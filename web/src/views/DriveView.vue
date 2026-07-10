@@ -2,8 +2,18 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useEventListener } from '@vueuse/core'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Document, EditPen, Folder, FolderAdd, Rank } from '@element-plus/icons-vue'
+import {
+  Delete,
+  Document,
+  Download,
+  EditPen,
+  Folder,
+  FolderAdd,
+  Rank,
+  Upload,
+} from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
@@ -13,9 +23,11 @@ import {
   DeleteNodesDocument,
   MoveNodesDocument,
   NodeDocument,
+  NodeDownloadUrlDocument,
   RenameNodeDocument,
 } from '@/api/gen/graphql'
 import type { ChildrenQuery } from '@/api/gen/graphql'
+import { enqueueFiles } from '@/uploader/manager'
 import { formatBytes, formatTime } from '@/utils/format'
 import MoveDialog from '@/components/MoveDialog.vue'
 
@@ -166,6 +178,118 @@ function onDelete() {
   deleteMutation.mutate({ ids: selectedIds.value })
 }
 
+// ---------- 上传 ----------
+
+const fileInput = ref<HTMLInputElement | null>(null)
+
+function onPickFiles() {
+  fileInput.value?.click()
+}
+
+function onFilesChosen(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  input.value = '' // 允许重复选择同一文件
+  if (files.length > 0) enqueueFiles(files, folderId.value)
+}
+
+// 整页拖拽:dragenter/leave 用计数器抵消子元素冒泡
+const dragDepth = ref(0)
+const dragging = computed(() => dragDepth.value > 0)
+
+function hasFiles(e: DragEvent): boolean {
+  return Array.from(e.dataTransfer?.types ?? []).includes('Files')
+}
+
+useEventListener(window, 'dragenter', (e: DragEvent) => {
+  if (!hasFiles(e)) return
+  e.preventDefault()
+  dragDepth.value++
+})
+useEventListener(window, 'dragover', (e: DragEvent) => {
+  if (!hasFiles(e)) return
+  e.preventDefault()
+})
+useEventListener(window, 'dragleave', (e: DragEvent) => {
+  if (!hasFiles(e)) return
+  dragDepth.value = Math.max(0, dragDepth.value - 1)
+})
+useEventListener(window, 'drop', (e: DragEvent) => {
+  if (!hasFiles(e)) return
+  e.preventDefault()
+  dragDepth.value = 0
+  // 只收文件;拖入的文件夹用 webkitGetAsEntry 识别后跳过(文件夹上传是 v2)
+  const files: File[] = []
+  for (const item of Array.from(e.dataTransfer?.items ?? [])) {
+    if (item.kind !== 'file') continue
+    const entry = item.webkitGetAsEntry?.()
+    if (entry?.isDirectory) continue
+    const f = item.getAsFile()
+    if (f) files.push(f)
+  }
+  if (files.length > 0) enqueueFiles(files, folderId.value)
+})
+
+// ---------- 下载 ----------
+
+const downloadingId = ref<string | null>(null)
+
+async function onDownload(row: ChildItem) {
+  if (row.kind !== 'FILE') return
+  downloadingId.value = row.id
+  try {
+    // downloadUrl 是 15 分钟预签名,按需查询、即查即用
+    const res = await request(NodeDownloadUrlDocument, { id: row.id })
+    const url = res.node.downloadUrl
+    if (!url) {
+      ElMessage.error('无法获取下载链接')
+      return
+    }
+    const a = document.createElement('a')
+    a.href = url
+    a.download = row.name
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  } catch (err) {
+    ElMessage.error(errorText(err, '获取下载链接失败'))
+  } finally {
+    downloadingId.value = null
+  }
+}
+
+// ---------- 右键菜单 ----------
+
+const contextMenu = ref<{ visible: boolean; x: number; y: number; row: ChildItem | null }>({
+  visible: false,
+  x: 0,
+  y: 0,
+  row: null,
+})
+
+function onRowContextmenu(row: ChildItem, _col: unknown, e: MouseEvent) {
+  if (row.kind !== 'FILE') return // 文件夹无下载(打包下载后端 M4)
+  e.preventDefault()
+  contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, row }
+}
+
+function closeContextMenu() {
+  contextMenu.value.visible = false
+}
+
+useEventListener(window, 'click', closeContextMenu)
+useEventListener(window, 'contextmenu', (e: MouseEvent) => {
+  // 点在表格行上的 contextmenu 由 onRowContextmenu 接管;其他位置关掉菜单
+  if (!(e.target as HTMLElement | null)?.closest('.el-table__row')) closeContextMenu()
+})
+
+function onContextDownload() {
+  const row = contextMenu.value.row
+  closeContextMenu()
+  if (row) void onDownload(row)
+}
+
 // ---------- 导航 ----------
 
 /** el-table 的 slot row 是宽类型 DefaultRow,这里收窄回业务类型 */
@@ -194,7 +318,10 @@ function onRowDblclick(row: ChildItem) {
     </el-breadcrumb>
 
     <div class="toolbar">
-      <el-button type="primary" :icon="FolderAdd" @click="onCreateFolder">
+      <el-button type="primary" :icon="Upload" @click="onPickFiles">
+        上传文件
+      </el-button>
+      <el-button :icon="FolderAdd" @click="onCreateFolder">
         新建文件夹
       </el-button>
       <el-button
@@ -231,6 +358,7 @@ function onRowDblclick(row: ChildItem) {
       empty-text="这里空空如也"
       @selection-change="onSelectionChange"
       @row-dblclick="onRowDblclick"
+      @row-contextmenu="(row: any, col: any, e: MouseEvent) => onRowContextmenu(asChild(row), col, e)"
     >
       <el-table-column type="selection" width="44" />
       <el-table-column label="名称" min-width="320">
@@ -254,6 +382,19 @@ function onRowDblclick(row: ChildItem) {
           {{ formatTime(asChild(row).updatedAt) }}
         </template>
       </el-table-column>
+      <el-table-column label="操作" width="80" align="center">
+        <template #default="{ row }">
+          <el-button
+            v-if="asChild(row).kind === 'FILE'"
+            link
+            type="primary"
+            :icon="Download"
+            :loading="downloadingId === asChild(row).id"
+            title="下载"
+            @click.stop="onDownload(asChild(row))"
+          />
+        </template>
+      </el-table-column>
     </el-table>
 
     <MoveDialog
@@ -261,6 +402,29 @@ function onRowDblclick(row: ChildItem) {
       :exclude-ids="selectedIds"
       @confirm="onMoveConfirm"
     />
+
+    <!-- 隐藏文件选择器(多选) -->
+    <input ref="fileInput" type="file" multiple class="hidden-input" @change="onFilesChosen" />
+
+    <!-- 整页拖拽遮罩 -->
+    <div v-if="dragging" class="drop-overlay">
+      <div class="drop-hint">
+        <el-icon :size="40"><Upload /></el-icon>
+        <p>松开鼠标,上传到当前文件夹</p>
+      </div>
+    </div>
+
+    <!-- 右键菜单(仅文件:下载) -->
+    <ul
+      v-if="contextMenu.visible"
+      class="context-menu"
+      :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+    >
+      <li class="context-menu-item" @click="onContextDownload">
+        <el-icon><Download /></el-icon>
+        下载
+      </li>
+    </ul>
   </div>
 </template>
 
@@ -288,5 +452,56 @@ function onRowDblclick(row: ChildItem) {
 }
 .name-icon {
   color: var(--el-color-primary);
+}
+.hidden-input {
+  display: none;
+}
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+  border: 2px dashed var(--el-color-primary);
+  pointer-events: none;
+}
+.drop-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 40px;
+  border-radius: 12px;
+  background: var(--el-bg-color);
+  box-shadow: var(--el-box-shadow);
+  color: var(--el-color-primary);
+  font-size: 15px;
+}
+.context-menu {
+  position: fixed;
+  z-index: 3001;
+  min-width: 120px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--el-bg-color-overlay);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 6px;
+  box-shadow: var(--el-box-shadow-light);
+}
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--el-text-color-primary);
+}
+.context-menu-item:hover {
+  background: var(--el-fill-color-light);
 }
 </style>

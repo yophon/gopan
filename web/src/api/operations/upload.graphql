@@ -1,0 +1,60 @@
+mutation InitUpload($parentId: ID, $name: String!, $sha256: String!, $size: Int64!) {
+  initUpload(parentId: $parentId, name: $name, sha256: $sha256, size: $size) {
+    instant
+    node {
+      id
+      parentId
+      name
+      kind
+      size
+      updatedAt
+    }
+    session {
+      id
+      partSize
+      partUrls {
+        partNumber
+        url
+      }
+      uploadedParts
+      expiresAt
+      status
+    }
+  }
+}
+
+mutation CompleteUpload($sessionId: ID!, $etags: [PartEtag!]!) {
+  completeUpload(sessionId: $sessionId, etags: $etags) {
+    id
+    parentId
+    name
+    kind
+    size
+    updatedAt
+  }
+}
+
+mutation AbortUpload($sessionId: ID!) {
+  abortUpload(sessionId: $sessionId)
+}
+
+query UploadSession($id: ID!) {
+  uploadSession(id: $id) {
+    id
+    partSize
+    partUrls {
+      partNumber
+      url
+    }
+    uploadedParts
+    expiresAt
+    status
+  }
+}
+
+query NodeDownloadUrl($id: ID!) {
+  node(id: $id) {
+    id
+    downloadUrl
+  }
+}

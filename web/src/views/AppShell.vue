@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { Delete, Folder, SwitchButton } from '@element-plus/icons-vue'
 
 import { useAuthStore } from '@/stores/auth'
+import UploadDrawer from '@/components/UploadDrawer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -42,6 +43,7 @@ async function onLogout() {
     <el-main class="main">
       <router-view />
     </el-main>
+    <UploadDrawer />
   </el-container>
 </template>
 
