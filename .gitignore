@@ -1,0 +1,8 @@
+/server/cmd/gopan/dist/*
+!/server/cmd/gopan/dist/.gitkeep
+/server/gopan
+/web/node_modules/
+/web/dist/
+/web/src/api/gen/
+.DS_Store
+*.local

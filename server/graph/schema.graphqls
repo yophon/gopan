@@ -1,0 +1,137 @@
+scalar Time
+scalar Int64
+
+# ---------- 对象 ----------
+
+type User {
+  id: ID!
+  username: String!
+  quotaBytes: Int64!
+  usedBytes: Int64!
+}
+
+enum NodeKind { FILE, FOLDER }
+
+type Node {
+  id: ID!
+  parentId: ID
+  name: String!
+  kind: NodeKind!
+  size: Int64
+  mime: String
+  sha256: String
+  createdAt: Time!
+  updatedAt: Time!
+  deletedAt: Time
+  preview: PreviewInfo!
+  downloadUrl: String
+}
+
+enum PreviewKind { NONE, IMAGE, PDF, NATIVE_PDF, VIDEO, AUDIO, TEXT, OFFICE }
+
+type PreviewInfo {
+  kind: PreviewKind!
+  thumbUrl: String
+  largeUrl: String
+  contentUrl: String
+  status: TaskStatus
+  durationSec: Int
+}
+
+enum TaskStatus { PENDING, RUNNING, DONE, FAILED }
+
+type NodePage {
+  items: [Node!]!
+  nextCursor: String
+  total: Int!
+}
+
+type UploadInit {
+  instant: Boolean!
+  node: Node
+  session: UploadSession
+}
+
+type UploadSession {
+  id: ID!
+  partSize: Int!
+  partUrls: [PartUrl!]!
+  uploadedParts: [Int!]!
+  expiresAt: Time!
+  status: String!
+}
+
+type PartUrl {
+  partNumber: Int!
+  url: String!
+}
+
+type Share {
+  id: ID!
+  token: String!
+  node: Node!
+  hasPassword: Boolean!
+  expiresAt: Time
+  createdAt: Time!
+}
+
+type ShareInfo {
+  token: String!
+  name: String!
+  kind: NodeKind!
+  needPassword: Boolean!
+  expired: Boolean!
+}
+
+type AuthPayload {
+  accessToken: String!
+  user: User!
+}
+
+# ---------- 查询 ----------
+
+enum NodeOrder { NAME, SIZE, UPDATED_AT }
+
+type Query {
+  me: User!
+  node(id: ID!): Node!
+  children(parentId: ID, cursor: String, order: NodeOrder = NAME, desc: Boolean = false): NodePage!
+  searchNodes(q: String!, cursor: String): NodePage!
+  trash(cursor: String): NodePage!
+  myShares: [Share!]!
+  uploadSession(id: ID!): UploadSession!
+  shareInfo(token: String!): ShareInfo!
+  shareRoot: Node!
+}
+
+# ---------- 变更 ----------
+
+input PartEtag {
+  partNumber: Int!
+  etag: String!
+}
+
+type Mutation {
+  register(username: String!, password: String!): AuthPayload!
+  login(username: String!, password: String!): AuthPayload!
+  refresh: AuthPayload!
+  logout: Boolean!
+
+  createFolder(parentId: ID, name: String!): Node!
+  renameNode(id: ID!, name: String!): Node!
+  moveNodes(ids: [ID!]!, targetParentId: ID): [Node!]!
+  deleteNodes(ids: [ID!]!): Boolean!
+  restoreNodes(ids: [ID!]!): [Node!]!
+  purgeNodes(ids: [ID!]!): Boolean!
+  purgeTrash: Boolean!
+
+  initUpload(parentId: ID, name: String!, sha256: String!, size: Int64!): UploadInit!
+  completeUpload(sessionId: ID!, etags: [PartEtag!]!): Node!
+  abortUpload(sessionId: ID!): Boolean!
+
+  requestPreview(nodeId: ID!): PreviewInfo!
+
+  createShare(nodeId: ID!, password: String, expiresAt: Time): Share!
+  revokeShare(id: ID!): Boolean!
+  verifySharePassword(token: String!, password: String!): AuthPayload!
+}
