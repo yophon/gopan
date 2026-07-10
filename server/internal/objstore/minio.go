@@ -154,3 +154,22 @@ func (s *Store) Ping(ctx context.Context) error {
 	_, err := s.internal.BucketExists(ctx, s.bucket)
 	return err
 }
+
+// Put 写对象(派生物用)。size 未知传 -1。
+func (s *Store) Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) error {
+	_, err := s.internal.PutObject(ctx, s.bucket, key, r, size, minio.PutObjectOptions{ContentType: contentType})
+	return err
+}
+
+// PresignInternalGet 用内网地址签 GET,给 ffmpeg/ffprobe 这类需要 URL 输入的工具。
+func (s *Store) PresignInternalGet(ctx context.Context, key string) (string, error) {
+	u, err := s.internal.Presign(ctx, "GET", s.bucket, key, 10*time.Minute, nil)
+	if err != nil {
+		return "", err
+	}
+	return u.String(), nil
+}
+
+func DerivedKey(sha256, kind string) string {
+	return "derived/" + sha256[:2] + "/" + sha256 + "/" + kind
+}

@@ -30,6 +30,10 @@ type Config struct {
 	SessionTTL       time.Duration // 上传会话有效期
 	PresignPutTTL    time.Duration
 	PresignGetTTL    time.Duration
+
+	GotenbergURL string
+	FFmpegPath   string
+	FFprobePath  string
 }
 
 func Load() (*Config, error) {
@@ -53,6 +57,10 @@ func Load() (*Config, error) {
 		SessionTTL:       48 * time.Hour,
 		PresignPutTTL:    time.Hour,
 		PresignGetTTL:    15 * time.Minute,
+
+		GotenbergURL: env("GOTENBERG_URL", "http://127.0.0.1:3100"),
+		FFmpegPath:   env("FFMPEG_PATH", "ffmpeg"),
+		FFprobePath:  env("FFPROBE_PATH", "ffprobe"),
 	}
 	if c.DBURL == "" {
 		return nil, fmt.Errorf("GOPAN_DB_URL is required")

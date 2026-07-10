@@ -67,7 +67,6 @@ func gqlNode(n store.Node) *Node {
 		ParentID: idPtrStr(n.ParentID),
 		Name:     n.Name,
 		Kind:     NodeKind(map[string]string{"file": "FILE", "folder": "FOLDER"}[n.Kind]),
-		Preview:  &PreviewInfo{Kind: PreviewKindNone},
 	}
 	out.CreatedAt = n.CreatedAt.Time
 	out.UpdatedAt = n.UpdatedAt.Time
@@ -99,9 +98,26 @@ func gqlNodeRow(r nodeRow) *Node {
 func gqlPage[T any](p *service.Page[T], conv func(T) *Node) *NodePage {
 	items := make([]*Node, 0, len(p.Items))
 	for _, it := range p.Items {
-		items = append(items, conv(it))
+		n := conv(it)
+		n.InList = true
+		items = append(items, n)
 	}
 	return &NodePage{Items: items, NextCursor: p.NextCursor, Total: int(p.Total)}
+}
+
+func gqlPreview(p service.PreviewInfo) *PreviewInfo {
+	out := &PreviewInfo{
+		Kind:        PreviewKind(p.Kind),
+		ThumbURL:    p.ThumbURL,
+		LargeURL:    p.LargeURL,
+		ContentURL:  p.ContentURL,
+		DurationSec: p.DurationSec,
+	}
+	if p.Status != nil {
+		st := TaskStatus(*p.Status)
+		out.Status = &st
+	}
+	return out
 }
 
 func gqlSession(v *service.SessionView) *UploadSession {

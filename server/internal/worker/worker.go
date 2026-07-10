@@ -21,14 +21,18 @@ import (
 )
 
 type Pool struct {
-	pool *pgxpool.Pool
-	q    *store.Queries
-	obj  *objstore.Store
-	wake chan struct{}
+	pool      *pgxpool.Pool
+	q         *store.Queries
+	obj       *objstore.Store
+	wake      chan struct{}
+	ffmpeg    string
+	ffprobe   string
+	gotenberg string
 }
 
-func New(pool *pgxpool.Pool, obj *objstore.Store) *Pool {
-	return &Pool{pool: pool, q: store.New(pool), obj: obj, wake: make(chan struct{}, 1)}
+func New(pool *pgxpool.Pool, obj *objstore.Store, ffmpeg, ffprobe, gotenberg string) *Pool {
+	return &Pool{pool: pool, q: store.New(pool), obj: obj, wake: make(chan struct{}, 1),
+		ffmpeg: ffmpeg, ffprobe: ffprobe, gotenberg: gotenberg}
 }
 
 // Enqueue 入队并唤醒 worker(注入给 service 用)。
@@ -83,8 +87,16 @@ func (w *Pool) execute(ctx context.Context, t store.Task) {
 	switch t.Kind {
 	case "verify_hash":
 		err = w.verifyHash(ctx, t.BlobID)
+	case "thumb":
+		err = w.makeThumbs(ctx, t.BlobID)
+	case "media_probe":
+		err = w.probeMedia(ctx, t.BlobID)
+	case "video_cover":
+		err = w.makeVideoCover(ctx, t.BlobID)
+	case "office_pdf":
+		err = w.makeOfficePDF(ctx, t.BlobID)
 	default:
-		err = fmt.Errorf("未知任务类型 %s", t.Kind) // thumb/cover/pdf 是 M3
+		err = fmt.Errorf("未知任务类型 %s", t.Kind)
 	}
 	status, errText := "done", (*string)(nil)
 	if err != nil {
@@ -132,6 +144,7 @@ func (w *Pool) verifyHash(ctx context.Context, blobID uuid.UUID) error {
 			Sha256: blob.Sha256, Status: "done", FailReason: &reason,
 		})
 		slog.Info("blob verified", "sha256", blob.Sha256, "size", size)
+		w.enqueueDerivatives(ctx, blob)
 		return nil
 	}
 
@@ -213,6 +226,14 @@ func (w *Pool) gcBlobs(ctx context.Context) error {
 		return err
 	}
 	for _, b := range blobs {
+		// 派生物对象一起清(derivatives 行随 blob 级联删,MinIO 对象要显式删)
+		if ds, err := w.q.GetDerivatives(ctx, b.ID); err == nil {
+			for _, d := range ds {
+				if err := w.obj.Remove(ctx, d.MinioKey); err != nil {
+					slog.Error("gc remove derivative", "key", d.MinioKey, "err", err)
+				}
+			}
+		}
 		if err := w.obj.Remove(ctx, objstore.BlobKey(b.Sha256)); err != nil {
 			slog.Error("gc remove object", "sha256", b.Sha256, "err", err)
 			continue

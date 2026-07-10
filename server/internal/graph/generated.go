@@ -175,6 +175,7 @@ type MutationResolver interface {
 	VerifySharePassword(ctx context.Context, token string, password string) (*AuthPayload, error)
 }
 type NodeResolver interface {
+	Preview(ctx context.Context, obj *Node) (*PreviewInfo, error)
 	DownloadURL(ctx context.Context, obj *Node) (*string, error)
 }
 type QueryResolver interface {
@@ -2812,7 +2813,7 @@ func (ec *executionContext) _Node_preview(ctx context.Context, field graphql.Col
 			return ec.fieldContext_Node_preview(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.Preview, nil
+			return ec.Resolvers.Node().Preview(ctx, obj)
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *PreviewInfo) graphql.Marshaler {
@@ -2826,8 +2827,8 @@ func (ec *executionContext) fieldContext_Node_preview(_ context.Context, field g
 	fc = &graphql.FieldContext{
 		Object:     "Node",
 		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
+		IsMethod:   true,
+		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_PreviewInfo(ctx, field)
 		},
@@ -5521,10 +5522,43 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "preview":
-			out.Values[i] = ec._Node_preview(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&out.Invalids, 1)
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Node_preview(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
 			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "downloadUrl":
 			field := field
 

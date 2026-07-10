@@ -31,6 +31,8 @@ type Node struct {
 	DeletedAt   *time.Time   `json:"deletedAt,omitempty"`
 	Preview     *PreviewInfo `json:"preview"`
 	DownloadURL *string      `json:"downloadUrl,omitempty"`
+	// 由列表转换器置位:preview 走零查询乐观路径
+	InList bool `json:"-"`
 }
 
 type NodePage struct {

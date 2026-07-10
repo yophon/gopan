@@ -8,8 +8,9 @@ import (
 )
 
 type Resolver struct {
-	Cfg     *config.Config
-	Auth    *service.Auth
-	Nodes   *service.Nodes
-	Uploads *service.Uploads
+	Cfg      *config.Config
+	Auth     *service.Auth
+	Nodes    *service.Nodes
+	Uploads  *service.Uploads
+	Previews *service.Previews
 }

@@ -20,8 +20,14 @@ omit_gqlgen_version_in_file_notice: true
 
 models:
   Node:
+    extraFields:
+      InList:
+        type: bool
+        description: "由列表转换器置位:preview 走零查询乐观路径"
     fields:
       downloadUrl:
+        resolver: true
+      preview:
         resolver: true
   ID:
     model: github.com/99designs/gqlgen/graphql.String

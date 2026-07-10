@@ -239,7 +239,19 @@ func (r *mutationResolver) AbortUpload(ctx context.Context, sessionID string) (b
 
 // RequestPreview is the resolver for the requestPreview field.
 func (r *mutationResolver) RequestPreview(ctx context.Context, nodeID string) (*PreviewInfo, error) {
-	return nil, service.ErrNotImplemented // M3
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nid, err := parseID(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	info, err := r.Previews.Request(ctx, ident.UserID, nid)
+	if err != nil {
+		return nil, err
+	}
+	return gqlPreview(info), nil
 }
 
 // CreateShare is the resolver for the createShare field.
@@ -255,6 +267,22 @@ func (r *mutationResolver) RevokeShare(ctx context.Context, id string) (bool, er
 // VerifySharePassword is the resolver for the verifySharePassword field.
 func (r *mutationResolver) VerifySharePassword(ctx context.Context, token string, password string) (*AuthPayload, error) {
 	return nil, service.ErrNotImplemented // M4
+}
+
+// Preview is the resolver for the preview field.
+func (r *nodeResolver) Preview(ctx context.Context, obj *Node) (*PreviewInfo, error) {
+	if obj.Kind != NodeKindFile {
+		return &PreviewInfo{Kind: PreviewKindNone}, nil
+	}
+	// 列表路径零查询(缩略图乐观签发);详情由单节点查询走 ForNode
+	if obj.InList {
+		return gqlPreview(r.Previews.ForList(ctx, obj.Name, obj.Sha256, obj.Mime, obj.Size)), nil
+	}
+	info, err := r.Previews.ForNode(ctx, obj.Name, obj.Sha256, obj.Mime, obj.Size)
+	if err != nil {
+		return nil, err
+	}
+	return gqlPreview(info), nil
 }
 
 // DownloadURL is the resolver for the downloadUrl field.

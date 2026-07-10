@@ -74,12 +74,14 @@ func run() error {
 	nodes := service.NewNodes(pool)
 	uploads := service.NewUploads(pool, obj, nodes, cfg.PartSize, cfg.SessionTTL)
 
-	wk := worker.New(pool, obj)
+	previews := service.NewPreviews(pool, obj)
+	wk := worker.New(pool, obj, cfg.FFmpegPath, cfg.FFprobePath, cfg.GotenbergURL)
 	uploads.SetEnqueue(wk.Enqueue)
+	previews.SetEnqueue(wk.Enqueue)
 	go wk.Run(ctx, 2)
 
 	es := graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
-		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads,
+		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews,
 	}})
 
 	mux := http.NewServeMux()
