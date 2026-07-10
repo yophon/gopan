@@ -6,6 +6,7 @@ import { Delete, Folder, SwitchButton } from '@element-plus/icons-vue'
 
 import { useAuthStore } from '@/stores/auth'
 import UploadDrawer from '@/components/UploadDrawer.vue'
+import PreviewModal from '@/components/preview/PreviewModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -44,6 +45,7 @@ async function onLogout() {
       <router-view />
     </el-main>
     <UploadDrawer />
+    <PreviewModal />
   </el-container>
 </template>
 

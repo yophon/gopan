@@ -8,6 +8,10 @@ query Trash($cursor: String) {
       size
       updatedAt
       deletedAt
+      preview {
+        kind
+        thumbUrl
+      }
     }
     nextCursor
     total

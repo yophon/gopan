@@ -7,9 +7,40 @@ query Children($parentId: ID, $cursor: String, $order: NodeOrder, $desc: Boolean
       kind
       size
       updatedAt
+      preview {
+        kind
+        thumbUrl
+      }
     }
     nextCursor
     total
+  }
+}
+
+# 预览专用单节点查询:列表里的 preview 只有 kind/thumbUrl 可靠,
+# 完整预签名 URL(15 分钟有效)必须打开预览时即查即用。
+query NodePreview($id: ID!) {
+  node(id: $id) {
+    id
+    name
+    kind
+    size
+    preview {
+      kind
+      thumbUrl
+      largeUrl
+      contentUrl
+      status
+      durationSec
+    }
+  }
+}
+
+mutation RequestPreview($nodeId: ID!) {
+  requestPreview(nodeId: $nodeId) {
+    kind
+    status
+    contentUrl
   }
 }
 

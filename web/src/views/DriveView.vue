@@ -5,14 +5,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useEventListener } from '@vueuse/core'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+  DataBoard,
   Delete,
   Document,
   Download,
   EditPen,
   Folder,
   FolderAdd,
+  Grid,
+  Headset,
+  Memo,
+  Picture,
   Rank,
+  Reading,
   Upload,
+  VideoCamera,
 } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
@@ -29,6 +36,7 @@ import {
 import type { ChildrenQuery } from '@/api/gen/graphql'
 import { enqueueFiles } from '@/uploader/manager'
 import { formatBytes, formatTime } from '@/utils/format'
+import { openPreview } from '@/composables/preview'
 import MoveDialog from '@/components/MoveDialog.vue'
 
 type ChildItem = ChildrenQuery['children']['items'][number]
@@ -300,6 +308,62 @@ function asChild(row: unknown): ChildItem {
 function onRowDblclick(row: ChildItem) {
   if (row.kind === 'FOLDER') {
     void router.push(`/drive/${row.id}`)
+    return
+  }
+  // 多选状态下双击不触发预览,避免误操作
+  if (selection.value.length > 1) return
+  const files = items.value.filter((n) => n.kind === 'FILE')
+  const idx = files.findIndex((n) => n.id === row.id)
+  if (idx >= 0) {
+    openPreview(
+      files.map((n) => n.id),
+      idx,
+    )
+  }
+}
+
+// ---------- 图标 / 缩略图 ----------
+
+/** 缩略图 URL 是乐观签发的,派生物可能还没生成;onerror 记下 id,回落到图标 */
+const thumbErrors = ref(new Set<string>())
+
+function onThumbError(id: string) {
+  const next = new Set(thumbErrors.value)
+  next.add(id)
+  thumbErrors.value = next
+}
+
+function showThumb(row: ChildItem): boolean {
+  return (
+    row.kind === 'FILE' &&
+    (row.preview.kind === 'IMAGE' || row.preview.kind === 'VIDEO') &&
+    !!row.preview.thumbUrl &&
+    !thumbErrors.value.has(row.id)
+  )
+}
+
+function fileIcon(row: ChildItem) {
+  if (row.kind === 'FOLDER') return Folder
+  switch (row.preview.kind) {
+    case 'IMAGE':
+      return Picture
+    case 'VIDEO':
+      return VideoCamera
+    case 'AUDIO':
+      return Headset
+    case 'PDF':
+      return Reading
+    case 'TEXT':
+      return Memo
+    case 'OFFICE': {
+      // OFFICE 内部再按扩展名细分:表格 / 演示 / 文档
+      const ext = row.name.split('.').pop()?.toLowerCase() ?? ''
+      if (['xls', 'xlsx', 'csv', 'ods'].includes(ext)) return Grid
+      if (['ppt', 'pptx', 'odp'].includes(ext)) return DataBoard
+      return Document
+    }
+    default:
+      return Document
   }
 }
 </script>
@@ -364,9 +428,16 @@ function onRowDblclick(row: ChildItem) {
       <el-table-column label="名称" min-width="320">
         <template #default="{ row }">
           <span class="name-cell" :class="{ folder: asChild(row).kind === 'FOLDER' }">
-            <el-icon class="name-icon">
-              <Folder v-if="asChild(row).kind === 'FOLDER'" />
-              <Document v-else />
+            <img
+              v-if="showThumb(asChild(row))"
+              class="name-thumb"
+              :src="asChild(row).preview.thumbUrl!"
+              alt=""
+              loading="lazy"
+              @error="onThumbError(asChild(row).id)"
+            />
+            <el-icon v-else class="name-icon">
+              <component :is="fileIcon(asChild(row))" />
             </el-icon>
             {{ asChild(row).name }}
           </span>
@@ -452,6 +523,14 @@ function onRowDblclick(row: ChildItem) {
 }
 .name-icon {
   color: var(--el-color-primary);
+}
+.name-thumb {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--el-fill-color-light);
 }
 .hidden-input {
   display: none;
