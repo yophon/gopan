@@ -1,0 +1,48 @@
+mutation Login($username: String!, $password: String!) {
+  login(username: $username, password: $password) {
+    accessToken
+    user {
+      id
+      username
+      quotaBytes
+      usedBytes
+    }
+  }
+}
+
+mutation Register($username: String!, $password: String!) {
+  register(username: $username, password: $password) {
+    accessToken
+    user {
+      id
+      username
+      quotaBytes
+      usedBytes
+    }
+  }
+}
+
+mutation Refresh {
+  refresh {
+    accessToken
+    user {
+      id
+      username
+      quotaBytes
+      usedBytes
+    }
+  }
+}
+
+mutation Logout {
+  logout
+}
+
+query Me {
+  me {
+    id
+    username
+    quotaBytes
+    usedBytes
+  }
+}

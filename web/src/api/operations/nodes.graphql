@@ -1,0 +1,59 @@
+query Children($parentId: ID, $cursor: String, $order: NodeOrder, $desc: Boolean) {
+  children(parentId: $parentId, cursor: $cursor, order: $order, desc: $desc) {
+    items {
+      id
+      parentId
+      name
+      kind
+      size
+      updatedAt
+    }
+    nextCursor
+    total
+  }
+}
+
+query Node($id: ID!) {
+  node(id: $id) {
+    id
+    parentId
+    name
+    kind
+    size
+    updatedAt
+  }
+}
+
+mutation CreateFolder($parentId: ID, $name: String!) {
+  createFolder(parentId: $parentId, name: $name) {
+    id
+    parentId
+    name
+    kind
+    size
+    updatedAt
+  }
+}
+
+mutation RenameNode($id: ID!, $name: String!) {
+  renameNode(id: $id, name: $name) {
+    id
+    parentId
+    name
+    kind
+    size
+    updatedAt
+  }
+}
+
+mutation MoveNodes($ids: [ID!]!, $targetParentId: ID) {
+  moveNodes(ids: $ids, targetParentId: $targetParentId) {
+    id
+    parentId
+    name
+  }
+}
+
+mutation DeleteNodes($ids: [ID!]!) {
+  deleteNodes(ids: $ids)
+}
