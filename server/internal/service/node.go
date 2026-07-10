@@ -253,7 +253,22 @@ func (s *Nodes) Purge(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) err
 		if err := qtx.DecrementBlobRefs(ctx, blobIDs); err != nil {
 			return err
 		}
-		// TODO(M2): 按 blob 大小扣减 used_bytes
+		// used_bytes 是逻辑记账:同 blob 被引用两次要扣两次,按出现次数累加
+		sizes, err := qtx.GetBlobSizes(ctx, blobIDs)
+		if err != nil {
+			return err
+		}
+		bySize := make(map[uuid.UUID]int64, len(sizes))
+		for _, r := range sizes {
+			bySize[r.ID] = r.Size
+		}
+		var total int64
+		for _, id := range blobIDs {
+			total += bySize[id]
+		}
+		if err := qtx.SubtractUsedBytes(ctx, store.SubtractUsedBytesParams{ID: owner, UsedBytes: total}); err != nil {
+			return err
+		}
 	}
 	return tx.Commit(ctx)
 }
@@ -352,4 +367,15 @@ func nextCursor(offset int32, got int, total int64) *string {
 	}
 	s := encodeB64(fmt.Sprintf("o:%d", next))
 	return &s
+}
+
+func (s *Nodes) GetWithBlob(ctx context.Context, owner, id uuid.UUID) (store.GetNodeWithBlobRow, error) {
+	row, err := s.q.GetNodeWithBlob(ctx, store.GetNodeWithBlobParams{ID: id, OwnerID: owner})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return store.GetNodeWithBlobRow{}, ErrNotFound
+		}
+		return store.GetNodeWithBlobRow{}, err
+	}
+	return row, nil
 }

@@ -22,8 +22,10 @@ import (
 	"github.com/yophon/gopan/server/internal/config"
 	"github.com/yophon/gopan/server/internal/graph"
 	"github.com/yophon/gopan/server/internal/httpx"
+	"github.com/yophon/gopan/server/internal/objstore"
 	"github.com/yophon/gopan/server/internal/service"
 	"github.com/yophon/gopan/server/internal/store"
+	"github.com/yophon/gopan/server/internal/worker"
 )
 
 //go:embed all:dist
@@ -59,12 +61,25 @@ func run() error {
 		return err
 	}
 
+	obj, err := objstore.New(cfg)
+	if err != nil {
+		return err
+	}
+	if err := obj.EnsureBucket(ctx); err != nil {
+		return err
+	}
+
 	q := store.New(pool)
 	auth := service.NewAuth(q, cfg.JWTSecret, cfg.AccessTTL, cfg.RefreshTTL, cfg.RegisterOpen, cfg.DefaultQuota)
 	nodes := service.NewNodes(pool)
+	uploads := service.NewUploads(pool, obj, nodes, cfg.PartSize, cfg.SessionTTL)
+
+	wk := worker.New(pool, obj)
+	uploads.SetEnqueue(wk.Enqueue)
+	go wk.Run(ctx, 2)
 
 	es := graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
-		Cfg: cfg, Auth: auth, Nodes: nodes,
+		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads,
 	}})
 
 	mux := http.NewServeMux()
@@ -72,6 +87,10 @@ func run() error {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := pool.Ping(r.Context()); err != nil {
 			http.Error(w, "db: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		if err := obj.Ping(r.Context()); err != nil {
+			http.Error(w, "objstore: "+err.Error(), http.StatusServiceUnavailable)
 			return
 		}
 		w.Write([]byte("ok"))

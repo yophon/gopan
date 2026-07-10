@@ -18,6 +18,18 @@ type Config struct {
 	AccessTTL    time.Duration
 	RefreshTTL   time.Duration
 	DevMode      bool // 关闭 cookie Secure、开 introspection
+
+	// 对象存储
+	S3Endpoint       string // 服务端内部访问地址
+	S3PublicEndpoint string // 预签名 URL 用的外部地址(浏览器可达)
+	S3Key            string
+	S3Secret         string
+	S3Bucket         string
+	S3UseSSL         bool
+	PartSize         int64         // 分片大小,S3 规定除末片外 ≥5MiB
+	SessionTTL       time.Duration // 上传会话有效期
+	PresignPutTTL    time.Duration
+	PresignGetTTL    time.Duration
 }
 
 func Load() (*Config, error) {
@@ -30,9 +42,26 @@ func Load() (*Config, error) {
 		AccessTTL:    15 * time.Minute,
 		RefreshTTL:   14 * 24 * time.Hour,
 		DevMode:      envBool("DEV_MODE", false),
+
+		S3Endpoint:       env("S3_ENDPOINT", "127.0.0.1:9000"),
+		S3PublicEndpoint: env("S3_PUBLIC_ENDPOINT", ""),
+		S3Key:            env("S3_KEY", "gopan"),
+		S3Secret:         env("S3_SECRET", "gopan-minio-dev"),
+		S3Bucket:         env("S3_BUCKET", "gopan"),
+		S3UseSSL:         envBool("S3_USE_SSL", false),
+		PartSize:         envInt64("PART_SIZE", 16<<20),
+		SessionTTL:       48 * time.Hour,
+		PresignPutTTL:    time.Hour,
+		PresignGetTTL:    15 * time.Minute,
 	}
 	if c.DBURL == "" {
 		return nil, fmt.Errorf("GOPAN_DB_URL is required")
+	}
+	if c.S3PublicEndpoint == "" {
+		c.S3PublicEndpoint = c.S3Endpoint // 单机同网默认
+	}
+	if c.PartSize < 5<<20 {
+		return nil, fmt.Errorf("GOPAN_PART_SIZE 不能小于 5MiB(S3 multipart 规定)")
 	}
 
 	secret := env("JWT_SECRET", "")

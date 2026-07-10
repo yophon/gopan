@@ -19,6 +19,10 @@ resolver:
 omit_gqlgen_version_in_file_notice: true
 
 models:
+  Node:
+    fields:
+      downloadUrl:
+        resolver: true
   ID:
     model: github.com/99designs/gqlgen/graphql.String
   Int64:

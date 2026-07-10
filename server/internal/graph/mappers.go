@@ -1,6 +1,9 @@
 package graph
 
 import (
+	"context"
+	"sort"
+
 	"github.com/google/uuid"
 
 	"github.com/yophon/gopan/server/internal/service"
@@ -99,4 +102,35 @@ func gqlPage[T any](p *service.Page[T], conv func(T) *Node) *NodePage {
 		items = append(items, conv(it))
 	}
 	return &NodePage{Items: items, NextCursor: p.NextCursor, Total: int(p.Total)}
+}
+
+func gqlSession(v *service.SessionView) *UploadSession {
+	urls := make([]*PartURL, 0, len(v.PartURLs))
+	for n, u := range v.PartURLs {
+		urls = append(urls, &PartURL{PartNumber: n, URL: u})
+	}
+	sort.Slice(urls, func(i, j int) bool { return urls[i].PartNumber < urls[j].PartNumber })
+	uploaded := make([]int, len(v.Uploaded))
+	copy(uploaded, v.Uploaded)
+	return &UploadSession{
+		ID:            v.Session.ID.String(),
+		PartSize:      int(v.Session.PartSize),
+		PartUrls:      urls,
+		UploadedParts: uploaded,
+		ExpiresAt:     v.Session.ExpiresAt.Time,
+		Status:        v.Session.Status,
+	}
+}
+
+// getNodeFull 取单节点并带上 blob 元信息(size/mime/sha256)。
+func (r *Resolver) getNodeFull(ctx context.Context, owner, id uuid.UUID) (*Node, error) {
+	row, err := r.Nodes.GetWithBlob(ctx, owner, id)
+	if err != nil {
+		return nil, err
+	}
+	return gqlNodeRow(nodeRow{Node: store.Node{
+		ID: row.ID, OwnerID: row.OwnerID, ParentID: row.ParentID, Name: row.Name,
+		Kind: row.Kind, BlobID: row.BlobID, DeletedAt: row.DeletedAt,
+		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+	}, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256}), nil
 }

@@ -70,16 +70,16 @@ func (r *mutationResolver) CreateFolder(ctx context.Context, parentID *string, n
 }
 
 // RenameNode is the resolver for the renameNode field.
-func (r *mutationResolver) RenameNode(ctx context.Context, idArg string, name string) (*Node, error) {
-	id, err := httpx.UserFrom(ctx)
+func (r *mutationResolver) RenameNode(ctx context.Context, id string, name string) (*Node, error) {
+	ident, err := httpx.UserFrom(ctx)
 	if err != nil {
 		return nil, err
 	}
-	nid, err := parseID(idArg)
+	nid, err := parseID(id)
 	if err != nil {
 		return nil, err
 	}
-	n, err := r.Nodes.Rename(ctx, id.UserID, nid, name)
+	n, err := r.Nodes.Rename(ctx, ident.UserID, nid, name)
 	if err != nil {
 		return nil, err
 	}
@@ -178,17 +178,63 @@ func (r *mutationResolver) PurgeTrash(ctx context.Context) (bool, error) {
 
 // InitUpload is the resolver for the initUpload field.
 func (r *mutationResolver) InitUpload(ctx context.Context, parentID *string, name string, sha256 string, size int64) (*UploadInit, error) {
-	return nil, service.ErrNotImplemented // M2
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pid, err := parseIDPtr(parentID)
+	if err != nil {
+		return nil, err
+	}
+	res, err := r.Uploads.Init(ctx, ident.UserID, pid, name, sha256, size)
+	if err != nil {
+		return nil, err
+	}
+	out := &UploadInit{Instant: res.Instant}
+	if res.Node != nil {
+		out.Node = gqlNode(*res.Node)
+	}
+	if res.Session != nil {
+		out.Session = gqlSession(res.Session)
+	}
+	return out, nil
 }
 
 // CompleteUpload is the resolver for the completeUpload field.
 func (r *mutationResolver) CompleteUpload(ctx context.Context, sessionID string, etags []*PartEtag) (*Node, error) {
-	return nil, service.ErrNotImplemented // M2
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sid, err := parseID(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	tags := make(map[int]string, len(etags))
+	for _, e := range etags {
+		tags[e.PartNumber] = e.Etag
+	}
+	n, err := r.Uploads.Complete(ctx, ident.UserID, sid, tags)
+	if err != nil {
+		return nil, err
+	}
+	return r.getNodeFull(ctx, ident.UserID, n.ID)
 }
 
 // AbortUpload is the resolver for the abortUpload field.
 func (r *mutationResolver) AbortUpload(ctx context.Context, sessionID string) (bool, error) {
-	return false, service.ErrNotImplemented // M2
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	sid, err := parseID(sessionID)
+	if err != nil {
+		return false, err
+	}
+	if err := r.Uploads.Abort(ctx, ident.UserID, sid); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // RequestPreview is the resolver for the requestPreview field.
@@ -211,6 +257,26 @@ func (r *mutationResolver) VerifySharePassword(ctx context.Context, token string
 	return nil, service.ErrNotImplemented // M4
 }
 
+// DownloadURL is the resolver for the downloadUrl field.
+func (r *nodeResolver) DownloadURL(ctx context.Context, obj *Node) (*string, error) {
+	if obj.Kind != NodeKindFile || obj.DeletedAt != nil {
+		return nil, nil
+	}
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nid, err := parseID(obj.ID)
+	if err != nil {
+		return nil, err
+	}
+	u, err := r.Uploads.DownloadURL(ctx, ident.UserID, nid)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
 // Me is the resolver for the me field.
 func (r *queryResolver) Me(ctx context.Context) (*User, error) {
 	id, err := httpx.UserFrom(ctx)
@@ -225,20 +291,16 @@ func (r *queryResolver) Me(ctx context.Context) (*User, error) {
 }
 
 // Node is the resolver for the node field.
-func (r *queryResolver) Node(ctx context.Context, idArg string) (*Node, error) {
-	id, err := httpx.UserFrom(ctx)
+func (r *queryResolver) Node(ctx context.Context, id string) (*Node, error) {
+	ident, err := httpx.UserFrom(ctx)
 	if err != nil {
 		return nil, err
 	}
-	nid, err := parseID(idArg)
+	nid, err := parseID(id)
 	if err != nil {
 		return nil, err
 	}
-	n, err := r.Nodes.Get(ctx, id.UserID, nid)
-	if err != nil {
-		return nil, err
-	}
-	return gqlNode(n), nil
+	return r.getNodeFull(ctx, ident.UserID, nid)
 }
 
 // Children is the resolver for the children field.
@@ -317,7 +379,19 @@ func (r *queryResolver) MyShares(ctx context.Context) ([]*Share, error) {
 
 // UploadSession is the resolver for the uploadSession field.
 func (r *queryResolver) UploadSession(ctx context.Context, id string) (*UploadSession, error) {
-	return nil, service.ErrNotImplemented // M2
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	view, err := r.Uploads.Session(ctx, ident.UserID, sid)
+	if err != nil {
+		return nil, err
+	}
+	return gqlSession(view), nil
 }
 
 // ShareInfo is the resolver for the shareInfo field.
@@ -333,8 +407,14 @@ func (r *queryResolver) ShareRoot(ctx context.Context) (*Node, error) {
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
+// Node returns NodeResolver implementation.
+func (r *Resolver) Node() NodeResolver { return &nodeResolver{r} }
+
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
-type mutationResolver struct{ *Resolver }
-type queryResolver struct{ *Resolver }
+type (
+	mutationResolver struct{ *Resolver }
+	nodeResolver     struct{ *Resolver }
+	queryResolver    struct{ *Resolver }
+)

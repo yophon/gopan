@@ -9,6 +9,12 @@ SELECT * FROM nodes WHERE id = $1;
 -- name: GetActiveNodeOwned :one
 SELECT * FROM nodes WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL;
 
+-- name: GetNodeWithBlob :one
+SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256, b.verified AS blob_verified
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.id = $1 AND n.owner_id = $2;
+
 -- name: SiblingNameExists :one
 SELECT EXISTS (
     SELECT 1 FROM nodes

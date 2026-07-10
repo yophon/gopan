@@ -158,6 +158,55 @@ func (q *Queries) GetNode(ctx context.Context, id uuid.UUID) (Node, error) {
 	return i, err
 }
 
+const getNodeWithBlob = `-- name: GetNodeWithBlob :one
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256, b.verified AS blob_verified
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.id = $1 AND n.owner_id = $2
+`
+
+type GetNodeWithBlobParams struct {
+	ID      uuid.UUID
+	OwnerID uuid.UUID
+}
+
+type GetNodeWithBlobRow struct {
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
+	BlobVerified *bool
+}
+
+func (q *Queries) GetNodeWithBlob(ctx context.Context, arg GetNodeWithBlobParams) (GetNodeWithBlobRow, error) {
+	row := q.db.QueryRow(ctx, getNodeWithBlob, arg.ID, arg.OwnerID)
+	var i GetNodeWithBlobRow
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.ParentID,
+		&i.Name,
+		&i.Kind,
+		&i.BlobID,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.BlobSize,
+		&i.BlobMime,
+		&i.BlobSha256,
+		&i.BlobVerified,
+	)
+	return i, err
+}
+
 const isDescendant = `-- name: IsDescendant :one
 WITH RECURSIVE sub AS (
     SELECT r.id FROM nodes r WHERE r.id = $1
