@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
-import { Delete, Folder, SwitchButton } from '@element-plus/icons-vue'
+import { Delete, Folder, Share, SwitchButton } from '@element-plus/icons-vue'
 
 import { useAuthStore } from '@/stores/auth'
 import UploadDrawer from '@/components/UploadDrawer.vue'
@@ -30,6 +30,10 @@ async function onLogout() {
         <el-menu-item index="/drive">
           <el-icon><Folder /></el-icon>
           <span>我的文件</span>
+        </el-menu-item>
+        <el-menu-item index="/shares">
+          <el-icon><Share /></el-icon>
+          <span>我的分享</span>
         </el-menu-item>
         <el-menu-item index="/trash">
           <el-icon><Delete /></el-icon>

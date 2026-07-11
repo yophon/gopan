@@ -12,6 +12,12 @@ const router = createRouter({
       component: () => import('@/views/LoginView.vue'),
     },
     {
+      // 访客分享页:公开访问,不要求登录
+      path: '/s/:token',
+      name: 'share-visitor',
+      component: () => import('@/views/ShareVisitorView.vue'),
+    },
+    {
       path: '/',
       component: () => import('@/views/AppShell.vue'),
       children: [
@@ -26,6 +32,11 @@ const router = createRouter({
           name: 'trash',
           component: () => import('@/views/TrashView.vue'),
         },
+        {
+          path: 'shares',
+          name: 'shares',
+          component: () => import('@/views/SharesView.vue'),
+        },
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/drive' },
@@ -34,6 +45,9 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
+
+  // 分享访客页公开,不做登录校验
+  if (to.name === 'share-visitor') return true
 
   if (to.path === '/login') {
     // 已登录还访问登录页 → 直接回主界面

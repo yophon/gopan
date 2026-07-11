@@ -13,18 +13,32 @@ import {
   WarningFilled,
 } from '@element-plus/icons-vue'
 
-import { request } from '@/api/client'
+import { guestRequest, request } from '@/api/client'
 import { errorText } from '@/api/errors'
 import {
   NodeDownloadUrlDocument,
   NodePreviewDocument,
   RequestPreviewDocument,
 } from '@/api/gen/graphql'
+import type { Variables } from 'graphql-request'
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core'
 import { formatBytes } from '@/utils/format'
 import { closePreview, previewNext, previewPrev, previewState } from '@/composables/preview'
 
 // pdfjs-dist 体积大(~1MB),按需异步加载,只有真正预览 PDF 时才拉
 const PdfViewer = defineAsyncComponent(() => import('./PdfViewer.vue'))
+
+/** 访客模式(分享页):带访客 token 请求;访客是只读白名单,不能触发文档转换 */
+const props = defineProps<{ guestToken?: string }>()
+
+function req<TResult, TVariables extends Variables>(
+  document: TypedDocumentNode<TResult, TVariables>,
+  variables?: TVariables,
+): Promise<TResult> {
+  return props.guestToken
+    ? guestRequest(document, props.guestToken, variables)
+    : request(document, variables)
+}
 
 const currentId = computed<string | null>(() =>
   previewState.visible ? (previewState.ids[previewState.index] ?? null) : null,
@@ -39,7 +53,7 @@ const hasNext = computed(
 const { data, isFetching, isError, error, refetch } = useQuery({
   queryKey: ['nodePreview', currentId],
   enabled: computed(() => currentId.value !== null),
-  queryFn: () => request(NodePreviewDocument, { id: currentId.value! }),
+  queryFn: () => req(NodePreviewDocument, { id: currentId.value! }),
   staleTime: 0,
   gcTime: 0,
   retry: 1,
@@ -62,7 +76,7 @@ const initialLoading = computed(() => isFetching.value && !data.value)
 const requestedOffice = new Set<string>()
 
 const requestPreviewMutation = useMutation({
-  mutationFn: (vars: { nodeId: string }) => request(RequestPreviewDocument, vars),
+  mutationFn: (vars: { nodeId: string }) => req(RequestPreviewDocument, vars),
   onSuccess: () => {
     // 刷新当前节点,让轮询接管 PENDING/RUNNING
     void refetch()
@@ -74,6 +88,7 @@ watch(
   [data, currentId],
   ([val, id]) => {
     if (!val || !id || val.node.id !== id) return
+    if (props.guestToken) return // 访客只读,不能触发转换
     const p = val.node.preview
     if (p.kind === 'OFFICE' && !p.status && !requestedOffice.has(id)) {
       requestedOffice.add(id)
@@ -90,9 +105,14 @@ function retryOffice() {
   requestPreviewMutation.mutate({ nodeId: id })
 }
 
+/** 访客打开从未转换过的 Office:无法触发,引导下载 */
+const officeUnavailable = computed(
+  () => !!props.guestToken && preview.value?.kind === 'OFFICE' && !preview.value.status,
+)
+
 const officeConverting = computed(() => {
   const p = preview.value
-  if (p?.kind !== 'OFFICE') return false
+  if (p?.kind !== 'OFFICE' || officeUnavailable.value) return false
   // status 为空 = 刚要触发/触发请求在途,也按转换中展示
   return !p.status || p.status === 'PENDING' || p.status === 'RUNNING'
 })
@@ -140,7 +160,7 @@ async function onDownload() {
   if (!n || downloading.value) return
   downloading.value = true
   try {
-    const res = await request(NodeDownloadUrlDocument, { id: n.id })
+    const res = await req(NodeDownloadUrlDocument, { id: n.id })
     const url = res.node.downloadUrl
     if (!url) {
       ElMessage.error('无法获取下载链接')
@@ -297,7 +317,14 @@ function formatDuration(sec: number | null | undefined): string {
             </template>
           </div>
 
-          <!-- OFFICE:转换中 / 完成(按 PDF 渲染)/ 失败 -->
+          <!-- OFFICE:访客无产物 / 转换中 / 完成(按 PDF 渲染)/ 失败 -->
+          <div v-else-if="officeUnavailable" class="preview-placeholder">
+            <el-empty description="该文档还没有生成预览,请下载查看">
+              <el-button type="primary" :icon="Download" :loading="downloading" @click="onDownload">
+                下载文件
+              </el-button>
+            </el-empty>
+          </div>
           <div v-else-if="officeConverting" class="preview-office-pending">
             <el-skeleton :rows="6" animated class="office-skeleton" />
             <p class="office-hint">文档转换中,请稍候…</p>
@@ -310,7 +337,7 @@ function formatDuration(sec: number | null | undefined): string {
             <el-icon :size="48" class="failed-icon"><WarningFilled /></el-icon>
             <p>文档转换失败</p>
             <div class="placeholder-actions">
-              <el-button size="small" @click="retryOffice">重试转换</el-button>
+              <el-button v-if="!props.guestToken" size="small" @click="retryOffice">重试转换</el-button>
               <el-button size="small" type="primary" :icon="Download" :loading="downloading" @click="onDownload">
                 下载原文件
               </el-button>

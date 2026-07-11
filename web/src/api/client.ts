@@ -54,6 +54,24 @@ export async function plainRequest<TResult, TVariables extends Variables>(
   })
 }
 
+// ---------- 访客请求(分享页) ----------
+
+/**
+ * 访客通道:带指定的访客 token,不走用户登录态、不做 401 刷新。
+ * 访客 token 30 分钟过期且无 refresh,过期由分享页捕获后引导重新验密。
+ */
+export async function guestRequest<TResult, TVariables extends Variables>(
+  document: TypedDocumentNode<TResult, TVariables>,
+  accessToken: string,
+  variables?: TVariables,
+): Promise<TResult> {
+  return gqlClient.request<TResult>({
+    document,
+    variables,
+    requestHeaders: { Authorization: `Bearer ${accessToken}` },
+  })
+}
+
 // ---------- 单飞刷新 ----------
 
 // 模块级 Promise 去重:并发多个 401 只触发一次 refresh,共享同一个结果。

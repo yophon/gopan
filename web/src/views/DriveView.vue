@@ -18,6 +18,7 @@ import {
   Picture,
   Rank,
   Reading,
+  Share,
   Upload,
   VideoCamera,
 } from '@element-plus/icons-vue'
@@ -37,7 +38,9 @@ import type { ChildrenQuery } from '@/api/gen/graphql'
 import { enqueueFiles } from '@/uploader/manager'
 import { formatBytes, formatTime } from '@/utils/format'
 import { openPreview } from '@/composables/preview'
+import { useAuthStore } from '@/stores/auth'
 import MoveDialog from '@/components/MoveDialog.vue'
+import ShareDialog from '@/components/ShareDialog.vue'
 
 type ChildItem = ChildrenQuery['children']['items'][number]
 
@@ -240,10 +243,25 @@ useEventListener(window, 'drop', (e: DragEvent) => {
 
 // ---------- 下载 ----------
 
+const auth = useAuthStore()
 const downloadingId = ref<string | null>(null)
 
+function clickA(href: string, download?: string) {
+  const a = document.createElement('a')
+  a.href = href
+  if (download) a.download = download
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
 async function onDownload(row: ChildItem) {
-  if (row.kind !== 'FILE') return
+  if (row.kind === 'FOLDER') {
+    // 文件夹走服务端流式 zip;token 15 分钟有效,点击即用
+    clickA(`/pack?nodes=${row.id}&token=${encodeURIComponent(auth.accessToken ?? '')}`)
+    return
+  }
   downloadingId.value = row.id
   try {
     // downloadUrl 是 15 分钟预签名,按需查询、即查即用
@@ -253,18 +271,27 @@ async function onDownload(row: ChildItem) {
       ElMessage.error('无法获取下载链接')
       return
     }
-    const a = document.createElement('a')
-    a.href = url
-    a.download = row.name
-    a.rel = 'noopener'
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
+    clickA(url, row.name)
   } catch (err) {
     ElMessage.error(errorText(err, '获取下载链接失败'))
   } finally {
     downloadingId.value = null
   }
+}
+
+// ---------- 分享 ----------
+
+const shareDialogVisible = ref(false)
+const shareTarget = ref<{ id: string; name: string } | null>(null)
+
+function openShare(row: { id: string; name: string }) {
+  shareTarget.value = { id: row.id, name: row.name }
+  shareDialogVisible.value = true
+}
+
+function onShareSelected() {
+  const target = selection.value[0]
+  if (target && selection.value.length === 1) openShare(target)
 }
 
 // ---------- 右键菜单 ----------
@@ -277,7 +304,6 @@ const contextMenu = ref<{ visible: boolean; x: number; y: number; row: ChildItem
 })
 
 function onRowContextmenu(row: ChildItem, _col: unknown, e: MouseEvent) {
-  if (row.kind !== 'FILE') return // 文件夹无下载(打包下载后端 M4)
   e.preventDefault()
   contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, row }
 }
@@ -296,6 +322,12 @@ function onContextDownload() {
   const row = contextMenu.value.row
   closeContextMenu()
   if (row) void onDownload(row)
+}
+
+function onContextShare() {
+  const row = contextMenu.value.row
+  closeContextMenu()
+  if (row) openShare(row)
 }
 
 // ---------- 导航 ----------
@@ -398,6 +430,9 @@ function fileIcon(row: ChildItem) {
       <el-button :icon="Rank" :disabled="selection.length === 0" @click="onMove">
         移动
       </el-button>
+      <el-button :icon="Share" :disabled="selection.length !== 1" @click="onShareSelected">
+        分享
+      </el-button>
       <el-popconfirm
         title="确定将所选项目放入回收站?"
         confirm-button-text="删除"
@@ -456,12 +491,11 @@ function fileIcon(row: ChildItem) {
       <el-table-column label="操作" width="80" align="center">
         <template #default="{ row }">
           <el-button
-            v-if="asChild(row).kind === 'FILE'"
             link
             type="primary"
             :icon="Download"
             :loading="downloadingId === asChild(row).id"
-            title="下载"
+            :title="asChild(row).kind === 'FOLDER' ? '打包下载' : '下载'"
             @click.stop="onDownload(asChild(row))"
           />
         </template>
@@ -485,7 +519,7 @@ function fileIcon(row: ChildItem) {
       </div>
     </div>
 
-    <!-- 右键菜单(仅文件:下载) -->
+    <!-- 右键菜单:下载/打包下载 + 分享 -->
     <ul
       v-if="contextMenu.visible"
       class="context-menu"
@@ -493,9 +527,15 @@ function fileIcon(row: ChildItem) {
     >
       <li class="context-menu-item" @click="onContextDownload">
         <el-icon><Download /></el-icon>
-        下载
+        {{ contextMenu.row?.kind === 'FOLDER' ? '打包下载' : '下载' }}
+      </li>
+      <li class="context-menu-item" @click="onContextShare">
+        <el-icon><Share /></el-icon>
+        分享
       </li>
     </ul>
+
+    <ShareDialog v-model="shareDialogVisible" :node="shareTarget" />
   </div>
 </template>
 

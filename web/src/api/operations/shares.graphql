@@ -1,0 +1,62 @@
+mutation CreateShare($nodeId: ID!, $password: String, $expiresAt: Time) {
+  createShare(nodeId: $nodeId, password: $password, expiresAt: $expiresAt) {
+    id
+    token
+    hasPassword
+    expiresAt
+    createdAt
+    node {
+      id
+      name
+      kind
+    }
+  }
+}
+
+mutation RevokeShare($id: ID!) {
+  revokeShare(id: $id)
+}
+
+query MyShares {
+  myShares {
+    id
+    token
+    hasPassword
+    expiresAt
+    createdAt
+    node {
+      id
+      name
+      kind
+    }
+  }
+}
+
+# 公开查询,验密前的最小信息
+query ShareInfo($token: String!) {
+  shareInfo(token: $token) {
+    token
+    name
+    kind
+    needPassword
+    expired
+  }
+}
+
+# 无密码分享也走这条(password 传空串)拿访客 token
+mutation VerifySharePassword($token: String!, $password: String!) {
+  verifySharePassword(token: $token, password: $password) {
+    accessToken
+  }
+}
+
+# 访客视角的分享根(guest token 调用)
+query ShareRoot {
+  shareRoot {
+    id
+    name
+    kind
+    size
+    updatedAt
+  }
+}
