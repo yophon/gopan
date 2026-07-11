@@ -1,0 +1,15 @@
+# 预签名 URL 形如 https://{域名}/{bucket}/{key}?X-Amz-...(minio-go 对自定义域用 path-style,
+# bucket 名就在路径里),所以按 /gopan/* 匹配转 MinIO,不剥前缀、透传 Host——
+# S3 V4 签名把 Host 和路径都签进去了,改任何一样都是 403。
+{$GOPAN_DOMAIN} {
+	encode gzip
+
+	@s3 path /gopan/*
+	handle @s3 {
+		reverse_proxy minio:9000
+	}
+
+	handle {
+		reverse_proxy gopan:8080
+	}
+}

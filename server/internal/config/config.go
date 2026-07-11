@@ -26,7 +26,9 @@ type Config struct {
 	S3Key            string
 	S3Secret         string
 	S3Bucket         string
-	S3UseSSL         bool
+	S3Region         string // 显式 region,免去签名前的 GetBucketLocation 探测
+	S3UseSSL         bool // 内部地址是否走 TLS
+	S3PublicUseSSL   bool // 外部地址是否走 TLS(生产经反代通常 true,内网 false)
 	PartSize         int64         // 分片大小,S3 规定除末片外 ≥5MiB
 	SessionTTL       time.Duration // 上传会话有效期
 	PresignPutTTL    time.Duration
@@ -54,6 +56,7 @@ func Load() (*Config, error) {
 		S3Key:            env("S3_KEY", "gopan"),
 		S3Secret:         env("S3_SECRET", "gopan-minio-dev"),
 		S3Bucket:         env("S3_BUCKET", "gopan"),
+		S3Region:         env("S3_REGION", "us-east-1"), // MinIO 默认 region
 		S3UseSSL:         envBool("S3_USE_SSL", false),
 		PartSize:         envInt64("PART_SIZE", 16<<20),
 		SessionTTL:       48 * time.Hour,
@@ -70,6 +73,7 @@ func Load() (*Config, error) {
 	if c.S3PublicEndpoint == "" {
 		c.S3PublicEndpoint = c.S3Endpoint // 单机同网默认
 	}
+	c.S3PublicUseSSL = envBool("S3_PUBLIC_USE_SSL", c.S3UseSSL)
 	if c.PartSize < 5<<20 {
 		return nil, fmt.Errorf("GOPAN_PART_SIZE 不能小于 5MiB(S3 multipart 规定)")
 	}

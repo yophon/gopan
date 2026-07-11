@@ -28,11 +28,17 @@ type Store struct {
 
 func New(cfg *config.Config) (*Store, error) {
 	creds := credentials.NewStaticV4(cfg.S3Key, cfg.S3Secret, "")
-	internal, err := minio.New(cfg.S3Endpoint, &minio.Options{Creds: creds, Secure: cfg.S3UseSSL})
+	// Region 必须显式给:否则 minio-go 签名前会向 endpoint 发 GetBucketLocation,
+	// 而 public endpoint 对服务端通常不可达(公网域名 / 容器内网无出网)
+	internal, err := minio.New(cfg.S3Endpoint, &minio.Options{
+		Creds: creds, Secure: cfg.S3UseSSL, Region: cfg.S3Region,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("minio internal client: %w", err)
 	}
-	public, err := minio.New(cfg.S3PublicEndpoint, &minio.Options{Creds: creds, Secure: cfg.S3UseSSL})
+	public, err := minio.New(cfg.S3PublicEndpoint, &minio.Options{
+		Creds: creds, Secure: cfg.S3PublicUseSSL, Region: cfg.S3Region,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("minio public client: %w", err)
 	}

@@ -1,0 +1,12 @@
+.git
+doc
+web/node_modules
+web/dist
+server/gopan
+server/cmd/gopan/dist/*
+!server/cmd/gopan/dist/.gitkeep
+docker-compose.yml
+docker-compose.prod.yml
+Caddyfile
+scripts
+*.md

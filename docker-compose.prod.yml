@@ -1,0 +1,105 @@
+# 生产部署:docker compose -f docker-compose.prod.yml up -d
+# 先准备 .env(GOPAN_DOMAIN、POSTGRES_PASSWORD、MINIO_ROOT_PASSWORD)
+# 和 secrets/jwt_secret(≥32 字节随机串),见 doc/09-上线手册。
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gopan
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: gopan
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gopan -d gopan"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: gopan
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+    volumes:
+      - miniodata:/data
+    # edge:Caddy 把 /{bucket}/* 反代过来,浏览器直传/直取走这条路
+    networks: [backend, edge]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    # 只挂 backend(internal 网络无出网):它处理的是用户上传的文件,防 SSRF
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  gopan:
+    build:
+      context: .
+      # 国内构建可加:args: { GOPROXY: "https://goproxy.cn,direct" }
+    image: gopan:latest
+    restart: unless-stopped
+    environment:
+      GOPAN_DB_URL: postgres://gopan:${POSTGRES_PASSWORD:?}@postgres:5432/gopan?sslmode=disable
+      GOPAN_S3_ENDPOINT: minio:9000
+      GOPAN_S3_PUBLIC_ENDPOINT: ${GOPAN_DOMAIN:?}          # 预签名 host = 对外域名
+      GOPAN_S3_PUBLIC_USE_SSL: "true"                       # 浏览器经 Caddy 走 https
+      GOPAN_S3_KEY: gopan
+      GOPAN_S3_SECRET: ${MINIO_ROOT_PASSWORD:?}
+      GOPAN_S3_BUCKET: gopan                                # 改名须同步 Caddyfile 的 /gopan/* 路由
+      GOPAN_GOTENBERG_URL: http://gotenberg:3000
+      GOPAN_JWT_SECRET_FILE: /run/secrets/jwt_secret
+      GOPAN_REGISTER_OPEN: ${GOPAN_REGISTER_OPEN:-true}
+      GOPAN_DEFAULT_QUOTA: ${GOPAN_DEFAULT_QUOTA:-107374182400}
+    secrets:
+      - jwt_secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks: [backend, edge]
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      GOPAN_DOMAIN: ${GOPAN_DOMAIN:?}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      - gopan
+    networks: [edge]
+
+networks:
+  backend:
+    internal: true # 不通公网:postgres/minio/gotenberg 全部只在内网
+  edge: {}
+
+volumes:
+  pgdata:
+  miniodata:
+  caddydata:
+  caddyconfig:
+
+secrets:
+  jwt_secret:
+    file: ./secrets/jwt_secret
