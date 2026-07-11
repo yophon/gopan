@@ -43,6 +43,7 @@ make build        # 前端构建 + embed → server/gopan 单二进制
 | [M2 · 传输](./doc/milestones/M2-传输.md) | 分片直传、秒传、断点续传、hash 校验与谎报回收、自研上传器 |
 | [M3 · 预览](./doc/milestones/M3-预览.md) | 派生物管线(缩略图/封面/时长/Office 转 PDF)、预览模态 |
 | [M4 · 分享](./doc/milestones/M4-分享.md) | 分享链接、访客子树授权、og 落地页、流式 zip 打包 |
+| [M5 · 计划](./doc/milestones/M5-计划.md) | **待做**:欠账清零(回收站自动清理/复制/搜索 UI/配额展示/改密码)+ 生产部署,做完发 v1.0 |
 
 ## 读法
 
