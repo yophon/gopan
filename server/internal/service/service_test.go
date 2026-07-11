@@ -459,3 +459,83 @@ func TestChangePassword(t *testing.T) {
 		t.Fatalf("新密码登录应成功:%v", err)
 	}
 }
+
+func TestListSearchAndMisc(t *testing.T) {
+	pool := setup(t)
+	ctx := context.Background()
+	auth := newAuth(pool)
+	nodes := service.NewNodes(pool)
+
+	res, err := auth.Register(ctx, "misc", "password123", "1.1.1.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := res.User.ID
+
+	docs, _ := nodes.CreateFolder(ctx, owner, nil, "docs")
+	sub, _ := nodes.CreateFolder(ctx, owner, &docs.ID, "报告")
+	_, _ = nodes.CreateFolder(ctx, owner, &docs.ID, "归档")
+
+	// Children:文件夹在前按名排序;非法游标按第一页处理
+	page, err := nodes.Children(ctx, owner, &docs.ID, nil, "NAME", false)
+	if err != nil || page.Total != 2 || page.Items[0].Name != "报告" && page.Items[1].Name != "报告" {
+		t.Fatalf("children: %+v err=%v", page, err)
+	}
+	bad := "not-base64!"
+	if _, err := nodes.Children(ctx, owner, &docs.ID, &bad, "NAME", false); err != nil {
+		t.Fatalf("非法游标应容错按第一页:%v", err)
+	}
+	// 列不存在的文件夹 → NOT_FOUND
+	fake := uuid.Must(uuid.NewV7())
+	if _, err := nodes.Children(ctx, owner, &fake, nil, "NAME", false); err != service.ErrNotFound {
+		t.Fatalf("不存在的父目录应 NOT_FOUND,got %v", err)
+	}
+
+	// Search 全库 / SearchInSubtree 限子树
+	found, err := nodes.Search(ctx, owner, "报告", nil)
+	if err != nil || found.Total != 1 {
+		t.Fatalf("search: %+v err=%v", found, err)
+	}
+	if got, _ := nodes.Search(ctx, owner, "  ", nil); got.Total != 0 {
+		t.Fatal("空关键词应返回空页")
+	}
+	inSub, err := nodes.SearchInSubtree(ctx, sub.ID, "报告", nil)
+	if err != nil || inSub.Total != 1 {
+		t.Fatalf("子树搜索应命中自身:%+v err=%v", inSub, err)
+	}
+	outSub, err := nodes.SearchInSubtree(ctx, sub.ID, "归档", nil)
+	if err != nil || outSub.Total != 0 {
+		t.Fatalf("子树外不应命中:%+v err=%v", outSub, err)
+	}
+
+	// Rename:成功 + 同层冲突
+	if _, err := nodes.Rename(ctx, owner, sub.ID, "周报"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := nodes.Rename(ctx, owner, sub.ID, "归档"); err == nil {
+		t.Fatal("重命名撞同层名应被拒")
+	}
+
+	// GetUser / Logout:登出后 refresh 整族失效
+	if _, err := auth.GetUser(ctx, owner); err != nil {
+		t.Fatal(err)
+	}
+	if err := auth.Logout(ctx, res.RefreshToken); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := auth.Refresh(ctx, res.RefreshToken); err == nil {
+		t.Fatal("登出后 refresh 应失效")
+	}
+
+	// PurgeTrash:软删两个根后清空
+	if err := nodes.Delete(ctx, owner, []uuid.UUID{docs.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := nodes.PurgeTrash(ctx, owner); err != nil {
+		t.Fatal(err)
+	}
+	trash, _ := nodes.Trash(ctx, owner, nil)
+	if trash.Total != 0 {
+		t.Fatalf("清空后回收站应为空,got %d", trash.Total)
+	}
+}
