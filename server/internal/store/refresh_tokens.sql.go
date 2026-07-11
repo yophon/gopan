@@ -96,6 +96,17 @@ func (q *Queries) RevokeAllRefreshForUser(ctx context.Context, userID uuid.UUID)
 	return err
 }
 
+const revokeAllUserFamilies = `-- name: RevokeAllUserFamilies :exec
+UPDATE refresh_tokens SET revoked_at = now()
+WHERE user_id = $1 AND revoked_at IS NULL
+`
+
+// 改密码:该用户全部设备下线
+func (q *Queries) RevokeAllUserFamilies(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, revokeAllUserFamilies, userID)
+	return err
+}
+
 const revokeRefreshFamily = `-- name: RevokeRefreshFamily :exec
 UPDATE refresh_tokens SET revoked_at = now()
 WHERE family_id = $1 AND revoked_at IS NULL

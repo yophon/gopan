@@ -84,8 +84,8 @@ SELECT count(*) FROM nodes n
 WHERE n.id IN (SELECT s.id FROM sub s) AND n.name ILIKE '%' || $2 || '%';
 
 -- name: ListActiveChildrenLite :many
--- 打包下载的树遍历用,不分页
-SELECT n.id, n.name, n.kind, b.sha256 AS blob_sha256, b.size AS blob_size
+-- 打包下载 / 复制的树遍历用,不分页
+SELECT n.id, n.name, n.kind, n.blob_id, b.sha256 AS blob_sha256, b.size AS blob_size
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.parent_id = $1 AND n.deleted_at IS NULL
@@ -171,6 +171,14 @@ SELECT id FROM nodes n
 WHERE n.owner_id = $1 AND n.deleted_at IS NOT NULL
   AND (n.parent_id IS NULL OR NOT EXISTS (
         SELECT 1 FROM nodes p WHERE p.id = n.parent_id AND p.deleted_at IS NOT NULL));
+
+-- name: ListExpiredTrashRoots :many
+-- 全用户的过期回收站顶层(整树软删是同一时刻,只看顶层即可)
+SELECT n.id, n.owner_id FROM nodes n
+WHERE n.deleted_at IS NOT NULL AND n.deleted_at < $1
+  AND (n.parent_id IS NULL OR NOT EXISTS (
+        SELECT 1 FROM nodes p WHERE p.id = n.parent_id AND p.deleted_at IS NOT NULL))
+LIMIT 500;
 
 -- name: DecrementBlobRefs :exec
 UPDATE blobs SET

@@ -19,3 +19,8 @@ WHERE user_id = $1 AND revoked_at IS NULL;
 
 -- name: DeleteExpiredRefreshTokens :exec
 DELETE FROM refresh_tokens WHERE expires_at < now() - interval '30 days';
+
+-- name: RevokeAllUserFamilies :exec
+-- 改密码:该用户全部设备下线
+UPDATE refresh_tokens SET revoked_at = now()
+WHERE user_id = $1 AND revoked_at IS NULL;

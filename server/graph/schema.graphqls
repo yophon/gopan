@@ -122,9 +122,12 @@ type Mutation {
   refresh: AuthPayload!
   logout: Boolean!
 
+  changePassword(oldPassword: String!, newPassword: String!): AuthPayload!
+
   createFolder(parentId: ID, name: String!): Node!
   renameNode(id: ID!, name: String!): Node!
   moveNodes(ids: [ID!]!, targetParentId: ID): [Node!]!
+  copyNodes(ids: [ID!]!, targetParentId: ID): [Node!]!
   deleteNodes(ids: [ID!]!): Boolean!
   restoreNodes(ids: [ID!]!): [Node!]!
   purgeNodes(ids: [ID!]!): Boolean!

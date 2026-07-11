@@ -318,3 +318,144 @@ func TestShareLifecycle(t *testing.T) {
 		t.Fatalf("级联删除后分享应 NOT_FOUND,got %v", err)
 	}
 }
+
+func TestCopyNodes(t *testing.T) {
+	pool := setup(t)
+	ctx := context.Background()
+	auth := newAuth(pool)
+	nodes := service.NewNodes(pool)
+
+	res, err := auth.Register(ctx, "dave", "password123", "1.1.1.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := res.User.ID
+	q := store.New(pool)
+
+	// 树:src/{sub/, f1(blob 100B), sub/f2(同 blob)}
+	src, _ := nodes.CreateFolder(ctx, owner, nil, "src")
+	sub, _ := nodes.CreateFolder(ctx, owner, &src.ID, "sub")
+	blob, err := q.UpsertBlob(ctx, store.UpsertBlobParams{
+		ID: uuid.Must(uuid.NewV7()), Sha256: "aa" + string(make([]byte, 0)) + "11223344556677889900112233445566778899001122334455667788990011", Size: 100, Mime: "text/plain",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mkfile := func(parent *uuid.UUID, name string) store.Node {
+		n, err := q.CreateNode(ctx, store.CreateNodeParams{
+			ID: uuid.Must(uuid.NewV7()), OwnerID: owner, ParentID: parent, Name: name, Kind: "file", BlobID: &blob.ID,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := q.IncrementBlobRef(ctx, blob.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err := q.AddUsedBytes(ctx, store.AddUsedBytesParams{ID: owner, UsedBytes: 100}); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	mkfile(&src.ID, "f1.txt")
+	mkfile(&sub.ID, "f2.txt")
+
+	before, _ := q.GetUserByID(ctx, owner)
+
+	// 复制 src 到根:重名自动 (1),配额 +200,ref_count +2
+	copied, err := nodes.Copy(ctx, owner, []uuid.UUID{src.ID}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(copied) != 1 || copied[0].Name != "src (1)" {
+		t.Fatalf("复制根应叫 src (1),got %+v", copied)
+	}
+	after, _ := q.GetUserByID(ctx, owner)
+	if after.UsedBytes-before.UsedBytes != 200 {
+		t.Fatalf("配额应 +200,got +%d", after.UsedBytes-before.UsedBytes)
+	}
+	b, _ := q.GetBlob(ctx, blob.ID)
+	if b.RefCount != 4 {
+		t.Fatalf("ref_count 应为 4,got %d", b.RefCount)
+	}
+	// 子树结构完整
+	kids, _ := q.ListActiveChildrenLite(ctx, &copied[0].ID)
+	if len(kids) != 2 {
+		t.Fatalf("复制的子级应有 2 个,got %d", len(kids))
+	}
+
+	// 复制到自己的子树 → 拒绝
+	if _, err := nodes.Copy(ctx, owner, []uuid.UUID{src.ID}, &sub.ID); err == nil {
+		t.Fatal("复制到自身子树应被拒")
+	}
+
+	// 超配额 → 拒绝
+	if err := q.AddUsedBytes(ctx, store.AddUsedBytesParams{ID: owner, UsedBytes: 1 << 30}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := nodes.Copy(ctx, owner, []uuid.UUID{src.ID}, nil); err == nil {
+		t.Fatal("超配额复制应被拒")
+	}
+}
+
+func TestPurgeExpiredTrash(t *testing.T) {
+	pool := setup(t)
+	ctx := context.Background()
+	auth := newAuth(pool)
+	nodes := service.NewNodes(pool)
+
+	res, _ := auth.Register(ctx, "erin", "password123", "1.1.1.1")
+	owner := res.User.ID
+
+	f1, _ := nodes.CreateFolder(ctx, owner, nil, "old")
+	f2, _ := nodes.CreateFolder(ctx, owner, nil, "fresh")
+	if err := nodes.Delete(ctx, owner, []uuid.UUID{f1.ID, f2.ID}); err != nil {
+		t.Fatal(err)
+	}
+	// 把 old 的删除时间拨回 31 天前
+	if _, err := pool.Exec(ctx,
+		`UPDATE nodes SET deleted_at = now() - interval '31 days' WHERE id = $1`, f1.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := nodes.PurgeExpiredTrash(ctx, 30*24*time.Hour)
+	if err != nil || n != 1 {
+		t.Fatalf("应清理 1 个,got %d err=%v", n, err)
+	}
+	if _, err := nodes.Get(ctx, owner, f1.ID); err != service.ErrNotFound {
+		t.Fatalf("过期项应已彻删,got %v", err)
+	}
+	if _, err := nodes.Get(ctx, owner, f2.ID); err != nil {
+		t.Fatalf("未过期项应保留:%v", err)
+	}
+}
+
+func TestChangePassword(t *testing.T) {
+	pool := setup(t)
+	ctx := context.Background()
+	auth := newAuth(pool)
+	auth.SetRateLimit(time.Millisecond, 1000)
+
+	res, _ := auth.Register(ctx, "frank", "oldpass123", "1.1.1.1")
+
+	// 旧密码错 → 拒
+	if _, err := auth.ChangePassword(ctx, res.User.ID, "wrong", "newpass456", "1.1.1.1"); err == nil {
+		t.Fatal("旧密码错误应被拒")
+	}
+	// 改密成功:旧 refresh 全失效,新 pair 可用,新旧密码登录各归其位
+	res2, err := auth.ChangePassword(ctx, res.User.ID, "oldpass123", "newpass456", "1.1.1.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := auth.Refresh(ctx, res.RefreshToken); err == nil {
+		t.Fatal("改密后旧 refresh 应失效")
+	}
+	if _, err := auth.Refresh(ctx, res2.RefreshToken); err != nil {
+		t.Fatalf("改密返回的新 refresh 应可用:%v", err)
+	}
+	if _, err := auth.Login(ctx, "frank", "oldpass123", "2.2.2.2"); err == nil {
+		t.Fatal("旧密码登录应被拒")
+	}
+	if _, err := auth.Login(ctx, "frank", "newpass456", "2.2.2.2"); err != nil {
+		t.Fatalf("新密码登录应成功:%v", err)
+	}
+}

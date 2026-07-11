@@ -52,6 +52,20 @@ func (r *mutationResolver) Logout(ctx context.Context) (bool, error) {
 	return err == nil, err
 }
 
+// ChangePassword is the resolver for the changePassword field.
+func (r *mutationResolver) ChangePassword(ctx context.Context, oldPassword string, newPassword string) (*AuthPayload, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res, err := r.Auth.ChangePassword(ctx, ident.UserID, oldPassword, newPassword, httpx.ClientIP(ctx))
+	if err != nil {
+		return nil, err
+	}
+	httpx.SetRefreshCookie(ctx, res.RefreshToken, int(r.Cfg.RefreshTTL.Seconds()), !r.Cfg.DevMode)
+	return gqlAuth(res), nil
+}
+
 // CreateFolder is the resolver for the createFolder field.
 func (r *mutationResolver) CreateFolder(ctx context.Context, parentID *string, name string) (*Node, error) {
 	id, err := httpx.UserFrom(ctx)
@@ -106,6 +120,31 @@ func (r *mutationResolver) MoveNodes(ctx context.Context, ids []string, targetPa
 	}
 	out := make([]*Node, 0, len(moved))
 	for _, n := range moved {
+		out = append(out, gqlNode(n))
+	}
+	return out, nil
+}
+
+// CopyNodes is the resolver for the copyNodes field.
+func (r *mutationResolver) CopyNodes(ctx context.Context, ids []string, targetParentID *string) ([]*Node, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nids, err := parseIDs(ids)
+	if err != nil {
+		return nil, err
+	}
+	target, err := parseIDPtr(targetParentID)
+	if err != nil {
+		return nil, err
+	}
+	copied, err := r.Nodes.Copy(ctx, ident.UserID, nids, target)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*Node, 0, len(copied))
+	for _, n := range copied {
 		out = append(out, gqlNode(n))
 	}
 	return out, nil

@@ -17,6 +17,7 @@ type Config struct {
 	DefaultQuota int64
 	AccessTTL    time.Duration
 	RefreshTTL   time.Duration
+	TrashTTL     time.Duration // 回收站保留期,过期自动彻删
 	DevMode      bool // 关闭 cookie Secure、开 introspection
 
 	// 对象存储
@@ -45,6 +46,7 @@ func Load() (*Config, error) {
 		DefaultQuota: envInt64("DEFAULT_QUOTA", 100<<30),
 		AccessTTL:    15 * time.Minute,
 		RefreshTTL:   14 * 24 * time.Hour,
+		TrashTTL:     envDuration("TRASH_TTL", 30*24*time.Hour),
 		DevMode:      envBool("DEV_MODE", false),
 
 		S3Endpoint:       env("S3_ENDPOINT", "127.0.0.1:9000"),
@@ -99,6 +101,16 @@ func envBool(key string, def bool) bool {
 		b, err := strconv.ParseBool(v)
 		if err == nil {
 			return b
+		}
+	}
+	return def
+}
+
+func envDuration(key string, def time.Duration) time.Duration {
+	if v, ok := os.LookupEnv("GOPAN_" + key); ok {
+		d, err := time.ParseDuration(v)
+		if err == nil {
+			return d
 		}
 	}
 	return def

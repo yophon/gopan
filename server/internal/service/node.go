@@ -210,6 +210,187 @@ func (s *Nodes) Move(ctx context.Context, owner uuid.UUID, ids []uuid.UUID, targ
 	return out, nil
 }
 
+const maxCopyNodes = 10000
+
+// copyEntry 复制清单项,父在前的顺序,parent 是清单内下标(-1 = 挂到复制目标)。
+type copyEntry struct {
+	parent int
+	name   string
+	kind   string
+	blobID *uuid.UUID
+	size   int64
+}
+
+// Copy 复制节点(多选)到目标文件夹。内容寻址下文件复制是零物理拷贝:
+// 新 node 指向同一 blob,引用计数 +1,配额按逻辑大小照扣。
+func (s *Nodes) Copy(ctx context.Context, owner uuid.UUID, ids []uuid.UUID, target *uuid.UUID) ([]store.Node, error) {
+	if err := s.ensureFolder(ctx, owner, target); err != nil {
+		return nil, err
+	}
+
+	// 收集清单(快照语义:以遍历瞬间为准,不加锁)
+	var entries []copyEntry
+	var total int64
+	rootIdx := make([]int, 0, len(ids))
+	taken := map[string]bool{}
+	for _, id := range ids {
+		n, err := s.Get(ctx, owner, id)
+		if err != nil {
+			return nil, err
+		}
+		if n.DeletedAt.Valid {
+			return nil, ErrNotFound
+		}
+		if target != nil {
+			// 目标在源子树内 = 递归复制自己,无限膨胀
+			cyclic, err := s.q.IsDescendant(ctx, store.IsDescendantParams{ID: id, ID_2: *target})
+			if err != nil {
+				return nil, err
+			}
+			if cyclic {
+				return nil, errf("CYCLIC_COPY", "不能复制到自身或其子文件夹内")
+			}
+		}
+		name, err := s.cleanNameTaken(ctx, owner, target, n.Name, taken)
+		if err != nil {
+			return nil, err
+		}
+		taken[name] = true
+		rootIdx = append(rootIdx, len(entries))
+		row, err := s.q.GetNodeWithBlob(ctx, store.GetNodeWithBlobParams{ID: id, OwnerID: owner})
+		if err != nil {
+			return nil, err
+		}
+		size := int64(0)
+		if row.BlobSize != nil {
+			size = *row.BlobSize
+		}
+		entries = append(entries, copyEntry{parent: -1, name: name, kind: n.Kind, blobID: n.BlobID, size: size})
+		total += size
+		if n.Kind == "folder" {
+			sub, subTotal, err := s.collectSubtree(ctx, id, len(entries)-1, len(entries))
+			if err != nil {
+				return nil, err
+			}
+			entries = append(entries, sub...)
+			total += subTotal
+		}
+		if len(entries) > maxCopyNodes {
+			return nil, errf("INVALID_INPUT", "单次复制不能超过 %d 个节点,请分批", maxCopyNodes)
+		}
+	}
+
+	// 配额预检(逻辑记账,复制同样占额)
+	u, err := s.q.GetUserByID(ctx, owner)
+	if err != nil {
+		return nil, err
+	}
+	if u.UsedBytes+total > u.QuotaBytes {
+		return nil, errf("QUOTA_EXCEEDED", "存储配额不足")
+	}
+
+	// 单事务落库
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+
+	newIDs := make([]uuid.UUID, len(entries))
+	out := make([]store.Node, 0, len(rootIdx))
+	for i, e := range entries {
+		var parent *uuid.UUID
+		if e.parent == -1 {
+			parent = target
+		} else {
+			parent = &newIDs[e.parent]
+		}
+		n, err := qtx.CreateNode(ctx, store.CreateNodeParams{
+			ID: uuid.Must(uuid.NewV7()), OwnerID: owner, ParentID: parent,
+			Name: e.name, Kind: e.kind, BlobID: e.blobID,
+		})
+		if isUniqueViolation(err) {
+			return nil, errf("NAME_CONFLICT", "目标位置已存在同名文件或文件夹")
+		}
+		if err != nil {
+			return nil, err
+		}
+		newIDs[i] = n.ID
+		if e.blobID != nil {
+			if err := qtx.IncrementBlobRef(ctx, *e.blobID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if total > 0 {
+		if err := qtx.AddUsedBytes(ctx, store.AddUsedBytesParams{ID: owner, UsedBytes: total}); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	for _, ri := range rootIdx {
+		n, err := s.q.GetNode(ctx, newIDs[ri])
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, nil
+}
+
+// collectSubtree 深度优先收集活跃子树,parentIdx 是父项在清单中的下标,base 是本批的起始下标。
+func (s *Nodes) collectSubtree(ctx context.Context, folderID uuid.UUID, parentIdx, base int) ([]copyEntry, int64, error) {
+	children, err := s.q.ListActiveChildrenLite(ctx, &folderID)
+	if err != nil {
+		return nil, 0, err
+	}
+	var entries []copyEntry
+	var total int64
+	for _, c := range children {
+		size := int64(0)
+		if c.BlobSize != nil {
+			size = *c.BlobSize
+		}
+		entries = append(entries, copyEntry{parent: parentIdx, name: c.Name, kind: c.Kind, blobID: c.BlobID, size: size})
+		total += size
+		if c.Kind == "folder" {
+			sub, subTotal, err := s.collectSubtree(ctx, c.ID, base+len(entries)-1, base+len(entries))
+			if err != nil {
+				return nil, 0, err
+			}
+			entries = append(entries, sub...)
+			total += subTotal
+		}
+		if base+len(entries) > maxCopyNodes {
+			return nil, 0, errf("INVALID_INPUT", "单次复制不能超过 %d 个节点,请分批", maxCopyNodes)
+		}
+	}
+	return entries, total, nil
+}
+
+// PurgeExpiredTrash 彻删回收站里超过保留期的顶层节点(整树),worker 周期调用。
+func (s *Nodes) PurgeExpiredTrash(ctx context.Context, ttl time.Duration) (int, error) {
+	rows, err := s.q.ListExpiredTrashRoots(ctx, tstz(time.Now().Add(-ttl)))
+	if err != nil {
+		return 0, err
+	}
+	byOwner := map[uuid.UUID][]uuid.UUID{}
+	for _, r := range rows {
+		byOwner[r.OwnerID] = append(byOwner[r.OwnerID], r.ID)
+	}
+	purged := 0
+	for owner, ids := range byOwner {
+		if err := s.Purge(ctx, owner, ids); err != nil {
+			return purged, err
+		}
+		purged += len(ids)
+	}
+	return purged, nil
+}
+
 func (s *Nodes) Delete(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) error {
 	for _, id := range ids {
 		if err := s.q.SoftDeleteSubtree(ctx, store.SoftDeleteSubtreeParams{ID: id, OwnerID: owner}); err != nil {
@@ -323,17 +504,26 @@ func (s *Nodes) ensureFolder(ctx context.Context, owner uuid.UUID, id *uuid.UUID
 
 // cleanName 校验名字并在冲突时自动加后缀 "name (1)"。
 func (s *Nodes) cleanName(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID, name string) (string, error) {
+	return s.cleanNameTaken(ctx, owner, parentID, name, nil)
+}
+
+// cleanNameTaken 同 cleanName,额外避开 taken 中的名字(批量操作里同批尚未落库的名)。
+func (s *Nodes) cleanNameTaken(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID, name string, taken map[string]bool) (string, error) {
 	name = strings.TrimSpace(name)
 	if err := validateName(name); err != nil {
 		return "", err
 	}
 	candidate := name
 	for i := 1; i <= 100; i++ {
-		exists, err := s.q.SiblingNameExists(ctx, store.SiblingNameExistsParams{
-			OwnerID: owner, ParentID: parentID, Name: candidate,
-		})
-		if err != nil {
-			return "", err
+		exists := taken[candidate]
+		if !exists {
+			var err error
+			exists, err = s.q.SiblingNameExists(ctx, store.SiblingNameExistsParams{
+				OwnerID: owner, ParentID: parentID, Name: candidate,
+			})
+			if err != nil {
+				return "", err
+			}
 		}
 		if !exists {
 			return candidate, nil

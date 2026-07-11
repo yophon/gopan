@@ -255,7 +255,7 @@ func (q *Queries) IsDescendant(ctx context.Context, arg IsDescendantParams) (boo
 }
 
 const listActiveChildrenLite = `-- name: ListActiveChildrenLite :many
-SELECT n.id, n.name, n.kind, b.sha256 AS blob_sha256, b.size AS blob_size
+SELECT n.id, n.name, n.kind, n.blob_id, b.sha256 AS blob_sha256, b.size AS blob_size
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.parent_id = $1 AND n.deleted_at IS NULL
@@ -266,11 +266,12 @@ type ListActiveChildrenLiteRow struct {
 	ID         uuid.UUID
 	Name       string
 	Kind       string
+	BlobID     *uuid.UUID
 	BlobSha256 *string
 	BlobSize   *int64
 }
 
-// 打包下载的树遍历用,不分页
+// 打包下载 / 复制的树遍历用,不分页
 func (q *Queries) ListActiveChildrenLite(ctx context.Context, parentID *uuid.UUID) ([]ListActiveChildrenLiteRow, error) {
 	rows, err := q.db.Query(ctx, listActiveChildrenLite, parentID)
 	if err != nil {
@@ -284,6 +285,7 @@ func (q *Queries) ListActiveChildrenLite(ctx context.Context, parentID *uuid.UUI
 			&i.ID,
 			&i.Name,
 			&i.Kind,
+			&i.BlobID,
 			&i.BlobSha256,
 			&i.BlobSize,
 		); err != nil {
@@ -370,6 +372,40 @@ func (q *Queries) ListChildren(ctx context.Context, arg ListChildrenParams) ([]L
 			&i.BlobMime,
 			&i.BlobSha256,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listExpiredTrashRoots = `-- name: ListExpiredTrashRoots :many
+SELECT n.id, n.owner_id FROM nodes n
+WHERE n.deleted_at IS NOT NULL AND n.deleted_at < $1
+  AND (n.parent_id IS NULL OR NOT EXISTS (
+        SELECT 1 FROM nodes p WHERE p.id = n.parent_id AND p.deleted_at IS NOT NULL))
+LIMIT 500
+`
+
+type ListExpiredTrashRootsRow struct {
+	ID      uuid.UUID
+	OwnerID uuid.UUID
+}
+
+// 全用户的过期回收站顶层(整树软删是同一时刻,只看顶层即可)
+func (q *Queries) ListExpiredTrashRoots(ctx context.Context, deletedAt pgtype.Timestamptz) ([]ListExpiredTrashRootsRow, error) {
+	rows, err := q.db.Query(ctx, listExpiredTrashRoots, deletedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListExpiredTrashRootsRow
+	for rows.Next() {
+		var i ListExpiredTrashRootsRow
+		if err := rows.Scan(&i.ID, &i.OwnerID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

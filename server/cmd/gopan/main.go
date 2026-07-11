@@ -77,7 +77,7 @@ func run() error {
 	previews := service.NewPreviews(pool, obj)
 	shares := service.NewShares(q, auth)
 	packer := service.NewPacker(q, obj, shares)
-	wk := worker.New(pool, obj, cfg.FFmpegPath, cfg.FFprobePath, cfg.GotenbergURL)
+	wk := worker.New(pool, obj, nodes, cfg.TrashTTL, cfg.FFmpegPath, cfg.FFprobePath, cfg.GotenbergURL)
 	uploads.SetEnqueue(wk.Enqueue)
 	previews.SetEnqueue(wk.Enqueue)
 	go wk.Run(ctx, 2)

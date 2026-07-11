@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/yophon/gopan/server/internal/objstore"
+	"github.com/yophon/gopan/server/internal/service"
 	"github.com/yophon/gopan/server/internal/store"
 )
 
@@ -24,15 +25,17 @@ type Pool struct {
 	pool      *pgxpool.Pool
 	q         *store.Queries
 	obj       *objstore.Store
+	nodes     *service.Nodes
+	trashTTL  time.Duration
 	wake      chan struct{}
 	ffmpeg    string
 	ffprobe   string
 	gotenberg string
 }
 
-func New(pool *pgxpool.Pool, obj *objstore.Store, ffmpeg, ffprobe, gotenberg string) *Pool {
-	return &Pool{pool: pool, q: store.New(pool), obj: obj, wake: make(chan struct{}, 1),
-		ffmpeg: ffmpeg, ffprobe: ffprobe, gotenberg: gotenberg}
+func New(pool *pgxpool.Pool, obj *objstore.Store, nodes *service.Nodes, trashTTL time.Duration, ffmpeg, ffprobe, gotenberg string) *Pool {
+	return &Pool{pool: pool, q: store.New(pool), obj: obj, nodes: nodes, trashTTL: trashTTL,
+		wake: make(chan struct{}, 1), ffmpeg: ffmpeg, ffprobe: ffprobe, gotenberg: gotenberg}
 }
 
 // Enqueue 入队并唤醒 worker(注入给 service 用)。
@@ -56,6 +59,7 @@ func (w *Pool) Run(ctx context.Context, n int) {
 	}
 	go w.periodic(ctx, time.Hour, "session-cleanup", w.cleanupSessions)
 	go w.periodic(ctx, time.Hour, "blob-gc", w.gcBlobs)
+	go w.periodic(ctx, time.Hour, "trash-cleanup", w.cleanupTrash)
 	<-ctx.Done()
 }
 
@@ -217,6 +221,15 @@ func (w *Pool) cleanupSessions(ctx context.Context) error {
 		slog.Info("expired sessions aborted", "count", len(expired))
 	}
 	return nil
+}
+
+// cleanupTrash 彻删回收站里超过保留期的内容(退配额、减引用,blob 由 GC 接手)。
+func (w *Pool) cleanupTrash(ctx context.Context) error {
+	n, err := w.nodes.PurgeExpiredTrash(ctx, w.trashTTL)
+	if n > 0 {
+		slog.Info("trash cleanup", "purged_roots", n, "ttl", w.trashTTL)
+	}
+	return err
 }
 
 // gcBlobs 删除 ref_count=0 且过宽限期(24h)的 blob 及其对象。

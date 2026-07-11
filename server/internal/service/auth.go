@@ -250,6 +250,35 @@ func (a *Auth) Logout(ctx context.Context, plain string) error {
 	return a.q.RevokeRefreshFamily(ctx, rt.FamilyID)
 }
 
+// ChangePassword 验旧密码后换新,吊销全部 refresh family(其它设备下线),
+// 当场重新签发一对 token 让当前会话无感续命。
+func (a *Auth) ChangePassword(ctx context.Context, userID uuid.UUID, oldPw, newPw, ip string) (*AuthResult, error) {
+	if !a.allow("chpw:" + ip) {
+		return nil, ErrRateLimited
+	}
+	u, err := a.q.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, ErrUnauthenticated
+	}
+	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(oldPw)) != nil {
+		return nil, errf("BAD_CREDENTIALS", "旧密码错误")
+	}
+	if len(newPw) < 8 || len(newPw) > 72 {
+		return nil, errf("INVALID_INPUT", "密码长度需在 8~72 之间")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPw), 12)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.q.UpdateUserPassword(ctx, store.UpdateUserPasswordParams{ID: userID, PasswordHash: string(hash)}); err != nil {
+		return nil, err
+	}
+	if err := a.q.RevokeAllUserFamilies(ctx, userID); err != nil {
+		return nil, err
+	}
+	return a.issuePair(ctx, u)
+}
+
 func (a *Auth) GetUser(ctx context.Context, id uuid.UUID) (store.User, error) {
 	u, err := a.q.GetUserByID(ctx, id)
 	if err != nil {

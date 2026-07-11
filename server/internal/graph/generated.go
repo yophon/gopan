@@ -44,7 +44,9 @@ type ComplexityRoot struct {
 
 	Mutation struct {
 		AbortUpload         func(childComplexity int, sessionID string) int
+		ChangePassword      func(childComplexity int, oldPassword string, newPassword string) int
 		CompleteUpload      func(childComplexity int, sessionID string, etags []*PartEtag) int
+		CopyNodes           func(childComplexity int, ids []string, targetParentID *string) int
 		CreateFolder        func(childComplexity int, parentID *string, name string) int
 		CreateShare         func(childComplexity int, nodeID string, password *string, expiresAt *time.Time) int
 		DeleteNodes         func(childComplexity int, ids []string) int
@@ -163,9 +165,11 @@ type MutationResolver interface {
 	Login(ctx context.Context, username string, password string) (*AuthPayload, error)
 	Refresh(ctx context.Context) (*AuthPayload, error)
 	Logout(ctx context.Context) (bool, error)
+	ChangePassword(ctx context.Context, oldPassword string, newPassword string) (*AuthPayload, error)
 	CreateFolder(ctx context.Context, parentID *string, name string) (*Node, error)
 	RenameNode(ctx context.Context, id string, name string) (*Node, error)
 	MoveNodes(ctx context.Context, ids []string, targetParentID *string) ([]*Node, error)
+	CopyNodes(ctx context.Context, ids []string, targetParentID *string) ([]*Node, error)
 	DeleteNodes(ctx context.Context, ids []string) (bool, error)
 	RestoreNodes(ctx context.Context, ids []string) ([]*Node, error)
 	PurgeNodes(ctx context.Context, ids []string) (bool, error)
@@ -236,6 +240,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AbortUpload(childComplexity, args["sessionId"].(string)), true
+	case "Mutation.changePassword":
+		if e.ComplexityRoot.Mutation.ChangePassword == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_changePassword_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ChangePassword(childComplexity, args["oldPassword"].(string), args["newPassword"].(string)), true
 	case "Mutation.completeUpload":
 		if e.ComplexityRoot.Mutation.CompleteUpload == nil {
 			break
@@ -247,6 +262,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CompleteUpload(childComplexity, args["sessionId"].(string), args["etags"].([]*PartEtag)), true
+	case "Mutation.copyNodes":
+		if e.ComplexityRoot.Mutation.CopyNodes == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_copyNodes_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CopyNodes(childComplexity, args["ids"].([]string), args["targetParentId"].(*string)), true
 	case "Mutation.createFolder":
 		if e.ComplexityRoot.Mutation.CreateFolder == nil {
 			break
@@ -1001,9 +1027,12 @@ type Mutation {
   refresh: AuthPayload!
   logout: Boolean!
 
+  changePassword(oldPassword: String!, newPassword: String!): AuthPayload!
+
   createFolder(parentId: ID, name: String!): Node!
   renameNode(id: ID!, name: String!): Node!
   moveNodes(ids: [ID!]!, targetParentId: ID): [Node!]!
+  copyNodes(ids: [ID!]!, targetParentId: ID): [Node!]!
   deleteNodes(ids: [ID!]!): Boolean!
   restoreNodes(ids: [ID!]!): [Node!]!
   purgeNodes(ids: [ID!]!): Boolean!
@@ -1323,6 +1352,28 @@ func (ec *executionContext) field_Mutation_abortUpload_args(ctx context.Context,
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_changePassword_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "oldPassword",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["oldPassword"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "newPassword",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["newPassword"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_completeUpload_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -1342,6 +1393,28 @@ func (ec *executionContext) field_Mutation_completeUpload_args(ctx context.Conte
 		return nil, err
 	}
 	args["etags"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_copyNodes_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "ids",
+		func(ctx context.Context, v any) ([]string, error) {
+			return ec.unmarshalNID2ᚕstringᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["ids"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "targetParentId",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["targetParentId"] = arg1
 	return args, nil
 }
 
@@ -2003,6 +2076,50 @@ func (ec *executionContext) fieldContext_Mutation_logout(_ context.Context, fiel
 	return graphql.NewScalarFieldContext("Mutation", field, true, true, errors.New("field of type Boolean does not have child fields"))
 }
 
+func (ec *executionContext) _Mutation_changePassword(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_changePassword(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ChangePassword(ctx, fc.Args["oldPassword"].(string), fc.Args["newPassword"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AuthPayload) graphql.Marshaler {
+			return ec.marshalNAuthPayload2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAuthPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_changePassword(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AuthPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_changePassword_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createFolder(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2129,6 +2246,50 @@ func (ec *executionContext) fieldContext_Mutation_moveNodes(ctx context.Context,
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_moveNodes_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_copyNodes(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_copyNodes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CopyNodes(ctx, fc.Args["ids"].([]string), fc.Args["targetParentId"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Node) graphql.Marshaler {
+			return ec.marshalNNode2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNodeᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_copyNodes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Node(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_copyNodes_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -5387,6 +5548,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "changePassword":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_changePassword(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createFolder":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createFolder(ctx, field)
@@ -5404,6 +5572,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "moveNodes":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_moveNodes(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "copyNodes":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_copyNodes(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
