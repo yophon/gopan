@@ -58,6 +58,15 @@ func PackHandler(auth *service.Auth, packer *service.Packer) http.Handler {
 			return
 		}
 
+		// 打包是唯一过 Go 的字节流:限频 + 全局并发上限
+		release, err := packer.Gate(ident)
+		if err != nil {
+			w.Header().Set("Retry-After", "30")
+			http.Error(w, "打包请求过于频繁,稍后再试", http.StatusTooManyRequests)
+			return
+		}
+		defer release()
+
 		var ids []uuid.UUID
 		for _, raw := range strings.Split(r.URL.Query().Get("nodes"), ",") {
 			raw = strings.TrimSpace(raw)

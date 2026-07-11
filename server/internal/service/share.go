@@ -5,14 +5,12 @@ import (
 	"crypto/rand"
 	"errors"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
-	"golang.org/x/time/rate"
 
 	"github.com/yophon/gopan/server/internal/store"
 )
@@ -38,40 +36,22 @@ func ShareScopeID(scope string) (uuid.UUID, bool) {
 }
 
 type Shares struct {
-	q    *store.Queries
-	auth *Auth
-
-	mu        sync.Mutex
-	limiters  map[string]*rate.Limiter
-	rateEvery time.Duration
-	rateBurst int
+	q       *store.Queries
+	auth    *Auth
+	limiter *keyedLimiter // 验密按 IP 限速
 }
 
 func NewShares(q *store.Queries, auth *Auth) *Shares {
-	return &Shares{
-		q: q, auth: auth,
-		limiters:  make(map[string]*rate.Limiter),
-		rateEvery: 6 * time.Second, rateBurst: 10,
-	}
+	return &Shares{q: q, auth: auth, limiter: newKeyedLimiter(6*time.Second, 10)}
 }
 
 // SetRateLimit 调整验密限速,测试注入用。
 func (s *Shares) SetRateLimit(interval time.Duration, burst int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.rateEvery, s.rateBurst = interval, burst
-	clear(s.limiters)
+	s.limiter.SetRate(interval, burst)
 }
 
 func (s *Shares) allow(key string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	l, ok := s.limiters[key]
-	if !ok {
-		l = rate.NewLimiter(rate.Every(s.rateEvery), s.rateBurst)
-		s.limiters[key] = l
-	}
-	return l.Allow()
+	return s.limiter.Allow(key)
 }
 
 // ---- 属主操作 ----

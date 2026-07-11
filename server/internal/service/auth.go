@@ -8,14 +8,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
-	"golang.org/x/time/rate"
 
 	"github.com/yophon/gopan/server/internal/store"
 )
@@ -35,10 +33,8 @@ type Auth struct {
 	registerOpen bool
 	defaultQuota int64
 
-	mu        sync.Mutex
-	limiters  map[string]*rate.Limiter
-	rateEvery time.Duration
-	rateBurst int
+	// 限速:每 key(IP)每分钟 10 次
+	limiter *keyedLimiter
 }
 
 func NewAuth(q *store.Queries, secret []byte, accessTTL, refreshTTL time.Duration, registerOpen bool, defaultQuota int64) *Auth {
@@ -46,30 +42,17 @@ func NewAuth(q *store.Queries, secret []byte, accessTTL, refreshTTL time.Duratio
 		q: q, secret: secret,
 		accessTTL: accessTTL, refreshTTL: refreshTTL,
 		registerOpen: registerOpen, defaultQuota: defaultQuota,
-		limiters:  make(map[string]*rate.Limiter),
-		rateEvery: 6 * time.Second, rateBurst: 10,
+		limiter: newKeyedLimiter(6*time.Second, 10),
 	}
 }
 
 // SetRateLimit 调整登录/注册限速(每 interval 回填一个令牌,突发上限 burst),测试注入用。
 func (a *Auth) SetRateLimit(interval time.Duration, burst int) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.rateEvery, a.rateBurst = interval, burst
-	clear(a.limiters)
+	a.limiter.SetRate(interval, burst)
 }
 
-// ---- 限速:每 key(IP)每分钟 10 次 ----
-
 func (a *Auth) allow(key string) bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	l, ok := a.limiters[key]
-	if !ok {
-		l = rate.NewLimiter(rate.Every(a.rateEvery), a.rateBurst)
-		a.limiters[key] = l
-	}
-	return l.Allow()
+	return a.limiter.Allow(key)
 }
 
 // ---- access token(JWT)----

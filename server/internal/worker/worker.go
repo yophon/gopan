@@ -60,6 +60,7 @@ func (w *Pool) Run(ctx context.Context, n int) {
 	go w.periodic(ctx, time.Hour, "session-cleanup", w.cleanupSessions)
 	go w.periodic(ctx, time.Hour, "blob-gc", w.gcBlobs)
 	go w.periodic(ctx, time.Hour, "trash-cleanup", w.cleanupTrash)
+	go w.periodic(ctx, 24*time.Hour, "refresh-cleanup", w.cleanupRefreshTokens)
 	<-ctx.Done()
 }
 
@@ -230,6 +231,12 @@ func (w *Pool) cleanupTrash(ctx context.Context) error {
 		slog.Info("trash cleanup", "purged_roots", n, "ttl", w.trashTTL)
 	}
 	return err
+}
+
+// cleanupRefreshTokens 删过期超 30 天的 refresh 行。留 30 天余量:
+// 重用检测靠"已用 token 再现"识别泄露,过期即删会丢取证窗口。
+func (w *Pool) cleanupRefreshTokens(ctx context.Context) error {
+	return w.q.DeleteExpiredRefreshTokens(ctx)
 }
 
 // gcBlobs 删除 ref_count=0 且过宽限期(24h)的 blob 及其对象。

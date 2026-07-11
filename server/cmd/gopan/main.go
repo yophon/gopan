@@ -117,7 +117,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           httpx.WithLogging(mux),
+		Handler:           httpx.WithLogging(httpx.WithSecurityHeaders(mux, cfg.DevMode)),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       60 * time.Second,
 		WriteTimeout:      60 * time.Second,

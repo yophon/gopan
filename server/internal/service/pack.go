@@ -31,10 +31,39 @@ type Packer struct {
 	q      *store.Queries
 	obj    *objstore.Store
 	shares *Shares
+
+	limiter *keyedLimiter // 打包是低频动作:30 秒回填一个,突发 3
+	sem     chan struct{} // 全局并发上限:打包是分钟级长请求,满了拒绝而不是排队
 }
 
 func NewPacker(q *store.Queries, obj *objstore.Store, shares *Shares) *Packer {
-	return &Packer{q: q, obj: obj, shares: shares}
+	return &Packer{
+		q: q, obj: obj, shares: shares,
+		limiter: newKeyedLimiter(30*time.Second, 3),
+		sem:     make(chan struct{}, 2),
+	}
+}
+
+// SetRateLimit 调整打包限速,测试注入用。
+func (p *Packer) SetRateLimit(interval time.Duration, burst int) {
+	p.limiter.SetRate(interval, burst)
+}
+
+// Gate 打包入口闸:按身份限频 + 全局并发上限。通过时返回释放函数。
+func (p *Packer) Gate(ident *Identity) (release func(), err error) {
+	key := ident.Scope // share:{id} 本身唯一;user scope 补上 userID
+	if ident.Scope == ScopeUser {
+		key = "user:" + ident.UserID.String()
+	}
+	if !p.limiter.Allow(key) {
+		return nil, ErrRateLimited
+	}
+	select {
+	case p.sem <- struct{}{}:
+		return func() { <-p.sem }, nil
+	default:
+		return nil, errf("PACK_BUSY", "打包通道繁忙,稍后再试")
+	}
 }
 
 // Collect 鉴权 + 遍历子树,产出打包清单。错误在写响应头之前全部暴露。
