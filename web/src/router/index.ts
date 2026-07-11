@@ -37,6 +37,11 @@ const router = createRouter({
           name: 'shares',
           component: () => import('@/views/SharesView.vue'),
         },
+        {
+          path: 'search',
+          name: 'search',
+          component: () => import('@/views/SearchView.vue'),
+        },
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/drive' },

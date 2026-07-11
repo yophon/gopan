@@ -37,6 +37,8 @@ function invalidate() {
   void queryClient.invalidateQueries({ queryKey: ['trash'] })
   // 还原会把节点放回原目录
   void queryClient.invalidateQueries({ queryKey: ['children'] })
+  // 彻删退配额,用量条跟进
+  void queryClient.invalidateQueries({ queryKey: ['me'] })
 }
 
 const restoreMutation = useMutation({

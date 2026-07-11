@@ -39,6 +39,7 @@ const queryClient = useQueryClient()
 setUploadInvalidator((parentId) => {
   void queryClient.invalidateQueries({ queryKey: ['children', parentId] })
   void queryClient.invalidateQueries({ queryKey: ['breadcrumb'] })
+  void queryClient.invalidateQueries({ queryKey: ['me'] }) // 用量条跟进
 })
 
 // 有进行中任务时,关闭页面前提示

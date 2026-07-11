@@ -27,6 +27,7 @@ import { closePreview, previewNext, previewPrev, previewState } from '@/composab
 
 // pdfjs-dist 体积大(~1MB),按需异步加载,只有真正预览 PDF 时才拉
 const PdfViewer = defineAsyncComponent(() => import('./PdfViewer.vue'))
+import ImageViewer from './ImageViewer.vue'
 
 /** 访客模式(分享页):带访客 token 请求;访客是只读白名单,不能触发文档转换 */
 const props = defineProps<{ guestToken?: string }>()
@@ -273,11 +274,10 @@ function formatDuration(sec: number | null | undefined): string {
             :description="errorText(error, '加载预览信息失败')"
           />
 
-          <!-- IMAGE -->
-          <img
+          <!-- IMAGE:滚轮缩放 / 拖拽平移 / 双击复位 -->
+          <ImageViewer
             v-else-if="preview?.kind === 'IMAGE' && (preview.largeUrl || preview.contentUrl)"
-            class="preview-image"
-            :src="preview.largeUrl ?? preview.contentUrl ?? undefined"
+            :src="(preview.largeUrl ?? preview.contentUrl)!"
             :alt="node?.name"
           />
 

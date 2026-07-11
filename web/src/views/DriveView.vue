@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useEventListener } from '@vueuse/core'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+  CopyDocument,
   DataBoard,
   Delete,
   Document,
@@ -27,6 +28,7 @@ import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
 import {
   ChildrenDocument,
+  CopyNodesDocument,
   CreateFolderDocument,
   DeleteNodesDocument,
   MoveNodesDocument,
@@ -129,6 +131,18 @@ const moveMutation = useMutation({
   onError: (err) => ElMessage.error(errorText(err)),
 })
 
+const copyMutation = useMutation({
+  mutationFn: (vars: { ids: string[]; targetParentId: string | null }) =>
+    request(CopyNodesDocument, vars),
+  onSuccess: () => {
+    ElMessage.success('复制成功')
+    selection.value = []
+    invalidate()
+    void queryClient.invalidateQueries({ queryKey: ['me'] }) // 复制占配额
+  },
+  onError: (err) => ElMessage.error(errorText(err)),
+})
+
 const deleteMutation = useMutation({
   mutationFn: (vars: { ids: string[] }) => request(DeleteNodesDocument, vars),
   onSuccess: () => {
@@ -174,6 +188,7 @@ async function onRename() {
 }
 
 const moveDialogVisible = ref(false)
+const copyDialogVisible = ref(false)
 
 function onMove() {
   if (selection.value.length === 0) return
@@ -182,6 +197,15 @@ function onMove() {
 
 function onMoveConfirm(targetParentId: string | null) {
   moveMutation.mutate({ ids: selectedIds.value, targetParentId })
+}
+
+function onCopy() {
+  if (selection.value.length === 0) return
+  copyDialogVisible.value = true
+}
+
+function onCopyConfirm(targetParentId: string | null) {
+  copyMutation.mutate({ ids: selectedIds.value, targetParentId })
 }
 
 function onDelete() {
@@ -225,20 +249,127 @@ useEventListener(window, 'dragleave', (e: DragEvent) => {
   if (!hasFiles(e)) return
   dragDepth.value = Math.max(0, dragDepth.value - 1)
 })
-useEventListener(window, 'drop', (e: DragEvent) => {
+const MAX_DROP_FILES = 1000
+
+/** readEntries 每批最多返回 100 项,必须循环读空 */
+function readAllEntries(dir: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
+  const reader = dir.createReader()
+  return new Promise((resolve, reject) => {
+    const all: FileSystemEntry[] = []
+    const step = () =>
+      reader.readEntries((batch) => {
+        if (batch.length === 0) {
+          resolve(all)
+          return
+        }
+        all.push(...batch)
+        step()
+      }, reject)
+    step()
+  })
+}
+
+function entryFile(entry: FileSystemFileEntry): Promise<File> {
+  return new Promise((resolve, reject) => entry.file(resolve, reject))
+}
+
+/** 深度优先展开 entry 树 → (相对目录段, 文件) 列表 */
+async function walkEntry(
+  entry: FileSystemEntry,
+  dirs: string[],
+  out: { dirs: string[]; file: File }[],
+): Promise<void> {
+  if (out.length >= MAX_DROP_FILES) return
+  if (entry.isFile) {
+    out.push({ dirs, file: await entryFile(entry as FileSystemFileEntry) })
+    return
+  }
+  if (entry.isDirectory) {
+    const children = await readAllEntries(entry as FileSystemDirectoryEntry)
+    const sub = [...dirs, entry.name]
+    if (children.length === 0) {
+      // 空目录也创建,保持结构
+      await ensureDirChain(sub)
+      return
+    }
+    for (const c of children) {
+      await walkEntry(c, sub, out)
+    }
+  }
+}
+
+/** 确保相对目录链存在于当前文件夹下,返回最深层目录 id;同名目录复用 */
+const dirCache = new Map<string, string | null>()
+
+async function ensureDirChain(dirs: string[]): Promise<string | null> {
+  let parent = folderId.value
+  let keyPrefix = parent ?? 'root'
+  for (const name of dirs) {
+    keyPrefix += '/' + name
+    const cached = dirCache.get(keyPrefix)
+    if (cached !== undefined) {
+      parent = cached
+      continue
+    }
+    const res = await request(ChildrenDocument, { parentId: parent })
+    const hit = res.children.items.find((i) => i.kind === 'FOLDER' && i.name === name)
+    let id: string
+    if (hit) {
+      id = hit.id
+    } else {
+      const created = await request(CreateFolderDocument, { parentId: parent, name })
+      id = created.createFolder.id
+    }
+    dirCache.set(keyPrefix, id)
+    parent = id
+  }
+  return parent
+}
+
+useEventListener(window, 'drop', async (e: DragEvent) => {
   if (!hasFiles(e)) return
   e.preventDefault()
   dragDepth.value = 0
-  // 只收文件;拖入的文件夹用 webkitGetAsEntry 识别后跳过(文件夹上传是 v2)
-  const files: File[] = []
+  const entries: FileSystemEntry[] = []
+  const plainFiles: File[] = []
   for (const item of Array.from(e.dataTransfer?.items ?? [])) {
     if (item.kind !== 'file') continue
     const entry = item.webkitGetAsEntry?.()
-    if (entry?.isDirectory) continue
-    const f = item.getAsFile()
-    if (f) files.push(f)
+    if (entry) {
+      entries.push(entry)
+    } else {
+      const f = item.getAsFile()
+      if (f) plainFiles.push(f)
+    }
   }
-  if (files.length > 0) enqueueFiles(files, folderId.value)
+  if (plainFiles.length > 0) enqueueFiles(plainFiles, folderId.value)
+  if (entries.length === 0) return
+
+  try {
+    dirCache.clear()
+    const collected: { dirs: string[]; file: File }[] = []
+    for (const entry of entries) {
+      await walkEntry(entry, [], collected)
+    }
+    if (collected.length >= MAX_DROP_FILES) {
+      ElMessage.warning(`单次最多上传 ${MAX_DROP_FILES} 个文件,超出部分已忽略`)
+    }
+    // 按目录分组:先建目录链,再把文件按归属入队
+    const groups = new Map<string, { dirs: string[]; files: File[] }>()
+    for (const c of collected) {
+      const key = c.dirs.join('/')
+      const g = groups.get(key) ?? { dirs: c.dirs, files: [] }
+      g.files.push(c.file)
+      groups.set(key, g)
+    }
+    for (const g of groups.values()) {
+      const target = g.dirs.length === 0 ? folderId.value : await ensureDirChain(g.dirs)
+      enqueueFiles(g.files, target)
+    }
+    invalidate()
+  } catch (err) {
+    ElMessage.error(errorText(err, '读取拖入的文件夹失败'))
+  }
 })
 
 // ---------- 下载 ----------
@@ -430,6 +561,9 @@ function fileIcon(row: ChildItem) {
       <el-button :icon="Rank" :disabled="selection.length === 0" @click="onMove">
         移动
       </el-button>
+      <el-button :icon="CopyDocument" :disabled="selection.length === 0" @click="onCopy">
+        复制
+      </el-button>
       <el-button :icon="Share" :disabled="selection.length !== 1" @click="onShareSelected">
         分享
       </el-button>
@@ -506,6 +640,13 @@ function fileIcon(row: ChildItem) {
       v-model="moveDialogVisible"
       :exclude-ids="selectedIds"
       @confirm="onMoveConfirm"
+    />
+
+    <MoveDialog
+      v-model="copyDialogVisible"
+      mode="copy"
+      :exclude-ids="selectedIds"
+      @confirm="onCopyConfirm"
     />
 
     <!-- 隐藏文件选择器(多选) -->

@@ -46,3 +46,24 @@ query Me {
     usedBytes
   }
 }
+
+query Me {
+  me {
+    id
+    username
+    quotaBytes
+    usedBytes
+  }
+}
+
+mutation ChangePassword($oldPassword: String!, $newPassword: String!) {
+  changePassword(oldPassword: $oldPassword, newPassword: $newPassword) {
+    accessToken
+    user {
+      id
+      username
+      quotaBytes
+      usedBytes
+    }
+  }
+}

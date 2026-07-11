@@ -88,3 +88,30 @@ mutation MoveNodes($ids: [ID!]!, $targetParentId: ID) {
 mutation DeleteNodes($ids: [ID!]!) {
   deleteNodes(ids: $ids)
 }
+
+mutation CopyNodes($ids: [ID!]!, $targetParentId: ID) {
+  copyNodes(ids: $ids, targetParentId: $targetParentId) {
+    id
+    parentId
+    name
+  }
+}
+
+query SearchNodes($q: String!, $cursor: String) {
+  searchNodes(q: $q, cursor: $cursor) {
+    items {
+      id
+      parentId
+      name
+      kind
+      size
+      updatedAt
+      preview {
+        kind
+        thumbUrl
+      }
+    }
+    nextCursor
+    total
+  }
+}

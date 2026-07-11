@@ -17,8 +17,10 @@ interface TreeItem {
 }
 
 const props = defineProps<{
-  /** 被移动的节点 id,树中排除 */
+  /** 被移动/复制的节点 id,树中排除 */
   excludeIds: string[]
+  /** 复制模式只改文案,选择逻辑一致 */
+  mode?: 'move' | 'copy'
 }>()
 
 const emit = defineEmits<{
@@ -63,7 +65,7 @@ function onOpen() {
 <template>
   <el-dialog
     v-model="visible"
-    title="移动到"
+    :title="props.mode === 'copy' ? '复制到' : '移动到'"
     width="420px"
     destroy-on-close
     @open="onOpen"
@@ -81,7 +83,7 @@ function onOpen() {
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
       <el-button type="primary" :disabled="!selectedKey" @click="onConfirm">
-        移动到此处
+        {{ props.mode === 'copy' ? '复制到此处' : '移动到此处' }}
       </el-button>
     </template>
   </el-dialog>
