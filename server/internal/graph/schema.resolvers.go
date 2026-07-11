@@ -256,17 +256,56 @@ func (r *mutationResolver) RequestPreview(ctx context.Context, nodeID string) (*
 
 // CreateShare is the resolver for the createShare field.
 func (r *mutationResolver) CreateShare(ctx context.Context, nodeID string, password *string, expiresAt *time.Time) (*Share, error) {
-	return nil, service.ErrNotImplemented // M4
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nid, err := parseID(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	sh, err := r.Shares.Create(ctx, ident.UserID, nid, password, expiresAt)
+	if err != nil {
+		return nil, err
+	}
+	node, err := r.getNodeFull(ctx, ident.UserID, sh.NodeID)
+	if err != nil {
+		return nil, err
+	}
+	out := &Share{
+		ID: sh.ID.String(), Token: sh.Token, Node: node,
+		HasPassword: sh.PasswordHash != nil, CreatedAt: sh.CreatedAt.Time,
+	}
+	if sh.ExpiresAt.Valid {
+		t := sh.ExpiresAt.Time
+		out.ExpiresAt = &t
+	}
+	return out, nil
 }
 
 // RevokeShare is the resolver for the revokeShare field.
 func (r *mutationResolver) RevokeShare(ctx context.Context, id string) (bool, error) {
-	return false, service.ErrNotImplemented // M4
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	sid, err := parseID(id)
+	if err != nil {
+		return false, err
+	}
+	if err := r.Shares.Revoke(ctx, ident.UserID, sid); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // VerifySharePassword is the resolver for the verifySharePassword field.
-func (r *mutationResolver) VerifySharePassword(ctx context.Context, token string, password string) (*AuthPayload, error) {
-	return nil, service.ErrNotImplemented // M4
+func (r *mutationResolver) VerifySharePassword(ctx context.Context, token string, password string) (*ShareAuth, error) {
+	access, err := r.Shares.Access(ctx, token, password, httpx.ClientIP(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return &ShareAuth{AccessToken: access}, nil
 }
 
 // Preview is the resolver for the preview field.
@@ -290,11 +329,11 @@ func (r *nodeResolver) DownloadURL(ctx context.Context, obj *Node) (*string, err
 	if obj.Kind != NodeKindFile || obj.DeletedAt != nil {
 		return nil, nil
 	}
-	ident, err := httpx.UserFrom(ctx)
+	nid, err := parseID(obj.ID)
 	if err != nil {
 		return nil, err
 	}
-	nid, err := parseID(obj.ID)
+	ident, err := r.requireNodeAccess(ctx, nid)
 	if err != nil {
 		return nil, err
 	}
@@ -320,11 +359,11 @@ func (r *queryResolver) Me(ctx context.Context) (*User, error) {
 
 // Node is the resolver for the node field.
 func (r *queryResolver) Node(ctx context.Context, id string) (*Node, error) {
-	ident, err := httpx.UserFrom(ctx)
+	nid, err := parseID(id)
 	if err != nil {
 		return nil, err
 	}
-	nid, err := parseID(id)
+	ident, err := r.requireNodeAccess(ctx, nid)
 	if err != nil {
 		return nil, err
 	}
@@ -333,13 +372,22 @@ func (r *queryResolver) Node(ctx context.Context, id string) (*Node, error) {
 
 // Children is the resolver for the children field.
 func (r *queryResolver) Children(ctx context.Context, parentID *string, cursor *string, order *NodeOrder, desc *bool) (*NodePage, error) {
-	id, err := httpx.UserFrom(ctx)
-	if err != nil {
-		return nil, err
-	}
 	pid, err := parseIDPtr(parentID)
 	if err != nil {
 		return nil, err
+	}
+	id, err := httpx.IdentityFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if id.Scope != service.ScopeUser {
+		// 访客不允许列根目录,只能从分享根往下走
+		if pid == nil {
+			return nil, service.ErrForbidden
+		}
+		if err := r.Shares.Authorize(ctx, id, *pid); err != nil {
+			return nil, err
+		}
 	}
 	ord := NodeOrderName
 	if order != nil {
@@ -361,9 +409,27 @@ func (r *queryResolver) Children(ctx context.Context, parentID *string, cursor *
 
 // SearchNodes is the resolver for the searchNodes field.
 func (r *queryResolver) SearchNodes(ctx context.Context, q string, cursor *string) (*NodePage, error) {
-	id, err := httpx.UserFrom(ctx)
+	id, err := httpx.IdentityFrom(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if id.Scope != service.ScopeUser {
+		// 访客搜索限定在分享子树内
+		sh, err := r.Shares.ValidateScope(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		page, err := r.Nodes.SearchInSubtree(ctx, sh.NodeID, q, cursor)
+		if err != nil {
+			return nil, err
+		}
+		return gqlPage(page, func(row store.SearchNodesInSubtreeRow) *Node {
+			return gqlNodeRow(nodeRow{Node: store.Node{
+				ID: row.ID, OwnerID: row.OwnerID, ParentID: row.ParentID, Name: row.Name,
+				Kind: row.Kind, BlobID: row.BlobID, DeletedAt: row.DeletedAt,
+				CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+			}, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256})
+		}), nil
 	}
 	page, err := r.Nodes.Search(ctx, id.UserID, q, cursor)
 	if err != nil {
@@ -399,10 +465,19 @@ func (r *queryResolver) Trash(ctx context.Context, cursor *string) (*NodePage, e
 
 // MyShares is the resolver for the myShares field.
 func (r *queryResolver) MyShares(ctx context.Context) ([]*Share, error) {
-	if _, err := httpx.UserFrom(ctx); err != nil {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
 		return nil, err
 	}
-	return []*Share{}, nil // M4
+	rows, err := r.Shares.List(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*Share, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, gqlShare(row))
+	}
+	return out, nil
 }
 
 // UploadSession is the resolver for the uploadSession field.
@@ -424,12 +499,33 @@ func (r *queryResolver) UploadSession(ctx context.Context, id string) (*UploadSe
 
 // ShareInfo is the resolver for the shareInfo field.
 func (r *queryResolver) ShareInfo(ctx context.Context, token string) (*ShareInfo, error) {
-	return nil, service.ErrNotImplemented // M4
+	info, err := r.Shares.Info(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	return &ShareInfo{
+		Token: info.Token, Name: info.Name,
+		Kind:         NodeKind(map[string]string{"file": "FILE", "folder": "FOLDER"}[info.Kind]),
+		NeedPassword: info.NeedPassword, Expired: info.Expired,
+	}, nil
 }
 
 // ShareRoot is the resolver for the shareRoot field.
 func (r *queryResolver) ShareRoot(ctx context.Context) (*Node, error) {
-	return nil, service.ErrNotImplemented // M4
+	ident, err := httpx.IdentityFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sh, err := r.Shares.ValidateScope(ctx, ident)
+	if err != nil {
+		return nil, err
+	}
+	node, err := r.getNodeFull(ctx, ident.UserID, sh.NodeID)
+	if err != nil {
+		return nil, err
+	}
+	node.ParentID = nil // 分享根之上的结构不暴露给访客
+	return node, nil
 }
 
 // Mutation returns MutationResolver implementation.

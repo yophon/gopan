@@ -80,13 +80,18 @@ type claims struct {
 }
 
 func (a *Auth) IssueAccess(userID uuid.UUID, scope string) (string, error) {
+	return a.IssueAccessFor(userID, scope, a.accessTTL)
+}
+
+// IssueAccessFor 指定 TTL 签发(访客 token 用 30 分钟,与用户 access 不同)。
+func (a *Auth) IssueAccessFor(userID uuid.UUID, scope string, ttl time.Duration) (string, error) {
 	now := time.Now()
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
 		Scope: scope,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID.String(),
 			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(a.accessTTL)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
 		},
 	})
 	return t.SignedString(a.secret)

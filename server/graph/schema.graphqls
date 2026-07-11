@@ -88,6 +88,11 @@ type AuthPayload {
   user: User!
 }
 
+# 访客凭证:不返回 User,避免向访客泄露属主信息
+type ShareAuth {
+  accessToken: String!
+}
+
 # ---------- 查询 ----------
 
 enum NodeOrder { NAME, SIZE, UPDATED_AT }
@@ -133,5 +138,5 @@ type Mutation {
 
   createShare(nodeId: ID!, password: String, expiresAt: Time): Share!
   revokeShare(id: ID!): Boolean!
-  verifySharePassword(token: String!, password: String!): AuthPayload!
+  verifySharePassword(token: String!, password: String!): ShareAuth!
 }

@@ -96,6 +96,27 @@ func (s *Nodes) Search(ctx context.Context, owner uuid.UUID, q string, cursor *s
 	return &Page[store.SearchNodesRow]{Items: rows, Total: total, NextCursor: nextCursor(offset, len(rows), total)}, nil
 }
 
+// SearchInSubtree 访客搜索:范围限定在分享根的子树内。
+func (s *Nodes) SearchInSubtree(ctx context.Context, root uuid.UUID, q string, cursor *string) (*Page[store.SearchNodesInSubtreeRow], error) {
+	kw := strings.TrimSpace(q)
+	if kw == "" {
+		return &Page[store.SearchNodesInSubtreeRow]{}, nil
+	}
+	offset := decodeCursor(cursor)
+	kwp := &kw
+	rows, err := s.q.SearchNodesInSubtree(ctx, store.SearchNodesInSubtreeParams{
+		ID: root, Column2: kwp, Limit: pageSize, Offset: offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	total, err := s.q.CountSearchNodesInSubtree(ctx, store.CountSearchNodesInSubtreeParams{ID: root, Column2: kwp})
+	if err != nil {
+		return nil, err
+	}
+	return &Page[store.SearchNodesInSubtreeRow]{Items: rows, Total: total, NextCursor: nextCursor(offset, len(rows), total)}, nil
+}
+
 func (s *Nodes) Trash(ctx context.Context, owner uuid.UUID, cursor *string) (*Page[store.ListTrashRow], error) {
 	offset := decodeCursor(cursor)
 	rows, err := s.q.ListTrash(ctx, store.ListTrashParams{OwnerID: owner, Limit: pageSize, Offset: offset})

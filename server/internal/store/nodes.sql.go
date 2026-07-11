@@ -46,6 +46,29 @@ func (q *Queries) CountSearchNodes(ctx context.Context, arg CountSearchNodesPara
 	return count, err
 }
 
+const countSearchNodesInSubtree = `-- name: CountSearchNodesInSubtree :one
+WITH RECURSIVE sub AS (
+    SELECT r.id FROM nodes r WHERE r.id = $1 AND r.deleted_at IS NULL
+    UNION ALL
+    SELECT n.id FROM nodes n JOIN sub s ON n.parent_id = s.id
+    WHERE n.deleted_at IS NULL
+)
+SELECT count(*) FROM nodes n
+WHERE n.id IN (SELECT s.id FROM sub s) AND n.name ILIKE '%' || $2 || '%'
+`
+
+type CountSearchNodesInSubtreeParams struct {
+	ID      uuid.UUID
+	Column2 *string
+}
+
+func (q *Queries) CountSearchNodesInSubtree(ctx context.Context, arg CountSearchNodesInSubtreeParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchNodesInSubtree, arg.ID, arg.Column2)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countTrash = `-- name: CountTrash :one
 SELECT count(*) FROM nodes n
 WHERE n.owner_id = $1 AND n.deleted_at IS NOT NULL
@@ -229,6 +252,49 @@ func (q *Queries) IsDescendant(ctx context.Context, arg IsDescendantParams) (boo
 	var is_descendant bool
 	err := row.Scan(&is_descendant)
 	return is_descendant, err
+}
+
+const listActiveChildrenLite = `-- name: ListActiveChildrenLite :many
+SELECT n.id, n.name, n.kind, b.sha256 AS blob_sha256, b.size AS blob_size
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.parent_id = $1 AND n.deleted_at IS NULL
+ORDER BY n.kind DESC, n.name
+`
+
+type ListActiveChildrenLiteRow struct {
+	ID         uuid.UUID
+	Name       string
+	Kind       string
+	BlobSha256 *string
+	BlobSize   *int64
+}
+
+// 打包下载的树遍历用,不分页
+func (q *Queries) ListActiveChildrenLite(ctx context.Context, parentID *uuid.UUID) ([]ListActiveChildrenLiteRow, error) {
+	rows, err := q.db.Query(ctx, listActiveChildrenLite, parentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveChildrenLiteRow
+	for rows.Next() {
+		var i ListActiveChildrenLiteRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Kind,
+			&i.BlobSha256,
+			&i.BlobSize,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listChildren = `-- name: ListChildren :many
@@ -586,6 +652,82 @@ func (q *Queries) SearchNodes(ctx context.Context, arg SearchNodesParams) ([]Sea
 	var items []SearchNodesRow
 	for rows.Next() {
 		var i SearchNodesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.ParentID,
+			&i.Name,
+			&i.Kind,
+			&i.BlobID,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchNodesInSubtree = `-- name: SearchNodesInSubtree :many
+WITH RECURSIVE sub AS (
+    SELECT r.id FROM nodes r WHERE r.id = $1 AND r.deleted_at IS NULL
+    UNION ALL
+    SELECT n.id FROM nodes n JOIN sub s ON n.parent_id = s.id
+    WHERE n.deleted_at IS NULL
+)
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.id IN (SELECT s.id FROM sub s) AND n.name ILIKE '%' || $2 || '%'
+ORDER BY n.updated_at DESC, n.id
+LIMIT $3 OFFSET $4
+`
+
+type SearchNodesInSubtreeParams struct {
+	ID      uuid.UUID
+	Column2 *string
+	Limit   int32
+	Offset  int32
+}
+
+type SearchNodesInSubtreeRow struct {
+	ID         uuid.UUID
+	OwnerID    uuid.UUID
+	ParentID   *uuid.UUID
+	Name       string
+	Kind       string
+	BlobID     *uuid.UUID
+	DeletedAt  pgtype.Timestamptz
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+	BlobSize   *int64
+	BlobMime   *string
+	BlobSha256 *string
+}
+
+// 访客搜索:范围限定在分享根($1)的子树内
+func (q *Queries) SearchNodesInSubtree(ctx context.Context, arg SearchNodesInSubtreeParams) ([]SearchNodesInSubtreeRow, error) {
+	rows, err := q.db.Query(ctx, searchNodesInSubtree,
+		arg.ID,
+		arg.Column2,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchNodesInSubtreeRow
+	for rows.Next() {
+		var i SearchNodesInSubtreeRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.OwnerID,

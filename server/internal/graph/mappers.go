@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/yophon/gopan/server/internal/httpx"
 	"github.com/yophon/gopan/server/internal/service"
 	"github.com/yophon/gopan/server/internal/store"
 )
@@ -136,6 +137,51 @@ func gqlSession(v *service.SessionView) *UploadSession {
 		ExpiresAt:     v.Session.ExpiresAt.Time,
 		Status:        v.Session.Status,
 	}
+}
+
+func gqlShare(r store.ListMySharesRow) *Share {
+	node := &Node{
+		ID:       r.NodeID.String(),
+		ParentID: idPtrStr(r.NodeParentID),
+		Name:     r.NodeName,
+		Kind:     NodeKind(map[string]string{"file": "FILE", "folder": "FOLDER"}[r.NodeKind]),
+		InList:   true, // 分享列表里的节点预览走零查询乐观路径
+	}
+	node.CreatedAt = r.NodeCreatedAt.Time
+	node.UpdatedAt = r.NodeUpdatedAt.Time
+	if r.NodeKind == "file" {
+		node.Size = r.BlobSize
+		node.Mime = r.BlobMime
+		node.Sha256 = r.BlobSha256
+	}
+	out := &Share{
+		ID:          r.ID.String(),
+		Token:       r.Token,
+		Node:        node,
+		HasPassword: r.PasswordHash != nil,
+		CreatedAt:   r.CreatedAt.Time,
+	}
+	if r.ExpiresAt.Valid {
+		t := r.ExpiresAt.Time
+		out.ExpiresAt = &t
+	}
+	return out
+}
+
+// requireNodeAccess 统一属主/访客鉴权:属主直接放行(下游查询本就带 owner 条件),
+// 访客校验分享有效 + 节点在分享子树内。返回身份供下游按 UserID 查询
+// (访客 JWT 的 sub 就是分享属主,天然复用属主视角)。
+func (r *Resolver) requireNodeAccess(ctx context.Context, nodeID uuid.UUID) (*service.Identity, error) {
+	ident, err := httpx.IdentityFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if ident.Scope != service.ScopeUser {
+		if err := r.Shares.Authorize(ctx, ident, nodeID); err != nil {
+			return nil, err
+		}
+	}
+	return ident, nil
 }
 
 // getNodeFull 取单节点并带上 blob 元信息(size/mime/sha256)。

@@ -75,17 +75,20 @@ func run() error {
 	uploads := service.NewUploads(pool, obj, nodes, cfg.PartSize, cfg.SessionTTL)
 
 	previews := service.NewPreviews(pool, obj)
+	shares := service.NewShares(q, auth)
+	packer := service.NewPacker(q, obj, shares)
 	wk := worker.New(pool, obj, cfg.FFmpegPath, cfg.FFprobePath, cfg.GotenbergURL)
 	uploads.SetEnqueue(wk.Enqueue)
 	previews.SetEnqueue(wk.Enqueue)
 	go wk.Run(ctx, 2)
 
 	es := graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
-		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews,
+		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares,
 	}})
 
 	mux := http.NewServeMux()
 	mux.Handle("POST /query", httpx.WithAuth(httpx.NewGraphQLHandler(es, cfg.DevMode), auth))
+	mux.Handle("GET /pack", httpx.PackHandler(auth, packer))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := pool.Ping(r.Context()); err != nil {
 			http.Error(w, "db: "+err.Error(), http.StatusServiceUnavailable)
@@ -101,6 +104,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	mux.Handle("GET /s/{token}", httpx.ShareLanding(dist, shares))
 	mux.Handle("/", httpx.SPAHandler(dist))
 
 	// pprof 只挂内网端口

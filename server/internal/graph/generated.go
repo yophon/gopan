@@ -119,6 +119,10 @@ type ComplexityRoot struct {
 		Token       func(childComplexity int) int
 	}
 
+	ShareAuth struct {
+		AccessToken func(childComplexity int) int
+	}
+
 	ShareInfo struct {
 		Expired      func(childComplexity int) int
 		Kind         func(childComplexity int) int
@@ -172,7 +176,7 @@ type MutationResolver interface {
 	RequestPreview(ctx context.Context, nodeID string) (*PreviewInfo, error)
 	CreateShare(ctx context.Context, nodeID string, password *string, expiresAt *time.Time) (*Share, error)
 	RevokeShare(ctx context.Context, id string) (bool, error)
-	VerifySharePassword(ctx context.Context, token string, password string) (*AuthPayload, error)
+	VerifySharePassword(ctx context.Context, token string, password string) (*ShareAuth, error)
 }
 type NodeResolver interface {
 	Preview(ctx context.Context, obj *Node) (*PreviewInfo, error)
@@ -670,6 +674,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Share.Token(childComplexity), true
 
+	case "ShareAuth.accessToken":
+		if e.ComplexityRoot.ShareAuth.AccessToken == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareAuth.AccessToken(childComplexity), true
+
 	case "ShareInfo.expired":
 		if e.ComplexityRoot.ShareInfo.Expired == nil {
 			break
@@ -956,6 +967,11 @@ type AuthPayload {
   user: User!
 }
 
+# 访客凭证:不返回 User,避免向访客泄露属主信息
+type ShareAuth {
+  accessToken: String!
+}
+
 # ---------- 查询 ----------
 
 enum NodeOrder { NAME, SIZE, UPDATED_AT }
@@ -1001,7 +1017,7 @@ type Mutation {
 
   createShare(nodeId: ID!, password: String, expiresAt: Time): Share!
   revokeShare(id: ID!): Boolean!
-  verifySharePassword(token: String!, password: String!): AuthPayload!
+  verifySharePassword(token: String!, password: String!): ShareAuth!
 }
 `, BuiltIn: false},
 }
@@ -1107,6 +1123,14 @@ func (ec *executionContext) childFields_Share(ctx context.Context, field graphql
 		return ec.fieldContext_Share_createdAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Share", field.Name)
+}
+
+func (ec *executionContext) childFields_ShareAuth(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "accessToken":
+		return ec.fieldContext_ShareAuth_accessToken(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ShareAuth", field.Name)
 }
 
 func (ec *executionContext) childFields_ShareInfo(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -2543,8 +2567,8 @@ func (ec *executionContext) _Mutation_verifySharePassword(ctx context.Context, f
 			return ec.Resolvers.Mutation().VerifySharePassword(ctx, fc.Args["token"].(string), fc.Args["password"].(string))
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *AuthPayload) graphql.Marshaler {
-			return ec.marshalNAuthPayload2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAuthPayload(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *ShareAuth) graphql.Marshaler {
+			return ec.marshalNShareAuth2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐShareAuth(ctx, selections, v)
 		},
 		true,
 		true,
@@ -2557,7 +2581,7 @@ func (ec *executionContext) fieldContext_Mutation_verifySharePassword(ctx contex
 		IsMethod:   true,
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_AuthPayload(ctx, field)
+			return ec.childFields_ShareAuth(ctx, field)
 		},
 	}
 	defer func() {
@@ -3702,6 +3726,29 @@ func (ec *executionContext) _Share_createdAt(ctx context.Context, field graphql.
 }
 func (ec *executionContext) fieldContext_Share_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Share", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _ShareAuth_accessToken(ctx context.Context, field graphql.CollectedField, obj *ShareAuth) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareAuth_accessToken(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AccessToken, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ShareAuth_accessToken(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareAuth", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _ShareInfo_token(ctx context.Context, field graphql.CollectedField, obj *ShareInfo) (ret graphql.Marshaler) {
@@ -6088,6 +6135,44 @@ func (ec *executionContext) _Share(ctx context.Context, sel ast.SelectionSet, ob
 	return out
 }
 
+var shareAuthImplementors = []string{"ShareAuth"}
+
+func (ec *executionContext) _ShareAuth(ctx context.Context, sel ast.SelectionSet, obj *ShareAuth) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, shareAuthImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ShareAuth")
+		case "accessToken":
+			out.Values[i] = ec._ShareAuth_accessToken(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var shareInfoImplementors = []string{"ShareInfo"}
 
 func (ec *executionContext) _ShareInfo(ctx context.Context, sel ast.SelectionSet, obj *ShareInfo) graphql.Marshaler {
@@ -6989,6 +7074,20 @@ func (ec *executionContext) marshalNShare2ᚖgithubᚗcomᚋyophonᚋgopanᚋser
 		return graphql.Null
 	}
 	return ec._Share(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNShareAuth2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐShareAuth(ctx context.Context, sel ast.SelectionSet, v ShareAuth) graphql.Marshaler {
+	return ec._ShareAuth(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNShareAuth2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐShareAuth(ctx context.Context, sel ast.SelectionSet, v *ShareAuth) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ShareAuth(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNShareInfo2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐShareInfo(ctx context.Context, sel ast.SelectionSet, v ShareInfo) graphql.Marshaler {

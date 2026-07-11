@@ -72,6 +72,10 @@ type Share struct {
 	CreatedAt   time.Time  `json:"createdAt"`
 }
 
+type ShareAuth struct {
+	AccessToken string `json:"accessToken"`
+}
+
 type ShareInfo struct {
 	Token        string   `json:"token"`
 	Name         string   `json:"name"`

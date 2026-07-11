@@ -101,6 +101,10 @@ type AuthPayload {
   user: User!
 }
 
+type ShareAuth {                # 访客凭证:不带 User,避免向访客泄露属主信息
+  accessToken: String!          # scope=share:{id},30min,无 refresh
+}
+
 # ---------- 查询 ----------
 
 enum NodeOrder { NAME, SIZE, UPDATED_AT }
@@ -142,7 +146,7 @@ type Mutation {
 
   createShare(nodeId: ID!, password: String, expiresAt: Time): Share!
   revokeShare(id: ID!): Boolean!
-  verifySharePassword(token: String!, password: String!): AuthPayload!  # 返回访客 JWT
+  verifySharePassword(token: String!, password: String!): ShareAuth!  # 返回访客 JWT
 }
 
 input PartEtag { partNumber: Int!, etag: String! }

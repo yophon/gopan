@@ -13,4 +13,5 @@ type Resolver struct {
 	Nodes    *service.Nodes
 	Uploads  *service.Uploads
 	Previews *service.Previews
+	Shares   *service.Shares
 }

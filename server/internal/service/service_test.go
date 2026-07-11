@@ -193,3 +193,128 @@ func TestNodeTreeRules(t *testing.T) {
 		t.Fatalf("他人节点应 NOT_FOUND,got %v", err)
 	}
 }
+
+func TestShareLifecycle(t *testing.T) {
+	pool := setup(t)
+	ctx := context.Background()
+	auth := newAuth(pool)
+	nodes := service.NewNodes(pool)
+	shares := service.NewShares(store.New(pool), auth)
+	shares.SetRateLimit(time.Millisecond, 1000)
+
+	res, err := auth.Register(ctx, "carol", "password123", "1.1.1.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := res.User.ID
+
+	docs, err := nodes.CreateFolder(ctx, owner, nil, "docs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sub, err := nodes.CreateFolder(ctx, owner, &docs.ID, "sub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	private, err := nodes.CreateFolder(ctx, owner, nil, "private")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 带密码分享 docs
+	pw := "sesame88"
+	sh, err := shares.Create(ctx, owner, docs.ID, &pw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sh.Token) != 10 {
+		t.Fatalf("token 应为 10 位,got %q", sh.Token)
+	}
+
+	// 公开 info
+	info, err := shares.Info(ctx, sh.Token)
+	if err != nil || !info.NeedPassword || info.Expired || info.Name != "docs" {
+		t.Fatalf("info=%+v err=%v", info, err)
+	}
+
+	// 空密码 → SHARE_PASSWORD_REQUIRED;错密码 → BAD_SHARE_PASSWORD
+	if _, err := shares.Access(ctx, sh.Token, "", "2.2.2.2"); err == nil {
+		t.Fatal("空密码应被拒")
+	}
+	if _, err := shares.Access(ctx, sh.Token, "wrong", "2.2.2.2"); err == nil {
+		t.Fatal("错密码应被拒")
+	}
+
+	// 正确密码 → 访客 token,scope=share:{id},sub=属主
+	access, err := shares.Access(ctx, sh.Token, pw, "2.2.2.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guest, err := auth.ParseAccess(access)
+	if err != nil || guest.UserID != owner || guest.Scope != "share:"+sh.ID.String() {
+		t.Fatalf("guest=%+v err=%v", guest, err)
+	}
+
+	// 子树内放行,子树外 NOT_FOUND
+	if err := shares.Authorize(ctx, guest, sub.ID); err != nil {
+		t.Fatalf("子树内应放行:%v", err)
+	}
+	if err := shares.Authorize(ctx, guest, docs.ID); err != nil {
+		t.Fatalf("分享根自身应放行:%v", err)
+	}
+	if err := shares.Authorize(ctx, guest, private.ID); err != service.ErrNotFound {
+		t.Fatalf("子树外应 NOT_FOUND,got %v", err)
+	}
+
+	// 软删分享根 → 分享失效
+	if err := nodes.Delete(ctx, owner, []uuid.UUID{docs.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := shares.Access(ctx, sh.Token, pw, "2.2.2.2"); err == nil {
+		t.Fatal("节点已删的分享应失效")
+	}
+	if _, err := nodes.Restore(ctx, owner, []uuid.UUID{docs.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 吊销 → 失效且从列表消失
+	if err := shares.Revoke(ctx, owner, sh.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := shares.Access(ctx, sh.Token, pw, "2.2.2.2"); err == nil {
+		t.Fatal("已吊销的分享应失效")
+	}
+	if err := shares.Authorize(ctx, guest, sub.ID); err == nil {
+		t.Fatal("吊销后已发的访客 token 也应失效")
+	}
+	ls, err := shares.List(ctx, owner)
+	if err != nil || len(ls) != 0 {
+		t.Fatalf("吊销后列表应为空,got %d err=%v", len(ls), err)
+	}
+
+	// 过期分享:Access 拒绝
+	past := time.Now().Add(time.Second)
+	sh2, err := shares.Create(ctx, owner, docs.ID, nil, &past)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1100 * time.Millisecond)
+	if _, err := shares.Access(ctx, sh2.Token, "", "2.2.2.2"); err == nil {
+		t.Fatal("过期分享应被拒")
+	}
+
+	// 无密码分享:空密码直接拿 token;彻底删除节点级联删分享
+	sh3, err := shares.Create(ctx, owner, docs.ID, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := shares.Access(ctx, sh3.Token, "", "2.2.2.2"); err != nil {
+		t.Fatalf("无密码分享应直接放行:%v", err)
+	}
+	if err := nodes.Purge(ctx, owner, []uuid.UUID{docs.ID}); err != nil {
+		t.Fatalf("彻底删除被分享的节点应级联成功:%v", err)
+	}
+	if _, err := shares.Info(ctx, sh3.Token); err != service.ErrNotFound {
+		t.Fatalf("级联删除后分享应 NOT_FOUND,got %v", err)
+	}
+}

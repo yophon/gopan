@@ -58,6 +58,39 @@ LIMIT $3 OFFSET $4;
 SELECT count(*) FROM nodes
 WHERE owner_id = $1 AND deleted_at IS NULL AND name ILIKE '%' || $2 || '%';
 
+-- name: SearchNodesInSubtree :many
+-- 访客搜索:范围限定在分享根($1)的子树内
+WITH RECURSIVE sub AS (
+    SELECT r.id FROM nodes r WHERE r.id = $1 AND r.deleted_at IS NULL
+    UNION ALL
+    SELECT n.id FROM nodes n JOIN sub s ON n.parent_id = s.id
+    WHERE n.deleted_at IS NULL
+)
+SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.id IN (SELECT s.id FROM sub s) AND n.name ILIKE '%' || $2 || '%'
+ORDER BY n.updated_at DESC, n.id
+LIMIT $3 OFFSET $4;
+
+-- name: CountSearchNodesInSubtree :one
+WITH RECURSIVE sub AS (
+    SELECT r.id FROM nodes r WHERE r.id = $1 AND r.deleted_at IS NULL
+    UNION ALL
+    SELECT n.id FROM nodes n JOIN sub s ON n.parent_id = s.id
+    WHERE n.deleted_at IS NULL
+)
+SELECT count(*) FROM nodes n
+WHERE n.id IN (SELECT s.id FROM sub s) AND n.name ILIKE '%' || $2 || '%';
+
+-- name: ListActiveChildrenLite :many
+-- 打包下载的树遍历用,不分页
+SELECT n.id, n.name, n.kind, b.sha256 AS blob_sha256, b.size AS blob_size
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.parent_id = $1 AND n.deleted_at IS NULL
+ORDER BY n.kind DESC, n.name;
+
 -- name: ListTrash :many
 SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
