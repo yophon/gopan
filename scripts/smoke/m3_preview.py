@@ -83,13 +83,21 @@ assert fetch(p["largeUrl"])[:2] == b"\xff\xd8", "封面应为 JPEG"
 assert p["contentUrl"], "视频应有直出 contentUrl"
 print("== VIDEO 封面/时长 OK ==")
 
-# Office:requestPreview 惰性触发 → PENDING/RUNNING → DONE,产物是 PDF
+# Office:两种部署都要能跑。没部署 Gotenberg(GOPAN_GOTENBERG_URL 置空)时预览回 UNAVAILABLE
+# 且 requestPreview 不入队;部署了才是 惰性触发 → PENDING/RUNNING → DONE,产物是 PDF。
 p = preview(ids["doc.rtf"])
-assert p["kind"] == "OFFICE" and p["status"] is None, p
-gql("mutation($id:ID!){requestPreview(nodeId:$id){status}}", {"id": ids["doc.rtf"]}, TOKEN)
-p = wait(ids["doc.rtf"], lambda p: p["status"] == "DONE", sec=90)
-assert fetch(p["contentUrl"])[:4] == b"%PDF", "Office 产物应为 PDF"
-print("== OFFICE 转 PDF OK ==")
+assert p["kind"] == "OFFICE", p
+if p["status"] == "UNAVAILABLE":
+    st = gql("mutation($id:ID!){requestPreview(nodeId:$id){status}}",
+             {"id": ids["doc.rtf"]}, TOKEN)["requestPreview"]["status"]
+    assert st == "UNAVAILABLE", f"关闭 Office 后 requestPreview 不该入队,got {st}"
+    print("== OFFICE 未启用:UNAVAILABLE,前端引导下载(精简档)==")
+else:
+    assert p["status"] is None, p
+    gql("mutation($id:ID!){requestPreview(nodeId:$id){status}}", {"id": ids["doc.rtf"]}, TOKEN)
+    p = wait(ids["doc.rtf"], lambda p: p["status"] == "DONE", sec=90)
+    assert fetch(p["contentUrl"])[:4] == b"%PDF", "Office 产物应为 PDF"
+    print("== OFFICE 转 PDF OK ==")
 
 # 文本直出逐字节;PDF 原文直出
 p = preview(ids["note.txt"])
