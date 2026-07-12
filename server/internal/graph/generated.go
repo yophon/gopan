@@ -943,7 +943,8 @@ type PreviewInfo {
   durationSec: Int
 }
 
-enum TaskStatus { PENDING, RUNNING, DONE, FAILED }
+# UNAVAILABLE:该派生能力未在本次部署中启用(如未部署 Gotenberg 时的 Office 转换)
+enum TaskStatus { PENDING, RUNNING, DONE, FAILED, UNAVAILABLE }
 
 type NodePage {
   items: [Node!]!

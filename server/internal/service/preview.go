@@ -26,6 +26,9 @@ const (
 	PvOffice = "OFFICE" // 需转换,contentUrl 是 derived pdf
 )
 
+// StUnavailable 是 TaskStatus 里唯一不来自 tasks 表的值:该派生任务在本次部署中被关掉了。
+const StUnavailable = "UNAVAILABLE"
+
 const maxTextPreview = 1 << 20 // 1MB
 
 var officeExts = map[string]bool{
@@ -79,15 +82,22 @@ type Previews struct {
 	q       *store.Queries
 	obj     *objstore.Store
 	enqueue func(ctx context.Context, kind string, blobID uuid.UUID)
+	// office 关闭时(未部署 Gotenberg)不入队转换任务,直接回 UNAVAILABLE 让前端引导下载
+	office bool
 }
 
 func NewPreviews(pool *pgxpool.Pool, obj *objstore.Store) *Previews {
 	return &Previews{pool: pool, q: store.New(pool), obj: obj,
-		enqueue: func(context.Context, string, uuid.UUID) {}}
+		enqueue: func(context.Context, string, uuid.UUID) {}, office: true}
 }
 
 func (s *Previews) SetEnqueue(fn func(ctx context.Context, kind string, blobID uuid.UUID)) {
 	s.enqueue = fn
+}
+
+// SetOfficeEnabled 由 main 按 GOPAN_GOTENBERG_URL 是否配置注入。
+func (s *Previews) SetOfficeEnabled(v bool) {
+	s.office = v
 }
 
 // ForList 列表路径:零额外查询。缩略图 URL 乐观签发(派生物可能还没生成,
@@ -149,6 +159,13 @@ func (s *Previews) ForNode(ctx context.Context, name string, sha *string, mime *
 			info.Status = &done
 			return info, nil
 		}
+		// 无产物且未部署 Gotenberg:明确告诉前端"本站不提供 Office 预览",别让它去等一个永不开始的任务。
+		// (历史产物仍走上面的 DONE 分支,关掉转换不影响已转好的文档)
+		if !s.office {
+			st := StUnavailable
+			info.Status = &st
+			return info, nil
+		}
 		// 还没有产物:看任务状态
 		task, err := s.q.GetTask(ctx, store.GetTaskParams{Kind: "office_pdf", BlobID: blob.ID})
 		if err != nil {
@@ -176,7 +193,7 @@ func (s *Previews) Request(ctx context.Context, owner, nodeID uuid.UUID) (Previe
 	if err != nil {
 		return info, err
 	}
-	if info.Kind == PvOffice && info.Status == nil && row.BlobID != nil {
+	if info.Kind == PvOffice && s.office && info.Status == nil && row.BlobID != nil {
 		s.enqueue(ctx, "office_pdf", *row.BlobID)
 		st := "PENDING"
 		info.Status = &st

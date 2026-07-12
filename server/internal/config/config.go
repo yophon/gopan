@@ -34,7 +34,7 @@ type Config struct {
 	PresignPutTTL    time.Duration
 	PresignGetTTL    time.Duration
 
-	GotenbergURL string
+	GotenbergURL string // 置空 = 本次部署不提供 Office 预览(小内存机器不部署 Gotenberg)
 	FFmpegPath   string
 	FFprobePath  string
 }

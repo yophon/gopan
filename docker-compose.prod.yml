@@ -1,16 +1,26 @@
 # 生产部署:docker compose -f docker-compose.prod.yml up -d
-# 先准备 .env(GOPAN_DOMAIN、POSTGRES_PASSWORD、MINIO_ROOT_PASSWORD)
-# 和 secrets/jwt_secret(≥32 字节随机串),见 doc/09-上线手册。
+# 先准备 .env(见 .env.example)和 secrets/jwt_secret(≥32 字节随机串),见 doc/09-上线手册。
+#
+# 两个可选组件靠 profile 开关,在 .env 里用 COMPOSE_PROFILES 选:
+#   office —— Gotenberg(Office→PDF 预览)。全家桶里的内存大户,2G 机器建议关。
+#   caddy  —— 自带反代 + 自动证书。宿主已有 nginx 占着 80/443 时关掉,见 deploy/nginx/。
+# 两个都开 = 全家桶(COMPOSE_PROFILES=office,caddy);都不开 = 只跑 gopan + postgres + minio。
 services:
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
+    # 小内存机器可把 shared_buffers 压到 32MB、连接数压到 30(gopan 单实例用不满)
+    command: >
+      postgres
+      -c shared_buffers=${PG_SHARED_BUFFERS:-128MB}
+      -c max_connections=${PG_MAX_CONNECTIONS:-100}
     environment:
       POSTGRES_USER: gopan
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
       POSTGRES_DB: gopan
     volumes:
       - pgdata:/var/lib/postgresql/data
+    mem_limit: ${PG_MEM_LIMIT:-0} # 0 = 不限
     networks: [backend]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U gopan -d gopan"]
@@ -27,7 +37,11 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
     volumes:
       - miniodata:/data
-    # edge:Caddy 把 /{bucket}/* 反代过来,浏览器直传/直取走这条路
+    # 默认只绑 127.0.0.1:19000,给宿主反代转 /{bucket}/* 用;caddy profile 下走容器网络,这个口开着也不对外
+    ports:
+      - "${MINIO_S3_BIND:-127.0.0.1:19000}:9000"
+    mem_limit: ${MINIO_MEM_LIMIT:-0}
+    # edge:反代把 /{bucket}/* 转过来,浏览器直传/直取走这条路
     networks: [backend, edge]
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
@@ -37,7 +51,11 @@ services:
 
   gotenberg:
     image: gotenberg/gotenberg:8
+    profiles: ["office"]
     restart: unless-stopped
+    # LibreOffice 常驻 300~500MB、转换峰值更高。内存紧张又想要 Office 预览:
+    # 开这个 profile 并把 GOTENBERG_MEM_LIMIT 收到 512m,让它带着枷锁跑。
+    mem_limit: ${GOTENBERG_MEM_LIMIT:-0}
     # 只挂 backend(internal 网络无出网):它处理的是用户上传的文件,防 SSRF
     networks: [backend]
     healthcheck:
@@ -56,16 +74,22 @@ services:
       GOPAN_DB_URL: postgres://gopan:${POSTGRES_PASSWORD:?}@postgres:5432/gopan?sslmode=disable
       GOPAN_S3_ENDPOINT: minio:9000
       GOPAN_S3_PUBLIC_ENDPOINT: ${GOPAN_DOMAIN:?}          # 预签名 host = 对外域名
-      GOPAN_S3_PUBLIC_USE_SSL: "true"                       # 浏览器经 Caddy 走 https
+      GOPAN_S3_PUBLIC_USE_SSL: "true"                       # 浏览器经反代走 https
       GOPAN_S3_KEY: gopan
       GOPAN_S3_SECRET: ${MINIO_ROOT_PASSWORD:?}
-      GOPAN_S3_BUCKET: gopan                                # 改名须同步 Caddyfile 的 /gopan/* 路由
-      GOPAN_GOTENBERG_URL: http://gotenberg:3000
+      GOPAN_S3_BUCKET: gopan                                # 改名须同步反代的 /gopan/* 路由
+      # 置空 = 本次部署不提供 Office 预览(不开 office profile 时就该置空):后端不再入队转换,
+      # 预览直接回 UNAVAILABLE、前端引导下载。这里用 `-` 而不是 `:-`,空值要原样保留。
+      GOPAN_GOTENBERG_URL: ${GOPAN_GOTENBERG_URL-http://gotenberg:3000}
       GOPAN_JWT_SECRET_FILE: /run/secrets/jwt_secret
       GOPAN_REGISTER_OPEN: ${GOPAN_REGISTER_OPEN:-true}
       GOPAN_DEFAULT_QUOTA: ${GOPAN_DEFAULT_QUOTA:-107374182400}
     secrets:
       - jwt_secret
+    # 默认只绑 127.0.0.1:18080,给宿主反代用;caddy profile 下反代走容器网络,不影响
+    ports:
+      - "${GOPAN_HTTP_BIND:-127.0.0.1:18080}:8080"
+    mem_limit: ${GOPAN_MEM_LIMIT:-0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,6 +99,7 @@ services:
 
   caddy:
     image: caddy:2
+    profiles: ["caddy"]
     restart: unless-stopped
     ports:
       - "80:80"

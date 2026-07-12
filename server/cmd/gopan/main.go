@@ -76,6 +76,7 @@ func run() error {
 	uploads := service.NewUploads(pool, obj, nodes, cfg.PartSize, cfg.SessionTTL)
 
 	previews := service.NewPreviews(pool, obj)
+	previews.SetOfficeEnabled(cfg.GotenbergURL != "") // 未配 Gotenberg = 本次部署不提供 Office 预览
 	shares := service.NewShares(q, auth)
 	packer := service.NewPacker(q, obj, shares)
 	wk := worker.New(pool, obj, nodes, cfg.TrashTTL, cfg.FFmpegPath, cfg.FFprobePath, cfg.GotenbergURL)

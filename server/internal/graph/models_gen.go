@@ -288,10 +288,11 @@ func (e PreviewKind) MarshalJSON() ([]byte, error) {
 type TaskStatus string
 
 const (
-	TaskStatusPending TaskStatus = "PENDING"
-	TaskStatusRunning TaskStatus = "RUNNING"
-	TaskStatusDone    TaskStatus = "DONE"
-	TaskStatusFailed  TaskStatus = "FAILED"
+	TaskStatusPending     TaskStatus = "PENDING"
+	TaskStatusRunning     TaskStatus = "RUNNING"
+	TaskStatusDone        TaskStatus = "DONE"
+	TaskStatusFailed      TaskStatus = "FAILED"
+	TaskStatusUnavailable TaskStatus = "UNAVAILABLE"
 )
 
 var AllTaskStatus = []TaskStatus{
@@ -299,11 +300,12 @@ var AllTaskStatus = []TaskStatus{
 	TaskStatusRunning,
 	TaskStatusDone,
 	TaskStatusFailed,
+	TaskStatusUnavailable,
 }
 
 func (e TaskStatus) IsValid() bool {
 	switch e {
-	case TaskStatusPending, TaskStatusRunning, TaskStatusDone, TaskStatusFailed:
+	case TaskStatusPending, TaskStatusRunning, TaskStatusDone, TaskStatusFailed, TaskStatusUnavailable:
 		return true
 	}
 	return false

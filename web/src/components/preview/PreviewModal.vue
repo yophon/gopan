@@ -106,9 +106,20 @@ function retryOffice() {
   requestPreviewMutation.mutate({ nodeId: id })
 }
 
-/** 访客打开从未转换过的 Office:无法触发,引导下载 */
-const officeUnavailable = computed(
-  () => !!props.guestToken && preview.value?.kind === 'OFFICE' && !preview.value.status,
+/**
+ * Office 转不出来的两种情况,都引导下载:
+ * UNAVAILABLE = 本次部署没开 Office 转换(未部署 Gotenberg);访客 + 无产物 = 有能力但访客无权触发。
+ */
+const officeUnavailable = computed(() => {
+  const p = preview.value
+  if (p?.kind !== 'OFFICE') return false
+  return p.status === 'UNAVAILABLE' || (!!props.guestToken && !p.status)
+})
+
+const officeUnavailableText = computed(() =>
+  preview.value?.status === 'UNAVAILABLE'
+    ? '本站未开启 Office 在线预览,请下载查看'
+    : '该文档还没有生成预览,请下载查看',
 )
 
 const officeConverting = computed(() => {
@@ -319,7 +330,7 @@ function formatDuration(sec: number | null | undefined): string {
 
           <!-- OFFICE:访客无产物 / 转换中 / 完成(按 PDF 渲染)/ 失败 -->
           <div v-else-if="officeUnavailable" class="preview-placeholder">
-            <el-empty description="该文档还没有生成预览,请下载查看">
+            <el-empty :description="officeUnavailableText">
               <el-button type="primary" :icon="Download" :loading="downloading" @click="onDownload">
                 下载文件
               </el-button>

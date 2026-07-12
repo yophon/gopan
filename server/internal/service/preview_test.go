@@ -155,3 +155,51 @@ func TestPreviewRequest(t *testing.T) {
 		t.Fatalf("越权 Request 应 NOT_FOUND,got %v", err)
 	}
 }
+
+// 未部署 Gotenberg 的精简部署:Office 文件报 UNAVAILABLE,且不入队(否则任务永远失败堆积)
+func TestPreviewOfficeDisabled(t *testing.T) {
+	pool := setup(t)
+	ctx := context.Background()
+	auth := newAuth(pool)
+	previews := service.NewPreviews(pool, fakeObj(t))
+	previews.SetOfficeEnabled(false)
+	q := store.New(pool)
+
+	var enqueued []string
+	previews.SetEnqueue(func(_ context.Context, kind string, _ uuid.UUID) {
+		enqueued = append(enqueued, kind)
+	})
+
+	res, err := auth.Register(ctx, "pvd_"+uuid.NewString()[:8], "password123", "1.1.1.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := res.User.ID
+	sha := "0000000000000000000000000000000000000000000000000000000000000002"
+	blob, _ := q.UpsertBlob(ctx, store.UpsertBlobParams{ID: uuid.Must(uuid.NewV7()), Sha256: sha, Size: 64, Mime: "application/octet-stream"})
+	node, err := q.CreateNode(ctx, store.CreateNodeParams{
+		ID: uuid.Must(uuid.NewV7()), OwnerID: owner, Name: "d.docx", Kind: "file", BlobID: &blob.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := previews.Request(ctx, owner, node.ID)
+	if err != nil || info.Kind != service.PvOffice || info.Status == nil || *info.Status != service.StUnavailable {
+		t.Fatalf("关闭 Office 应回 UNAVAILABLE:%+v err=%v", info, err)
+	}
+	if len(enqueued) != 0 {
+		t.Fatalf("关闭 Office 不该入队,got %v", enqueued)
+	}
+
+	// 已有产物(在关闭前转好的)仍然可看
+	if err := q.UpsertDerivative(ctx, store.UpsertDerivativeParams{
+		BlobID: blob.ID, Kind: "pdf", MinioKey: objstore.DerivedKey(sha, "pdf"), Size: 100,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	info, err = previews.ForNode(ctx, "d.docx", &sha, ptr("application/octet-stream"), ptr(int64(64)))
+	if err != nil || info.Status == nil || *info.Status != "DONE" || info.ContentURL == nil {
+		t.Fatalf("历史产物应仍可预览:%+v err=%v", info, err)
+	}
+}

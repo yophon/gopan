@@ -138,6 +138,10 @@ func (w *Pool) makeVideoCover(ctx context.Context, blobID uuid.UUID) error {
 // ---- Office → PDF(Gotenberg)----
 
 func (w *Pool) makeOfficePDF(ctx context.Context, blobID uuid.UUID) error {
+	if w.gotenberg == "" {
+		// service 层不会再入队,这里兜住历史遗留任务(关掉 Gotenberg 之前排上的)
+		return fmt.Errorf("未配置 GOPAN_GOTENBERG_URL,Office 转换已关闭")
+	}
 	blob, err := w.q.GetBlob(ctx, blobID)
 	if err != nil {
 		return err
