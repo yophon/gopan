@@ -38,4 +38,4 @@ lint:
 # 端到端 smoke:需要 dev 依赖与服务已跑(make dev-env && make dev-server)
 smoke:
 	cd scripts/smoke && python3 m2_transfer.py && python3 m3_preview.py \
-		&& python3 m4_share.py && python3 m5_misc.py
+		&& python3 m4_share.py && python3 m5_misc.py && node browser_probe.mjs

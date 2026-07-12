@@ -14,7 +14,9 @@ import router from '@/router'
  *   刷新也失败 → 清 auth store,跳 /login?redirect=当前路由。
  */
 
-const gqlClient = new GraphQLClient('/query', {
+// graphql-request v7 内部用 new URL() 解析 endpoint,相对路径会抛 Invalid URL,
+// 必须给绝对地址(同源部署,origin 即当前站点)
+const gqlClient = new GraphQLClient(`${location.origin}/query`, {
   credentials: 'include', // refresh token 在 httpOnly cookie 里
 })
 
