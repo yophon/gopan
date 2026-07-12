@@ -45,7 +45,7 @@ make build        # 前端构建 + embed → server/gopan 单二进制
 | [M3 · 预览](./doc/milestones/M3-预览.md) | 派生物管线(缩略图/封面/时长/Office 转 PDF)、预览模态 |
 | [M4 · 分享](./doc/milestones/M4-分享.md) | 分享链接、访客子树授权、og 落地页、流式 zip 打包 |
 | [M5 · 收尾](./doc/milestones/M5-收尾.md) | 欠账清零(回收站自动清理/复制/搜索/配额/改密码)+ Docker 生产化;真机上线后打 v1.0.0 |
-| [M6 · 计划](./doc/milestones/M6-计划.md) | **待做**:加固——测试矩阵补齐、/pack 限速、refresh 表清理、深度限制、/metrics、安全头 |
+| [M6 · 加固](./doc/milestones/M6-加固.md) | 测试 64%→73%、/pack 双闸限速、refresh 清理、深度限制、/metrics、安全头、smoke 入库 |
 
 ## 读法
 
