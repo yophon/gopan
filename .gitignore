@@ -6,3 +6,4 @@
 /web/src/api/gen/
 .DS_Store
 *.local
+__pycache__/

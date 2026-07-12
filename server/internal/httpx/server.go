@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 
+	"github.com/yophon/gopan/server/internal/metrics"
 	"github.com/yophon/gopan/server/internal/service"
 )
 
@@ -124,11 +126,39 @@ func WithSecurityHeaders(next http.Handler, devMode bool) http.Handler {
 	})
 }
 
+// statusRecorder 捕获响应码给指标用。
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+// normalizePath 归一指标的 path 标签,防 /s/{token} 这类动态段打爆基数。
+func normalizePath(p string) string {
+	switch {
+	case p == "/query", p == "/healthz", p == "/pack":
+		return p
+	case strings.HasPrefix(p, "/s/"):
+		return "/s/:token"
+	default:
+		return "/spa"
+	}
+}
+
 func WithLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		next.ServeHTTP(w, r)
-		slog.Info("http", "method", r.Method, "path", r.URL.Path, "dur_ms", time.Since(start).Milliseconds())
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(rec, r)
+		dur := time.Since(start)
+		slog.Info("http", "method", r.Method, "path", r.URL.Path, "status", rec.status, "dur_ms", dur.Milliseconds())
+		np := normalizePath(r.URL.Path)
+		metrics.HTTPRequests.WithLabelValues(np, strconv.Itoa(rec.status)).Inc()
+		metrics.HTTPDuration.WithLabelValues(np).Observe(dur.Seconds())
 	})
 }
 

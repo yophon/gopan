@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/yophon/gopan/server/internal/metrics"
 	"github.com/yophon/gopan/server/internal/objstore"
 	"github.com/yophon/gopan/server/internal/service"
 	"github.com/yophon/gopan/server/internal/store"
@@ -116,6 +117,7 @@ func (w *Pool) execute(ctx context.Context, t store.Task) {
 	if ferr := w.q.FinishTask(ctx, store.FinishTaskParams{ID: t.ID, Status: status, LastError: errText}); ferr != nil {
 		slog.Error("finish task", "err", ferr)
 	}
+	metrics.Tasks.WithLabelValues(t.Kind, status).Inc()
 }
 
 // verifyHash 流式重算对象 sha256。不符 = 客户端谎报,删对象、节点、blob,标记会话失败。
@@ -220,6 +222,7 @@ func (w *Pool) cleanupSessions(ctx context.Context) error {
 	}
 	if len(expired) > 0 {
 		slog.Info("expired sessions aborted", "count", len(expired))
+		metrics.Cleanup.WithLabelValues("sessions").Add(float64(len(expired)))
 	}
 	return nil
 }
@@ -229,6 +232,7 @@ func (w *Pool) cleanupTrash(ctx context.Context) error {
 	n, err := w.nodes.PurgeExpiredTrash(ctx, w.trashTTL)
 	if n > 0 {
 		slog.Info("trash cleanup", "purged_roots", n, "ttl", w.trashTTL)
+		metrics.Cleanup.WithLabelValues("trash").Add(float64(n))
 	}
 	return err
 }
@@ -236,7 +240,12 @@ func (w *Pool) cleanupTrash(ctx context.Context) error {
 // cleanupRefreshTokens 删过期超 30 天的 refresh 行。留 30 天余量:
 // 重用检测靠"已用 token 再现"识别泄露,过期即删会丢取证窗口。
 func (w *Pool) cleanupRefreshTokens(ctx context.Context) error {
-	return w.q.DeleteExpiredRefreshTokens(ctx)
+	n, err := w.q.DeleteExpiredRefreshTokens(ctx)
+	if n > 0 {
+		slog.Info("refresh tokens cleanup", "deleted", n)
+		metrics.Cleanup.WithLabelValues("refresh_tokens").Add(float64(n))
+	}
+	return err
 }
 
 // gcBlobs 删除 ref_count=0 且过宽限期(24h)的 blob 及其对象。
@@ -264,6 +273,7 @@ func (w *Pool) gcBlobs(ctx context.Context) error {
 	}
 	if len(blobs) > 0 {
 		slog.Info("blobs gc", "count", len(blobs))
+		metrics.Cleanup.WithLabelValues("blobs").Add(float64(len(blobs)))
 	}
 	return nil
 }

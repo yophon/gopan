@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib" // goose 走 database/sql,需要 pgx 的 stdlib 驱动
 	"github.com/pressly/goose/v3"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/yophon/gopan/server/db"
 	"github.com/yophon/gopan/server/internal/config"
@@ -107,9 +108,10 @@ func run() error {
 	mux.Handle("GET /s/{token}", httpx.ShareLanding(dist, shares))
 	mux.Handle("/", httpx.SPAHandler(dist))
 
-	// pprof 只挂内网端口
+	// pprof + /metrics 同挂内网端口(反代永不转发,与 pprof 同一安全边界)
+	http.Handle("/metrics", promhttp.Handler())
 	go func() {
-		slog.Info("pprof listening", "addr", cfg.PprofListen)
+		slog.Info("pprof/metrics listening", "addr", cfg.PprofListen)
 		if err := http.ListenAndServe(cfg.PprofListen, nil); err != nil {
 			slog.Warn("pprof server stopped", "err", err)
 		}
