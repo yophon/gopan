@@ -29,6 +29,7 @@ build:
 
 test:
 	cd server && go test ./... && go vet ./...
+	cd web && pnpm test
 
 lint:
 	cd server && go vet ./...

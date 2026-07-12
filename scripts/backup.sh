@@ -20,4 +20,15 @@ docker run --rm -v "$VOLUME":/data:ro -v "$BACKUP_DIR":/backup debian:bookworm-s
 find "$BACKUP_DIR" -name 'db-*.dump' -mtime +7 -delete
 find "$BACKUP_DIR" -name 'minio-*.tar.gz' -mtime +7 -delete
 
+# 可选异地:设 BACKUP_REMOTE(rclone 远端,如 r2:gopan-backup)后同步整个备份目录。
+# 远端配置一次即可:rclone config(任意 S3/网盘)。本机备份挡误删,异地挡整机故障。
+if [ -n "${BACKUP_REMOTE:-}" ]; then
+  if command -v rclone > /dev/null; then
+    echo "[$(date '+%F %T')] rclone sync -> $BACKUP_REMOTE ..."
+    rclone sync "$BACKUP_DIR" "$BACKUP_REMOTE" --transfers 2
+  else
+    echo "[$(date '+%F %T')] 警告:设置了 BACKUP_REMOTE 但未安装 rclone,跳过异地备份" >&2
+  fi
+fi
+
 echo "[$(date '+%F %T')] done: $(du -sh "$BACKUP_DIR" | cut -f1) in $BACKUP_DIR"
