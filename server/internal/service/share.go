@@ -138,7 +138,7 @@ func (s *Shares) Info(ctx context.Context, token string) (*ShareInfoView, error)
 		Name:         sh.NodeName,
 		Kind:         sh.NodeKind,
 		NeedPassword: sh.PasswordHash != nil,
-		Expired:      shareDead(sh.RevokedAt.Valid, sh.ExpiresAt, sh.NodeDeletedAt.Valid),
+		Expired:      shareDead(sh.RevokedAt.Valid, sh.ExpiresAt, sh.NodeDeletedAt.Valid, sh.OwnerDisabled),
 	}, nil
 }
 
@@ -156,7 +156,7 @@ func (s *Shares) Access(ctx context.Context, token, password, ip string) (string
 		}
 		return "", err
 	}
-	if shareDead(sh.RevokedAt.Valid, sh.ExpiresAt, sh.NodeDeletedAt.Valid) {
+	if shareDead(sh.RevokedAt.Valid, sh.ExpiresAt, sh.NodeDeletedAt.Valid, sh.OwnerDisabled) {
 		return "", errShareExpired
 	}
 	if sh.PasswordHash != nil {
@@ -179,7 +179,7 @@ func (s *Shares) Validate(ctx context.Context, shareID uuid.UUID) (store.GetShar
 		}
 		return store.GetShareByIDRow{}, err
 	}
-	if shareDead(sh.RevokedAt.Valid, sh.ExpiresAt, sh.NodeDeletedAt.Valid) {
+	if shareDead(sh.RevokedAt.Valid, sh.ExpiresAt, sh.NodeDeletedAt.Valid, sh.OwnerDisabled) {
 		return store.GetShareByIDRow{}, errShareExpired
 	}
 	return sh, nil
@@ -235,8 +235,9 @@ func (s *Shares) Authorize(ctx context.Context, ident *Identity, nodeID uuid.UUI
 
 var errShareExpired = &Error{Code: "SHARE_EXPIRED", Message: "分享已失效"}
 
-func shareDead(revoked bool, expiresAt pgtype.Timestamptz, nodeDeleted bool) bool {
-	if revoked || nodeDeleted {
+// ownerDisabled:属主被禁用时分享连带失效(冻结账号 = 冻结其对外暴露面)。
+func shareDead(revoked bool, expiresAt pgtype.Timestamptz, nodeDeleted, ownerDisabled bool) bool {
+	if revoked || nodeDeleted || ownerDisabled {
 		return true
 	}
 	return expiresAt.Valid && expiresAt.Time.Before(time.Now())

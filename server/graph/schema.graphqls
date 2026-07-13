@@ -8,6 +8,32 @@ type User {
   username: String!
   quotaBytes: Int64!
   usedBytes: Int64!
+  isAdmin: Boolean!
+}
+
+# ---------- 管理端(所有 admin* 字段要求调用者 is_admin,校验在 service 层) ----------
+
+type AdminUser {
+  id: ID!
+  username: String!
+  isAdmin: Boolean!
+  disabled: Boolean!
+  quotaBytes: Int64!
+  usedBytes: Int64!
+  createdAt: Time!
+}
+
+type TaskCount {
+  status: String!
+  count: Int!
+}
+
+type AdminOverview {
+  userCount: Int!
+  totalUsedBytes: Int64!
+  blobCount: Int!
+  blobBytes: Int64!
+  taskCounts: [TaskCount!]!
 }
 
 enum NodeKind { FILE, FOLDER }
@@ -108,6 +134,9 @@ type Query {
   uploadSession(id: ID!): UploadSession!
   shareInfo(token: String!): ShareInfo!
   shareRoot: Node!
+
+  adminUsers: [AdminUser!]!
+  adminOverview: AdminOverview!
 }
 
 # ---------- 变更 ----------
@@ -143,4 +172,11 @@ type Mutation {
   createShare(nodeId: ID!, password: String, expiresAt: Time): Share!
   revokeShare(id: ID!): Boolean!
   verifySharePassword(token: String!, password: String!): ShareAuth!
+
+  adminCreateUser(username: String!, password: String!, quotaBytes: Int64): AdminUser!
+  adminSetQuota(userId: ID!, quotaBytes: Int64!): AdminUser!
+  adminSetDisabled(userId: ID!, disabled: Boolean!): AdminUser!
+  # 生成随机新密码并吊销该用户全部会话;明文只在返回值出现一次
+  adminResetPassword(userId: ID!): String!
+  adminRetryFailedTasks: Int!
 }

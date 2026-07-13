@@ -4,13 +4,15 @@ VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: GetShareByToken :one
-SELECT s.*, n.name AS node_name, n.kind AS node_kind, n.deleted_at AS node_deleted_at
-FROM shares s JOIN nodes n ON n.id = s.node_id
+SELECT s.*, n.name AS node_name, n.kind AS node_kind, n.deleted_at AS node_deleted_at,
+       (u.disabled_at IS NOT NULL)::boolean AS owner_disabled
+FROM shares s JOIN nodes n ON n.id = s.node_id JOIN users u ON u.id = s.created_by
 WHERE s.token = $1;
 
 -- name: GetShareByID :one
-SELECT s.*, n.name AS node_name, n.kind AS node_kind, n.deleted_at AS node_deleted_at
-FROM shares s JOIN nodes n ON n.id = s.node_id
+SELECT s.*, n.name AS node_name, n.kind AS node_kind, n.deleted_at AS node_deleted_at,
+       (u.disabled_at IS NOT NULL)::boolean AS owner_disabled
+FROM shares s JOIN nodes n ON n.id = s.node_id JOIN users u ON u.id = s.created_by
 WHERE s.id = $1;
 
 -- name: ListMyShares :many

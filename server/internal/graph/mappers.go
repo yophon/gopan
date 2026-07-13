@@ -54,6 +54,16 @@ func gqlUser(u store.User) *User {
 	return &User{
 		ID: u.ID.String(), Username: u.Username,
 		QuotaBytes: u.QuotaBytes, UsedBytes: u.UsedBytes,
+		IsAdmin: u.IsAdmin,
+	}
+}
+
+func gqlAdminUser(u store.User) *AdminUser {
+	return &AdminUser{
+		ID: u.ID.String(), Username: u.Username,
+		IsAdmin: u.IsAdmin, Disabled: u.DisabledAt.Valid,
+		QuotaBytes: u.QuotaBytes, UsedBytes: u.UsedBytes,
+		CreatedAt: u.CreatedAt.Time,
 	}
 }
 

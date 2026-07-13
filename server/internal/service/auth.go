@@ -151,6 +151,9 @@ func (a *Auth) Login(ctx context.Context, username, password, ip string) (*AuthR
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
 		return nil, errf("BAD_CREDENTIALS", "用户名或密码错误")
 	}
+	if u.DisabledAt.Valid {
+		return nil, errf("ACCOUNT_DISABLED", "账号已被禁用")
+	}
 	return a.issuePair(ctx, u)
 }
 
@@ -210,6 +213,9 @@ func (a *Auth) Refresh(ctx context.Context, plain string) (*AuthResult, error) {
 	u, err := a.q.GetUserByID(ctx, rt.UserID)
 	if err != nil {
 		return nil, err
+	}
+	if u.DisabledAt.Valid {
+		return nil, ErrUnauthenticated
 	}
 	access, err := a.IssueAccess(u.ID, ScopeUser)
 	if err != nil {

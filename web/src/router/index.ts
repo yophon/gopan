@@ -42,6 +42,11 @@ const router = createRouter({
           name: 'search',
           component: () => import('@/views/SearchView.vue'),
         },
+        {
+          path: 'admin',
+          name: 'admin',
+          component: () => import('@/views/AdminView.vue'),
+        },
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/drive' },
@@ -66,6 +71,11 @@ router.beforeEach(async (to) => {
     if (!ok) {
       return { path: '/login', query: { redirect: to.fullPath } }
     }
+  }
+
+  // 管理页只对 admin 开放;非 admin 静默回主界面,不暴露路由存在
+  if (to.name === 'admin' && !auth.user?.isAdmin) {
+    return { path: '/drive' }
   }
   return true
 })

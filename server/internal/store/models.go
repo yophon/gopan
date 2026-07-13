@@ -97,4 +97,5 @@ type User struct {
 	UsedBytes    int64
 	IsAdmin      bool
 	CreatedAt    pgtype.Timestamptz
+	DisabledAt   pgtype.Timestamptz
 }

@@ -51,8 +51,9 @@ func (q *Queries) CreateShare(ctx context.Context, arg CreateShareParams) (Share
 }
 
 const getShareByID = `-- name: GetShareByID :one
-SELECT s.id, s.token, s.node_id, s.created_by, s.password_hash, s.expires_at, s.revoked_at, s.created_at, n.name AS node_name, n.kind AS node_kind, n.deleted_at AS node_deleted_at
-FROM shares s JOIN nodes n ON n.id = s.node_id
+SELECT s.id, s.token, s.node_id, s.created_by, s.password_hash, s.expires_at, s.revoked_at, s.created_at, n.name AS node_name, n.kind AS node_kind, n.deleted_at AS node_deleted_at,
+       (u.disabled_at IS NOT NULL)::boolean AS owner_disabled
+FROM shares s JOIN nodes n ON n.id = s.node_id JOIN users u ON u.id = s.created_by
 WHERE s.id = $1
 `
 
@@ -68,6 +69,7 @@ type GetShareByIDRow struct {
 	NodeName      string
 	NodeKind      string
 	NodeDeletedAt pgtype.Timestamptz
+	OwnerDisabled bool
 }
 
 func (q *Queries) GetShareByID(ctx context.Context, id uuid.UUID) (GetShareByIDRow, error) {
@@ -85,13 +87,15 @@ func (q *Queries) GetShareByID(ctx context.Context, id uuid.UUID) (GetShareByIDR
 		&i.NodeName,
 		&i.NodeKind,
 		&i.NodeDeletedAt,
+		&i.OwnerDisabled,
 	)
 	return i, err
 }
 
 const getShareByToken = `-- name: GetShareByToken :one
-SELECT s.id, s.token, s.node_id, s.created_by, s.password_hash, s.expires_at, s.revoked_at, s.created_at, n.name AS node_name, n.kind AS node_kind, n.deleted_at AS node_deleted_at
-FROM shares s JOIN nodes n ON n.id = s.node_id
+SELECT s.id, s.token, s.node_id, s.created_by, s.password_hash, s.expires_at, s.revoked_at, s.created_at, n.name AS node_name, n.kind AS node_kind, n.deleted_at AS node_deleted_at,
+       (u.disabled_at IS NOT NULL)::boolean AS owner_disabled
+FROM shares s JOIN nodes n ON n.id = s.node_id JOIN users u ON u.id = s.created_by
 WHERE s.token = $1
 `
 
@@ -107,6 +111,7 @@ type GetShareByTokenRow struct {
 	NodeName      string
 	NodeKind      string
 	NodeDeletedAt pgtype.Timestamptz
+	OwnerDisabled bool
 }
 
 func (q *Queries) GetShareByToken(ctx context.Context, token string) (GetShareByTokenRow, error) {
@@ -124,6 +129,7 @@ func (q *Queries) GetShareByToken(ctx context.Context, token string) (GetShareBy
 		&i.NodeName,
 		&i.NodeKind,
 		&i.NodeDeletedAt,
+		&i.OwnerDisabled,
 	)
 	return i, err
 }

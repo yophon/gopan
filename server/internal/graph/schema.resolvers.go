@@ -347,6 +347,76 @@ func (r *mutationResolver) VerifySharePassword(ctx context.Context, token string
 	return &ShareAuth{AccessToken: access}, nil
 }
 
+// AdminCreateUser is the resolver for the adminCreateUser field.
+func (r *mutationResolver) AdminCreateUser(ctx context.Context, username string, password string, quotaBytes *int64) (*AdminUser, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	u, err := r.Admin.CreateUser(ctx, ident.UserID, username, password, quotaBytes)
+	if err != nil {
+		return nil, err
+	}
+	return gqlAdminUser(u), nil
+}
+
+// AdminSetQuota is the resolver for the adminSetQuota field.
+func (r *mutationResolver) AdminSetQuota(ctx context.Context, userID string, quotaBytes int64) (*AdminUser, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	target, err := parseID(userID)
+	if err != nil {
+		return nil, err
+	}
+	u, err := r.Admin.SetQuota(ctx, ident.UserID, target, quotaBytes)
+	if err != nil {
+		return nil, err
+	}
+	return gqlAdminUser(u), nil
+}
+
+// AdminSetDisabled is the resolver for the adminSetDisabled field.
+func (r *mutationResolver) AdminSetDisabled(ctx context.Context, userID string, disabled bool) (*AdminUser, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	target, err := parseID(userID)
+	if err != nil {
+		return nil, err
+	}
+	u, err := r.Admin.SetDisabled(ctx, ident.UserID, target, disabled)
+	if err != nil {
+		return nil, err
+	}
+	return gqlAdminUser(u), nil
+}
+
+// AdminResetPassword is the resolver for the adminResetPassword field.
+func (r *mutationResolver) AdminResetPassword(ctx context.Context, userID string) (string, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return "", err
+	}
+	target, err := parseID(userID)
+	if err != nil {
+		return "", err
+	}
+	return r.Admin.ResetPassword(ctx, ident.UserID, target)
+}
+
+// AdminRetryFailedTasks is the resolver for the adminRetryFailedTasks field.
+func (r *mutationResolver) AdminRetryFailedTasks(ctx context.Context) (int, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n, err := r.Admin.RetryFailedTasks(ctx, ident.UserID)
+	return int(n), err
+}
+
 // Preview is the resolver for the preview field.
 func (r *nodeResolver) Preview(ctx context.Context, obj *Node) (*PreviewInfo, error) {
 	if obj.Kind != NodeKindFile {
@@ -565,6 +635,46 @@ func (r *queryResolver) ShareRoot(ctx context.Context) (*Node, error) {
 	}
 	node.ParentID = nil // 分享根之上的结构不暴露给访客
 	return node, nil
+}
+
+// AdminUsers is the resolver for the adminUsers field.
+func (r *queryResolver) AdminUsers(ctx context.Context) ([]*AdminUser, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	us, err := r.Admin.ListUsers(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*AdminUser, 0, len(us))
+	for _, u := range us {
+		out = append(out, gqlAdminUser(u))
+	}
+	return out, nil
+}
+
+// AdminOverview is the resolver for the adminOverview field.
+func (r *queryResolver) AdminOverview(ctx context.Context) (*AdminOverview, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ov, err := r.Admin.Overview(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	counts := make([]*TaskCount, 0, len(ov.TaskCounts))
+	for _, tc := range ov.TaskCounts {
+		counts = append(counts, &TaskCount{Status: tc.Status, Count: int(tc.Count)})
+	}
+	return &AdminOverview{
+		UserCount:      int(ov.UserCount),
+		TotalUsedBytes: ov.TotalUsedBytes,
+		BlobCount:      int(ov.BlobCount),
+		BlobBytes:      ov.BlobBytes,
+		TaskCounts:     counts,
+	}, nil
 }
 
 // Mutation returns MutationResolver implementation.

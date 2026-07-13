@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -34,10 +35,48 @@ var distFS embed.FS
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	// 子命令模式:gopan admin promote <username>。只连库,不起服务。
+	if len(os.Args) > 1 && os.Args[1] == "admin" {
+		if err := adminCmd(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}
+}
+
+// adminCmd 处理 admin 子命令。目前只有 promote:把已注册用户提升为管理员。
+// 首个管理员只能从这里产生(不受注册开关与 API 鉴权约束,属主凭服务器权限自举)。
+func adminCmd(args []string) error {
+	if len(args) != 2 || args[0] != "promote" {
+		return fmt.Errorf("用法:gopan admin promote <username>(需要 GOPAN_DB_URL)")
+	}
+	dbURL := os.Getenv("GOPAN_DB_URL")
+	if dbURL == "" {
+		return fmt.Errorf("需要设置 GOPAN_DB_URL")
+	}
+	if err := migrate(dbURL); err != nil {
+		return err
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dbURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	n, err := store.New(pool).PromoteAdminByUsername(ctx, args[1])
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("用户 %q 不存在(请先注册该账号)", args[1])
+	}
+	fmt.Printf("已将 %s 提升为管理员\n", args[1])
+	return nil
 }
 
 func run() error {
@@ -78,6 +117,7 @@ func run() error {
 	previews := service.NewPreviews(pool, obj)
 	previews.SetOfficeEnabled(cfg.GotenbergURL != "") // 未配 Gotenberg = 本次部署不提供 Office 预览
 	shares := service.NewShares(q, auth)
+	admin := service.NewAdmin(q, cfg.DefaultQuota)
 	packer := service.NewPacker(q, obj, shares)
 	wk := worker.New(pool, obj, nodes, cfg.TrashTTL, cfg.FFmpegPath, cfg.FFprobePath, cfg.GotenbergURL)
 	uploads.SetEnqueue(wk.Enqueue)
@@ -85,7 +125,7 @@ func run() error {
 	go wk.Run(ctx, 2)
 
 	es := graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
-		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares,
+		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin,
 	}})
 
 	mux := http.NewServeMux()

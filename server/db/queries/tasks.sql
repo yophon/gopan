@@ -21,3 +21,10 @@ RETURNING *;
 
 -- name: FinishTask :exec
 UPDATE tasks SET status = $2, last_error = $3, updated_at = now() WHERE id = $1;
+
+-- name: CountTasksByStatus :many
+SELECT status, count(*) AS count FROM tasks GROUP BY status;
+
+-- name: RetryFailedTasks :execrows
+UPDATE tasks SET status = 'pending', attempts = 0, last_error = NULL, updated_at = now()
+WHERE status = 'failed';

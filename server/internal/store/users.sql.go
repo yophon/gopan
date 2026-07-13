@@ -11,10 +11,130 @@ import (
 	"github.com/google/uuid"
 )
 
+const adminListUsers = `-- name: AdminListUsers :many
+SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at FROM users ORDER BY created_at
+`
+
+func (q *Queries) AdminListUsers(ctx context.Context) ([]User, error) {
+	rows, err := q.db.Query(ctx, adminListUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.PasswordHash,
+			&i.QuotaBytes,
+			&i.UsedBytes,
+			&i.IsAdmin,
+			&i.CreatedAt,
+			&i.DisabledAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const adminOverviewBlobs = `-- name: AdminOverviewBlobs :one
+SELECT count(*) AS blob_count, COALESCE(sum(size), 0)::bigint AS blob_bytes
+FROM blobs
+`
+
+type AdminOverviewBlobsRow struct {
+	BlobCount int64
+	BlobBytes int64
+}
+
+func (q *Queries) AdminOverviewBlobs(ctx context.Context) (AdminOverviewBlobsRow, error) {
+	row := q.db.QueryRow(ctx, adminOverviewBlobs)
+	var i AdminOverviewBlobsRow
+	err := row.Scan(&i.BlobCount, &i.BlobBytes)
+	return i, err
+}
+
+const adminOverviewUsers = `-- name: AdminOverviewUsers :one
+SELECT count(*) AS user_count, COALESCE(sum(used_bytes), 0)::bigint AS total_used
+FROM users
+`
+
+type AdminOverviewUsersRow struct {
+	UserCount int64
+	TotalUsed int64
+}
+
+func (q *Queries) AdminOverviewUsers(ctx context.Context) (AdminOverviewUsersRow, error) {
+	row := q.db.QueryRow(ctx, adminOverviewUsers)
+	var i AdminOverviewUsersRow
+	err := row.Scan(&i.UserCount, &i.TotalUsed)
+	return i, err
+}
+
+const adminSetUserDisabled = `-- name: AdminSetUserDisabled :one
+UPDATE users
+SET disabled_at = CASE WHEN $2::boolean THEN now() ELSE NULL END
+WHERE id = $1
+RETURNING id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at
+`
+
+type AdminSetUserDisabledParams struct {
+	ID       uuid.UUID
+	Disabled bool
+}
+
+func (q *Queries) AdminSetUserDisabled(ctx context.Context, arg AdminSetUserDisabledParams) (User, error) {
+	row := q.db.QueryRow(ctx, adminSetUserDisabled, arg.ID, arg.Disabled)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.QuotaBytes,
+		&i.UsedBytes,
+		&i.IsAdmin,
+		&i.CreatedAt,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
+const adminSetUserQuota = `-- name: AdminSetUserQuota :one
+UPDATE users SET quota_bytes = $2 WHERE id = $1 RETURNING id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at
+`
+
+type AdminSetUserQuotaParams struct {
+	ID         uuid.UUID
+	QuotaBytes int64
+}
+
+func (q *Queries) AdminSetUserQuota(ctx context.Context, arg AdminSetUserQuotaParams) (User, error) {
+	row := q.db.QueryRow(ctx, adminSetUserQuota, arg.ID, arg.QuotaBytes)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.QuotaBytes,
+		&i.UsedBytes,
+		&i.IsAdmin,
+		&i.CreatedAt,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (id, username, password_hash, quota_bytes)
 VALUES ($1, $2, $3, $4)
-RETURNING id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at
+RETURNING id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at
 `
 
 type CreateUserParams struct {
@@ -40,12 +160,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.UsedBytes,
 		&i.IsAdmin,
 		&i.CreatedAt,
+		&i.DisabledAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at FROM users WHERE id = $1
+SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -59,12 +180,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.UsedBytes,
 		&i.IsAdmin,
 		&i.CreatedAt,
+		&i.DisabledAt,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at FROM users WHERE username = $1
+SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -78,8 +200,21 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.UsedBytes,
 		&i.IsAdmin,
 		&i.CreatedAt,
+		&i.DisabledAt,
 	)
 	return i, err
+}
+
+const promoteAdminByUsername = `-- name: PromoteAdminByUsername :execrows
+UPDATE users SET is_admin = true WHERE username = $1
+`
+
+func (q *Queries) PromoteAdminByUsername(ctx context.Context, username string) (int64, error) {
+	result, err := q.db.Exec(ctx, promoteAdminByUsername, username)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :exec

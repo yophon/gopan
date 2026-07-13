@@ -41,6 +41,35 @@ func (q *Queries) ClaimTask(ctx context.Context) (Task, error) {
 	return i, err
 }
 
+const countTasksByStatus = `-- name: CountTasksByStatus :many
+SELECT status, count(*) AS count FROM tasks GROUP BY status
+`
+
+type CountTasksByStatusRow struct {
+	Status string
+	Count  int64
+}
+
+func (q *Queries) CountTasksByStatus(ctx context.Context) ([]CountTasksByStatusRow, error) {
+	rows, err := q.db.Query(ctx, countTasksByStatus)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountTasksByStatusRow
+	for rows.Next() {
+		var i CountTasksByStatusRow
+		if err := rows.Scan(&i.Status, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const enqueueTask = `-- name: EnqueueTask :exec
 INSERT INTO tasks (id, kind, blob_id)
 VALUES ($1, $2, $3)
@@ -74,4 +103,17 @@ type FinishTaskParams struct {
 func (q *Queries) FinishTask(ctx context.Context, arg FinishTaskParams) error {
 	_, err := q.db.Exec(ctx, finishTask, arg.ID, arg.Status, arg.LastError)
 	return err
+}
+
+const retryFailedTasks = `-- name: RetryFailedTasks :execrows
+UPDATE tasks SET status = 'pending', attempts = 0, last_error = NULL, updated_at = now()
+WHERE status = 'failed'
+`
+
+func (q *Queries) RetryFailedTasks(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, retryFailedTasks)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

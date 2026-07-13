@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Delete, Folder, Key, Search, Share, SwitchButton } from '@element-plus/icons-vue'
+import { Delete, Folder, Key, Search, Setting, Share, SwitchButton } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { MeDocument } from '@/api/gen/graphql'
@@ -82,6 +82,10 @@ async function onLogout() {
         <el-menu-item index="/trash">
           <el-icon><Delete /></el-icon>
           <span>回收站</span>
+        </el-menu-item>
+        <el-menu-item v-if="me?.isAdmin" index="/admin">
+          <el-icon><Setting /></el-icon>
+          <span>管理</span>
         </el-menu-item>
       </el-menu>
       <div v-if="me" class="quota-area">

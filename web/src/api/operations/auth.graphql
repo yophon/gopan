@@ -6,6 +6,7 @@ mutation Login($username: String!, $password: String!) {
       username
       quotaBytes
       usedBytes
+      isAdmin
     }
   }
 }
@@ -18,6 +19,7 @@ mutation Register($username: String!, $password: String!) {
       username
       quotaBytes
       usedBytes
+      isAdmin
     }
   }
 }
@@ -30,6 +32,7 @@ mutation Refresh {
       username
       quotaBytes
       usedBytes
+      isAdmin
     }
   }
 }
@@ -44,15 +47,7 @@ query Me {
     username
     quotaBytes
     usedBytes
-  }
-}
-
-query Me {
-  me {
-    id
-    username
-    quotaBytes
-    usedBytes
+    isAdmin
   }
 }
 
@@ -64,6 +59,7 @@ mutation ChangePassword($oldPassword: String!, $newPassword: String!) {
       username
       quotaBytes
       usedBytes
+      isAdmin
     }
   }
 }

@@ -10,6 +10,24 @@ import (
 	"time"
 )
 
+type AdminOverview struct {
+	UserCount      int          `json:"userCount"`
+	TotalUsedBytes int64        `json:"totalUsedBytes"`
+	BlobCount      int          `json:"blobCount"`
+	BlobBytes      int64        `json:"blobBytes"`
+	TaskCounts     []*TaskCount `json:"taskCounts"`
+}
+
+type AdminUser struct {
+	ID         string    `json:"id"`
+	Username   string    `json:"username"`
+	IsAdmin    bool      `json:"isAdmin"`
+	Disabled   bool      `json:"disabled"`
+	QuotaBytes int64     `json:"quotaBytes"`
+	UsedBytes  int64     `json:"usedBytes"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
 type AuthPayload struct {
 	AccessToken string `json:"accessToken"`
 	User        *User  `json:"user"`
@@ -84,6 +102,11 @@ type ShareInfo struct {
 	Expired      bool     `json:"expired"`
 }
 
+type TaskCount struct {
+	Status string `json:"status"`
+	Count  int    `json:"count"`
+}
+
 type UploadInit struct {
 	Instant bool           `json:"instant"`
 	Node    *Node          `json:"node,omitempty"`
@@ -104,6 +127,7 @@ type User struct {
 	Username   string `json:"username"`
 	QuotaBytes int64  `json:"quotaBytes"`
 	UsedBytes  int64  `json:"usedBytes"`
+	IsAdmin    bool   `json:"isAdmin"`
 }
 
 type NodeKind string
