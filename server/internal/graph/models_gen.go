@@ -28,6 +28,13 @@ type AdminUser struct {
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
+type AppPassword struct {
+	ID         string     `json:"id"`
+	Name       string     `json:"name"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+}
+
 type AuthPayload struct {
 	AccessToken string `json:"accessToken"`
 	User        *User  `json:"user"`

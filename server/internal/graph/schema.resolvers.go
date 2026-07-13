@@ -347,6 +347,32 @@ func (r *mutationResolver) VerifySharePassword(ctx context.Context, token string
 	return &ShareAuth{AccessToken: access}, nil
 }
 
+// CreateAppPassword is the resolver for the createAppPassword field.
+func (r *mutationResolver) CreateAppPassword(ctx context.Context, name string) (string, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return "", err
+	}
+	plain, _, err := r.AppPass.Create(ctx, ident.UserID, name)
+	return plain, err
+}
+
+// RevokeAppPassword is the resolver for the revokeAppPassword field.
+func (r *mutationResolver) RevokeAppPassword(ctx context.Context, id string) (bool, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	pid, err := parseID(id)
+	if err != nil {
+		return false, err
+	}
+	if err := r.AppPass.Revoke(ctx, ident.UserID, pid); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // AdminCreateUser is the resolver for the adminCreateUser field.
 func (r *mutationResolver) AdminCreateUser(ctx context.Context, username string, password string, quotaBytes *int64) (*AdminUser, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -639,6 +665,23 @@ func (r *queryResolver) ShareRoot(ctx context.Context) (*Node, error) {
 	}
 	node.ParentID = nil // 分享根之上的结构不暴露给访客
 	return node, nil
+}
+
+// AppPasswords is the resolver for the appPasswords field.
+func (r *queryResolver) AppPasswords(ctx context.Context) ([]*AppPassword, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.AppPass.List(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*AppPassword, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, gqlAppPassword(row))
+	}
+	return out, nil
 }
 
 // AdminUsers is the resolver for the adminUsers field.

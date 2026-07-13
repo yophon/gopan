@@ -15,6 +15,25 @@ FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.id = $1 AND n.owner_id = $2;
 
+-- name: ListChildrenAll :many
+-- WebDAV PROPFIND:目录全量列表(协议无分页,客户端自己排序)
+SELECT n.id, n.name, n.kind, n.updated_at, b.size AS blob_size
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1 AND n.parent_id IS NOT DISTINCT FROM $2 AND n.deleted_at IS NULL
+ORDER BY n.name;
+
+-- name: GetActiveChildByName :one
+-- WebDAV 路径解析:按名取活跃子节点
+SELECT * FROM nodes
+WHERE owner_id = $1 AND parent_id IS NOT DISTINCT FROM $2 AND name = $3 AND deleted_at IS NULL;
+
+-- name: ReplaceNodeBlob :one
+-- WebDAV PUT 覆盖:换 blob 指向,不产生回收站副本
+UPDATE nodes SET blob_id = $3, updated_at = now()
+WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL AND kind = 'file'
+RETURNING *;
+
 -- name: SiblingNameExists :one
 SELECT EXISTS (
     SELECT 1 FROM nodes

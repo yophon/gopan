@@ -15,4 +15,5 @@ type Resolver struct {
 	Previews *service.Previews
 	Shares   *service.Shares
 	Admin    *service.Admin
+	AppPass  *service.AppPasswords
 }

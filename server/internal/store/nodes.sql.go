@@ -137,6 +137,38 @@ func (q *Queries) DecrementBlobRefs(ctx context.Context, dollar_1 []uuid.UUID) e
 	return err
 }
 
+const getActiveChildByName = `-- name: GetActiveChildByName :one
+SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale FROM nodes
+WHERE owner_id = $1 AND parent_id IS NOT DISTINCT FROM $2 AND name = $3 AND deleted_at IS NULL
+`
+
+type GetActiveChildByNameParams struct {
+	OwnerID  uuid.UUID
+	ParentID *uuid.UUID
+	Name     string
+}
+
+// WebDAV 路径解析:按名取活跃子节点
+func (q *Queries) GetActiveChildByName(ctx context.Context, arg GetActiveChildByNameParams) (Node, error) {
+	row := q.db.QueryRow(ctx, getActiveChildByName, arg.OwnerID, arg.ParentID, arg.Name)
+	var i Node
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.ParentID,
+		&i.Name,
+		&i.Kind,
+		&i.BlobID,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SubtreeBytes,
+		&i.SubtreeCount,
+		&i.StatsStale,
+	)
+	return i, err
+}
+
 const getActiveNodeOwned = `-- name: GetActiveNodeOwned :one
 SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale FROM nodes WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL
 `
@@ -391,6 +423,54 @@ func (q *Queries) ListChildren(ctx context.Context, arg ListChildrenParams) ([]L
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChildrenAll = `-- name: ListChildrenAll :many
+SELECT n.id, n.name, n.kind, n.updated_at, b.size AS blob_size
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1 AND n.parent_id IS NOT DISTINCT FROM $2 AND n.deleted_at IS NULL
+ORDER BY n.name
+`
+
+type ListChildrenAllParams struct {
+	OwnerID  uuid.UUID
+	ParentID *uuid.UUID
+}
+
+type ListChildrenAllRow struct {
+	ID        uuid.UUID
+	Name      string
+	Kind      string
+	UpdatedAt pgtype.Timestamptz
+	BlobSize  *int64
+}
+
+// WebDAV PROPFIND:目录全量列表(协议无分页,客户端自己排序)
+func (q *Queries) ListChildrenAll(ctx context.Context, arg ListChildrenAllParams) ([]ListChildrenAllRow, error) {
+	rows, err := q.db.Query(ctx, listChildrenAll, arg.OwnerID, arg.ParentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListChildrenAllRow
+	for rows.Next() {
+		var i ListChildrenAllRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Kind,
+			&i.UpdatedAt,
+			&i.BlobSize,
 		); err != nil {
 			return nil, err
 		}
@@ -1321,6 +1401,39 @@ type RenameNodeAnyStateParams struct {
 func (q *Queries) RenameNodeAnyState(ctx context.Context, arg RenameNodeAnyStateParams) error {
 	_, err := q.db.Exec(ctx, renameNodeAnyState, arg.ID, arg.OwnerID, arg.Name)
 	return err
+}
+
+const replaceNodeBlob = `-- name: ReplaceNodeBlob :one
+UPDATE nodes SET blob_id = $3, updated_at = now()
+WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL AND kind = 'file'
+RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale
+`
+
+type ReplaceNodeBlobParams struct {
+	ID      uuid.UUID
+	OwnerID uuid.UUID
+	BlobID  *uuid.UUID
+}
+
+// WebDAV PUT 覆盖:换 blob 指向,不产生回收站副本
+func (q *Queries) ReplaceNodeBlob(ctx context.Context, arg ReplaceNodeBlobParams) (Node, error) {
+	row := q.db.QueryRow(ctx, replaceNodeBlob, arg.ID, arg.OwnerID, arg.BlobID)
+	var i Node
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.ParentID,
+		&i.Name,
+		&i.Kind,
+		&i.BlobID,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SubtreeBytes,
+		&i.SubtreeCount,
+		&i.StatsStale,
+	)
+	return i, err
 }
 
 const restoreSubtree = `-- name: RestoreSubtree :exec

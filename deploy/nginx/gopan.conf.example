@@ -44,6 +44,24 @@ server {
         proxy_send_timeout 300s;
     }
 
+    # WebDAV:字节流过 Go(唯一入站字节流),PUT 必须流式转发不落盘。
+    # nginx 对 PROPFIND/MKCOL/MOVE 这些扩展方法默认放行 proxy_pass,无需额外配置;
+    # Destination 头(MOVE 用)原样透传即可。
+    location /dav {
+        proxy_pass http://127.0.0.1:18080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        client_max_body_size 5g;       # WebDAV 单文件上限(后端同款限制)
+        proxy_request_buffering off;   # PUT 不在 nginx 落盘,直接流给后端
+        proxy_buffering off;
+        proxy_read_timeout 3600s;      # 大文件上传/下载是长请求
+        proxy_send_timeout 3600s;
+    }
+
     # GraphQL / SPA / 分享页 /s / 打包下载 /pack
     location / {
         proxy_pass http://127.0.0.1:18080;

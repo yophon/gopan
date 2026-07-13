@@ -22,6 +22,7 @@ import (
 
 	"github.com/yophon/gopan/server/db"
 	"github.com/yophon/gopan/server/internal/config"
+	"github.com/yophon/gopan/server/internal/dav"
 	"github.com/yophon/gopan/server/internal/graph"
 	"github.com/yophon/gopan/server/internal/httpx"
 	"github.com/yophon/gopan/server/internal/objstore"
@@ -118,6 +119,7 @@ func run() error {
 	previews.SetOfficeEnabled(cfg.GotenbergURL != "") // 未配 Gotenberg = 本次部署不提供 Office 预览
 	shares := service.NewShares(q, auth)
 	admin := service.NewAdmin(q, cfg.DefaultQuota)
+	appPass := service.NewAppPasswords(q)
 	packer := service.NewPacker(q, obj, shares)
 	wk := worker.New(pool, obj, nodes, cfg.TrashTTL, cfg.FFmpegPath, cfg.FFprobePath, cfg.GotenbergURL)
 	uploads.SetEnqueue(wk.Enqueue)
@@ -125,12 +127,16 @@ func run() error {
 	go wk.Run(ctx, 2)
 
 	es := graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
-		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin,
+		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass,
 	}})
 
 	mux := http.NewServeMux()
 	mux.Handle("POST /query", httpx.WithAuth(httpx.NewGraphQLHandler(es, cfg.DevMode), auth))
 	mux.Handle("GET /pack", httpx.PackHandler(auth, packer))
+	// WebDAV:应用密码 Basic 认证,/dav 与 /dav/ 都接(Finder/资源管理器会裸打前缀)
+	davHandler := dav.Handler(appPass, dav.NewBackend(q, obj, nodes, uploads))
+	mux.Handle("/dav", davHandler)
+	mux.Handle("/dav/", davHandler)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := pool.Ping(r.Context()); err != nil {
 			http.Error(w, "db: "+err.Error(), http.StatusServiceUnavailable)

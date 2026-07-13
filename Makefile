@@ -27,8 +27,9 @@ build:
 	cd server && CGO_ENABLED=0 go build -o gopan ./cmd/gopan
 	@echo "==> server/gopan"
 
+# -p 1:集成测试包(service/dav)共用 TEST_DB_URL 指向的库,并行会互相重建 schema
 test:
-	cd server && go test ./... && go vet ./...
+	cd server && go test -p 1 ./... && go vet ./...
 	cd web && pnpm test
 
 lint:
@@ -39,4 +40,4 @@ lint:
 smoke:
 	cd scripts/smoke && python3 m2_transfer.py && python3 m3_preview.py \
 		&& python3 m4_share.py && python3 m5_misc.py && python3 m7_admin.py \
-		&& node browser_probe.mjs
+		&& python3 m9_webdav.py && node browser_probe.mjs

@@ -301,6 +301,131 @@ func (s *Uploads) linkBlob(ctx context.Context, owner uuid.UUID, parentID *uuid.
 	return node, tx.Commit(ctx)
 }
 
+// CommitStreamed WebDAV 写入定稿:字节已流式转存到 tmpKey,sha/size 是服务端算的。
+// 覆盖语义:目标已有同名文件 → 换 blob 指向并调整引用与配额(不进回收站,
+// rclone sync 高频覆盖不能变成垃圾制造机);同名文件夹 → 冲突报错。
+// 与 completeUpload 走同一条 verify 管线:新 blob 仍标 pending 并入队 verify_hash,
+// 信任模型不分叉,verify 通过后自动触发派生物。
+func (s *Uploads) CommitStreamed(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID, name, sha string, size int64, tmpKey string) (*store.Node, error) {
+	defer func() { _ = s.obj.Remove(context.WithoutCancel(ctx), tmpKey) }() // 成功失败都清临时对象
+
+	if err := s.nodes.ensureFolder(ctx, owner, parentID); err != nil {
+		return nil, err
+	}
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
+	existing, err := s.q.GetActiveChildByName(ctx, store.GetActiveChildByNameParams{
+		OwnerID: owner, ParentID: parentID, Name: name,
+	})
+	overwrite := err == nil
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	if overwrite && existing.Kind != "file" {
+		return nil, errf("NAME_CONFLICT", "同名文件夹已存在")
+	}
+
+	// 配额预检:覆盖按差额算
+	var oldSize int64
+	if overwrite && existing.BlobID != nil {
+		old, err := s.q.GetBlob(ctx, *existing.BlobID)
+		if err != nil {
+			return nil, err
+		}
+		oldSize = old.Size
+	}
+	u, err := s.q.GetUserByID(ctx, owner)
+	if err != nil {
+		return nil, err
+	}
+	if u.UsedBytes+size-oldSize > u.QuotaBytes {
+		return nil, errf("QUOTA_EXCEEDED", "存储配额不足")
+	}
+
+	// 对象定稿:内容寻址 key 不存在才拷贝(并发同 sha 拷贝同 key 同内容,无害)
+	if _, err := s.q.GetBlobBySha256(ctx, sha); errors.Is(err, pgx.ErrNoRows) {
+		if err := s.obj.Copy(ctx, objstore.BlobKey(sha), tmpKey); err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+
+	blob, err := qtx.UpsertBlob(ctx, store.UpsertBlobParams{
+		ID: uuid.Must(uuid.NewV7()), Sha256: sha, Size: size, Mime: mimeByName(name),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if blob.Size != size {
+		return nil, errf("INVALID_INPUT", "同 hash 但大小不一致,拒绝")
+	}
+
+	var node store.Node
+	switch {
+	case overwrite && existing.BlobID != nil && *existing.BlobID == blob.ID:
+		// 内容没变:只碰 updated_at,引用与配额原样
+		node, err = qtx.ReplaceNodeBlob(ctx, store.ReplaceNodeBlobParams{ID: existing.ID, OwnerID: owner, BlobID: &blob.ID})
+		if err != nil {
+			return nil, err
+		}
+	case overwrite:
+		node, err = qtx.ReplaceNodeBlob(ctx, store.ReplaceNodeBlobParams{ID: existing.ID, OwnerID: owner, BlobID: &blob.ID})
+		if err != nil {
+			return nil, err
+		}
+		if err := qtx.IncrementBlobRef(ctx, blob.ID); err != nil {
+			return nil, err
+		}
+		if existing.BlobID != nil {
+			if err := qtx.DecrementBlobRefs(ctx, []uuid.UUID{*existing.BlobID}); err != nil {
+				return nil, err
+			}
+		}
+		if err := qtx.AddUsedBytes(ctx, store.AddUsedBytesParams{ID: owner, UsedBytes: size}); err != nil {
+			return nil, err
+		}
+		if err := qtx.SubtractUsedBytes(ctx, store.SubtractUsedBytesParams{ID: owner, UsedBytes: oldSize}); err != nil {
+			return nil, err
+		}
+	default:
+		node, err = qtx.CreateNode(ctx, store.CreateNodeParams{
+			ID: uuid.Must(uuid.NewV7()), OwnerID: owner, ParentID: parentID,
+			Name: name, Kind: "file", BlobID: &blob.ID,
+		})
+		if isUniqueViolation(err) {
+			return nil, errf("NAME_CONFLICT", "目标位置已有同名文件")
+		}
+		if err != nil {
+			return nil, err
+		}
+		if err := qtx.IncrementBlobRef(ctx, blob.ID); err != nil {
+			return nil, err
+		}
+		if err := qtx.AddUsedBytes(ctx, store.AddUsedBytesParams{ID: owner, UsedBytes: size}); err != nil {
+			return nil, err
+		}
+	}
+	if err := qtx.MarkAncestorsStale(ctx, node.ID); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	if !blob.Verified {
+		s.enqueue(ctx, "verify_hash", blob.ID)
+	}
+	return &node, nil
+}
+
 func (s *Uploads) setStatus(ctx context.Context, sess store.UploadSession, status, reason string) error {
 	var rp *string
 	if reason != "" {

@@ -167,6 +167,33 @@ func (s *Store) Put(ctx context.Context, key string, r io.Reader, size int64, co
 	return err
 }
 
+// OpenSeeker 可 Seek 的流式读(WebDAV 的 http.ServeContent 需要 Seek 探大小与处理 Range)。
+// minio.Object 的 Seek 是惰性的,不会真的把对象拉回来。
+func (s *Store) OpenSeeker(ctx context.Context, key string) (io.ReadSeekCloser, error) {
+	return s.internal.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+}
+
+// PutStream 未知长度流式写(WebDAV PUT 转存)。分片压到 16MB:
+// minio-go 对 size=-1 按 PartSize 在内存攒块,默认 128MB 会把小内存机器打爆。
+// 返回实际写入字节数。
+func (s *Store) PutStream(ctx context.Context, key string, r io.Reader, contentType string) (int64, error) {
+	info, err := s.internal.PutObject(ctx, s.bucket, key, r, -1, minio.PutObjectOptions{
+		ContentType: contentType, PartSize: 16 << 20,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return info.Size, nil
+}
+
+// Copy 服务端拷贝(临时 key → 内容寻址 key)。单调用上限 5GiB,调用方负责限制。
+func (s *Store) Copy(ctx context.Context, dstKey, srcKey string) error {
+	_, err := s.internal.CopyObject(ctx,
+		minio.CopyDestOptions{Bucket: s.bucket, Object: dstKey},
+		minio.CopySrcOptions{Bucket: s.bucket, Object: srcKey})
+	return err
+}
+
 // PresignInternalGet 用内网地址签 GET,给 ffmpeg/ffprobe 这类需要 URL 输入的工具。
 func (s *Store) PresignInternalGet(ctx context.Context, key string) (string, error) {
 	u, err := s.internal.Presign(ctx, "GET", s.bucket, key, 10*time.Minute, nil)

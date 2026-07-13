@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -66,6 +67,10 @@ func PackHandler(auth *service.Auth, packer *service.Packer) http.Handler {
 			return
 		}
 		defer release()
+
+		// 打包是分钟级流式响应,豁免 Server 级 60s WriteTimeout(过闸后才放开,
+		// 名额被并发闸限死)。M9 接 WebDAV 时发现的 v1 潜伏问题:全局超时会掐断长下载。
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 
 		var ids []uuid.UUID
 		for _, raw := range strings.Split(r.URL.Query().Get("nodes"), ",") {

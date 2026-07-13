@@ -144,6 +144,8 @@ func normalizePath(p string) string {
 		return p
 	case strings.HasPrefix(p, "/s/"):
 		return "/s/:token"
+	case p == "/dav" || strings.HasPrefix(p, "/dav/"):
+		return "/dav"
 	default:
 		return "/spa"
 	}

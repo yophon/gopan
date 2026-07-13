@@ -1,0 +1,16 @@
+query AppPasswords {
+  appPasswords {
+    id
+    name
+    createdAt
+    lastUsedAt
+  }
+}
+
+mutation CreateAppPassword($name: String!) {
+  createAppPassword(name: $name)
+}
+
+mutation RevokeAppPassword($id: ID!) {
+  revokeAppPassword(id: $id)
+}

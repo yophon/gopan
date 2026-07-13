@@ -55,6 +55,13 @@ type ComplexityRoot struct {
 		Username   func(childComplexity int) int
 	}
 
+	AppPassword struct {
+		CreatedAt  func(childComplexity int) int
+		ID         func(childComplexity int) int
+		LastUsedAt func(childComplexity int) int
+		Name       func(childComplexity int) int
+	}
+
 	AuthPayload struct {
 		AccessToken func(childComplexity int) int
 		User        func(childComplexity int) int
@@ -70,6 +77,7 @@ type ComplexityRoot struct {
 		ChangePassword        func(childComplexity int, oldPassword string, newPassword string) int
 		CompleteUpload        func(childComplexity int, sessionID string, etags []*PartEtag) int
 		CopyNodes             func(childComplexity int, ids []string, targetParentID *string) int
+		CreateAppPassword     func(childComplexity int, name string) int
 		CreateFolder          func(childComplexity int, parentID *string, name string) int
 		CreateShare           func(childComplexity int, nodeID string, password *string, expiresAt *time.Time) int
 		DeleteNodes           func(childComplexity int, ids []string) int
@@ -84,6 +92,7 @@ type ComplexityRoot struct {
 		RenameNode            func(childComplexity int, id string, name string) int
 		RequestPreview        func(childComplexity int, nodeID string) int
 		RestoreNodes          func(childComplexity int, ids []string) int
+		RevokeAppPassword     func(childComplexity int, id string) int
 		RevokeShare           func(childComplexity int, id string) int
 		VerifySharePassword   func(childComplexity int, token string, password string) int
 	}
@@ -129,6 +138,7 @@ type ComplexityRoot struct {
 	Query struct {
 		AdminOverview func(childComplexity int) int
 		AdminUsers    func(childComplexity int) int
+		AppPasswords  func(childComplexity int) int
 		Children      func(childComplexity int, parentID *string, cursor *string, order *NodeOrder, desc *bool) int
 		Me            func(childComplexity int) int
 		MyShares      func(childComplexity int) int
@@ -215,6 +225,8 @@ type MutationResolver interface {
 	CreateShare(ctx context.Context, nodeID string, password *string, expiresAt *time.Time) (*Share, error)
 	RevokeShare(ctx context.Context, id string) (bool, error)
 	VerifySharePassword(ctx context.Context, token string, password string) (*ShareAuth, error)
+	CreateAppPassword(ctx context.Context, name string) (string, error)
+	RevokeAppPassword(ctx context.Context, id string) (bool, error)
 	AdminCreateUser(ctx context.Context, username string, password string, quotaBytes *int64) (*AdminUser, error)
 	AdminSetQuota(ctx context.Context, userID string, quotaBytes int64) (*AdminUser, error)
 	AdminSetDisabled(ctx context.Context, userID string, disabled bool) (*AdminUser, error)
@@ -235,6 +247,7 @@ type QueryResolver interface {
 	UploadSession(ctx context.Context, id string) (*UploadSession, error)
 	ShareInfo(ctx context.Context, token string) (*ShareInfo, error)
 	ShareRoot(ctx context.Context) (*Node, error)
+	AppPasswords(ctx context.Context) ([]*AppPassword, error)
 	AdminUsers(ctx context.Context) ([]*AdminUser, error)
 	AdminOverview(ctx context.Context) (*AdminOverview, error)
 }
@@ -330,6 +343,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AdminUser.Username(childComplexity), true
+
+	case "AppPassword.createdAt":
+		if e.ComplexityRoot.AppPassword.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AppPassword.CreatedAt(childComplexity), true
+	case "AppPassword.id":
+		if e.ComplexityRoot.AppPassword.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AppPassword.ID(childComplexity), true
+	case "AppPassword.lastUsedAt":
+		if e.ComplexityRoot.AppPassword.LastUsedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AppPassword.LastUsedAt(childComplexity), true
+	case "AppPassword.name":
+		if e.ComplexityRoot.AppPassword.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AppPassword.Name(childComplexity), true
 
 	case "AuthPayload.accessToken":
 		if e.ComplexityRoot.AuthPayload.AccessToken == nil {
@@ -438,6 +476,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CopyNodes(childComplexity, args["ids"].([]string), args["targetParentId"].(*string)), true
+	case "Mutation.createAppPassword":
+		if e.ComplexityRoot.Mutation.CreateAppPassword == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createAppPassword_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateAppPassword(childComplexity, args["name"].(string)), true
 	case "Mutation.createFolder":
 		if e.ComplexityRoot.Mutation.CreateFolder == nil {
 			break
@@ -577,6 +626,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RestoreNodes(childComplexity, args["ids"].([]string)), true
+	case "Mutation.revokeAppPassword":
+		if e.ComplexityRoot.Mutation.RevokeAppPassword == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_revokeAppPassword_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RevokeAppPassword(childComplexity, args["id"].(string)), true
 	case "Mutation.revokeShare":
 		if e.ComplexityRoot.Mutation.RevokeShare == nil {
 			break
@@ -772,6 +832,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminUsers(childComplexity), true
+	case "Query.appPasswords":
+		if e.ComplexityRoot.Query.AppPasswords == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AppPasswords(childComplexity), true
 	case "Query.children":
 		if e.ComplexityRoot.Query.Children == nil {
 			break
@@ -1130,6 +1196,15 @@ type User {
   isAdmin: Boolean!
 }
 
+# ---------- WebDAV 应用密码 ----------
+
+type AppPassword {
+  id: ID!
+  name: String!
+  createdAt: Time!
+  lastUsedAt: Time
+}
+
 # ---------- 管理端(所有 admin* 字段要求调用者 is_admin,校验在 service 层) ----------
 
 type AdminUser {
@@ -1258,6 +1333,8 @@ type Query {
   shareInfo(token: String!): ShareInfo!
   shareRoot: Node!
 
+  appPasswords: [AppPassword!]!
+
   adminUsers: [AdminUser!]!
   adminOverview: AdminOverview!
 }
@@ -1295,6 +1372,10 @@ type Mutation {
   createShare(nodeId: ID!, password: String, expiresAt: Time): Share!
   revokeShare(id: ID!): Boolean!
   verifySharePassword(token: String!, password: String!): ShareAuth!
+
+  # WebDAV 应用密码:明文只在返回值出现一次
+  createAppPassword(name: String!): String!
+  revokeAppPassword(id: ID!): Boolean!
 
   adminCreateUser(username: String!, password: String!, quotaBytes: Int64): AdminUser!
   adminSetQuota(userId: ID!, quotaBytes: Int64!): AdminUser!
@@ -1345,6 +1426,20 @@ func (ec *executionContext) childFields_AdminUser(ctx context.Context, field gra
 		return ec.fieldContext_AdminUser_createdAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type AdminUser", field.Name)
+}
+
+func (ec *executionContext) childFields_AppPassword(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_AppPassword_id(ctx, field)
+	case "name":
+		return ec.fieldContext_AppPassword_name(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_AppPassword_createdAt(ctx, field)
+	case "lastUsedAt":
+		return ec.fieldContext_AppPassword_lastUsedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AppPassword", field.Name)
 }
 
 func (ec *executionContext) childFields_AuthPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -1815,6 +1910,20 @@ func (ec *executionContext) field_Mutation_copyNodes_args(ctx context.Context, r
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_createAppPassword_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "name",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createFolder_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -2046,6 +2155,20 @@ func (ec *executionContext) field_Mutation_restoreNodes_args(ctx context.Context
 		return nil, err
 	}
 	args["ids"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_revokeAppPassword_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -2558,6 +2681,98 @@ func (ec *executionContext) _AdminUser_createdAt(ctx context.Context, field grap
 }
 func (ec *executionContext) fieldContext_AdminUser_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("AdminUser", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _AppPassword_id(ctx context.Context, field graphql.CollectedField, obj *AppPassword) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AppPassword_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AppPassword_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AppPassword", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AppPassword_name(ctx context.Context, field graphql.CollectedField, obj *AppPassword) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AppPassword_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AppPassword_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AppPassword", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AppPassword_createdAt(ctx context.Context, field graphql.CollectedField, obj *AppPassword) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AppPassword_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AppPassword_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AppPassword", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _AppPassword_lastUsedAt(ctx context.Context, field graphql.CollectedField, obj *AppPassword) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AppPassword_lastUsedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LastUsedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AppPassword_lastUsedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AppPassword", field, false, false, errors.New("field of type Time does not have child fields"))
 }
 
 func (ec *executionContext) _AuthPayload_accessToken(ctx context.Context, field graphql.CollectedField, obj *AuthPayload) (ret graphql.Marshaler) {
@@ -3435,6 +3650,94 @@ func (ec *executionContext) fieldContext_Mutation_verifySharePassword(ctx contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_verifySharePassword_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createAppPassword(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createAppPassword(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateAppPassword(ctx, fc.Args["name"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createAppPassword(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createAppPassword_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_revokeAppPassword(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_revokeAppPassword(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RevokeAppPassword(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_revokeAppPassword(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_revokeAppPassword_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -4611,6 +4914,38 @@ func (ec *executionContext) fieldContext_Query_shareRoot(_ context.Context, fiel
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Node(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_appPasswords(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_appPasswords(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AppPasswords(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*AppPassword) graphql.Marshaler {
+			return ec.marshalNAppPassword2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAppPasswordᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_appPasswords(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AppPassword(ctx, field)
 		},
 	}
 	return fc, nil
@@ -6666,6 +7001,59 @@ func (ec *executionContext) _AdminUser(ctx context.Context, sel ast.SelectionSet
 	return out
 }
 
+var appPasswordImplementors = []string{"AppPassword"}
+
+func (ec *executionContext) _AppPassword(ctx context.Context, sel ast.SelectionSet, obj *AppPassword) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, appPasswordImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AppPassword")
+		case "id":
+			out.Values[i] = ec._AppPassword_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._AppPassword_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._AppPassword_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastUsedAt":
+			out.Values[i] = ec._AppPassword_lastUsedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var authPayloadImplementors = []string{"AuthPayload"}
 
 func (ec *executionContext) _AuthPayload(ctx context.Context, sel ast.SelectionSet, obj *AuthPayload) graphql.Marshaler {
@@ -6865,6 +7253,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "verifySharePassword":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_verifySharePassword(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createAppPassword":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createAppPassword(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "revokeAppPassword":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_revokeAppPassword(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -7459,6 +7861,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_shareRoot(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "appPasswords":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_appPasswords(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -8355,6 +8779,32 @@ func (ec *executionContext) marshalNAdminUser2ᚖgithubᚗcomᚋyophonᚋgopan�
 		return graphql.Null
 	}
 	return ec._AdminUser(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAppPassword2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAppPasswordᚄ(ctx context.Context, sel ast.SelectionSet, v []*AppPassword) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAppPassword2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAppPassword(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAppPassword2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAppPassword(ctx context.Context, sel ast.SelectionSet, v *AppPassword) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AppPassword(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNAuthPayload2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAuthPayload(ctx context.Context, sel ast.SelectionSet, v AuthPayload) graphql.Marshaler {

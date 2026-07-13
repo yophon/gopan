@@ -11,6 +11,15 @@ type User {
   isAdmin: Boolean!
 }
 
+# ---------- WebDAV 应用密码 ----------
+
+type AppPassword {
+  id: ID!
+  name: String!
+  createdAt: Time!
+  lastUsedAt: Time
+}
+
 # ---------- 管理端(所有 admin* 字段要求调用者 is_admin,校验在 service 层) ----------
 
 type AdminUser {
@@ -139,6 +148,8 @@ type Query {
   shareInfo(token: String!): ShareInfo!
   shareRoot: Node!
 
+  appPasswords: [AppPassword!]!
+
   adminUsers: [AdminUser!]!
   adminOverview: AdminOverview!
 }
@@ -176,6 +187,10 @@ type Mutation {
   createShare(nodeId: ID!, password: String, expiresAt: Time): Share!
   revokeShare(id: ID!): Boolean!
   verifySharePassword(token: String!, password: String!): ShareAuth!
+
+  # WebDAV 应用密码:明文只在返回值出现一次
+  createAppPassword(name: String!): String!
+  revokeAppPassword(id: ID!): Boolean!
 
   adminCreateUser(username: String!, password: String!, quotaBytes: Int64): AdminUser!
   adminSetQuota(userId: ID!, quotaBytes: Int64!): AdminUser!
