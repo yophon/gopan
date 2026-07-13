@@ -17,7 +17,7 @@
 | ![预览](doc/assets/preview.png) | ![分享访客页](doc/assets/share.png) |
 -->
 
-当前阶段:**v2.0.0——v2 三里程碑(M7 管理端 / M8 规模 / M9 WebDAV)全部交付**(规划与取舍见 doc/13;v1 上线复盘见 doc/10)。部署走 doc/09 上线手册,分全家桶 / 精简两档,2G 小机可关 Gotenberg 与自带反代。功能:分片直传/秒传/断点续传、图片/音视频/PDF/文本/Office 预览、文件与文件夹分享(密码、有效期、访客只读子树)、打包下载、回收站、文件夹体积统计、双 token 认证、管理端、WebDAV 挂载。
+当前阶段:**v2.1.0——在 v2.0 管理端 / 规模 / WebDAV 之上交付 Remote MCP Agent 接入**。部署走 doc/09 上线手册,分全家桶 / 精简两档,2G 小机可关 Gotenberg 与自带反代。功能:分片直传/秒传/断点续传、图片/音视频/PDF/文本/Office 预览、文件与文件夹分享、打包下载、回收站、文件夹体积统计、管理端、WebDAV,以及 OAuth 2.1 / API Key 鉴权的远程 MCP 文件工具。
 
 ## 架构
 
@@ -26,10 +26,14 @@ flowchart LR
     Browser["浏览器 · Vue 3 SPA"]
     Browser -- "GraphQL /query<br/>(元数据与编排)" --> GQL
     Browser <-. "字节流:预签名 URL<br/>分片直传 / 直取" .-> MinIO
+    Agent["Agent · MCP Host"] -- "Streamable HTTP /mcp<br/>OAuth 2.1 / API Key" --> MCP
+    Agent <-. "预签名 PUT / GET<br/>Agent 自主传输" .-> MinIO
+    DAV["Finder · rclone · 文件 App"] -- "WebDAV /dav<br/>应用密码" --> REST
 
     subgraph Gopan["gopan · Go 单二进制"]
         GQL["gqlgen"] --> Service["service 业务层"]
-        REST["REST:/healthz · /s/:token(og 直出) · /pack(流式 zip)"] --> Service
+        MCP["Remote MCP · OAuth server"] --> Service
+        REST["HTTP:/dav · /pack · /s/:token · /healthz"] --> Service
         Worker["worker pool<br/>缩略图 · 转 PDF · hash 校验 · GC"]
         Embed["embed 前端静态资源"]
     end
@@ -41,7 +45,7 @@ flowchart LR
     Worker --> FF["ffmpeg(exec)"]
 ```
 
-要点:**字节流不过 Go**——上传是浏览器拿预签名 URL 分片直传 MinIO,下载/预览直连预签名 GET,唯一经过 Go 的字节流是 /pack 流式 zip。文件按 SHA-256 内容寻址,全站同内容物理只存一份(秒传),配额按逻辑大小各记各的。类型从数据库到组件不断链:sqlc(SQL→Go)、gqlgen(schema→resolver)、GraphQL Code Generator(schema→TS),改一处两端编译报错。
+要点:**主传输路径字节流不过 Go**——浏览器和 Agent 都拿预签名 URL 直传/直取 MinIO。显式例外只有流式 zip(`/pack`、`/mcp-download`)和协议决定必须中转的 WebDAV PUT/GET。文件按 SHA-256 内容寻址,全站同内容物理只存一份(秒传),配额按逻辑大小各记各的。类型从数据库到组件不断链:sqlc(SQL→Go)、gqlgen(schema→resolver)、GraphQL Code Generator(schema→TS),改一处两端编译报错。
 
 ## 快速开始
 
@@ -59,16 +63,18 @@ make build        # 前端构建 + embed → server/gopan 单二进制
 
 ## 设计文档
 
+Agent 接入与远程 MCP 工具见 [docs/MCP.md](./docs/MCP.md)。
+
 全部设计文档在 [doc/](./doc/):
 
 | 文档 | 内容 |
 |---|---|
 | [01 · 需求与范围](./doc/01-需求与范围.md) | v1 功能清单、明确不做的、非功能要求、术语表 |
 | [02 · 技术选型](./doc/02-技术选型.md) | 前后端选型表、不用什么及理由 |
-| [03 · 架构与核心流程](./doc/03-架构与核心流程.md) | 组件图;上传(秒传/分片/断点)、下载、预览、分享、GC 流程 |
-| [04 · 数据模型](./doc/04-数据模型.md) | Postgres 全量 DDL、不变量、容量估算 |
-| [05 · GraphQL 设计](./doc/05-GraphQL设计.md) | 完整 SDL(接口唯一事实源)、约定、resolver 要点 |
-| [06 · 认证与安全](./doc/06-认证与安全.md) | 双 token 细节、访客授权、预签名边界、限速 |
+| [03 · 架构与核心流程](./doc/03-架构与核心流程.md) | 组件图;浏览器/Agent 传输、下载、预览、分享、GC 流程 |
+| [04 · 数据模型](./doc/04-数据模型.md) | Postgres 核心结构、凭据/传输表、不变量、容量估算 |
+| [05 · GraphQL 设计](./doc/05-GraphQL设计.md) | SDL 约定、Agent 凭据控制面、resolver 要点 |
+| [06 · 认证与安全](./doc/06-认证与安全.md) | 登录双 token、访客、WebDAV、MCP OAuth/API Key、预签名边界 |
 | [07 · 前端设计](./doc/07-前端设计.md) | 路由/组件/store 划分、上传器状态机、token 处理层 |
 | [08 · 项目结构与部署](./doc/08-项目结构与部署.md) | 仓库布局、开发流、compose、运维、里程碑 |
 | [09 · 上线手册](./doc/09-上线手册.md) | 从裸机到可用:部署/升级/回滚/备份恢复/排障/配置速查 |
@@ -92,7 +98,8 @@ make build        # 前端构建 + embed → server/gopan 单二进制
 | [M7 · 管理端](./doc/milestones/M7-管理端.md) | 建号/配额/禁用(分享连带失效)/重置密码/概览,CLI promote 自举;v1.1.0 |
 | [M8 · 规模](./doc/milestones/M8-规模.md) | keyset 分页(深页 31ms→7.5ms 且不随深度退化)、文件夹体积异步统计;v1.2.0 |
 | [M9 · WebDAV](./doc/milestones/M9-WebDAV.md) | 应用密码、流式转存走 verify 管线、rclone 真实验收;v1.3.0,v2 收官 |
+| [v2.1 · Remote MCP](./doc/milestones/v2.1-MCP.md) | 零安装 Remote MCP、Agent 直传、OAuth 2.1、API Key 与细粒度 scope |
 
 ## 读法
 
-想看全貌:01 → 02 → 03,或者直接读 12(产品说明,一页版)。要动手:04、05 是实现的两份合同。想知道每步实际怎么落地的:doc/milestones/ 按序读(实际执行为 M1~M6,08 末尾的四段划分是设计期建议)。要部署:doc/09 照着走,装新机前先扫一遍 doc/10 的检查清单。只是用:doc/11 使用手册。
+想看全貌:01 → 02 → 03,或者直接读 12(产品说明,一页版)。要动手:04、05 是数据库与 GraphQL 合同,MCP 的协议合同单独见 docs/MCP.md。想知道每步实际怎么落地的:doc/milestones/。要部署:doc/09 照着走,装新机前先扫一遍 doc/10 的检查清单。只是用:doc/11 使用手册。

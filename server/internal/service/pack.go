@@ -186,3 +186,11 @@ func (p *Packer) Stream(ctx context.Context, entries []PackEntry, w io.Writer) e
 	}
 	return zw.Close()
 }
+
+func PackEntriesSize(entries []PackEntry) int64 {
+	var total int64
+	for _, entry := range entries {
+		total += entry.Size
+	}
+	return total
+}

@@ -71,6 +71,24 @@ func gqlAuth(r *service.AuthResult) *AuthPayload {
 	return &AuthPayload{AccessToken: r.AccessToken, User: gqlUser(r.User)}
 }
 
+func gqlMCPAPIKey(t store.McpToken) *MCPAPIKey {
+	out := &MCPAPIKey{
+		ID: t.ID.String(), Name: t.Name, Scopes: t.Scopes, CreatedAt: t.CreatedAt.Time,
+	}
+	if t.LastUsedAt.Valid {
+		lastUsed := t.LastUsedAt.Time
+		out.LastUsedAt = &lastUsed
+	}
+	return out
+}
+
+func gqlOAuthGrant(row store.ListOAuthGrantsRow) *OAuthGrant {
+	return &OAuthGrant{
+		ID: row.ID.String(), ClientID: row.ClientID, ClientName: row.ClientName,
+		Scopes: row.Scopes, CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time,
+	}
+}
+
 // gqlNode 由 store.Node 映射(无 blob 信息,M1 里全是文件夹/无预览)。
 func gqlNode(n store.Node) *Node {
 	out := &Node{

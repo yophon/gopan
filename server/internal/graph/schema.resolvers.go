@@ -373,6 +373,64 @@ func (r *mutationResolver) RevokeAppPassword(ctx context.Context, id string) (bo
 	return true, nil
 }
 
+// CreateMCPAPIKey is the resolver for the createMCPAPIKey field.
+func (r *mutationResolver) CreateMCPAPIKey(ctx context.Context, name string, scopes []string) (*MCPAPIKeyCreated, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	plain, key, err := r.MCPTokens.Create(ctx, ident.UserID, name, scopes)
+	if err != nil {
+		return nil, err
+	}
+	return &MCPAPIKeyCreated{Token: plain, Credential: gqlMCPAPIKey(key)}, nil
+}
+
+// RevokeMCPAPIKey is the resolver for the revokeMCPAPIKey field.
+func (r *mutationResolver) RevokeMCPAPIKey(ctx context.Context, id string) (bool, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	keyID, err := parseID(id)
+	if err != nil {
+		return false, err
+	}
+	if err := r.MCPTokens.Revoke(ctx, ident.UserID, keyID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// DecideOAuthAuthorization is the resolver for the decideOAuthAuthorization field.
+func (r *mutationResolver) DecideOAuthAuthorization(ctx context.Context, input OAuthAuthorizationInput, approved bool) (*OAuthAuthorizationResult, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	redirectURL, err := r.OAuth.Authorize(ctx, ident.UserID, oauthAuthorizationInput(input), approved)
+	if err != nil {
+		return nil, err
+	}
+	return &OAuthAuthorizationResult{RedirectURL: redirectURL}, nil
+}
+
+// RevokeOAuthGrant is the resolver for the revokeOAuthGrant field.
+func (r *mutationResolver) RevokeOAuthGrant(ctx context.Context, id string) (bool, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	grantID, err := parseID(id)
+	if err != nil {
+		return false, err
+	}
+	if err := r.OAuth.RevokeGrant(ctx, ident.UserID, grantID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // AdminCreateUser is the resolver for the adminCreateUser field.
 func (r *mutationResolver) AdminCreateUser(ctx context.Context, username string, password string, quotaBytes *int64) (*AdminUser, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -682,6 +740,52 @@ func (r *queryResolver) AppPasswords(ctx context.Context) ([]*AppPassword, error
 		out = append(out, gqlAppPassword(row))
 	}
 	return out, nil
+}
+
+// McpAPIKeys is the resolver for the mcpAPIKeys field.
+func (r *queryResolver) McpAPIKeys(ctx context.Context) ([]*MCPAPIKey, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.MCPTokens.List(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*MCPAPIKey, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, gqlMCPAPIKey(row))
+	}
+	return out, nil
+}
+
+// OauthGrants is the resolver for the oauthGrants field.
+func (r *queryResolver) OauthGrants(ctx context.Context) ([]*OAuthGrant, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.OAuth.ListGrants(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*OAuthGrant, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, gqlOAuthGrant(row))
+	}
+	return out, nil
+}
+
+// OauthAuthorizationRequest is the resolver for the oauthAuthorizationRequest field.
+func (r *queryResolver) OauthAuthorizationRequest(ctx context.Context, input OAuthAuthorizationInput) (*OAuthAuthorizationRequest, error) {
+	if _, err := httpx.UserFrom(ctx); err != nil {
+		return nil, err
+	}
+	view, err := r.OAuth.InspectAuthorization(ctx, oauthAuthorizationInput(input))
+	if err != nil {
+		return nil, err
+	}
+	return &OAuthAuthorizationRequest{ClientName: view.ClientName, Scopes: view.Scopes}, nil
 }
 
 // AdminUsers is the resolver for the adminUsers field.

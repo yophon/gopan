@@ -1,17 +1,17 @@
 # 05 · GraphQL 设计
 
-前后端的合同。gqlgen 从这份 SDL 生成 Go 骨架,GraphQL Code Generator 从同一份生成前端类型——本文件是唯一事实源,改接口先改这里。
+前后端的合同。gqlgen 和 GraphQL Code Generator 都读取 `server/graph/schema.graphqls`,它才是唯一可执行事实源;本篇记录设计约定与核心 SDL 摘要。改接口先改 schema,再跑 `make gen`。
 
 ## 约定
 
 - 单端点 `POST /query`;access token 走 `Authorization: Bearer`,由 HTTP 中间件解析进 ctx,resolver 只读 ctx。
-- 字节流不过 GraphQL:上传/下载/预览统一返回**预签名 URL 字段**。
+- 字节流不过 GraphQL:浏览器上传/下载/预览统一返回**预签名 URL 字段**。Agent 文件传输走独立 `/mcp`,同样只返回 URL/状态。
 - 错误:业务错误用 gqlgen 的 error extensions 带 `code`(如 `QUOTA_EXCEEDED`、`NAME_CONFLICT`、`SHARE_PASSWORD_REQUIRED`),前端按 code 分支;不靠错误文案。
 - 列表用游标分页(Relay 风格简化版);目录列表默认 200/页。
 - 访客(share scope)只能调 Query,且鉴权层限制在分享子树。
 - 深度限制 8、复杂度限制 300,防递归查询打挂。(复杂度限制 gqlgen 自带;深度限制 gqlgen 没有,M6 自研 AST 计算实现——命名 fragment 按定义展开、seen 集防循环。)
 
-## SDL
+## 核心 SDL 摘要
 
 ```graphql
 scalar Time
@@ -24,6 +24,7 @@ type User {
   username: String!
   quotaBytes: Int64!
   usedBytes: Int64!
+  isAdmin: Boolean!
 }
 
 enum NodeKind { FILE, FOLDER }
@@ -41,6 +42,9 @@ type Node {
   deletedAt: Time
   preview: PreviewInfo!         # 该文件可用的预览方式与产物
   downloadUrl: String           # 预签名 GET,15min;文件夹为 null
+  subtreeBytes: Int64           # 文件夹异步统计
+  subtreeCount: Int64
+  statsStale: Boolean
 }
 
 enum PreviewKind { NONE, IMAGE, PDF, NATIVE_PDF, VIDEO, AUDIO, TEXT, OFFICE }
@@ -54,7 +58,7 @@ type PreviewInfo {
   durationSec: Int              # 音视频
 }
 
-enum TaskStatus { PENDING, RUNNING, DONE, FAILED }
+enum TaskStatus { PENDING, RUNNING, DONE, FAILED, UNAVAILABLE }
 
 type NodePage {
   items: [Node!]!
@@ -151,6 +155,56 @@ type Mutation {
 
 input PartEtag { partNumber: Int!, etag: String! }
 ```
+
+## v2.1 凭据与 OAuth 控制面
+
+MCP tool 不塞进 GraphQL schema;`/mcp` 由 MCP SDK 暴露。GraphQL 只负责已登录用户的 API Key 管理、OAuth consent 决策和授权撤销:
+
+```graphql
+type MCPAPIKey {
+  id: ID!
+  name: String!
+  scopes: [String!]!
+  createdAt: Time!
+  lastUsedAt: Time
+}
+type MCPAPIKeyCreated { token: String!, credential: MCPAPIKey! }
+
+type OAuthGrant {
+  id: ID!
+  clientId: String!
+  clientName: String!
+  scopes: [String!]!
+  createdAt: Time!
+  updatedAt: Time!
+}
+type OAuthAuthorizationRequest { clientName: String!, scopes: [String!]! }
+type OAuthAuthorizationResult { redirectUrl: String! }
+
+input OAuthAuthorizationInput {
+  clientId: String!
+  redirectUri: String!
+  responseType: String!
+  scope: String
+  state: String
+  codeChallenge: String!
+  codeChallengeMethod: String!
+}
+
+extend type Query {
+  mcpAPIKeys: [MCPAPIKey!]!
+  oauthGrants: [OAuthGrant!]!
+  oauthAuthorizationRequest(input: OAuthAuthorizationInput!): OAuthAuthorizationRequest!
+}
+extend type Mutation {
+  createMCPAPIKey(name: String!, scopes: [String!]!): MCPAPIKeyCreated!
+  revokeMCPAPIKey(id: ID!): Boolean!
+  decideOAuthAuthorization(input: OAuthAuthorizationInput!, approved: Boolean!): OAuthAuthorizationResult!
+  revokeOAuthGrant(id: ID!): Boolean!
+}
+```
+
+`createMCPAPIKey` 的明文只在本次响应出现。`oauthAuthorizationRequest` 与 `decideOAuthAuthorization` 都要求正常用户 JWT;未认证 Agent 不能借 GraphQL 给自己签发凭据。协议发现、DCR 和 token 兑换分别走 `/.well-known/*`、`/oauth/register`、`/oauth/authorize`、`/oauth/token`。
 
 ## resolver 层要点
 

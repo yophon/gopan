@@ -185,6 +185,26 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
+const getUserByIDForUpdate = `-- name: GetUserByIDForUpdate :one
+SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at FROM users WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) GetUserByIDForUpdate(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByIDForUpdate, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.QuotaBytes,
+		&i.UsedBytes,
+		&i.IsAdmin,
+		&i.CreatedAt,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
 const getUserByUsername = `-- name: GetUserByUsername :one
 SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at FROM users WHERE username = $1
 `

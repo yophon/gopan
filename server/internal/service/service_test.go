@@ -6,7 +6,10 @@ package service_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -54,6 +57,127 @@ func setup(t *testing.T) *pgxpool.Pool {
 func newAuth(pool *pgxpool.Pool) *service.Auth {
 	return service.NewAuth(store.New(pool), []byte("test-secret-test-secret-test-secret"),
 		15*time.Minute, 14*24*time.Hour, true, 1<<30)
+}
+
+func TestMCPTokenLifecycle(t *testing.T) {
+	pool := setup(t)
+	ctx := context.Background()
+	auth := newAuth(pool)
+	res, err := auth.Register(ctx, "mcp_user", "password123", "1.1.1.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokens := service.NewMCPTokens(store.New(pool))
+	plain, row, err := tokens.Create(ctx, res.User.ID, "codex", []string{"files:write", "files:read", "files:read"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain[:10] != "gopan_key_" || len(row.Scopes) != 2 || row.Scopes[0] != "files:read" {
+		t.Fatalf("token/scopes 不符:plain=%q scopes=%v", plain, row.Scopes)
+	}
+	principal, err := tokens.Authenticate(ctx, plain)
+	if err != nil || principal.UserID != res.User.ID || !principal.HasScope("files:write") {
+		t.Fatalf("认证结果不符:principal=%+v err=%v", principal, err)
+	}
+	if _, _, err := tokens.Create(ctx, res.User.ID, "bad", []string{"admin:*"}); err == nil {
+		t.Fatal("未知 scope 应拒绝")
+	}
+	if err := tokens.Revoke(ctx, res.User.ID, row.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tokens.Authenticate(ctx, plain); err != service.ErrUnauthenticated {
+		t.Fatalf("吊销后应拒绝,got %v", err)
+	}
+}
+
+func TestOAuthAuthorizationCodeRefreshAndRevoke(t *testing.T) {
+	pool := setup(t)
+	ctx := context.Background()
+	auth := newAuth(pool)
+	registered, err := auth.Register(ctx, "oauth_user", "password123", "1.1.1.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oauth := service.NewOAuth(store.New(pool))
+	redirectURI := "http://127.0.0.1:49152/callback"
+	client, err := oauth.RegisterClient(ctx, "Codex", []string{redirectURI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~"
+	digest := sha256.Sum256([]byte(verifier))
+	challenge := base64.RawURLEncoding.EncodeToString(digest[:])
+	request := service.OAuthAuthorizationInput{
+		ClientID: client.ClientID, RedirectURI: redirectURI, ResponseType: "code",
+		Scopes: []string{"files:read", "files:download"}, State: "state-123",
+		CodeChallenge: challenge, CodeChallengeMethod: "S256",
+	}
+	redirect, err := oauth.Authorize(ctx, registered.User.ID, request, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := url.Parse(redirect)
+	if err != nil || u.Query().Get("state") != "state-123" || u.Query().Get("code") == "" {
+		t.Fatalf("授权回调不符: %q err=%v", redirect, err)
+	}
+	code := u.Query().Get("code")
+	tokens, err := oauth.ExchangeAuthorizationCode(ctx, code, client.ClientID, redirectURI, verifier)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := oauth.ExchangeAuthorizationCode(ctx, code, client.ClientID, redirectURI, verifier); err == nil {
+		t.Fatal("授权码不应允许重复兑换")
+	}
+	principal, err := oauth.Authenticate(ctx, tokens.AccessToken)
+	if err != nil || principal.UserID != registered.User.ID || !principal.HasScope("files:download") {
+		t.Fatalf("OAuth access token 认证不符: principal=%+v err=%v", principal, err)
+	}
+	rotated, err := oauth.Refresh(ctx, tokens.RefreshToken, client.ClientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := oauth.Refresh(ctx, tokens.RefreshToken, client.ClientID); err == nil {
+		t.Fatal("refresh token 不应允许重复使用")
+	}
+	grants, err := oauth.ListGrants(ctx, registered.User.ID)
+	if err != nil || len(grants) != 1 {
+		t.Fatalf("OAuth grant 列表不符: grants=%+v err=%v", grants, err)
+	}
+	if err := oauth.RevokeGrant(ctx, registered.User.ID, grants[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := oauth.Authenticate(ctx, rotated.AccessToken); err != service.ErrUnauthenticated {
+		t.Fatalf("撤销授权后 access token 应失效,got %v", err)
+	}
+}
+
+func TestOAuthRedirectURIValidation(t *testing.T) {
+	for _, valid := range []string{"https://agent.example/callback", "http://127.0.0.1:9000/callback", "http://[::1]:9000/callback"} {
+		if err := service.ValidateOAuthRedirectURI(valid); err != nil {
+			t.Fatalf("应接受 redirect URI %q: %v", valid, err)
+		}
+	}
+	for _, invalid := range []string{"http://agent.example/callback", "javascript:alert(1)", "https://agent.example/callback#fragment"} {
+		if err := service.ValidateOAuthRedirectURI(invalid); err == nil {
+			t.Fatalf("应拒绝 redirect URI %q", invalid)
+		}
+	}
+}
+
+func TestPackTicketIsRestrictedAndExpiring(t *testing.T) {
+	tickets := service.NewPackTickets([]byte("test-secret-test-secret-test-secret"), time.Minute)
+	userID, nodeID := uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())
+	raw, err := tickets.Issue(userID, []uuid.UUID{nodeID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ident, ids, err := tickets.Parse(raw)
+	if err != nil || ident.UserID != userID || ident.Scope != service.ScopeUser || len(ids) != 1 || ids[0] != nodeID {
+		t.Fatalf("票据解析不符:ident=%+v ids=%v err=%v", ident, ids, err)
+	}
+	if _, _, err := tickets.Parse(raw + "x"); err != service.ErrUnauthenticated {
+		t.Fatalf("篡改票据应拒绝,got %v", err)
+	}
 }
 
 func TestAuthRefreshRotationAndReuseDetection(t *testing.T) {

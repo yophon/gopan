@@ -40,6 +40,19 @@ type AuthPayload struct {
 	User        *User  `json:"user"`
 }
 
+type MCPAPIKey struct {
+	ID         string     `json:"id"`
+	Name       string     `json:"name"`
+	Scopes     []string   `json:"scopes"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+}
+
+type MCPAPIKeyCreated struct {
+	Token      string     `json:"token"`
+	Credential *MCPAPIKey `json:"credential"`
+}
+
 type Mutation struct {
 }
 
@@ -67,6 +80,34 @@ type NodePage struct {
 	Items      []*Node `json:"items"`
 	NextCursor *string `json:"nextCursor,omitempty"`
 	Total      int     `json:"total"`
+}
+
+type OAuthAuthorizationInput struct {
+	ClientID            string  `json:"clientId"`
+	RedirectURI         string  `json:"redirectUri"`
+	ResponseType        string  `json:"responseType"`
+	Scope               *string `json:"scope,omitempty"`
+	State               *string `json:"state,omitempty"`
+	CodeChallenge       string  `json:"codeChallenge"`
+	CodeChallengeMethod string  `json:"codeChallengeMethod"`
+}
+
+type OAuthAuthorizationRequest struct {
+	ClientName string   `json:"clientName"`
+	Scopes     []string `json:"scopes"`
+}
+
+type OAuthAuthorizationResult struct {
+	RedirectURL string `json:"redirectUrl"`
+}
+
+type OAuthGrant struct {
+	ID         string    `json:"id"`
+	ClientID   string    `json:"clientId"`
+	ClientName string    `json:"clientName"`
+	Scopes     []string  `json:"scopes"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
 type PartEtag struct {

@@ -27,6 +27,7 @@ type Pool struct {
 	q         *store.Queries
 	obj       *objstore.Store
 	nodes     *service.Nodes
+	uploads   *service.Uploads
 	trashTTL  time.Duration
 	wake      chan struct{}
 	ffmpeg    string
@@ -37,6 +38,10 @@ type Pool struct {
 func New(pool *pgxpool.Pool, obj *objstore.Store, nodes *service.Nodes, trashTTL time.Duration, ffmpeg, ffprobe, gotenberg string) *Pool {
 	return &Pool{pool: pool, q: store.New(pool), obj: obj, nodes: nodes, trashTTL: trashTTL,
 		wake: make(chan struct{}, 1), ffmpeg: ffmpeg, ffprobe: ffprobe, gotenberg: gotenberg}
+}
+
+func (w *Pool) SetUploads(uploads *service.Uploads) {
+	w.uploads = uploads
 }
 
 // Enqueue 入队并唤醒 worker(注入给 service 用)。
@@ -59,6 +64,10 @@ func (w *Pool) Run(ctx context.Context, n int) {
 		go w.taskLoop(ctx)
 	}
 	go w.periodic(ctx, time.Hour, "session-cleanup", w.cleanupSessions)
+	if w.uploads != nil {
+		go w.periodic(ctx, 2*time.Second, "agent-transfer-finalize", w.finalizeAgentTransfers)
+		go w.periodic(ctx, time.Hour, "agent-transfer-cleanup", w.uploads.CleanupAgentTransfers)
+	}
 	go w.periodic(ctx, time.Hour, "blob-gc", w.gcBlobs)
 	go w.periodic(ctx, time.Hour, "trash-cleanup", w.cleanupTrash)
 	go w.periodic(ctx, 24*time.Hour, "refresh-cleanup", w.cleanupRefreshTokens)
@@ -151,6 +160,7 @@ func (w *Pool) verifyHash(ctx context.Context, blobID uuid.UUID) error {
 		_ = w.q.MarkSessionsVerifyResult(ctx, store.MarkSessionsVerifyResultParams{
 			Sha256: blob.Sha256, Status: "done", FailReason: &reason,
 		})
+		_ = w.q.MarkTransferReadyBySha(ctx, &blob.Sha256)
 		slog.Info("blob verified", "sha256", blob.Sha256, "size", size)
 		w.enqueueDerivatives(ctx, blob)
 		return nil
@@ -188,10 +198,24 @@ func (w *Pool) verifyHash(ctx context.Context, blobID uuid.UUID) error {
 	}); err != nil {
 		return err
 	}
+	if err := qtx.MarkTransfersFailedBySha(ctx, store.MarkTransfersFailedByShaParams{
+		ComputedSha256: &blob.Sha256, FailReason: &reason,
+	}); err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 	return w.obj.Remove(ctx, key)
+}
+
+func (w *Pool) finalizeAgentTransfers(ctx context.Context) error {
+	for {
+		processed, err := w.uploads.ProcessNextAgentTransfer(ctx)
+		if err != nil || !processed {
+			return err
+		}
+	}
 }
 
 func (w *Pool) periodic(ctx context.Context, every time.Duration, name string, fn func(context.Context) error) {

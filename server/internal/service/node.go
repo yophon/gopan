@@ -393,6 +393,15 @@ func (s *Nodes) Copy(ctx context.Context, owner uuid.UUID, ids []uuid.UUID, targ
 	}
 	defer tx.Rollback(ctx)
 	qtx := s.q.WithTx(tx)
+	if total > 0 {
+		locked, err := qtx.GetUserByIDForUpdate(ctx, owner)
+		if err != nil {
+			return nil, err
+		}
+		if locked.UsedBytes+total > locked.QuotaBytes {
+			return nil, errf("QUOTA_EXCEEDED", "存储配额不足")
+		}
+	}
 
 	newIDs := make([]uuid.UUID, len(entries))
 	out := make([]store.Node, 0, len(rootIdx))

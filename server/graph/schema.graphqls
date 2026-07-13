@@ -20,6 +20,37 @@ type AppPassword {
   lastUsedAt: Time
 }
 
+type MCPAPIKey {
+  id: ID!
+  name: String!
+  scopes: [String!]!
+  createdAt: Time!
+  lastUsedAt: Time
+}
+
+type MCPAPIKeyCreated {
+  token: String!
+  credential: MCPAPIKey!
+}
+
+type OAuthGrant {
+  id: ID!
+  clientId: String!
+  clientName: String!
+  scopes: [String!]!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type OAuthAuthorizationRequest {
+  clientName: String!
+  scopes: [String!]!
+}
+
+type OAuthAuthorizationResult {
+  redirectUrl: String!
+}
+
 # ---------- 管理端(所有 admin* 字段要求调用者 is_admin,校验在 service 层) ----------
 
 type AdminUser {
@@ -149,6 +180,9 @@ type Query {
   shareRoot: Node!
 
   appPasswords: [AppPassword!]!
+  mcpAPIKeys: [MCPAPIKey!]!
+  oauthGrants: [OAuthGrant!]!
+  oauthAuthorizationRequest(input: OAuthAuthorizationInput!): OAuthAuthorizationRequest!
 
   adminUsers: [AdminUser!]!
   adminOverview: AdminOverview!
@@ -159,6 +193,16 @@ type Query {
 input PartEtag {
   partNumber: Int!
   etag: String!
+}
+
+input OAuthAuthorizationInput {
+  clientId: String!
+  redirectUri: String!
+  responseType: String!
+  scope: String
+  state: String
+  codeChallenge: String!
+  codeChallengeMethod: String!
 }
 
 type Mutation {
@@ -191,6 +235,11 @@ type Mutation {
   # WebDAV 应用密码:明文只在返回值出现一次
   createAppPassword(name: String!): String!
   revokeAppPassword(id: ID!): Boolean!
+
+  createMCPAPIKey(name: String!, scopes: [String!]!): MCPAPIKeyCreated!
+  revokeMCPAPIKey(id: ID!): Boolean!
+  decideOAuthAuthorization(input: OAuthAuthorizationInput!, approved: Boolean!): OAuthAuthorizationResult!
+  revokeOAuthGrant(id: ID!): Boolean!
 
   adminCreateUser(username: String!, password: String!, quotaBytes: Int64): AdminUser!
   adminSetQuota(userId: ID!, quotaBytes: Int64!): AdminUser!

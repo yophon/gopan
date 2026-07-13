@@ -140,10 +140,16 @@ func (r *statusRecorder) WriteHeader(code int) {
 // normalizePath 归一指标的 path 标签,防 /s/{token} 这类动态段打爆基数。
 func normalizePath(p string) string {
 	switch {
-	case p == "/query", p == "/healthz", p == "/pack":
+	case p == "/query", p == "/healthz", p == "/pack", p == "/mcp":
 		return p
+	case strings.HasPrefix(p, "/oauth/"):
+		return "/oauth/:endpoint"
+	case strings.HasPrefix(p, "/.well-known/oauth-"):
+		return "/.well-known/oauth-*"
 	case strings.HasPrefix(p, "/s/"):
 		return "/s/:token"
+	case strings.HasPrefix(p, "/mcp-download/"):
+		return "/mcp-download/:ticket"
 	case p == "/dav" || strings.HasPrefix(p, "/dav/"):
 		return "/dav"
 	default:
@@ -157,8 +163,8 @@ func WithLogging(next http.Handler) http.Handler {
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
 		dur := time.Since(start)
-		slog.Info("http", "method", r.Method, "path", r.URL.Path, "status", rec.status, "dur_ms", dur.Milliseconds())
 		np := normalizePath(r.URL.Path)
+		slog.Info("http", "method", r.Method, "path", np, "status", rec.status, "dur_ms", dur.Milliseconds())
 		metrics.HTTPRequests.WithLabelValues(np, strconv.Itoa(rec.status)).Inc()
 		metrics.HTTPDuration.WithLabelValues(np).Observe(dur.Seconds())
 	})

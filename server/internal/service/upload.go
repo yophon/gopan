@@ -3,11 +3,14 @@ package service
 import (
 	"context"
 	"errors"
+	"io"
 	"mime"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -279,6 +282,13 @@ func (s *Uploads) linkBlob(ctx context.Context, owner uuid.UUID, parentID *uuid.
 	}
 	defer tx.Rollback(ctx)
 	qtx := s.q.WithTx(tx)
+	locked, err := qtx.GetUserByIDForUpdate(ctx, owner)
+	if err != nil {
+		return store.Node{}, err
+	}
+	if locked.UsedBytes+blob.Size > locked.QuotaBytes {
+		return store.Node{}, errf("QUOTA_EXCEEDED", "存储配额不足")
+	}
 	node, err := qtx.CreateNode(ctx, store.CreateNodeParams{
 		ID: uuid.Must(uuid.NewV7()), OwnerID: owner, ParentID: parentID,
 		Name: name, Kind: "file", BlobID: &blob.ID,
@@ -345,7 +355,7 @@ func (s *Uploads) CommitStreamed(ctx context.Context, owner uuid.UUID, parentID 
 
 	// 对象定稿:内容寻址 key 不存在才拷贝(并发同 sha 拷贝同 key 同内容,无害)
 	if _, err := s.q.GetBlobBySha256(ctx, sha); errors.Is(err, pgx.ErrNoRows) {
-		if err := s.obj.Copy(ctx, objstore.BlobKey(sha), tmpKey); err != nil {
+		if err := s.obj.Promote(ctx, objstore.BlobKey(sha), tmpKey, size, mimeByName(name)); err != nil {
 			return nil, err
 		}
 	} else if err != nil {
@@ -358,6 +368,13 @@ func (s *Uploads) CommitStreamed(ctx context.Context, owner uuid.UUID, parentID 
 	}
 	defer tx.Rollback(ctx)
 	qtx := s.q.WithTx(tx)
+	locked, err := qtx.GetUserByIDForUpdate(ctx, owner)
+	if err != nil {
+		return nil, err
+	}
+	if locked.UsedBytes+size-oldSize > locked.QuotaBytes {
+		return nil, errf("QUOTA_EXCEEDED", "存储配额不足")
+	}
 
 	blob, err := qtx.UpsertBlob(ctx, store.UpsertBlobParams{
 		ID: uuid.Must(uuid.NewV7()), Sha256: sha, Size: size, Mime: mimeByName(name),
@@ -449,6 +466,62 @@ func (s *Uploads) DownloadURL(ctx context.Context, owner, nodeID uuid.UUID) (str
 		return "", ErrNotFound
 	}
 	return s.obj.PresignGet(ctx, objstore.BlobKey(*row.BlobSha256), row.Name)
+}
+
+func (s *Uploads) NodeInfo(ctx context.Context, owner, nodeID uuid.UUID) (store.GetNodeWithBlobRow, error) {
+	row, err := s.q.GetNodeWithBlob(ctx, store.GetNodeWithBlobParams{ID: nodeID, OwnerID: owner})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return store.GetNodeWithBlobRow{}, ErrNotFound
+		}
+		return store.GetNodeWithBlobRow{}, err
+	}
+	if row.DeletedAt.Valid {
+		return store.GetNodeWithBlobRow{}, ErrNotFound
+	}
+	return row, nil
+}
+
+func (s *Uploads) ReadText(ctx context.Context, owner, nodeID uuid.UUID, offset, maxBytes int64) (string, bool, error) {
+	if offset < 0 || maxBytes <= 0 || maxBytes > 64<<10 {
+		return "", false, errf("INVALID_INPUT", "offset 必须非负,max_bytes 必须在 1~65536")
+	}
+	row, err := s.NodeInfo(ctx, owner, nodeID)
+	if err != nil {
+		return "", false, err
+	}
+	if row.Kind != "file" || row.BlobSha256 == nil || row.BlobSize == nil {
+		return "", false, ErrNotFound
+	}
+	mimeType := ""
+	if row.BlobMime != nil {
+		mimeType = *row.BlobMime
+	}
+	ext := strings.ToLower(filepath.Ext(row.Name))
+	if !strings.HasPrefix(mimeType, "text/") && ext != ".json" && ext != ".xml" && ext != ".md" && ext != ".csv" && ext != ".log" {
+		return "", false, errf("UNSUPPORTED_TYPE", "文件不是支持的文本类型")
+	}
+	if offset >= *row.BlobSize {
+		return "", true, nil
+	}
+	r, err := s.obj.Open(ctx, objstore.BlobKey(*row.BlobSha256))
+	if err != nil {
+		return "", false, err
+	}
+	defer r.Close()
+	if offset > 0 {
+		if _, err := io.CopyN(io.Discard, r, offset); err != nil {
+			return "", false, err
+		}
+	}
+	b, err := io.ReadAll(io.LimitReader(r, maxBytes))
+	if err != nil {
+		return "", false, err
+	}
+	if !utf8.Valid(b) {
+		return "", false, errf("UNSUPPORTED_ENCODING", "文本不是有效 UTF-8")
+	}
+	return string(b), offset+int64(len(b)) >= *row.BlobSize, nil
 }
 
 func mimeByName(name string) string {

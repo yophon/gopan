@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Connection, Delete, Folder, Key, Search, Setting, Share, SwitchButton } from '@element-plus/icons-vue'
+import { Connection, Delete, Folder, Key, Lock, Search, Setting, Share, SwitchButton } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { MeDocument } from '@/api/gen/graphql'
@@ -12,6 +12,7 @@ import UploadDrawer from '@/components/UploadDrawer.vue'
 import PreviewModal from '@/components/preview/PreviewModal.vue'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import AppPasswordsDialog from '@/components/AppPasswordsDialog.vue'
+import MCPAccessDialog from '@/components/MCPAccessDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -52,6 +53,7 @@ const quotaStatus = computed(() => {
 
 const pwdDialogVisible = ref(false)
 const davDialogVisible = ref(false)
+const mcpDialogVisible = ref(false)
 
 async function onLogout() {
   await auth.logoutAction()
@@ -105,7 +107,8 @@ async function onLogout() {
         <span class="username" :title="auth.user?.username">{{ auth.user?.username }}</span>
         <span class="user-actions">
           <el-button link :icon="Connection" title="WebDAV 应用密码" @click="davDialogVisible = true" />
-          <el-button link :icon="Key" title="修改密码" @click="pwdDialogVisible = true" />
+          <el-button link :icon="Key" title="Agent API Key 与 OAuth" @click="mcpDialogVisible = true" />
+          <el-button link :icon="Lock" title="修改密码" @click="pwdDialogVisible = true" />
           <el-button link type="danger" :icon="SwitchButton" title="退出" @click="onLogout" />
         </span>
       </div>
@@ -117,6 +120,7 @@ async function onLogout() {
     <PreviewModal />
     <ChangePasswordDialog v-model="pwdDialogVisible" />
     <AppPasswordsDialog v-model="davDialogVisible" />
+    <MCPAccessDialog v-model="mcpDialogVisible" />
   </el-container>
 </template>
 

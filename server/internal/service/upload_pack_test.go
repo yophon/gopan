@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,6 +102,74 @@ func TestUploadValidation(t *testing.T) {
 	// 超配额(默认配额 1GB,见 newAuth)
 	if _, err := uploads.Init(ctx, owner, nil, "a.bin", shaHex([]byte("x")), 2<<30); err == nil {
 		t.Fatal("超配额应被拒")
+	}
+}
+
+func TestAgentSinglePutOptionalHash(t *testing.T) {
+	pool := setup(t)
+	obj := setupS3(t)
+	ctx := context.Background()
+	uploads, _, owner := newUploads(t, pool, obj)
+	q := store.New(pool)
+	data := []byte("agent direct upload without a precomputed hash")
+
+	init, err := uploads.PrepareAgentUpload(ctx, owner, nil, "agent.txt", int64(len(data)), "text/plain", nil, "single_put", nil)
+	if err != nil || init.Mode != "single_put" || init.Transfer.PutURL == "" {
+		t.Fatalf("单 PUT 初始化失败:%+v err=%v", init, err)
+	}
+	httpPut(t, init.Transfer.PutURL, data)
+	sid := init.Transfer.Session.ID
+	if _, err := uploads.CompleteAgentTransfer(ctx, owner, sid); err != nil {
+		t.Fatal(err)
+	}
+	processed, err := uploads.ProcessNextAgentTransfer(ctx)
+	if err != nil || !processed {
+		t.Fatalf("定稿任务未处理:processed=%v err=%v", processed, err)
+	}
+	view, err := uploads.AgentTransfer(ctx, owner, sid, 1, 1)
+	if err != nil || view.Session.Status != "verifying" || view.Session.ComputedSha256 == nil || view.Session.NodeID == nil {
+		t.Fatalf("定稿状态不符:%+v err=%v", view, err)
+	}
+	if *view.Session.ComputedSha256 != shaHex(data) {
+		t.Fatalf("服务端 sha 不符:%s", *view.Session.ComputedSha256)
+	}
+	blob, err := q.GetBlobBySha256(ctx, *view.Session.ComputedSha256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := q.MarkBlobVerified(ctx, blob.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.MarkTransferReadyBySha(ctx, view.Session.ComputedSha256); err != nil {
+		t.Fatal(err)
+	}
+	view, _ = uploads.AgentTransfer(ctx, owner, sid, 1, 1)
+	if view.Session.Status != "ready" {
+		t.Fatalf("校验后应 ready,got %s", view.Session.Status)
+	}
+	if err := service.NewNodes(pool).Purge(ctx, owner, []uuid.UUID{*view.Session.NodeID}); err != nil {
+		t.Fatalf("传输审计不能阻止删除节点:%v", err)
+	}
+	view, err = uploads.AgentTransfer(ctx, owner, sid, 1, 1)
+	if err != nil || view.Session.NodeID != nil {
+		t.Fatalf("删除节点后会话应保留且 node_id 置空:%+v err=%v", view, err)
+	}
+
+	fake := strings.Repeat("0", 64)
+	bad, err := uploads.PrepareAgentUpload(ctx, owner, nil, "fake.txt", int64(len(data)), "text/plain", &fake, "single_put", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	httpPut(t, bad.Transfer.PutURL, data)
+	if _, err := uploads.CompleteAgentTransfer(ctx, owner, bad.Transfer.Session.ID); err != nil {
+		t.Fatal(err)
+	}
+	if processed, err := uploads.ProcessNextAgentTransfer(ctx); err != nil || !processed {
+		t.Fatalf("伪 hash 定稿未处理:processed=%v err=%v", processed, err)
+	}
+	badView, err := uploads.AgentTransfer(ctx, owner, bad.Transfer.Session.ID, 1, 1)
+	if err != nil || badView.Session.Status != "failed" || badView.Session.NodeID != nil {
+		t.Fatalf("伪 hash 应 failed 且无节点:%+v err=%v", badView, err)
 	}
 }
 

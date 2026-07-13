@@ -25,6 +25,8 @@ import (
 	"github.com/yophon/gopan/server/internal/dav"
 	"github.com/yophon/gopan/server/internal/graph"
 	"github.com/yophon/gopan/server/internal/httpx"
+	"github.com/yophon/gopan/server/internal/mcpserver"
+	"github.com/yophon/gopan/server/internal/oauthserver"
 	"github.com/yophon/gopan/server/internal/objstore"
 	"github.com/yophon/gopan/server/internal/service"
 	"github.com/yophon/gopan/server/internal/store"
@@ -120,18 +122,31 @@ func run() error {
 	shares := service.NewShares(q, auth)
 	admin := service.NewAdmin(q, cfg.DefaultQuota)
 	appPass := service.NewAppPasswords(q)
+	mcpTokens := service.NewMCPTokens(q)
+	oauth := service.NewOAuth(q)
 	packer := service.NewPacker(q, obj, shares)
+	packTickets := service.NewPackTickets(cfg.JWTSecret, 10*time.Minute)
 	wk := worker.New(pool, obj, nodes, cfg.TrashTTL, cfg.FFmpegPath, cfg.FFprobePath, cfg.GotenbergURL)
+	wk.SetUploads(uploads)
 	uploads.SetEnqueue(wk.Enqueue)
 	previews.SetEnqueue(wk.Enqueue)
 	go wk.Run(ctx, 2)
 
 	es := graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
-		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass,
+		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass, MCPTokens: mcpTokens, OAuth: oauth,
 	}})
 
 	mux := http.NewServeMux()
 	mux.Handle("POST /query", httpx.WithAuth(httpx.NewGraphQLHandler(es, cfg.DevMode), auth))
+	oauthHTTP := oauthserver.New(oauth)
+	mux.HandleFunc("GET /.well-known/oauth-authorization-server", oauthHTTP.AuthorizationMetadata)
+	mux.HandleFunc("GET /.well-known/oauth-protected-resource", oauthHTTP.ProtectedResourceMetadata)
+	mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", oauthHTTP.ProtectedResourceMetadata)
+	mux.HandleFunc("GET /oauth/authorize", oauthHTTP.Authorize)
+	mux.HandleFunc("POST /oauth/token", oauthHTTP.Token)
+	mux.HandleFunc("POST /oauth/register", oauthHTTP.Register)
+	mux.Handle("/mcp", mcpserver.NewHandler(nodes, uploads, mcpTokens, oauth, packer, packTickets))
+	mux.Handle("GET /mcp-download/{ticket}", httpx.MCPPackHandler(packTickets, packer))
 	mux.Handle("GET /pack", httpx.PackHandler(auth, packer))
 	// WebDAV:应用密码 Basic 认证,/dav 与 /dav/ 都接(Finder/资源管理器会裸打前缀)
 	davHandler := dav.Handler(appPass, dav.NewBackend(q, obj, nodes, uploads))

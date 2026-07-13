@@ -38,6 +38,17 @@ type Derivative struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type McpToken struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	Name       string
+	TokenHash  string
+	Scopes     []string
+	CreatedAt  pgtype.Timestamptz
+	LastUsedAt pgtype.Timestamptz
+	RevokedAt  pgtype.Timestamptz
+}
+
 type Node struct {
 	ID           uuid.UUID
 	OwnerID      uuid.UUID
@@ -51,6 +62,55 @@ type Node struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+}
+
+type OauthAccessToken struct {
+	ID         uuid.UUID
+	GrantID    uuid.UUID
+	TokenHash  string
+	Scopes     []string
+	ExpiresAt  pgtype.Timestamptz
+	CreatedAt  pgtype.Timestamptz
+	LastUsedAt pgtype.Timestamptz
+}
+
+type OauthAuthorizationCode struct {
+	CodeHash      string
+	GrantID       uuid.UUID
+	ClientID      string
+	RedirectUri   string
+	Scopes        []string
+	CodeChallenge string
+	ExpiresAt     pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+}
+
+type OauthClient struct {
+	ClientID     string
+	ClientName   string
+	RedirectUris []string
+	CreatedAt    pgtype.Timestamptz
+}
+
+type OauthGrant struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	ClientID  string
+	Scopes    []string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+	RevokedAt pgtype.Timestamptz
+}
+
+type OauthRefreshToken struct {
+	ID        uuid.UUID
+	GrantID   uuid.UUID
+	TokenHash string
+	Scopes    []string
+	ExpiresAt pgtype.Timestamptz
+	UsedAt    pgtype.Timestamptz
+	RevokedAt pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
 }
 
 type RefreshToken struct {
@@ -84,6 +144,27 @@ type Task struct {
 	LastError *string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+}
+
+type TransferSession struct {
+	ID             uuid.UUID
+	OwnerID        uuid.UUID
+	TargetParent   *uuid.UUID
+	TargetName     string
+	Size           int64
+	Mime           string
+	ExpectedSha256 *string
+	ComputedSha256 *string
+	ObjectKey      string
+	Transport      string
+	MinioUploadID  *string
+	PartSize       int32
+	Status         string
+	FailReason     *string
+	NodeID         *uuid.UUID
+	IdempotencyKey *string
+	CreatedAt      pgtype.Timestamptz
+	ExpiresAt      pgtype.Timestamptz
 }
 
 type UploadSession struct {

@@ -1,0 +1,54 @@
+query MCPAPIKeys {
+  mcpAPIKeys {
+    id
+    name
+    scopes
+    createdAt
+    lastUsedAt
+  }
+}
+
+mutation CreateMCPAPIKey($name: String!, $scopes: [String!]!) {
+  createMCPAPIKey(name: $name, scopes: $scopes) {
+    token
+    credential {
+      id
+      name
+      scopes
+      createdAt
+      lastUsedAt
+    }
+  }
+}
+
+mutation RevokeMCPAPIKey($id: ID!) {
+  revokeMCPAPIKey(id: $id)
+}
+
+query OAuthGrants {
+  oauthGrants {
+    id
+    clientId
+    clientName
+    scopes
+    createdAt
+    updatedAt
+  }
+}
+
+mutation RevokeOAuthGrant($id: ID!) {
+  revokeOAuthGrant(id: $id)
+}
+
+query OAuthAuthorizationRequest($input: OAuthAuthorizationInput!) {
+  oauthAuthorizationRequest(input: $input) {
+    clientName
+    scopes
+  }
+}
+
+mutation DecideOAuthAuthorization($input: OAuthAuthorizationInput!, $approved: Boolean!) {
+  decideOAuthAuthorization(input: $input, approved: $approved) {
+    redirectUrl
+  }
+}

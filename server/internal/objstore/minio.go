@@ -86,6 +86,16 @@ func (s *Store) PresignPart(ctx context.Context, key, uploadID string, partNumbe
 	return u.String(), nil
 }
 
+// PresignPut 为单对象直传生成 PUT URL。服务端完成时会以 Stat 的实际大小为准，
+// Content-Type 只作对象元数据，不作为信任边界。
+func (s *Store) PresignPut(ctx context.Context, key string) (string, error) {
+	u, err := s.public.PresignedPutObject(ctx, s.bucket, key, s.putTTL)
+	if err != nil {
+		return "", err
+	}
+	return u.String(), nil
+}
+
 // ListParts 返回已完成分片号→ETag(断点续传唯一事实源)。
 func (s *Store) ListParts(ctx context.Context, key, uploadID string) (map[int]string, error) {
 	parts := make(map[int]string)
@@ -156,6 +166,14 @@ func (s *Store) Remove(ctx context.Context, key string) error {
 	return s.internal.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})
 }
 
+func (s *Store) Stat(ctx context.Context, key string) (int64, error) {
+	info, err := s.internal.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
+	if err != nil {
+		return 0, err
+	}
+	return info.Size, nil
+}
+
 func (s *Store) Ping(ctx context.Context) error {
 	_, err := s.internal.BucketExists(ctx, s.bucket)
 	return err
@@ -192,6 +210,20 @@ func (s *Store) Copy(ctx context.Context, dstKey, srcKey string) error {
 		minio.CopyDestOptions{Bucket: s.bucket, Object: dstKey},
 		minio.CopySrcOptions{Bucket: s.bucket, Object: srcKey})
 	return err
+}
+
+// Promote 把 staging 对象提升到内容寻址 key。S3 CopyObject 单调用只支持 5GiB，
+// 更大的对象重新走内网流式 PUT；字节仍不经过 MCP 或 Agent 上下文。
+func (s *Store) Promote(ctx context.Context, dstKey, srcKey string, size int64, contentType string) error {
+	if size <= 5<<30 {
+		return s.Copy(ctx, dstKey, srcKey)
+	}
+	r, err := s.Open(ctx, srcKey)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	return s.Put(ctx, dstKey, r, size, contentType)
 }
 
 // PresignInternalGet 用内网地址签 GET,给 ffmpeg/ffprobe 这类需要 URL 输入的工具。

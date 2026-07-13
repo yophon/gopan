@@ -8,12 +8,14 @@ import (
 )
 
 type Resolver struct {
-	Cfg      *config.Config
-	Auth     *service.Auth
-	Nodes    *service.Nodes
-	Uploads  *service.Uploads
-	Previews *service.Previews
-	Shares   *service.Shares
-	Admin    *service.Admin
-	AppPass  *service.AppPasswords
+	Cfg       *config.Config
+	Auth      *service.Auth
+	Nodes     *service.Nodes
+	Uploads   *service.Uploads
+	Previews  *service.Previews
+	Shares    *service.Shares
+	Admin     *service.Admin
+	AppPass   *service.AppPasswords
+	MCPTokens *service.MCPTokens
+	OAuth     *service.OAuth
 }

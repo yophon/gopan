@@ -9,6 +9,9 @@ SELECT * FROM users WHERE username = $1;
 -- name: GetUserByID :one
 SELECT * FROM users WHERE id = $1;
 
+-- name: GetUserByIDForUpdate :one
+SELECT * FROM users WHERE id = $1 FOR UPDATE;
+
 -- name: UpdateUserPassword :exec
 UPDATE users SET password_hash = $2 WHERE id = $1;
 

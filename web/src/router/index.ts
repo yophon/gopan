@@ -18,6 +18,11 @@ const router = createRouter({
       component: () => import('@/views/ShareVisitorView.vue'),
     },
     {
+      path: '/oauth/consent',
+      name: 'oauth-consent',
+      component: () => import('@/views/OAuthConsentView.vue'),
+    },
+    {
       path: '/',
       component: () => import('@/views/AppShell.vue'),
       children: [
