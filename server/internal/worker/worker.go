@@ -62,6 +62,7 @@ func (w *Pool) Run(ctx context.Context, n int) {
 	go w.periodic(ctx, time.Hour, "blob-gc", w.gcBlobs)
 	go w.periodic(ctx, time.Hour, "trash-cleanup", w.cleanupTrash)
 	go w.periodic(ctx, 24*time.Hour, "refresh-cleanup", w.cleanupRefreshTokens)
+	go w.periodic(ctx, time.Minute, "subtree-stats", w.recomputeStats)
 	<-ctx.Done()
 }
 
@@ -168,6 +169,9 @@ func (w *Pool) verifyHash(ctx context.Context, blobID uuid.UUID) error {
 	defer tx.Rollback(ctx)
 	qtx := w.q.WithTx(tx)
 	for _, n := range nodes {
+		if err := qtx.MarkAncestorsStale(ctx, n.ID); err != nil {
+			return err
+		}
 		if _, err := qtx.PurgeSubtree(ctx, store.PurgeSubtreeParams{ID: n.ID, OwnerID: n.OwnerID}); err != nil {
 			return err
 		}
@@ -246,6 +250,29 @@ func (w *Pool) cleanupRefreshTokens(ctx context.Context) error {
 		metrics.Cleanup.WithLabelValues("refresh_tokens").Add(float64(n))
 	}
 	return err
+}
+
+// recomputeStats 重算被写路径标脏的文件夹子树统计(方案 B:最终一致)。
+// 单语句 UPDATE 靠行锁与并发标脏串行化;重算窗口内的新变更会再次置脏,下一轮修正。
+func (w *Pool) recomputeStats(ctx context.Context) error {
+	const batch = 200
+	for {
+		ids, err := w.q.ListStaleFolders(ctx, batch)
+		if err != nil {
+			return err
+		}
+		for _, id := range ids {
+			if err := w.q.RecomputeFolderStats(ctx, id); err != nil {
+				return err
+			}
+		}
+		if len(ids) > 0 {
+			metrics.Cleanup.WithLabelValues("subtree_stats").Add(float64(len(ids)))
+		}
+		if len(ids) < batch {
+			return nil
+		}
+	}
 }
 
 // gcBlobs 删除 ref_count=0 且过宽限期(24h)的 blob 及其对象。

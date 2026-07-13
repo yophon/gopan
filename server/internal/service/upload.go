@@ -240,6 +240,9 @@ func (s *Uploads) Complete(ctx context.Context, owner, id uuid.UUID, etags map[i
 	if err := qtx.AddUsedBytes(ctx, store.AddUsedBytesParams{ID: owner, UsedBytes: sess.Size}); err != nil {
 		return nil, err
 	}
+	if err := qtx.MarkAncestorsStale(ctx, node.ID); err != nil {
+		return nil, err
+	}
 	if err := qtx.SetUploadSessionStatus(ctx, store.SetUploadSessionStatusParams{
 		ID: sess.ID, OwnerID: owner, Status: "verifying",
 	}); err != nil {
@@ -290,6 +293,9 @@ func (s *Uploads) linkBlob(ctx context.Context, owner uuid.UUID, parentID *uuid.
 		return store.Node{}, err
 	}
 	if err := qtx.AddUsedBytes(ctx, store.AddUsedBytesParams{ID: owner, UsedBytes: blob.Size}); err != nil {
+		return store.Node{}, err
+	}
+	if err := qtx.MarkAncestorsStale(ctx, node.ID); err != nil {
 		return store.Node{}, err
 	}
 	return node, tx.Commit(ctx)

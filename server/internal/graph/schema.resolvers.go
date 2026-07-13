@@ -512,6 +512,7 @@ func (r *queryResolver) Children(ctx context.Context, parentID *string, cursor *
 			ID: row.ID, OwnerID: row.OwnerID, ParentID: row.ParentID, Name: row.Name,
 			Kind: row.Kind, BlobID: row.BlobID, DeletedAt: row.DeletedAt,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+			SubtreeBytes: row.SubtreeBytes, SubtreeCount: row.SubtreeCount, StatsStale: row.StatsStale,
 		}, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256})
 	}), nil
 }
@@ -537,6 +538,7 @@ func (r *queryResolver) SearchNodes(ctx context.Context, q string, cursor *strin
 				ID: row.ID, OwnerID: row.OwnerID, ParentID: row.ParentID, Name: row.Name,
 				Kind: row.Kind, BlobID: row.BlobID, DeletedAt: row.DeletedAt,
 				CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+				SubtreeBytes: row.SubtreeBytes, SubtreeCount: row.SubtreeCount, StatsStale: row.StatsStale,
 			}, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256})
 		}), nil
 	}
@@ -549,6 +551,7 @@ func (r *queryResolver) SearchNodes(ctx context.Context, q string, cursor *strin
 			ID: row.ID, OwnerID: row.OwnerID, ParentID: row.ParentID, Name: row.Name,
 			Kind: row.Kind, BlobID: row.BlobID, DeletedAt: row.DeletedAt,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+			SubtreeBytes: row.SubtreeBytes, SubtreeCount: row.SubtreeCount, StatsStale: row.StatsStale,
 		}, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256})
 	}), nil
 }
@@ -568,6 +571,7 @@ func (r *queryResolver) Trash(ctx context.Context, cursor *string) (*NodePage, e
 			ID: row.ID, OwnerID: row.OwnerID, ParentID: row.ParentID, Name: row.Name,
 			Kind: row.Kind, BlobID: row.BlobID, DeletedAt: row.DeletedAt,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+			SubtreeBytes: row.SubtreeBytes, SubtreeCount: row.SubtreeCount, StatsStale: row.StatsStale,
 		}, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256})
 	}), nil
 }

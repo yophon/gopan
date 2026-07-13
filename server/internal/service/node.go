@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -60,12 +61,7 @@ func (s *Nodes) Children(ctx context.Context, owner uuid.UUID, parentID *uuid.UU
 			return nil, ErrNotFound
 		}
 	}
-	offset := decodeCursor(cursor)
-	rows, err := s.q.ListChildren(ctx, store.ListChildrenParams{
-		OwnerID: owner, ParentID: parentID,
-		OrderBy: order, Descending: desc,
-		PageLimit: pageSize, PageOffset: offset,
-	})
+	rows, err := s.listChildrenPage(ctx, owner, parentID, decodeCursor(cursor, order, desc), order, desc)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +69,64 @@ func (s *Nodes) Children(ctx context.Context, owner uuid.UUID, parentID *uuid.UU
 	if err != nil {
 		return nil, err
 	}
-	return &Page[store.ListChildrenRow]{Items: rows, Total: total, NextCursor: nextCursor(offset, len(rows), total)}, nil
+	return &Page[store.ListChildrenRow]{Items: rows, Total: total, NextCursor: childrenNextCursor(rows, order, desc)}, nil
+}
+
+// listChildrenPage 按游标分派:无游标走首页查询,有游标走对应排序的 keyset 查询。
+// 各 keyset 查询的行形状与 ListChildrenRow 完全一致,靠结构体转换收敛到同一类型。
+func (s *Nodes) listChildrenPage(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID, cur *cursorPayload, order string, desc bool) ([]store.ListChildrenRow, error) {
+	if cur == nil {
+		return s.q.ListChildren(ctx, store.ListChildrenParams{
+			OwnerID: owner, ParentID: parentID,
+			OrderBy: order, Descending: desc, PageLimit: pageSize,
+		})
+	}
+	switch order {
+	case "SIZE":
+		var size int64
+		if cur.Size != nil {
+			size = *cur.Size
+		}
+		if desc {
+			rows, err := s.q.ListChildrenSizeDesc(ctx, store.ListChildrenSizeDescParams{
+				OwnerID: owner, ParentID: parentID, PageLimit: pageSize,
+				CKind: cur.Kind, CSizeNull: cur.Size == nil, CSize: size, CID: cur.ID,
+			})
+			return mapSlice(rows, func(r store.ListChildrenSizeDescRow) store.ListChildrenRow { return store.ListChildrenRow(r) }), err
+		}
+		rows, err := s.q.ListChildrenSizeAsc(ctx, store.ListChildrenSizeAscParams{
+			OwnerID: owner, ParentID: parentID, PageLimit: pageSize,
+			CKind: cur.Kind, CSizeNull: cur.Size == nil, CSize: size, CID: cur.ID,
+		})
+		return mapSlice(rows, func(r store.ListChildrenSizeAscRow) store.ListChildrenRow { return store.ListChildrenRow(r) }), err
+	case "UPDATED_AT":
+		t := tstz(time.Unix(0, cur.T))
+		if desc {
+			rows, err := s.q.ListChildrenUpdatedDesc(ctx, store.ListChildrenUpdatedDescParams{
+				OwnerID: owner, ParentID: parentID, PageLimit: pageSize,
+				CKind: cur.Kind, CUpdated: t, CID: cur.ID,
+			})
+			return mapSlice(rows, func(r store.ListChildrenUpdatedDescRow) store.ListChildrenRow { return store.ListChildrenRow(r) }), err
+		}
+		rows, err := s.q.ListChildrenUpdatedAsc(ctx, store.ListChildrenUpdatedAscParams{
+			OwnerID: owner, ParentID: parentID, PageLimit: pageSize,
+			CKind: cur.Kind, CUpdated: t, CID: cur.ID,
+		})
+		return mapSlice(rows, func(r store.ListChildrenUpdatedAscRow) store.ListChildrenRow { return store.ListChildrenRow(r) }), err
+	default: // NAME
+		if desc {
+			rows, err := s.q.ListChildrenNameDesc(ctx, store.ListChildrenNameDescParams{
+				OwnerID: owner, ParentID: parentID, PageLimit: pageSize,
+				CKind: cur.Kind, CName: cur.Name, CID: cur.ID,
+			})
+			return mapSlice(rows, func(r store.ListChildrenNameDescRow) store.ListChildrenRow { return store.ListChildrenRow(r) }), err
+		}
+		rows, err := s.q.ListChildrenNameAsc(ctx, store.ListChildrenNameAscParams{
+			OwnerID: owner, ParentID: parentID, PageLimit: pageSize,
+			CKind: cur.Kind, CName: cur.Name, CID: cur.ID,
+		})
+		return mapSlice(rows, func(r store.ListChildrenNameAscRow) store.ListChildrenRow { return store.ListChildrenRow(r) }), err
+	}
 }
 
 func (s *Nodes) Search(ctx context.Context, owner uuid.UUID, q string, cursor *string) (*Page[store.SearchNodesRow], error) {
@@ -81,11 +134,18 @@ func (s *Nodes) Search(ctx context.Context, owner uuid.UUID, q string, cursor *s
 	if kw == "" {
 		return &Page[store.SearchNodesRow]{}, nil
 	}
-	offset := decodeCursor(cursor)
 	kwp := &kw
-	rows, err := s.q.SearchNodes(ctx, store.SearchNodesParams{
-		OwnerID: owner, Column2: kwp, Limit: pageSize, Offset: offset,
-	})
+	var rows []store.SearchNodesRow
+	var err error
+	if cur := decodeCursor(cursor, orderSearch, true); cur != nil {
+		after, aerr := s.q.SearchNodesAfter(ctx, store.SearchNodesAfterParams{
+			OwnerID: owner, Column2: kwp, Limit: pageSize,
+			CUpdated: tstz(time.Unix(0, cur.T)), CID: cur.ID,
+		})
+		rows, err = mapSlice(after, func(r store.SearchNodesAfterRow) store.SearchNodesRow { return store.SearchNodesRow(r) }), aerr
+	} else {
+		rows, err = s.q.SearchNodes(ctx, store.SearchNodesParams{OwnerID: owner, Column2: kwp, Limit: pageSize})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +153,10 @@ func (s *Nodes) Search(ctx context.Context, owner uuid.UUID, q string, cursor *s
 	if err != nil {
 		return nil, err
 	}
-	return &Page[store.SearchNodesRow]{Items: rows, Total: total, NextCursor: nextCursor(offset, len(rows), total)}, nil
+	next := timelineNextCursor(rows, orderSearch, func(r store.SearchNodesRow) (time.Time, uuid.UUID) {
+		return r.UpdatedAt.Time, r.ID
+	})
+	return &Page[store.SearchNodesRow]{Items: rows, Total: total, NextCursor: next}, nil
 }
 
 // SearchInSubtree 访客搜索:范围限定在分享根的子树内。
@@ -102,11 +165,20 @@ func (s *Nodes) SearchInSubtree(ctx context.Context, root uuid.UUID, q string, c
 	if kw == "" {
 		return &Page[store.SearchNodesInSubtreeRow]{}, nil
 	}
-	offset := decodeCursor(cursor)
 	kwp := &kw
-	rows, err := s.q.SearchNodesInSubtree(ctx, store.SearchNodesInSubtreeParams{
-		ID: root, Column2: kwp, Limit: pageSize, Offset: offset,
-	})
+	var rows []store.SearchNodesInSubtreeRow
+	var err error
+	if cur := decodeCursor(cursor, orderSearch, true); cur != nil {
+		after, aerr := s.q.SearchNodesInSubtreeAfter(ctx, store.SearchNodesInSubtreeAfterParams{
+			ID: root, Column2: kwp, Limit: pageSize,
+			CUpdated: tstz(time.Unix(0, cur.T)), CID: cur.ID,
+		})
+		rows, err = mapSlice(after, func(r store.SearchNodesInSubtreeAfterRow) store.SearchNodesInSubtreeRow {
+			return store.SearchNodesInSubtreeRow(r)
+		}), aerr
+	} else {
+		rows, err = s.q.SearchNodesInSubtree(ctx, store.SearchNodesInSubtreeParams{ID: root, Column2: kwp, Limit: pageSize})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -114,12 +186,24 @@ func (s *Nodes) SearchInSubtree(ctx context.Context, root uuid.UUID, q string, c
 	if err != nil {
 		return nil, err
 	}
-	return &Page[store.SearchNodesInSubtreeRow]{Items: rows, Total: total, NextCursor: nextCursor(offset, len(rows), total)}, nil
+	next := timelineNextCursor(rows, orderSearch, func(r store.SearchNodesInSubtreeRow) (time.Time, uuid.UUID) {
+		return r.UpdatedAt.Time, r.ID
+	})
+	return &Page[store.SearchNodesInSubtreeRow]{Items: rows, Total: total, NextCursor: next}, nil
 }
 
 func (s *Nodes) Trash(ctx context.Context, owner uuid.UUID, cursor *string) (*Page[store.ListTrashRow], error) {
-	offset := decodeCursor(cursor)
-	rows, err := s.q.ListTrash(ctx, store.ListTrashParams{OwnerID: owner, Limit: pageSize, Offset: offset})
+	var rows []store.ListTrashRow
+	var err error
+	if cur := decodeCursor(cursor, orderTrash, true); cur != nil {
+		after, aerr := s.q.ListTrashAfter(ctx, store.ListTrashAfterParams{
+			OwnerID: owner, Limit: pageSize,
+			CDeleted: tstz(time.Unix(0, cur.T)), CID: cur.ID,
+		})
+		rows, err = mapSlice(after, func(r store.ListTrashAfterRow) store.ListTrashRow { return store.ListTrashRow(r) }), aerr
+	} else {
+		rows, err = s.q.ListTrash(ctx, store.ListTrashParams{OwnerID: owner, Limit: pageSize})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +211,10 @@ func (s *Nodes) Trash(ctx context.Context, owner uuid.UUID, cursor *string) (*Pa
 	if err != nil {
 		return nil, err
 	}
-	return &Page[store.ListTrashRow]{Items: rows, Total: total, NextCursor: nextCursor(offset, len(rows), total)}, nil
+	next := timelineNextCursor(rows, orderTrash, func(r store.ListTrashRow) (time.Time, uuid.UUID) {
+		return r.DeletedAt.Time, r.ID
+	})
+	return &Page[store.ListTrashRow]{Items: rows, Total: total, NextCursor: next}, nil
 }
 
 // ---- 写操作 ----
@@ -182,7 +269,8 @@ func (s *Nodes) Move(ctx context.Context, owner uuid.UUID, ids []uuid.UUID, targ
 
 	out := make([]store.Node, 0, len(ids))
 	for _, id := range ids {
-		if _, err := s.Get(ctx, owner, id); err != nil {
+		prev, err := s.Get(ctx, owner, id)
+		if err != nil {
 			return nil, err
 		}
 		if target != nil {
@@ -201,6 +289,15 @@ func (s *Nodes) Move(ctx context.Context, owner uuid.UUID, ids []uuid.UUID, targ
 		}
 		if err != nil {
 			return nil, err
+		}
+		// 新旧两条祖先链都要标脏(id 含自身,向上即新链)
+		if err := qtx.MarkAncestorsStale(ctx, id); err != nil {
+			return nil, err
+		}
+		if prev.ParentID != nil {
+			if err := qtx.MarkAncestorsStale(ctx, *prev.ParentID); err != nil {
+				return nil, err
+			}
 		}
 		out = append(out, n)
 	}
@@ -328,6 +425,11 @@ func (s *Nodes) Copy(ctx context.Context, owner uuid.UUID, ids []uuid.UUID, targ
 			return nil, err
 		}
 	}
+	if target != nil {
+		if err := qtx.MarkAncestorsStale(ctx, *target); err != nil {
+			return nil, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
@@ -396,6 +498,9 @@ func (s *Nodes) Delete(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) er
 		if err := s.q.SoftDeleteSubtree(ctx, store.SoftDeleteSubtreeParams{ID: id, OwnerID: owner}); err != nil {
 			return err
 		}
+		if err := s.q.MarkAncestorsStale(ctx, id); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -423,6 +528,9 @@ func (s *Nodes) Restore(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) (
 		if err := s.q.RestoreSubtree(ctx, store.RestoreSubtreeParams{ID: id, OwnerID: owner}); err != nil {
 			return nil, err
 		}
+		if err := s.q.MarkAncestorsStale(ctx, id); err != nil {
+			return nil, err
+		}
 		restored, err := s.Get(ctx, owner, id)
 		if err != nil {
 			return nil, err
@@ -441,6 +549,10 @@ func (s *Nodes) Purge(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) err
 	qtx := s.q.WithTx(tx)
 	var blobIDs []uuid.UUID
 	for _, id := range ids {
+		// 标脏在删之前:行删掉后就爬不了父链了
+		if err := qtx.MarkAncestorsStale(ctx, id); err != nil {
+			return err
+		}
 		got, err := qtx.PurgeSubtree(ctx, store.PurgeSubtreeParams{ID: id, OwnerID: owner})
 		if err != nil {
 			return err
@@ -558,26 +670,83 @@ func tstz(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
-// ---- 游标:base64("o:<offset>"),实现可替换 ----
+// ---- 游标:base64(JSON 排序键元组),对外仍是不透明字符串(v1 的 offset 游标自然失效,按首页处理) ----
 
-func decodeCursor(c *string) int32 {
-	if c == nil {
-		return 0
-	}
-	var off int32
-	if _, err := fmt.Sscanf(decodeB64(*c), "o:%d", &off); err != nil || off < 0 {
-		return 0
-	}
-	return off
+const (
+	orderSearch = "SEARCH"
+	orderTrash  = "TRASH"
+)
+
+type cursorPayload struct {
+	V    int       `json:"v"`           // 版本,现为 2
+	O    string    `json:"o"`           // NAME / SIZE / UPDATED_AT / SEARCH / TRASH
+	D    bool      `json:"d"`           // 方向
+	Kind string    `json:"k,omitempty"` // children:folders-first 的 kind 键
+	Name string    `json:"n,omitempty"` // NAME 键
+	Size *int64    `json:"s,omitempty"` // SIZE 键,nil = 该行无 blob(文件夹)
+	T    int64     `json:"t,omitempty"` // 时间键 unixnano(UPDATED_AT / SEARCH / TRASH)
+	ID   uuid.UUID `json:"id"`          // 平局决胜
 }
 
-func nextCursor(offset int32, got int, total int64) *string {
-	next := offset + int32(got)
-	if int64(next) >= total || got == 0 {
+// decodeCursor 解析游标并校验与本次请求的排序一致;不一致或解析失败按首页处理
+// (用户翻页途中切排序、或旧版本游标,都归为"从头来")。
+func decodeCursor(c *string, order string, desc bool) *cursorPayload {
+	if c == nil || *c == "" {
 		return nil
 	}
-	s := encodeB64(fmt.Sprintf("o:%d", next))
+	var p cursorPayload
+	if err := json.Unmarshal([]byte(decodeB64(*c)), &p); err != nil {
+		return nil
+	}
+	if p.V != 2 || p.O != order || (order != orderSearch && order != orderTrash && p.D != desc) {
+		return nil
+	}
+	return &p
+}
+
+func encodeCursor(p cursorPayload) *string {
+	p.V = 2
+	b, err := json.Marshal(p)
+	if err != nil {
+		return nil
+	}
+	s := encodeB64(string(b))
 	return &s
+}
+
+// childrenNextCursor 从本页末行提取排序键;不满一页即到底。
+func childrenNextCursor(rows []store.ListChildrenRow, order string, desc bool) *string {
+	if len(rows) < pageSize {
+		return nil
+	}
+	last := rows[len(rows)-1]
+	p := cursorPayload{O: order, D: desc, Kind: last.Kind, ID: last.ID}
+	switch order {
+	case "SIZE":
+		p.Size = last.BlobSize
+	case "UPDATED_AT":
+		p.T = last.UpdatedAt.Time.UnixNano()
+	default:
+		p.Name = last.Name
+	}
+	return encodeCursor(p)
+}
+
+// timelineNextCursor 搜索/回收站共用:固定"时间 DESC, id"排序的游标。
+func timelineNextCursor[T any](rows []T, order string, key func(T) (time.Time, uuid.UUID)) *string {
+	if len(rows) < pageSize {
+		return nil
+	}
+	t, id := key(rows[len(rows)-1])
+	return encodeCursor(cursorPayload{O: order, D: true, T: t.UnixNano(), ID: id})
+}
+
+func mapSlice[S, D any](in []S, f func(S) D) []D {
+	out := make([]D, len(in))
+	for i, v := range in {
+		out[i] = f(v)
+	}
+	return out
 }
 
 func (s *Nodes) GetWithBlob(ctx context.Context, owner, id uuid.UUID) (store.GetNodeWithBlobRow, error) {

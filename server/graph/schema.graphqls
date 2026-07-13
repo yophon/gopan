@@ -51,6 +51,10 @@ type Node {
   deletedAt: Time
   preview: PreviewInfo!
   downloadUrl: String
+  # 子树统计(仅文件夹;异步重算,statsStale=true 表示数字可能滞后)
+  subtreeBytes: Int64
+  subtreeCount: Int64
+  statsStale: Boolean
 }
 
 enum PreviewKind { NONE, IMAGE, PDF, NATIVE_PDF, VIDEO, AUDIO, TEXT, OFFICE }

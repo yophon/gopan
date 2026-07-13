@@ -46,6 +46,13 @@ import ShareDialog from '@/components/ShareDialog.vue'
 
 type ChildItem = ChildrenQuery['children']['items'][number]
 
+/** 文件夹体积:异步统计,statsStale 时数字可能滞后,展示上弱化并加提示 */
+function folderSizeText(row: ChildItem): string {
+  if (row.subtreeBytes == null) return '—'
+  const text = formatBytes(row.subtreeBytes)
+  return row.statsStale ? `约 ${text}` : text
+}
+
 const route = useRoute()
 const router = useRouter()
 const queryClient = useQueryClient()
@@ -614,7 +621,15 @@ function fileIcon(row: ChildItem) {
       </el-table-column>
       <el-table-column label="大小" width="120">
         <template #default="{ row }">
-          {{ asChild(row).kind === 'FOLDER' ? '—' : formatBytes(asChild(row).size) }}
+          <span
+            v-if="asChild(row).kind === 'FOLDER'"
+            class="folder-size"
+            :class="{ stale: asChild(row).statsStale }"
+            :title="asChild(row).statsStale ? '统计中,数字可能滞后' : `${asChild(row).subtreeCount ?? 0} 个文件`"
+          >
+            {{ folderSizeText(asChild(row)) }}
+          </span>
+          <template v-else>{{ formatBytes(asChild(row).size) }}</template>
         </template>
       </el-table-column>
       <el-table-column label="修改时间" width="180">
@@ -763,5 +778,11 @@ function fileIcon(row: ChildItem) {
 }
 .context-menu-item:hover {
   background: var(--el-fill-color-light);
+}
+.folder-size {
+  color: var(--el-text-color-secondary);
+}
+.folder-size.stale {
+  opacity: 0.6;
 }
 </style>

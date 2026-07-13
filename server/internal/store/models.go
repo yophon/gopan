@@ -30,15 +30,18 @@ type Derivative struct {
 }
 
 type Node struct {
-	ID        uuid.UUID
-	OwnerID   uuid.UUID
-	ParentID  *uuid.UUID
-	Name      string
-	Kind      string
-	BlobID    *uuid.UUID
-	DeletedAt pgtype.Timestamptz
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
 }
 
 type RefreshToken struct {

@@ -89,18 +89,21 @@ type ComplexityRoot struct {
 	}
 
 	Node struct {
-		CreatedAt   func(childComplexity int) int
-		DeletedAt   func(childComplexity int) int
-		DownloadURL func(childComplexity int) int
-		ID          func(childComplexity int) int
-		Kind        func(childComplexity int) int
-		Mime        func(childComplexity int) int
-		Name        func(childComplexity int) int
-		ParentID    func(childComplexity int) int
-		Preview     func(childComplexity int) int
-		Sha256      func(childComplexity int) int
-		Size        func(childComplexity int) int
-		UpdatedAt   func(childComplexity int) int
+		CreatedAt    func(childComplexity int) int
+		DeletedAt    func(childComplexity int) int
+		DownloadURL  func(childComplexity int) int
+		ID           func(childComplexity int) int
+		Kind         func(childComplexity int) int
+		Mime         func(childComplexity int) int
+		Name         func(childComplexity int) int
+		ParentID     func(childComplexity int) int
+		Preview      func(childComplexity int) int
+		Sha256       func(childComplexity int) int
+		Size         func(childComplexity int) int
+		StatsStale   func(childComplexity int) int
+		SubtreeBytes func(childComplexity int) int
+		SubtreeCount func(childComplexity int) int
+		UpdatedAt    func(childComplexity int) int
 	}
 
 	NodePage struct {
@@ -663,6 +666,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Node.Size(childComplexity), true
+	case "Node.statsStale":
+		if e.ComplexityRoot.Node.StatsStale == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Node.StatsStale(childComplexity), true
+	case "Node.subtreeBytes":
+		if e.ComplexityRoot.Node.SubtreeBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Node.SubtreeBytes(childComplexity), true
+	case "Node.subtreeCount":
+		if e.ComplexityRoot.Node.SubtreeCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Node.SubtreeCount(childComplexity), true
 	case "Node.updatedAt":
 		if e.ComplexityRoot.Node.UpdatedAt == nil {
 			break
@@ -1149,6 +1170,10 @@ type Node {
   deletedAt: Time
   preview: PreviewInfo!
   downloadUrl: String
+  # 子树统计(仅文件夹;异步重算,statsStale=true 表示数字可能滞后)
+  subtreeBytes: Int64
+  subtreeCount: Int64
+  statsStale: Boolean
 }
 
 enum PreviewKind { NONE, IMAGE, PDF, NATIVE_PDF, VIDEO, AUDIO, TEXT, OFFICE }
@@ -1358,6 +1383,12 @@ func (ec *executionContext) childFields_Node(ctx context.Context, field graphql.
 		return ec.fieldContext_Node_preview(ctx, field)
 	case "downloadUrl":
 		return ec.fieldContext_Node_downloadUrl(ctx, field)
+	case "subtreeBytes":
+		return ec.fieldContext_Node_subtreeBytes(ctx, field)
+	case "subtreeCount":
+		return ec.fieldContext_Node_subtreeCount(ctx, field)
+	case "statsStale":
+		return ec.fieldContext_Node_statsStale(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Node", field.Name)
 }
@@ -3892,6 +3923,75 @@ func (ec *executionContext) _Node_downloadUrl(ctx context.Context, field graphql
 }
 func (ec *executionContext) fieldContext_Node_downloadUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Node", field, true, true, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Node_subtreeBytes(ctx context.Context, field graphql.CollectedField, obj *Node) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Node_subtreeBytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SubtreeBytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int64) graphql.Marshaler {
+			return ec.marshalOInt642ᚖint64(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Node_subtreeBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Node", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _Node_subtreeCount(ctx context.Context, field graphql.CollectedField, obj *Node) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Node_subtreeCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SubtreeCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int64) graphql.Marshaler {
+			return ec.marshalOInt642ᚖint64(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Node_subtreeCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Node", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _Node_statsStale(ctx context.Context, field graphql.CollectedField, obj *Node) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Node_statsStale(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.StatsStale, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *bool) graphql.Marshaler {
+			return ec.marshalOBoolean2ᚖbool(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Node_statsStale(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Node", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _NodePage_items(ctx context.Context, field graphql.CollectedField, obj *NodePage) (ret graphql.Marshaler) {
@@ -6963,6 +7063,21 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "subtreeBytes":
+			out.Values[i] = ec._Node_subtreeBytes(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "subtreeCount":
+			out.Values[i] = ec._Node_subtreeCount(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "statsStale":
+			out.Values[i] = ec._Node_statsStale(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}

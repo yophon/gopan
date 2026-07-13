@@ -25,6 +25,7 @@ SELECT EXISTS (
 ) AS exists;
 
 -- name: ListChildren :many
+-- 首页(无 cursor)。翻页走下面 6 条 keyset 查询,方向拆开写,不用 CASE 包 WHERE,留住索引通道。
 SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
@@ -40,7 +41,98 @@ ORDER BY
   CASE WHEN sqlc.arg(order_by)::text = 'UPDATED_AT' AND NOT sqlc.arg(descending)::boolean THEN n.updated_at END ASC,
   CASE WHEN sqlc.arg(order_by)::text = 'UPDATED_AT' AND     sqlc.arg(descending)::boolean THEN n.updated_at END DESC,
   n.id
-LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+LIMIT sqlc.arg(page_limit);
+
+-- name: ListChildrenNameAsc :many
+SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = sqlc.arg(owner_id)
+  AND n.parent_id IS NOT DISTINCT FROM sqlc.arg(parent_id)
+  AND n.deleted_at IS NULL
+  AND (n.kind < sqlc.arg(c_kind)::text
+       OR (n.kind = sqlc.arg(c_kind)::text
+           AND (n.name > sqlc.arg(c_name)::text
+                OR (n.name = sqlc.arg(c_name)::text AND n.id > sqlc.arg(c_id)))))
+ORDER BY n.kind DESC, n.name ASC, n.id
+LIMIT sqlc.arg(page_limit);
+
+-- name: ListChildrenNameDesc :many
+SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = sqlc.arg(owner_id)
+  AND n.parent_id IS NOT DISTINCT FROM sqlc.arg(parent_id)
+  AND n.deleted_at IS NULL
+  AND (n.kind < sqlc.arg(c_kind)::text
+       OR (n.kind = sqlc.arg(c_kind)::text
+           AND (n.name < sqlc.arg(c_name)::text
+                OR (n.name = sqlc.arg(c_name)::text AND n.id > sqlc.arg(c_id)))))
+ORDER BY n.kind DESC, n.name DESC, n.id
+LIMIT sqlc.arg(page_limit);
+
+-- name: ListChildrenSizeAsc :many
+-- SIZE 键可空(文件夹无 blob):ASC NULLS FIRST——cursor 键为空时,"之后" = 同为空且 id 更大,或键非空
+SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = sqlc.arg(owner_id)
+  AND n.parent_id IS NOT DISTINCT FROM sqlc.arg(parent_id)
+  AND n.deleted_at IS NULL
+  AND (n.kind < sqlc.arg(c_kind)::text
+       OR (n.kind = sqlc.arg(c_kind)::text
+           AND ((sqlc.arg(c_size_null)::boolean AND ((b.size IS NULL AND n.id > sqlc.arg(c_id)) OR b.size IS NOT NULL))
+                OR (NOT sqlc.arg(c_size_null)::boolean
+                    AND (b.size > sqlc.arg(c_size)::bigint
+                         OR (b.size = sqlc.arg(c_size)::bigint AND n.id > sqlc.arg(c_id)))))))
+ORDER BY n.kind DESC, b.size ASC NULLS FIRST, n.id
+LIMIT sqlc.arg(page_limit);
+
+-- name: ListChildrenSizeDesc :many
+-- DESC NULLS LAST——cursor 键非空时,"之后" = 键更小,或同键 id 更大,或键为空
+SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = sqlc.arg(owner_id)
+  AND n.parent_id IS NOT DISTINCT FROM sqlc.arg(parent_id)
+  AND n.deleted_at IS NULL
+  AND (n.kind < sqlc.arg(c_kind)::text
+       OR (n.kind = sqlc.arg(c_kind)::text
+           AND ((sqlc.arg(c_size_null)::boolean AND b.size IS NULL AND n.id > sqlc.arg(c_id))
+                OR (NOT sqlc.arg(c_size_null)::boolean
+                    AND (b.size < sqlc.arg(c_size)::bigint
+                         OR (b.size = sqlc.arg(c_size)::bigint AND n.id > sqlc.arg(c_id))
+                         OR b.size IS NULL)))))
+ORDER BY n.kind DESC, b.size DESC NULLS LAST, n.id
+LIMIT sqlc.arg(page_limit);
+
+-- name: ListChildrenUpdatedAsc :many
+SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = sqlc.arg(owner_id)
+  AND n.parent_id IS NOT DISTINCT FROM sqlc.arg(parent_id)
+  AND n.deleted_at IS NULL
+  AND (n.kind < sqlc.arg(c_kind)::text
+       OR (n.kind = sqlc.arg(c_kind)::text
+           AND (n.updated_at > sqlc.arg(c_updated)::timestamptz
+                OR (n.updated_at = sqlc.arg(c_updated)::timestamptz AND n.id > sqlc.arg(c_id)))))
+ORDER BY n.kind DESC, n.updated_at ASC, n.id
+LIMIT sqlc.arg(page_limit);
+
+-- name: ListChildrenUpdatedDesc :many
+SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = sqlc.arg(owner_id)
+  AND n.parent_id IS NOT DISTINCT FROM sqlc.arg(parent_id)
+  AND n.deleted_at IS NULL
+  AND (n.kind < sqlc.arg(c_kind)::text
+       OR (n.kind = sqlc.arg(c_kind)::text
+           AND (n.updated_at < sqlc.arg(c_updated)::timestamptz
+                OR (n.updated_at = sqlc.arg(c_updated)::timestamptz AND n.id > sqlc.arg(c_id)))))
+ORDER BY n.kind DESC, n.updated_at DESC, n.id
+LIMIT sqlc.arg(page_limit);
 
 -- name: CountChildren :one
 SELECT count(*) FROM nodes
@@ -52,7 +144,17 @@ FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1 AND n.deleted_at IS NULL AND n.name ILIKE '%' || $2 || '%'
 ORDER BY n.updated_at DESC, n.id
-LIMIT $3 OFFSET $4;
+LIMIT $3;
+
+-- name: SearchNodesAfter :many
+SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1 AND n.deleted_at IS NULL AND n.name ILIKE '%' || $2 || '%'
+  AND (n.updated_at < sqlc.arg(c_updated)::timestamptz
+       OR (n.updated_at = sqlc.arg(c_updated)::timestamptz AND n.id > sqlc.arg(c_id)))
+ORDER BY n.updated_at DESC, n.id
+LIMIT $3;
 
 -- name: CountSearchNodes :one
 SELECT count(*) FROM nodes
@@ -71,7 +173,23 @@ FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.id IN (SELECT s.id FROM sub s) AND n.name ILIKE '%' || $2 || '%'
 ORDER BY n.updated_at DESC, n.id
-LIMIT $3 OFFSET $4;
+LIMIT $3;
+
+-- name: SearchNodesInSubtreeAfter :many
+WITH RECURSIVE sub AS (
+    SELECT r.id FROM nodes r WHERE r.id = $1 AND r.deleted_at IS NULL
+    UNION ALL
+    SELECT n.id FROM nodes n JOIN sub s ON n.parent_id = s.id
+    WHERE n.deleted_at IS NULL
+)
+SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.id IN (SELECT s.id FROM sub s) AND n.name ILIKE '%' || $2 || '%'
+  AND (n.updated_at < sqlc.arg(c_updated)::timestamptz
+       OR (n.updated_at = sqlc.arg(c_updated)::timestamptz AND n.id > sqlc.arg(c_id)))
+ORDER BY n.updated_at DESC, n.id
+LIMIT $3;
 
 -- name: CountSearchNodesInSubtree :one
 WITH RECURSIVE sub AS (
@@ -100,7 +218,19 @@ WHERE n.owner_id = $1 AND n.deleted_at IS NOT NULL
   AND (n.parent_id IS NULL OR NOT EXISTS (
         SELECT 1 FROM nodes p WHERE p.id = n.parent_id AND p.deleted_at IS NOT NULL))
 ORDER BY n.deleted_at DESC, n.id
-LIMIT $2 OFFSET $3;
+LIMIT $2;
+
+-- name: ListTrashAfter :many
+SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1 AND n.deleted_at IS NOT NULL
+  AND (n.parent_id IS NULL OR NOT EXISTS (
+        SELECT 1 FROM nodes p WHERE p.id = n.parent_id AND p.deleted_at IS NOT NULL))
+  AND (n.deleted_at < sqlc.arg(c_deleted)::timestamptz
+       OR (n.deleted_at = sqlc.arg(c_deleted)::timestamptz AND n.id > sqlc.arg(c_id)))
+ORDER BY n.deleted_at DESC, n.id
+LIMIT $2;
 
 -- name: CountTrash :one
 SELECT count(*) FROM nodes n
@@ -188,3 +318,40 @@ WHERE id = ANY($1::uuid[]);
 
 -- name: SubtractUsedBytes :exec
 UPDATE users SET used_bytes = greatest(used_bytes - $2, 0) WHERE id = $1;
+
+-- ---- 子树统计(异步,最终一致) ----
+
+-- name: MarkAncestorsStale :exec
+-- 从 $1(含自身)沿父链向上,把途经的 folder 全部标脏
+WITH RECURSIVE anc AS (
+    SELECT n.id, n.parent_id FROM nodes n WHERE n.id = $1
+    UNION ALL
+    SELECT p.id, p.parent_id FROM nodes p JOIN anc a ON p.id = a.parent_id
+)
+UPDATE nodes SET stats_stale = true
+WHERE nodes.id IN (SELECT a.id FROM anc a) AND nodes.kind = 'folder';
+
+-- name: ListStaleFolders :many
+SELECT id FROM nodes
+WHERE kind = 'folder' AND stats_stale AND deleted_at IS NULL
+LIMIT $1;
+
+-- name: RecomputeFolderStats :exec
+-- 单语句重算:行锁保证与并发标脏串行化;重算窗口内的新变更会再次置脏,下一轮修正
+WITH RECURSIVE sub AS (
+    SELECT r.id FROM nodes r WHERE r.id = $1 AND r.deleted_at IS NULL
+    UNION ALL
+    SELECT n.id FROM nodes n JOIN sub s ON n.parent_id = s.id
+    WHERE n.deleted_at IS NULL
+), agg AS (
+    SELECT COALESCE(sum(b.size), 0)::bigint AS bytes, count(b.id) AS files
+    FROM nodes f
+    LEFT JOIN blobs b ON b.id = f.blob_id
+    WHERE f.id IN (SELECT s.id FROM sub s) AND f.kind = 'file'
+)
+UPDATE nodes SET
+    subtree_bytes = agg.bytes,
+    subtree_count = agg.files,
+    stats_stale   = false
+FROM agg
+WHERE nodes.id = $1;

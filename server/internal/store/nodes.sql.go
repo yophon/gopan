@@ -86,7 +86,7 @@ func (q *Queries) CountTrash(ctx context.Context, ownerID uuid.UUID) (int64, err
 const createNode = `-- name: CreateNode :one
 INSERT INTO nodes (id, owner_id, parent_id, name, kind, blob_id)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at
+RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale
 `
 
 type CreateNodeParams struct {
@@ -118,6 +118,9 @@ func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (Node, e
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SubtreeBytes,
+		&i.SubtreeCount,
+		&i.StatsStale,
 	)
 	return i, err
 }
@@ -135,7 +138,7 @@ func (q *Queries) DecrementBlobRefs(ctx context.Context, dollar_1 []uuid.UUID) e
 }
 
 const getActiveNodeOwned = `-- name: GetActiveNodeOwned :one
-SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at FROM nodes WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL
+SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale FROM nodes WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL
 `
 
 type GetActiveNodeOwnedParams struct {
@@ -156,12 +159,15 @@ func (q *Queries) GetActiveNodeOwned(ctx context.Context, arg GetActiveNodeOwned
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SubtreeBytes,
+		&i.SubtreeCount,
+		&i.StatsStale,
 	)
 	return i, err
 }
 
 const getNode = `-- name: GetNode :one
-SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at FROM nodes WHERE id = $1
+SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale FROM nodes WHERE id = $1
 `
 
 func (q *Queries) GetNode(ctx context.Context, id uuid.UUID) (Node, error) {
@@ -177,12 +183,15 @@ func (q *Queries) GetNode(ctx context.Context, id uuid.UUID) (Node, error) {
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SubtreeBytes,
+		&i.SubtreeCount,
+		&i.StatsStale,
 	)
 	return i, err
 }
 
 const getNodeWithBlob = `-- name: GetNodeWithBlob :one
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256, b.verified AS blob_verified
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256, b.verified AS blob_verified
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.id = $1 AND n.owner_id = $2
@@ -203,6 +212,9 @@ type GetNodeWithBlobRow struct {
 	DeletedAt    pgtype.Timestamptz
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -222,6 +234,9 @@ func (q *Queries) GetNodeWithBlob(ctx context.Context, arg GetNodeWithBlobParams
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SubtreeBytes,
+		&i.SubtreeCount,
+		&i.StatsStale,
 		&i.BlobSize,
 		&i.BlobMime,
 		&i.BlobSha256,
@@ -300,7 +315,7 @@ func (q *Queries) ListActiveChildrenLite(ctx context.Context, parentID *uuid.UUI
 }
 
 const listChildren = `-- name: ListChildren :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1
@@ -315,7 +330,7 @@ ORDER BY
   CASE WHEN $3::text = 'UPDATED_AT' AND NOT $4::boolean THEN n.updated_at END ASC,
   CASE WHEN $3::text = 'UPDATED_AT' AND     $4::boolean THEN n.updated_at END DESC,
   n.id
-LIMIT $6 OFFSET $5
+LIMIT $5
 `
 
 type ListChildrenParams struct {
@@ -323,32 +338,34 @@ type ListChildrenParams struct {
 	ParentID   *uuid.UUID
 	OrderBy    string
 	Descending bool
-	PageOffset int32
 	PageLimit  int32
 }
 
 type ListChildrenRow struct {
-	ID         uuid.UUID
-	OwnerID    uuid.UUID
-	ParentID   *uuid.UUID
-	Name       string
-	Kind       string
-	BlobID     *uuid.UUID
-	DeletedAt  pgtype.Timestamptz
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
-	BlobSize   *int64
-	BlobMime   *string
-	BlobSha256 *string
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
 }
 
+// 首页(无 cursor)。翻页走下面 6 条 keyset 查询,方向拆开写,不用 CASE 包 WHERE,留住索引通道。
 func (q *Queries) ListChildren(ctx context.Context, arg ListChildrenParams) ([]ListChildrenRow, error) {
 	rows, err := q.db.Query(ctx, listChildren,
 		arg.OwnerID,
 		arg.ParentID,
 		arg.OrderBy,
 		arg.Descending,
-		arg.PageOffset,
 		arg.PageLimit,
 	)
 	if err != nil {
@@ -368,6 +385,530 @@ func (q *Queries) ListChildren(ctx context.Context, arg ListChildrenParams) ([]L
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChildrenNameAsc = `-- name: ListChildrenNameAsc :many
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1
+  AND n.parent_id IS NOT DISTINCT FROM $2
+  AND n.deleted_at IS NULL
+  AND (n.kind < $3::text
+       OR (n.kind = $3::text
+           AND (n.name > $4::text
+                OR (n.name = $4::text AND n.id > $5))))
+ORDER BY n.kind DESC, n.name ASC, n.id
+LIMIT $6
+`
+
+type ListChildrenNameAscParams struct {
+	OwnerID   uuid.UUID
+	ParentID  *uuid.UUID
+	CKind     string
+	CName     string
+	CID       uuid.UUID
+	PageLimit int32
+}
+
+type ListChildrenNameAscRow struct {
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
+}
+
+func (q *Queries) ListChildrenNameAsc(ctx context.Context, arg ListChildrenNameAscParams) ([]ListChildrenNameAscRow, error) {
+	rows, err := q.db.Query(ctx, listChildrenNameAsc,
+		arg.OwnerID,
+		arg.ParentID,
+		arg.CKind,
+		arg.CName,
+		arg.CID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListChildrenNameAscRow
+	for rows.Next() {
+		var i ListChildrenNameAscRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.ParentID,
+			&i.Name,
+			&i.Kind,
+			&i.BlobID,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChildrenNameDesc = `-- name: ListChildrenNameDesc :many
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1
+  AND n.parent_id IS NOT DISTINCT FROM $2
+  AND n.deleted_at IS NULL
+  AND (n.kind < $3::text
+       OR (n.kind = $3::text
+           AND (n.name < $4::text
+                OR (n.name = $4::text AND n.id > $5))))
+ORDER BY n.kind DESC, n.name DESC, n.id
+LIMIT $6
+`
+
+type ListChildrenNameDescParams struct {
+	OwnerID   uuid.UUID
+	ParentID  *uuid.UUID
+	CKind     string
+	CName     string
+	CID       uuid.UUID
+	PageLimit int32
+}
+
+type ListChildrenNameDescRow struct {
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
+}
+
+func (q *Queries) ListChildrenNameDesc(ctx context.Context, arg ListChildrenNameDescParams) ([]ListChildrenNameDescRow, error) {
+	rows, err := q.db.Query(ctx, listChildrenNameDesc,
+		arg.OwnerID,
+		arg.ParentID,
+		arg.CKind,
+		arg.CName,
+		arg.CID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListChildrenNameDescRow
+	for rows.Next() {
+		var i ListChildrenNameDescRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.ParentID,
+			&i.Name,
+			&i.Kind,
+			&i.BlobID,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChildrenSizeAsc = `-- name: ListChildrenSizeAsc :many
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1
+  AND n.parent_id IS NOT DISTINCT FROM $2
+  AND n.deleted_at IS NULL
+  AND (n.kind < $3::text
+       OR (n.kind = $3::text
+           AND (($4::boolean AND ((b.size IS NULL AND n.id > $5) OR b.size IS NOT NULL))
+                OR (NOT $4::boolean
+                    AND (b.size > $6::bigint
+                         OR (b.size = $6::bigint AND n.id > $5))))))
+ORDER BY n.kind DESC, b.size ASC NULLS FIRST, n.id
+LIMIT $7
+`
+
+type ListChildrenSizeAscParams struct {
+	OwnerID   uuid.UUID
+	ParentID  *uuid.UUID
+	CKind     string
+	CSizeNull bool
+	CID       uuid.UUID
+	CSize     int64
+	PageLimit int32
+}
+
+type ListChildrenSizeAscRow struct {
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
+}
+
+// SIZE 键可空(文件夹无 blob):ASC NULLS FIRST——cursor 键为空时,"之后" = 同为空且 id 更大,或键非空
+func (q *Queries) ListChildrenSizeAsc(ctx context.Context, arg ListChildrenSizeAscParams) ([]ListChildrenSizeAscRow, error) {
+	rows, err := q.db.Query(ctx, listChildrenSizeAsc,
+		arg.OwnerID,
+		arg.ParentID,
+		arg.CKind,
+		arg.CSizeNull,
+		arg.CID,
+		arg.CSize,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListChildrenSizeAscRow
+	for rows.Next() {
+		var i ListChildrenSizeAscRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.ParentID,
+			&i.Name,
+			&i.Kind,
+			&i.BlobID,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChildrenSizeDesc = `-- name: ListChildrenSizeDesc :many
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1
+  AND n.parent_id IS NOT DISTINCT FROM $2
+  AND n.deleted_at IS NULL
+  AND (n.kind < $3::text
+       OR (n.kind = $3::text
+           AND (($4::boolean AND b.size IS NULL AND n.id > $5)
+                OR (NOT $4::boolean
+                    AND (b.size < $6::bigint
+                         OR (b.size = $6::bigint AND n.id > $5)
+                         OR b.size IS NULL)))))
+ORDER BY n.kind DESC, b.size DESC NULLS LAST, n.id
+LIMIT $7
+`
+
+type ListChildrenSizeDescParams struct {
+	OwnerID   uuid.UUID
+	ParentID  *uuid.UUID
+	CKind     string
+	CSizeNull bool
+	CID       uuid.UUID
+	CSize     int64
+	PageLimit int32
+}
+
+type ListChildrenSizeDescRow struct {
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
+}
+
+// DESC NULLS LAST——cursor 键非空时,"之后" = 键更小,或同键 id 更大,或键为空
+func (q *Queries) ListChildrenSizeDesc(ctx context.Context, arg ListChildrenSizeDescParams) ([]ListChildrenSizeDescRow, error) {
+	rows, err := q.db.Query(ctx, listChildrenSizeDesc,
+		arg.OwnerID,
+		arg.ParentID,
+		arg.CKind,
+		arg.CSizeNull,
+		arg.CID,
+		arg.CSize,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListChildrenSizeDescRow
+	for rows.Next() {
+		var i ListChildrenSizeDescRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.ParentID,
+			&i.Name,
+			&i.Kind,
+			&i.BlobID,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChildrenUpdatedAsc = `-- name: ListChildrenUpdatedAsc :many
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1
+  AND n.parent_id IS NOT DISTINCT FROM $2
+  AND n.deleted_at IS NULL
+  AND (n.kind < $3::text
+       OR (n.kind = $3::text
+           AND (n.updated_at > $4::timestamptz
+                OR (n.updated_at = $4::timestamptz AND n.id > $5))))
+ORDER BY n.kind DESC, n.updated_at ASC, n.id
+LIMIT $6
+`
+
+type ListChildrenUpdatedAscParams struct {
+	OwnerID   uuid.UUID
+	ParentID  *uuid.UUID
+	CKind     string
+	CUpdated  pgtype.Timestamptz
+	CID       uuid.UUID
+	PageLimit int32
+}
+
+type ListChildrenUpdatedAscRow struct {
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
+}
+
+func (q *Queries) ListChildrenUpdatedAsc(ctx context.Context, arg ListChildrenUpdatedAscParams) ([]ListChildrenUpdatedAscRow, error) {
+	rows, err := q.db.Query(ctx, listChildrenUpdatedAsc,
+		arg.OwnerID,
+		arg.ParentID,
+		arg.CKind,
+		arg.CUpdated,
+		arg.CID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListChildrenUpdatedAscRow
+	for rows.Next() {
+		var i ListChildrenUpdatedAscRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.ParentID,
+			&i.Name,
+			&i.Kind,
+			&i.BlobID,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChildrenUpdatedDesc = `-- name: ListChildrenUpdatedDesc :many
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1
+  AND n.parent_id IS NOT DISTINCT FROM $2
+  AND n.deleted_at IS NULL
+  AND (n.kind < $3::text
+       OR (n.kind = $3::text
+           AND (n.updated_at < $4::timestamptz
+                OR (n.updated_at = $4::timestamptz AND n.id > $5))))
+ORDER BY n.kind DESC, n.updated_at DESC, n.id
+LIMIT $6
+`
+
+type ListChildrenUpdatedDescParams struct {
+	OwnerID   uuid.UUID
+	ParentID  *uuid.UUID
+	CKind     string
+	CUpdated  pgtype.Timestamptz
+	CID       uuid.UUID
+	PageLimit int32
+}
+
+type ListChildrenUpdatedDescRow struct {
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
+}
+
+func (q *Queries) ListChildrenUpdatedDesc(ctx context.Context, arg ListChildrenUpdatedDescParams) ([]ListChildrenUpdatedDescRow, error) {
+	rows, err := q.db.Query(ctx, listChildrenUpdatedDesc,
+		arg.OwnerID,
+		arg.ParentID,
+		arg.CKind,
+		arg.CUpdated,
+		arg.CID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListChildrenUpdatedDescRow
+	for rows.Next() {
+		var i ListChildrenUpdatedDescRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.ParentID,
+			&i.Name,
+			&i.Kind,
+			&i.BlobID,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -416,8 +957,34 @@ func (q *Queries) ListExpiredTrashRoots(ctx context.Context, deletedAt pgtype.Ti
 	return items, nil
 }
 
+const listStaleFolders = `-- name: ListStaleFolders :many
+SELECT id FROM nodes
+WHERE kind = 'folder' AND stats_stale AND deleted_at IS NULL
+LIMIT $1
+`
+
+func (q *Queries) ListStaleFolders(ctx context.Context, limit int32) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listStaleFolders, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTrash = `-- name: ListTrash :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1 AND n.deleted_at IS NOT NULL
@@ -425,32 +992,34 @@ WHERE n.owner_id = $1 AND n.deleted_at IS NOT NULL
   AND (n.parent_id IS NULL OR NOT EXISTS (
         SELECT 1 FROM nodes p WHERE p.id = n.parent_id AND p.deleted_at IS NOT NULL))
 ORDER BY n.deleted_at DESC, n.id
-LIMIT $2 OFFSET $3
+LIMIT $2
 `
 
 type ListTrashParams struct {
 	OwnerID uuid.UUID
 	Limit   int32
-	Offset  int32
 }
 
 type ListTrashRow struct {
-	ID         uuid.UUID
-	OwnerID    uuid.UUID
-	ParentID   *uuid.UUID
-	Name       string
-	Kind       string
-	BlobID     *uuid.UUID
-	DeletedAt  pgtype.Timestamptz
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
-	BlobSize   *int64
-	BlobMime   *string
-	BlobSha256 *string
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
 }
 
 func (q *Queries) ListTrash(ctx context.Context, arg ListTrashParams) ([]ListTrashRow, error) {
-	rows, err := q.db.Query(ctx, listTrash, arg.OwnerID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listTrash, arg.OwnerID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -468,6 +1037,88 @@ func (q *Queries) ListTrash(ctx context.Context, arg ListTrashParams) ([]ListTra
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTrashAfter = `-- name: ListTrashAfter :many
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1 AND n.deleted_at IS NOT NULL
+  AND (n.parent_id IS NULL OR NOT EXISTS (
+        SELECT 1 FROM nodes p WHERE p.id = n.parent_id AND p.deleted_at IS NOT NULL))
+  AND (n.deleted_at < $3::timestamptz
+       OR (n.deleted_at = $3::timestamptz AND n.id > $4))
+ORDER BY n.deleted_at DESC, n.id
+LIMIT $2
+`
+
+type ListTrashAfterParams struct {
+	OwnerID  uuid.UUID
+	Limit    int32
+	CDeleted pgtype.Timestamptz
+	CID      uuid.UUID
+}
+
+type ListTrashAfterRow struct {
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
+}
+
+func (q *Queries) ListTrashAfter(ctx context.Context, arg ListTrashAfterParams) ([]ListTrashAfterRow, error) {
+	rows, err := q.db.Query(ctx, listTrashAfter,
+		arg.OwnerID,
+		arg.Limit,
+		arg.CDeleted,
+		arg.CID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTrashAfterRow
+	for rows.Next() {
+		var i ListTrashAfterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.ParentID,
+			&i.Name,
+			&i.Kind,
+			&i.BlobID,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -509,10 +1160,28 @@ func (q *Queries) ListTrashRootsForPurge(ctx context.Context, ownerID uuid.UUID)
 	return items, nil
 }
 
+const markAncestorsStale = `-- name: MarkAncestorsStale :exec
+
+WITH RECURSIVE anc AS (
+    SELECT n.id, n.parent_id FROM nodes n WHERE n.id = $1
+    UNION ALL
+    SELECT p.id, p.parent_id FROM nodes p JOIN anc a ON p.id = a.parent_id
+)
+UPDATE nodes SET stats_stale = true
+WHERE nodes.id IN (SELECT a.id FROM anc a) AND nodes.kind = 'folder'
+`
+
+// ---- 子树统计(异步,最终一致) ----
+// 从 $1(含自身)沿父链向上,把途经的 folder 全部标脏
+func (q *Queries) MarkAncestorsStale(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markAncestorsStale, id)
+	return err
+}
+
 const moveNode = `-- name: MoveNode :one
 UPDATE nodes SET parent_id = $3, updated_at = now()
 WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL
-RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at
+RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale
 `
 
 type MoveNodeParams struct {
@@ -534,6 +1203,9 @@ func (q *Queries) MoveNode(ctx context.Context, arg MoveNodeParams) (Node, error
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SubtreeBytes,
+		&i.SubtreeCount,
+		&i.StatsStale,
 	)
 	return i, err
 }
@@ -576,10 +1248,36 @@ func (q *Queries) PurgeSubtree(ctx context.Context, arg PurgeSubtreeParams) ([]*
 	return items, nil
 }
 
+const recomputeFolderStats = `-- name: RecomputeFolderStats :exec
+WITH RECURSIVE sub AS (
+    SELECT r.id FROM nodes r WHERE r.id = $1 AND r.deleted_at IS NULL
+    UNION ALL
+    SELECT n.id FROM nodes n JOIN sub s ON n.parent_id = s.id
+    WHERE n.deleted_at IS NULL
+), agg AS (
+    SELECT COALESCE(sum(b.size), 0)::bigint AS bytes, count(b.id) AS files
+    FROM nodes f
+    LEFT JOIN blobs b ON b.id = f.blob_id
+    WHERE f.id IN (SELECT s.id FROM sub s) AND f.kind = 'file'
+)
+UPDATE nodes SET
+    subtree_bytes = agg.bytes,
+    subtree_count = agg.files,
+    stats_stale   = false
+FROM agg
+WHERE nodes.id = $1
+`
+
+// 单语句重算:行锁保证与并发标脏串行化;重算窗口内的新变更会再次置脏,下一轮修正
+func (q *Queries) RecomputeFolderStats(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, recomputeFolderStats, id)
+	return err
+}
+
 const renameNode = `-- name: RenameNode :one
 UPDATE nodes SET name = $3, updated_at = now()
 WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL
-RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at
+RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale
 `
 
 type RenameNodeParams struct {
@@ -601,6 +1299,9 @@ func (q *Queries) RenameNode(ctx context.Context, arg RenameNodeParams) (Node, e
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SubtreeBytes,
+		&i.SubtreeCount,
+		&i.StatsStale,
 	)
 	return i, err
 }
@@ -644,43 +1345,40 @@ func (q *Queries) RestoreSubtree(ctx context.Context, arg RestoreSubtreeParams) 
 }
 
 const searchNodes = `-- name: SearchNodes :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1 AND n.deleted_at IS NULL AND n.name ILIKE '%' || $2 || '%'
 ORDER BY n.updated_at DESC, n.id
-LIMIT $3 OFFSET $4
+LIMIT $3
 `
 
 type SearchNodesParams struct {
 	OwnerID uuid.UUID
 	Column2 *string
 	Limit   int32
-	Offset  int32
 }
 
 type SearchNodesRow struct {
-	ID         uuid.UUID
-	OwnerID    uuid.UUID
-	ParentID   *uuid.UUID
-	Name       string
-	Kind       string
-	BlobID     *uuid.UUID
-	DeletedAt  pgtype.Timestamptz
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
-	BlobSize   *int64
-	BlobMime   *string
-	BlobSha256 *string
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
 }
 
 func (q *Queries) SearchNodes(ctx context.Context, arg SearchNodesParams) ([]SearchNodesRow, error) {
-	rows, err := q.db.Query(ctx, searchNodes,
-		arg.OwnerID,
-		arg.Column2,
-		arg.Limit,
-		arg.Offset,
-	)
+	rows, err := q.db.Query(ctx, searchNodes, arg.OwnerID, arg.Column2, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -698,6 +1396,88 @@ func (q *Queries) SearchNodes(ctx context.Context, arg SearchNodesParams) ([]Sea
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchNodesAfter = `-- name: SearchNodesAfter :many
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1 AND n.deleted_at IS NULL AND n.name ILIKE '%' || $2 || '%'
+  AND (n.updated_at < $4::timestamptz
+       OR (n.updated_at = $4::timestamptz AND n.id > $5))
+ORDER BY n.updated_at DESC, n.id
+LIMIT $3
+`
+
+type SearchNodesAfterParams struct {
+	OwnerID  uuid.UUID
+	Column2  *string
+	Limit    int32
+	CUpdated pgtype.Timestamptz
+	CID      uuid.UUID
+}
+
+type SearchNodesAfterRow struct {
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
+}
+
+func (q *Queries) SearchNodesAfter(ctx context.Context, arg SearchNodesAfterParams) ([]SearchNodesAfterRow, error) {
+	rows, err := q.db.Query(ctx, searchNodesAfter,
+		arg.OwnerID,
+		arg.Column2,
+		arg.Limit,
+		arg.CUpdated,
+		arg.CID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchNodesAfterRow
+	for rows.Next() {
+		var i SearchNodesAfterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.ParentID,
+			&i.Name,
+			&i.Kind,
+			&i.BlobID,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -719,44 +1499,41 @@ WITH RECURSIVE sub AS (
     SELECT n.id FROM nodes n JOIN sub s ON n.parent_id = s.id
     WHERE n.deleted_at IS NULL
 )
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.id IN (SELECT s.id FROM sub s) AND n.name ILIKE '%' || $2 || '%'
 ORDER BY n.updated_at DESC, n.id
-LIMIT $3 OFFSET $4
+LIMIT $3
 `
 
 type SearchNodesInSubtreeParams struct {
 	ID      uuid.UUID
 	Column2 *string
 	Limit   int32
-	Offset  int32
 }
 
 type SearchNodesInSubtreeRow struct {
-	ID         uuid.UUID
-	OwnerID    uuid.UUID
-	ParentID   *uuid.UUID
-	Name       string
-	Kind       string
-	BlobID     *uuid.UUID
-	DeletedAt  pgtype.Timestamptz
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
-	BlobSize   *int64
-	BlobMime   *string
-	BlobSha256 *string
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
 }
 
 // 访客搜索:范围限定在分享根($1)的子树内
 func (q *Queries) SearchNodesInSubtree(ctx context.Context, arg SearchNodesInSubtreeParams) ([]SearchNodesInSubtreeRow, error) {
-	rows, err := q.db.Query(ctx, searchNodesInSubtree,
-		arg.ID,
-		arg.Column2,
-		arg.Limit,
-		arg.Offset,
-	)
+	rows, err := q.db.Query(ctx, searchNodesInSubtree, arg.ID, arg.Column2, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -774,6 +1551,94 @@ func (q *Queries) SearchNodesInSubtree(ctx context.Context, arg SearchNodesInSub
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchNodesInSubtreeAfter = `-- name: SearchNodesInSubtreeAfter :many
+WITH RECURSIVE sub AS (
+    SELECT r.id FROM nodes r WHERE r.id = $1 AND r.deleted_at IS NULL
+    UNION ALL
+    SELECT n.id FROM nodes n JOIN sub s ON n.parent_id = s.id
+    WHERE n.deleted_at IS NULL
+)
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.id IN (SELECT s.id FROM sub s) AND n.name ILIKE '%' || $2 || '%'
+  AND (n.updated_at < $4::timestamptz
+       OR (n.updated_at = $4::timestamptz AND n.id > $5))
+ORDER BY n.updated_at DESC, n.id
+LIMIT $3
+`
+
+type SearchNodesInSubtreeAfterParams struct {
+	ID       uuid.UUID
+	Column2  *string
+	Limit    int32
+	CUpdated pgtype.Timestamptz
+	CID      uuid.UUID
+}
+
+type SearchNodesInSubtreeAfterRow struct {
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
+}
+
+func (q *Queries) SearchNodesInSubtreeAfter(ctx context.Context, arg SearchNodesInSubtreeAfterParams) ([]SearchNodesInSubtreeAfterRow, error) {
+	rows, err := q.db.Query(ctx, searchNodesInSubtreeAfter,
+		arg.ID,
+		arg.Column2,
+		arg.Limit,
+		arg.CUpdated,
+		arg.CID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchNodesInSubtreeAfterRow
+	for rows.Next() {
+		var i SearchNodesInSubtreeAfterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.ParentID,
+			&i.Name,
+			&i.Kind,
+			&i.BlobID,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,

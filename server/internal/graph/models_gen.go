@@ -37,18 +37,21 @@ type Mutation struct {
 }
 
 type Node struct {
-	ID          string       `json:"id"`
-	ParentID    *string      `json:"parentId,omitempty"`
-	Name        string       `json:"name"`
-	Kind        NodeKind     `json:"kind"`
-	Size        *int64       `json:"size,omitempty"`
-	Mime        *string      `json:"mime,omitempty"`
-	Sha256      *string      `json:"sha256,omitempty"`
-	CreatedAt   time.Time    `json:"createdAt"`
-	UpdatedAt   time.Time    `json:"updatedAt"`
-	DeletedAt   *time.Time   `json:"deletedAt,omitempty"`
-	Preview     *PreviewInfo `json:"preview"`
-	DownloadURL *string      `json:"downloadUrl,omitempty"`
+	ID           string       `json:"id"`
+	ParentID     *string      `json:"parentId,omitempty"`
+	Name         string       `json:"name"`
+	Kind         NodeKind     `json:"kind"`
+	Size         *int64       `json:"size,omitempty"`
+	Mime         *string      `json:"mime,omitempty"`
+	Sha256       *string      `json:"sha256,omitempty"`
+	CreatedAt    time.Time    `json:"createdAt"`
+	UpdatedAt    time.Time    `json:"updatedAt"`
+	DeletedAt    *time.Time   `json:"deletedAt,omitempty"`
+	Preview      *PreviewInfo `json:"preview"`
+	DownloadURL  *string      `json:"downloadUrl,omitempty"`
+	SubtreeBytes *int64       `json:"subtreeBytes,omitempty"`
+	SubtreeCount *int64       `json:"subtreeCount,omitempty"`
+	StatsStale   *bool        `json:"statsStale,omitempty"`
 	// 由列表转换器置位:preview 走零查询乐观路径
 	InList bool `json:"-"`
 }

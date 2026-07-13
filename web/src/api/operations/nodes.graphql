@@ -6,6 +6,9 @@ query Children($parentId: ID, $cursor: String, $order: NodeOrder, $desc: Boolean
       name
       kind
       size
+      subtreeBytes
+      subtreeCount
+      statsStale
       updatedAt
       preview {
         kind
