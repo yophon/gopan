@@ -14,15 +14,19 @@ import (
 
 func TestNormalizePath(t *testing.T) {
 	cases := map[string]string{
-		"/query":        "/query",
-		"/healthz":      "/healthz",
-		"/pack":         "/pack",
-		"/s/AbC123xyz9": "/s/:token",
-		"/dav":          "/dav",
-		"/dav/docs/a":   "/dav",
-		"/":             "/spa",
-		"/drive/xxx":    "/spa",
-		"/assets/x.js":  "/spa",
+		"/query":                      "/query",
+		"/healthz":                    "/healthz",
+		"/pack":                       "/pack",
+		"/s/AbC123xyz9":               "/s/:token",
+		"/mcp":                        "/mcp",
+		"/mcp-download/eyJhbGciOi...": "/mcp-download/:ticket",
+		"/oauth/token":                "/oauth/:endpoint",
+		"/.well-known/oauth-authorization-server": "/.well-known/oauth-*",
+		"/dav":         "/dav",
+		"/dav/docs/a":  "/dav",
+		"/":            "/spa",
+		"/drive/xxx":   "/spa",
+		"/assets/x.js": "/spa",
 	}
 	for in, want := range cases {
 		if got := normalizePath(in); got != want {

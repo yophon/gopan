@@ -293,6 +293,174 @@ func TestUploadMissingPartAndResume(t *testing.T) {
 	}
 }
 
+func TestUploadSessionAbortAndEnqueue(t *testing.T) {
+	pool := setup(t)
+	obj := setupS3(t)
+	ctx := context.Background()
+	uploads, _, owner := newUploads(t, pool, obj)
+
+	// 不存在的会话 → NOT_FOUND
+	if _, err := uploads.Session(ctx, owner, uuid.Must(uuid.NewV7())); err != service.ErrNotFound {
+		t.Fatalf("不存在的会话应 NOT_FOUND,got %v", err)
+	}
+	if err := uploads.Abort(ctx, owner, uuid.Must(uuid.NewV7())); err != service.ErrNotFound {
+		t.Fatalf("abort 不存在的会话应 NOT_FOUND,got %v", err)
+	}
+
+	data := bytes.Repeat([]byte{0x42}, 4096)
+	init, err := uploads.Init(ctx, owner, nil, "abort.bin", shaHex(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sid := init.Session.Session.ID
+	// 他人不可见
+	if _, err := uploads.Session(ctx, uuid.Must(uuid.NewV7()), sid); err != service.ErrNotFound {
+		t.Fatalf("他人会话应 NOT_FOUND,got %v", err)
+	}
+	if err := uploads.Abort(ctx, owner, sid); err != nil {
+		t.Fatal(err)
+	}
+	// aborted 后 Session 返回快照,不再签 URL;重复 Abort 是 no-op
+	view, err := uploads.Session(ctx, owner, sid)
+	if err != nil || view.Session.Status != "aborted" || view.PartURLs != nil {
+		t.Fatalf("aborted 会话应返回快照:%+v err=%v", view, err)
+	}
+	if err := uploads.Abort(ctx, owner, sid); err != nil {
+		t.Fatalf("重复 abort 应 no-op:%v", err)
+	}
+
+	// SetEnqueue:complete 后应把 blob 送进 verify_hash 队列
+	var kind string
+	var blobID uuid.UUID
+	uploads.SetEnqueue(func(_ context.Context, k string, b uuid.UUID) { kind, blobID = k, b })
+	init2, err := uploads.Init(ctx, owner, nil, "enq.bin", shaHex(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range init2.Session.PartURLs {
+		httpPut(t, u, data)
+	}
+	if _, err := uploads.Complete(ctx, owner, init2.Session.Session.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if kind != "verify_hash" || blobID == uuid.Nil {
+		t.Fatalf("complete 后应入队 verify_hash:kind=%q blob=%v", kind, blobID)
+	}
+}
+
+func TestNodeInfoReadTextAndGetWithBlob(t *testing.T) {
+	pool := setup(t)
+	obj := setupS3(t)
+	ctx := context.Background()
+	uploads, nodes, owner := newUploads(t, pool, obj)
+
+	put := func(name string, content []byte) *store.Node {
+		t.Helper()
+		tmp := "tmp/test/" + uuid.NewString()
+		if _, err := obj.PutStream(ctx, tmp, bytes.NewReader(content), "application/octet-stream"); err != nil {
+			t.Fatal(err)
+		}
+		n, err := uploads.CommitStreamed(ctx, owner, nil, name, shaHex(content), int64(len(content)), tmp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+
+	content := []byte("hello gopan text preview") // 24 字节纯 ASCII,offset 切割安全
+	txt := put("note.txt", content)
+
+	// NodeInfo:正常 / 越权
+	row, err := uploads.NodeInfo(ctx, owner, txt.ID)
+	if err != nil || row.Kind != "file" || row.BlobSize == nil || *row.BlobSize != int64(len(content)) {
+		t.Fatalf("NodeInfo: %+v err=%v", row, err)
+	}
+	if _, err := uploads.NodeInfo(ctx, uuid.Must(uuid.NewV7()), txt.ID); err != service.ErrNotFound {
+		t.Fatalf("他人节点应 NOT_FOUND,got %v", err)
+	}
+
+	// GetWithBlob(Nodes):带 blob 元数据 / 不存在
+	nb, err := nodes.GetWithBlob(ctx, owner, txt.ID)
+	if err != nil || nb.BlobSha256 == nil || *nb.BlobSha256 != shaHex(content) {
+		t.Fatalf("GetWithBlob: %+v err=%v", nb, err)
+	}
+	if _, err := nodes.GetWithBlob(ctx, owner, uuid.Must(uuid.NewV7())); err != service.ErrNotFound {
+		t.Fatalf("不存在的节点应 NOT_FOUND,got %v", err)
+	}
+
+	// ReadText 参数校验:负 offset、非正 maxBytes、超过 64KiB 上限
+	for _, bad := range [][2]int64{{-1, 10}, {0, 0}, {0, (64 << 10) + 1}} {
+		if _, _, err := uploads.ReadText(ctx, owner, txt.ID, bad[0], bad[1]); err == nil {
+			t.Fatalf("非法参数 %v 应被拒", bad)
+		}
+	}
+	// 整读 / 分段 / 偏移越界
+	text, eof, err := uploads.ReadText(ctx, owner, txt.ID, 0, 64<<10)
+	if err != nil || !eof || text != string(content) {
+		t.Fatalf("整读:%q eof=%v err=%v", text, eof, err)
+	}
+	head, eof, err := uploads.ReadText(ctx, owner, txt.ID, 0, 5)
+	if err != nil || eof || head != "hello" {
+		t.Fatalf("截断读:%q eof=%v err=%v", head, eof, err)
+	}
+	tail, eof, err := uploads.ReadText(ctx, owner, txt.ID, 6, 64<<10)
+	if err != nil || !eof || tail != "gopan text preview" {
+		t.Fatalf("偏移读:%q eof=%v err=%v", tail, eof, err)
+	}
+	if text, eof, err := uploads.ReadText(ctx, owner, txt.ID, 100, 10); err != nil || !eof || text != "" {
+		t.Fatalf("offset 越界应空串 + eof:%q eof=%v err=%v", text, eof, err)
+	}
+
+	// 非文本类型拒读;.log 扩展放行但非 UTF-8 → 编码错误;文件夹不可读
+	bin := put("blob.bin", []byte{0x00, 0x01, 0x02})
+	if _, _, err := uploads.ReadText(ctx, owner, bin.ID, 0, 10); err == nil {
+		t.Fatal("非文本类型应被拒")
+	}
+	badLog := put("bad.log", []byte{0xff, 0xfe, 0xfd})
+	if _, _, err := uploads.ReadText(ctx, owner, badLog.ID, 0, 10); err == nil {
+		t.Fatal("非 UTF-8 文本应被拒")
+	}
+	folder, err := nodes.CreateFolder(ctx, owner, nil, "dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := uploads.ReadText(ctx, owner, folder.ID, 0, 10); err != service.ErrNotFound {
+		t.Fatalf("文件夹应 NOT_FOUND,got %v", err)
+	}
+
+	// 软删后 NodeInfo → NOT_FOUND
+	if err := nodes.Delete(ctx, owner, []uuid.UUID{txt.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := uploads.NodeInfo(ctx, owner, txt.ID); err != service.ErrNotFound {
+		t.Fatalf("软删节点应 NOT_FOUND,got %v", err)
+	}
+}
+
+func TestPackEntriesSizeAndErrorFormat(t *testing.T) {
+	// PackEntriesSize:目录项 Size 为 0,文件按字节求和
+	entries := []service.PackEntry{
+		{Path: "root/", IsDir: true},
+		{Path: "root/a.txt", Sha: "aa", Size: 3},
+		{Path: "root/b.txt", Sha: "bb", Size: 7},
+	}
+	if got := service.PackEntriesSize(entries); got != 10 {
+		t.Fatalf("PackEntriesSize 应 10,got %d", got)
+	}
+	if got := service.PackEntriesSize(nil); got != 0 {
+		t.Fatalf("空列表应 0,got %d", got)
+	}
+
+	// service.Error 的字符串格式:code: message
+	e := &service.Error{Code: "X_CODE", Message: "boom"}
+	if e.Error() != "X_CODE: boom" {
+		t.Fatalf("Error() 格式不符:%q", e.Error())
+	}
+	if service.ErrNotFound.Error() != "NOT_FOUND: 对象不存在" {
+		t.Fatalf("哨兵错误格式不符:%q", service.ErrNotFound.Error())
+	}
+}
+
 func TestPackCollectStreamAndGate(t *testing.T) {
 	pool := setup(t)
 	obj := setupS3(t)

@@ -37,6 +37,15 @@ func TestAppPasswordsService(t *testing.T) {
 		t.Fatalf("Create: %q err=%v", plain, err)
 	}
 
+	// List:只见自己的;别人的列表为空
+	rows, err := ap.List(ctx, ra.User.ID)
+	if err != nil || len(rows) != 1 || rows[0].Name != "mbp" {
+		t.Fatalf("List 应只有 mbp 一条:%+v err=%v", rows, err)
+	}
+	if rows, err := ap.List(ctx, uuid.Must(uuid.NewV7())); err != nil || len(rows) != 0 {
+		t.Fatalf("他人列表应为空:%+v err=%v", rows, err)
+	}
+
 	// 认证:成功、错密码、错用户名
 	uid, err := ap.Authenticate(ctx, "davsvc", plain, "9.9.9.9")
 	if err != nil || uid != ra.User.ID {
@@ -85,6 +94,10 @@ func TestAppPasswordsService(t *testing.T) {
 	}
 	if err := ap.Revoke(ctx, ra.User.ID, row.ID); err != service.ErrNotFound {
 		t.Fatalf("重复吊销应 NOT_FOUND,got %v", err)
+	}
+	// 吊销后列表清空
+	if rows, err := ap.List(ctx, ra.User.ID); err != nil || len(rows) != 0 {
+		t.Fatalf("吊销后 List 应为空:%+v err=%v", rows, err)
 	}
 }
 

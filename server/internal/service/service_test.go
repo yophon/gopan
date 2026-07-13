@@ -82,11 +82,27 @@ func TestMCPTokenLifecycle(t *testing.T) {
 	if _, _, err := tokens.Create(ctx, res.User.ID, "bad", []string{"admin:*"}); err == nil {
 		t.Fatal("未知 scope 应拒绝")
 	}
+	// List:只见自己的;别人的列表为空
+	rows, err := tokens.List(ctx, res.User.ID)
+	if err != nil || len(rows) != 1 || rows[0].ID != row.ID {
+		t.Fatalf("List 应只有刚建的 1 条:%+v err=%v", rows, err)
+	}
+	other, err := auth.Register(ctx, "mcp_other", "password123", "1.1.1.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows, err := tokens.List(ctx, other.User.ID); err != nil || len(rows) != 0 {
+		t.Fatalf("他人列表应为空:%+v err=%v", rows, err)
+	}
 	if err := tokens.Revoke(ctx, res.User.ID, row.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tokens.Authenticate(ctx, plain); err != service.ErrUnauthenticated {
 		t.Fatalf("吊销后应拒绝,got %v", err)
+	}
+	// 吊销的 token 不出现在列表里
+	if rows, err := tokens.List(ctx, res.User.ID); err != nil || len(rows) != 0 {
+		t.Fatalf("吊销后 List 应为空:%+v err=%v", rows, err)
 	}
 }
 
