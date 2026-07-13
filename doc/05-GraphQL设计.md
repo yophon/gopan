@@ -9,7 +9,7 @@
 - 错误:业务错误用 gqlgen 的 error extensions 带 `code`(如 `QUOTA_EXCEEDED`、`NAME_CONFLICT`、`SHARE_PASSWORD_REQUIRED`),前端按 code 分支;不靠错误文案。
 - 列表用游标分页(Relay 风格简化版);目录列表默认 200/页。
 - 访客(share scope)只能调 Query,且鉴权层限制在分享子树。
-- 深度限制 8、复杂度限制 300(gqlgen 自带),防递归查询打挂。
+- 深度限制 8、复杂度限制 300,防递归查询打挂。(复杂度限制 gqlgen 自带;深度限制 gqlgen 没有,M6 自研 AST 计算实现——命名 fragment 按定义展开、seen 集防循环。)
 
 ## SDL
 
