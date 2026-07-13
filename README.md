@@ -2,7 +2,46 @@
 
 自部署云盘。Go + GraphQL + Postgres + MinIO 后端,Vue 3 前端,单二进制交付。
 
+**在线实例**:<https://drive.979687.xyz>(跑在 2 核 2G 的 VPS 上,精简档部署)
+
+<!--
+截图待补。拍好放 doc/assets/ 后取消下面的注释即可(浏览器窗口 1280 宽,浅色主题):
+1. drive.png   — 主目录页:混合类型文件(图片有缩略图)、右键菜单打开
+2. upload.png  — 上传抽屉:3 个以上任务,含进行中(有速度)/暂停/完成三种状态
+3. preview.png — 图片或视频预览模态
+4. share.png   — 分享访客页(输密码那屏或文件列表屏)
+
+| | |
+|---|---|
+| ![主目录](doc/assets/drive.png) | ![上传队列](doc/assets/upload.png) |
+| ![预览](doc/assets/preview.png) | ![分享访客页](doc/assets/share.png) |
+-->
+
 当前阶段:**M1~M6 全部完成,2026-07-12 首次真机上线**(2 核 2G 小机,精简档;踩坑复盘见 doc/10)。部署走 doc/09 上线手册,分全家桶 / 精简两档,2G 小机可关 Gotenberg 与自带反代。功能:分片直传/秒传/断点续传、图片/音视频/PDF/文本/Office 预览、文件与文件夹分享(密码、有效期、访客只读子树)、打包下载、回收站、双 token 认证。
+
+## 架构
+
+```mermaid
+flowchart LR
+    Browser["浏览器 · Vue 3 SPA"]
+    Browser -- "GraphQL /query<br/>(元数据与编排)" --> GQL
+    Browser <-. "字节流:预签名 URL<br/>分片直传 / 直取" .-> MinIO
+
+    subgraph Gopan["gopan · Go 单二进制"]
+        GQL["gqlgen"] --> Service["service 业务层"]
+        REST["REST:/healthz · /s/:token(og 直出) · /pack(流式 zip)"] --> Service
+        Worker["worker pool<br/>缩略图 · 转 PDF · hash 校验 · GC"]
+        Embed["embed 前端静态资源"]
+    end
+
+    Service --> PG[("PostgreSQL<br/>元数据 · 事务 · 递归 CTE")]
+    Service --> MinIO[("MinIO<br/>blobs/{sha256} 内容寻址")]
+    Worker --> MinIO
+    Worker --> GT["Gotenberg<br/>(office → PDF,可关)"]
+    Worker --> FF["ffmpeg(exec)"]
+```
+
+要点:**字节流不过 Go**——上传是浏览器拿预签名 URL 分片直传 MinIO,下载/预览直连预签名 GET,唯一经过 Go 的字节流是 /pack 流式 zip。文件按 SHA-256 内容寻址,全站同内容物理只存一份(秒传),配额按逻辑大小各记各的。类型从数据库到组件不断链:sqlc(SQL→Go)、gqlgen(schema→resolver)、GraphQL Code Generator(schema→TS),改一处两端编译报错。
 
 ## 快速开始
 
