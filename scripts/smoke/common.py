@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import random
+import time
 import urllib.error
 import urllib.request
 
@@ -55,6 +56,26 @@ def put(url, data):
     urllib.request.urlopen(urllib.request.Request(url, data=data, method="PUT"))
 
 
+def complete_upload(session_id, token, timeout=120):
+    """Wait for durable background verification, without treating it as failure."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            return gql(
+                "mutation($id:ID!){completeUpload(sessionId:$id,etags:[]){id}}",
+                {"id": session_id}, token,
+            )["completeUpload"]["id"]
+        except RuntimeError as err:
+            errors = err.args[0]
+            if not isinstance(errors, list) or not errors or any(
+                e.get("extensions", {}).get("code") != "UPLOAD_PROCESSING" for e in errors
+            ):
+                raise
+            if time.monotonic() >= deadline:
+                raise TimeoutError("upload verification did not finish") from err
+            time.sleep(0.5)
+
+
 def upload(name, data, parent, token):
     """完整上传(秒传或分片直传),返回 node id。"""
     sha = hashlib.sha256(data).hexdigest()
@@ -71,11 +92,7 @@ def upload(name, data, parent, token):
     for p in s["partUrls"]:
         n = p["partNumber"]
         put(p["url"], data[(n - 1) * ps : n * ps])
-    return gql(
-        "mutation($id:ID!){completeUpload(sessionId:$id,etags:[]){id}}",
-        {"id": s["id"]},
-        token,
-    )["completeUpload"]["id"]
+    return complete_upload(s["id"], token)
 
 
 def mkdir(name, parent, token):

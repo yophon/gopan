@@ -143,6 +143,7 @@ type Mutation {
   purgeTrash: Boolean!
 
   initUpload(parentId: ID, name: String!, sha256: String!, size: Int64!): UploadInit!
+  # 后台校验期间返回 UPLOAD_PROCESSING;重试同一会话,成功后幂等返回节点。
   completeUpload(sessionId: ID!, etags: [PartEtag!]!): Node!
   abortUpload(sessionId: ID!): Boolean!
 

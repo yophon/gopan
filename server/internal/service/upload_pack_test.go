@@ -193,21 +193,21 @@ func TestUploadCompleteAndInstant(t *testing.T) {
 		end := min(n*ps, len(data))
 		httpPut(t, u, data[(n-1)*ps:end])
 	}
-	node, err := uploads.Complete(ctx, owner, init.Session.Session.ID, nil)
+	// A second session can be opened before verification, but its private
+	// staging object cannot overwrite the first session's published bytes.
+	init2, err := uploads.Init(ctx, owner, nil, "b.bin", sha, int64(len(data)))
+	if err != nil || init2.Instant {
+		t.Fatalf("未验证前不应秒传:%+v %v", init2, err)
+	}
+	_ = uploads.Abort(ctx, owner, init2.Session.Session.ID)
+	node, err := completeBrowser(t, uploads, owner, init.Session.Session.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 重复 complete → 状态机拒绝
-	if _, err := uploads.Complete(ctx, owner, init.Session.Session.ID, nil); err == nil {
-		t.Fatal("重复 complete 应被拒")
+	// Lost HTTP responses can be retried without another node or quota charge.
+	if again, err := uploads.Complete(ctx, owner, init.Session.Session.ID, nil); err != nil || again.ID != node.ID {
+		t.Fatalf("重复 complete 应返回同一节点:%v", err)
 	}
-
-	// 未 verified 不给秒传
-	init2, err := uploads.Init(ctx, owner, nil, "b.bin", sha, int64(len(data)))
-	if err != nil || init2.Instant {
-		t.Fatalf("未 verified 不应秒传:%+v err=%v", init2, err)
-	}
-	_ = uploads.Abort(ctx, owner, init2.Session.Session.ID)
 
 	// 标 verified → 秒传,ref_count 与配额随之走
 	row, err := q.GetNodeWithBlob(ctx, store.GetNodeWithBlobParams{ID: node.ID, OwnerID: owner})
@@ -288,7 +288,7 @@ func TestUploadMissingPartAndResume(t *testing.T) {
 		t.Fatalf("应只签第 2 片,got %v", view.PartURLs)
 	}
 	httpPut(t, u2, data[5<<20:])
-	if _, err := uploads.Complete(ctx, owner, sid, nil); err != nil {
+	if _, err := completeBrowser(t, uploads, owner, sid); err != nil {
 		t.Fatalf("补齐后 complete 应成功:%v", err)
 	}
 }
@@ -329,10 +329,7 @@ func TestUploadSessionAbortAndEnqueue(t *testing.T) {
 		t.Fatalf("重复 abort 应 no-op:%v", err)
 	}
 
-	// SetEnqueue:complete 后应把 blob 送进 verify_hash 队列
-	var kind string
-	var blobID uuid.UUID
-	uploads.SetEnqueue(func(_ context.Context, k string, b uuid.UUID) { kind, blobID = k, b })
+	// Derivative dispatch is durable in the same transaction as the node.
 	init2, err := uploads.Init(ctx, owner, nil, "enq.bin", shaHex(data), int64(len(data)))
 	if err != nil {
 		t.Fatal(err)
@@ -340,11 +337,12 @@ func TestUploadSessionAbortAndEnqueue(t *testing.T) {
 	for _, u := range init2.Session.PartURLs {
 		httpPut(t, u, data)
 	}
-	if _, err := uploads.Complete(ctx, owner, init2.Session.Session.ID, nil); err != nil {
+	if _, err := completeBrowser(t, uploads, owner, init2.Session.Session.ID); err != nil {
 		t.Fatal(err)
 	}
-	if kind != "verify_hash" || blobID == uuid.Nil {
-		t.Fatalf("complete 后应入队 verify_hash:kind=%q blob=%v", kind, blobID)
+	var count int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM tasks WHERE kind = 'verify_hash'").Scan(&count); err != nil || count != 1 {
+		t.Fatalf("应持久化派生任务:count=%d err=%v", count, err)
 	}
 }
 

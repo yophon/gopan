@@ -4,7 +4,7 @@ import os
 import time
 import urllib.request
 
-from common import gql, put, register, upload
+from common import complete_upload, gql, put, register, upload
 
 _, TOKEN = register("m2")
 print("== 注册 ==")
@@ -40,11 +40,7 @@ print("== 断点续传视图 OK ==")
 for p in view["partUrls"]:
     n = p["partNumber"]
     put(p["url"], data[(n - 1) * ps : n * ps])
-node_id = gql(
-    "mutation($id:ID!){completeUpload(sessionId:$id,etags:[]){id}}",
-    {"id": sess["id"]},
-    TOKEN,
-)["completeUpload"]["id"]
+node_id = complete_upload(sess["id"], TOKEN)
 
 # 等异步 verify(校验通过后 downloadUrl 一直可用,session 状态转 done)
 for _ in range(60):
@@ -77,19 +73,19 @@ init3 = gql(
 )["initUpload"]
 for p in init3["session"]["partUrls"]:
     put(p["url"], lie_data)
-lie_node = gql(
-    "mutation($id:ID!){completeUpload(sessionId:$id,etags:[]){id}}",
-    {"id": init3["session"]["id"]},
-    TOKEN,
-)["completeUpload"]["id"]
+try:
+    complete_upload(init3["session"]["id"], TOKEN)
+except RuntimeError as err:
+    assert err.args[0][0]["extensions"]["code"] == "HASH_MISMATCH", err
+else:
+    raise AssertionError("hash mismatch must never create a node")
 for _ in range(60):
     st = gql("query($id:ID!){uploadSession(id:$id){status}}", {"id": init3["session"]["id"]}, TOKEN)["uploadSession"]
     if st["status"] == "failed":
         break
     time.sleep(0.5)
 assert st["status"] == "failed", f"谎报应判 failed:{st}"
-gql("query($id:ID!){node(id:$id){id}}", {"id": lie_node}, TOKEN, expect_code="NOT_FOUND")
-print("== hash 谎报被识别,节点已回收 ==")
+print("== hash 谎报被识别,未创建节点 ==")
 
 # 谎报回收也退配额:再传一个正常小文件确认账目还能走
 upload("after.bin", os.urandom(1024), None, TOKEN)

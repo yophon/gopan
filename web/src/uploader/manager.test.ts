@@ -208,6 +208,68 @@ describe('enqueueFiles', () => {
 // ---------- 主流程 ----------
 
 describe('上传主流程', () => {
+  it('后台校验超过三轮仍继续等待,只在定稿成功后显示完成', async () => {
+    vi.useFakeTimers()
+    let completed = 0
+    requestMock.mockImplementation((document: unknown) => {
+      if (document === InitUploadDocument) return Promise.resolve({ initUpload: { instant: false, session: session() } })
+      if (document === CompleteUploadDocument) {
+        completed++
+        return completed <= 5 ? Promise.reject({ code: 'UPLOAD_PROCESSING' }) : Promise.resolve({ completeUpload: {} })
+      }
+      return Promise.reject(new Error('unexpected request'))
+    })
+    enqueueFiles([makeFile()], null)
+    await vi.advanceTimersByTimeAsync(0)
+    const task = useUploadsStore().tasks[0]!
+    expect(task.status).toBe('completing')
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(task.status).toBe('completing')
+    expect(useUploadsStore().records).toHaveLength(1)
+    expect(invalidated).toEqual([])
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(task.status).toBe('done')
+    expect(completed).toBe(6)
+    expect(callsFor(InitUploadDocument)).toHaveLength(1)
+    expect(invalidated).toEqual([null])
+  })
+
+  it('后台校验时暂停会停止轮询,恢复后复用原会话', async () => {
+    vi.useFakeTimers()
+    let ready = false
+    requestMock.mockImplementation((document: unknown) => {
+      if (document === InitUploadDocument) return Promise.resolve({ initUpload: { instant: false, session: session() } })
+      if (document === UploadSessionDocument) return Promise.resolve({ uploadSession: session() })
+      if (document === CompleteUploadDocument) return ready ? Promise.resolve({ completeUpload: {} }) : Promise.reject({ code: 'UPLOAD_PROCESSING' })
+      return Promise.reject(new Error('unexpected request'))
+    })
+    enqueueFiles([makeFile()], null)
+    await vi.advanceTimersByTimeAsync(0)
+    const task = useUploadsStore().tasks[0]!
+    pauseTask(task.id)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(task.status).toBe('paused')
+    expect(callsFor(CompleteUploadDocument)).toHaveLength(1)
+    ready = true
+    resumeTask(task.id)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(task.status).toBe('done')
+    expect(callsFor(InitUploadDocument)).toHaveLength(1)
+  })
+
+  it('后台校验拒绝伪造哈希后直接失败,不显示上传成功', async () => {
+    requestMock.mockImplementation((document: unknown) => {
+      if (document === InitUploadDocument) return Promise.resolve({ initUpload: { instant: false, session: session() } })
+      return Promise.reject({ code: 'HASH_MISMATCH' })
+    })
+    enqueueFiles([makeFile()], null)
+    const task = useUploadsStore().tasks[0]!
+    await vi.waitFor(() => expect(task.status).toBe('failed'))
+    expect(callsFor(CompleteUploadDocument)).toHaveLength(1)
+    expect(invalidated).toEqual([])
+    expect(useUploadsStore().records).toEqual([])
+  })
+
   it('秒传:init 返回 instant → 直接 done,进度拉满并刷新列表', async () => {
     requestMock.mockResolvedValue({ initUpload: { instant: true, session: null } })
     const store = useUploadsStore()
