@@ -273,7 +273,9 @@ func (b *Backend) OpenFile(ctx context.Context, name string, flag int, _ os.File
 	if err != nil {
 		return nil, err
 	}
-	if flag&(os.O_WRONLY|os.O_RDWR) != 0 {
+	// PROPPATCH opens existing files with O_RDWR to update metadata. Only
+	// creation/truncation (PUT/COPY) may start a replacement upload.
+	if flag&(os.O_WRONLY|os.O_RDWR) != 0 && flag&(os.O_CREATE|os.O_TRUNC) != 0 {
 		return b.openWrite(ctx, owner, name)
 	}
 	n, err := b.resolve(ctx, owner, name)

@@ -170,6 +170,14 @@ func TestWebDAV(t *testing.T) {
 	if code, body := e.do(t, "GET", "/docs/hello.txt", "", nil); code != 200 || body != content {
 		t.Fatalf("GET: code=%d body=%q", code, body)
 	}
+	// Windows sends PROPPATCH after PUT; metadata updates must not truncate data.
+	patch := `<D:propertyupdate xmlns:D="DAV:" xmlns:Z="urn:schemas-microsoft-com:"><D:set><D:prop><Z:Win32LastModifiedTime>Tue, 08 Sep 2026 06:00:00 GMT</Z:Win32LastModifiedTime></D:prop></D:set></D:propertyupdate>`
+	if code, _ := e.do(t, "PROPPATCH", "/docs/hello.txt", patch, map[string]string{"Content-Type": "application/xml"}); code != 207 {
+		t.Fatalf("PROPPATCH: got %d", code)
+	}
+	if code, body := e.do(t, "GET", "/docs/hello.txt", "", nil); code != 200 || body != content {
+		t.Fatalf("PROPPATCH changed contents: code=%d body=%q", code, body)
+	}
 	// Range(预览/断点下载路径)
 	if code, body := e.do(t, "GET", "/docs/hello.txt", "", map[string]string{"Range": "bytes=0-4"}); code != 206 || body != "hello" {
 		t.Fatalf("Range GET: code=%d body=%q", code, body)
