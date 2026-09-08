@@ -19,7 +19,7 @@ const visible = defineModel<boolean>({ required: true })
 const queryClient = useQueryClient()
 
 const endpoint = `${location.origin}/mcp`
-const activeTab = ref<'keys' | 'oauth'>('keys')
+const activeTab = ref<'keys' | 'oauth'>('oauth')
 const newName = ref('')
 const selectedScopes = ref<string[]>(['files:read'])
 const createdKey = ref<string | null>(null)
@@ -93,8 +93,13 @@ async function copy(text: string) {
       <el-button link type="primary" @click="copy(endpoint)">复制</el-button>
     </div>
 
+    <el-alert type="info" :closable="false" class="connection-help">
+      支持 OAuth 的客户端填写 MCP 地址后，选择登录并授权即可。上传和下载还需要客户端具备 HTTP 文件传输能力；文本读取、目录整理可直接通过 MCP 完成。
+    </el-alert>
+
     <el-tabs v-model="activeTab">
       <el-tab-pane label="API Key" name="keys">
+        <p class="connection-help">适合 CI 或不支持 OAuth 的客户端。每个客户端使用单独的 Key，并选择所需权限。</p>
         <el-alert v-if="createdKey" type="success" :closable="false" class="created">
           <p class="created-label">新 API Key,仅显示一次</p>
           <p class="mono created-value">
@@ -162,6 +167,7 @@ async function copy(text: string) {
       </el-tab-pane>
 
       <el-tab-pane label="OAuth 授权" name="oauth">
+        <p class="connection-help">在客户端发起登录后，这里会显示已授权应用。客户端可自动刷新登录状态；撤销授权后立即失效。</p>
         <el-table
           v-loading="grantsFetching"
           :data="grants"
@@ -202,6 +208,10 @@ async function copy(text: string) {
 </template>
 
 <style scoped>
+.connection-help {
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
 .endpoint-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

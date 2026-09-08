@@ -21,8 +21,10 @@ import (
 const pageSize = 200
 
 type Nodes struct {
-	pool *pgxpool.Pool
-	q    *store.Queries
+	pool interface {
+		Begin(context.Context) (pgx.Tx, error)
+	}
+	q *store.Queries
 }
 
 func NewNodes(pool *pgxpool.Pool) *Nodes {
