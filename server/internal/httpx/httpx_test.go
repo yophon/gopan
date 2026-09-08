@@ -51,6 +51,12 @@ func TestSecurityHeaders(t *testing.T) {
 		if got := h.Get("Content-Security-Policy") != ""; got != tc.wantCSP {
 			t.Fatalf("dev=%v CSP 应为 %v", tc.dev, tc.wantCSP)
 		}
+		if tc.wantCSP {
+			csp := h.Get("Content-Security-Policy")
+			if !strings.Contains(csp, "'wasm-unsafe-eval'") || strings.Contains(csp, "'unsafe-eval'") {
+				t.Fatalf("生产上传需要 WebAssembly,但不应允许 JavaScript eval: %s", csp)
+			}
+		}
 	}
 }
 

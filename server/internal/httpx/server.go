@@ -109,10 +109,11 @@ func WithAuth(next http.Handler, auth *service.Auth) http.Handler {
 // WithSecurityHeaders 全站安全响应头。CSP 是宽松基线:img/media/connect 放开
 // http/https 是给"预签名走独立子域"的部署留路(默认同域反代其实 'self' 就够);
 // style unsafe-inline 是 Element Plus 动态样式的现实;dev 跳过 CSP(vite 注入脚本会撞)。
+// hash-wasm 在上传 Worker 内编译 WebAssembly;仅放行 wasm,不放行 JS eval。
 func WithSecurityHeaders(next http.Handler, devMode bool) http.Handler {
 	const csp = "default-src 'self'; img-src 'self' data: blob: http: https:; " +
 		"media-src 'self' blob: http: https:; connect-src 'self' http: https:; " +
-		"style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:; " +
+		"style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; " +
 		"frame-ancestors 'none'"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
