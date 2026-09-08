@@ -103,8 +103,81 @@ OAuth 与 API Key 共用以下权限：
 | `complete_upload` | `files:upload` | 提交上传并启动服务端定稿 |
 | `get_upload_status` | `files:upload` | 查询上传状态 |
 | `abort_upload` | `files:upload` | 取消上传并清理 staging 数据 |
+| `wait_upload` | `files:upload` | 最多等待 25 秒，返回终态或超时时的最新状态 |
+| `resolve_path` | `files:read` | 按绝对路径取得节点 ID，`/` 表示虚拟根目录 |
+| `create_directories` | `files:write` | 原子地递归创建目录，复用已有目录 |
+| `list_trash` | `files:read` | 分页列回收站，包含节点 ID、原父目录与删除时间 |
+| `batch_nodes` | 按操作使用 `files:write` 或 `files:delete` | 批量预览、逐项执行与错误反馈 |
 
 永久删除故意不暴露给第一版 MCP。
+
+### 客户端要求与 OAuth
+
+客户端需要支持 Streamable HTTP、MCP 工具调用及结构化结果。文件字节不经过 MCP：
+
+- 读取文本、搜索和整理目录，只需要 MCP。
+- 上传需要读取本地文件并向预签名地址执行 HTTP PUT；下载、ZIP 打包需要 HTTP GET 与保存文件能力。
+- 只支持 MCP 调用的客户端仍可签发传输地址，但不能独立完成本地文件传输。
+
+支持 OAuth 的客户端优先使用 OAuth。Codex 示例（将 URL 替换为实际地址）：
+
+```bash
+codex mcp add gopan --url https://pan.example.com/mcp
+codex mcp login gopan
+```
+
+在授权页面确认账号与所需权限。OAuth 凭据由客户端管理，访问令牌可自动刷新，不需要把长期 API Key 写入 MCP 配置。已有 API Key 接入迁移时，先移除该连接的静态 Authorization 头，再完成 OAuth 登录并验证，最后在“Agent 接入”里吊销旧 Key。API Key 仍用于 CI 等无交互环境。
+
+参考：[OpenAI Docs：Codex MCP](https://developers.openai.com/codex/mcp)。
+
+### 路径操作
+
+路径以 `/` 开头，区分大小写，名称按原文匹配；不做 URL 解码或 Unicode 归一化。不支持空路径段、`.`、`..`，最多 64 层、4096 字节。可选末尾 `/`。
+
+| 工具 | 路径参数 | 替代的 ID 参数 |
+|---|---|---|
+| `list_files` | `path` | `parent_id` |
+| `get_file_info`、`read_text_file`、`rename_node` | `path` | `node_id` |
+| `create_folder`、`prepare_upload` | `parent_path` | `parent_id` |
+| `move_nodes`、`copy_nodes` | `target_path` | `target_folder_id` |
+| `prepare_download` | `paths` | `node_id` / `node_ids` |
+| `batch_nodes` | `paths`、`target_path` | `node_ids`、`target_folder_id` |
+
+对应的路径和 ID 参数不能同时指定。`resolve_path({"path":"/"})` 返回 `root:true`，虚拟根目录没有节点 ID；列根目录可用 `list_files({"path":"/"})`。恢复回收站节点应使用 `list_trash` 返回的 ID，因为活跃路径解析不会返回已删除节点。
+
+```json
+{"path":"/reports/2026/September","idempotency_key":"mkdir-report-202609"}
+```
+
+以上为 `create_directories` 的参数：已有目录会复用，缺少的目录一次事务创建；路径途中遇到同名文件则全部回滚。
+
+### 写操作重试与批量预览
+
+`create_folder`、`create_directories`、`rename_node`、`move_nodes`、`copy_nodes`、`trash_nodes`、`restore_nodes`、`batch_nodes` 支持可选 `idempotency_key`（1–128 字节）。节点变更与响应记录在同一个数据库事务提交，因此进程重启、并发重试和响应丢失不会重复执行成功操作。
+
+- 同一用户的节点写操作共用键空间；建议每个逻辑操作使用新的 UUID。
+- 同键、同工具、同参数返回原始结果；同键改参数返回 `IDEMPOTENCY_CONFLICT`。
+- 原始响应是历史执行结果，不是节点当前状态；需要新状态时重新查询。
+- 整体失败会回滚且不保存键，修正问题后可重试。
+- 成功提交的记录持续保留，不自动过期，以防旧重试重复执行。大量自动化使用时需将此表纳入存储监控与备份。
+- 上传生命周期沿用传输会话的幂等机制；节点写操作键与上传键不共用键空间。
+
+`batch_nodes` 每批最多 100 个节点，操作为 `move`、`copy`、`trash` 或 `restore`。使用 ID 或路径选择源，恢复操作使用 ID。示例：
+
+```json
+{
+  "operation":"move",
+  "paths":["/inbox/a.txt","/inbox/b.txt"],
+  "target_path":"/reports/2026",
+  "dry_run":true
+}
+```
+
+返回 `items` 中每项的 `source`、`success`、成功节点或 `error_code/error`，以及 `succeeded/failed` 总数。单项失败回滚该项，其余项继续；真实执行的所有成功项和整批响应一起提交。旧的 `*_nodes` 工具保留整体成功/失败语义，需要逐项反馈时使用 `batch_nodes`。
+
+`dry_run:true` 会运行相同的数据库校验和变更逻辑，再回滚整个事务，不创建幂等记录。预览按给定顺序考虑同批前项的影响；复制预览不返回可用的新节点 ID。预览不会锁定未来状态，正式执行时仍可能因配额、同名冲突或其他客户端修改而失败。正式执行使用 `dry_run:false` 和新的逻辑操作键即可。
+
+真实批次重试会返回原整批结果，包括其中失败的项。只重试失败项时，提交这些项并使用新幂等键。批量输入不要重复节点，也应避免同时选择目录及其子节点，以免按顺序执行后发生冲突。
 
 ## 上传
 
@@ -162,6 +235,8 @@ curl --fail --request PUT --upload-file ./report.pdf 'PUT_URL'
 uploading -> completing -> finalizing -> processing -> verifying -> ready
                                                     \-> failed
 ```
+
+也可调用 `wait_upload({"upload_id":"019f...","timeout_seconds":20})`，减少客户端轮询。默认等待 20 秒，可设置 1–25 秒；`ready`、`failed`、`aborted` 会立即返回。等待超时正常返回最新状态，不代表上传失败；非终态时可再次等待。请求取消会停止等待，不会取消上传。
 
 无 SHA 上传写入 `staging/mcp/{user}/{upload_id}`。服务端流式计算 SHA-256，迁移到内容寻址 key，执行最终去重并清理 staging。提供 SHA 时仍会服务端复核；声明错误会进入 `failed`，不创建文件节点。
 

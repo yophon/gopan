@@ -29,7 +29,7 @@ type Server struct {
 
 func NewHandler(nodes *service.Nodes, uploads *service.Uploads, tokens *service.MCPTokens, oauth *service.OAuth, packer *service.Packer, tickets *service.PackTickets) http.Handler {
 	s := &Server{nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, packer: packer, tickets: tickets}
-	protocol := mcp.NewServer(&mcp.Implementation{Name: "gopan", Version: "2.1.0"}, nil)
+	protocol := mcp.NewServer(&mcp.Implementation{Name: "gopan", Version: "2.2.0"}, nil)
 	s.registerTools(protocol)
 	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return protocol }, &mcp.StreamableHTTPOptions{
 		Stateless: true, JSONResponse: true,
@@ -124,6 +124,9 @@ func parseOptionalID(raw *string) (*uuid.UUID, error) {
 }
 
 func parseIDs(raw []string) ([]uuid.UUID, error) {
+	if len(raw) > 100 {
+		return nil, &service.Error{Code: "INVALID_INPUT", Message: "每批最多 100 个节点"}
+	}
 	ids := make([]uuid.UUID, 0, len(raw))
 	for _, value := range raw {
 		id, err := parseID(value)
@@ -196,6 +199,7 @@ func nodeFromSearch(n store.SearchNodesRow) NodeOutput {
 }
 
 type ListFilesInput struct {
+	Path     *string `json:"path,omitempty" jsonschema:"absolute folder path instead of parent_id"`
 	ParentID *string `json:"parent_id,omitempty" jsonschema:"folder node ID; omit for root"`
 	Cursor   *string `json:"cursor,omitempty" jsonschema:"cursor returned by the previous call"`
 	Order    string  `json:"order,omitempty" jsonschema:"sort order: name, size, or updated_at"`
@@ -213,7 +217,7 @@ func (s *Server) listFiles(ctx context.Context, _ *mcp.CallToolRequest, in ListF
 	if err != nil {
 		return nil, ListFilesOutput{}, err
 	}
-	parentID, err := parseOptionalID(in.ParentID)
+	parentID, err := s.parentByPath(ctx, p.UserID, in.ParentID, in.Path)
 	if err != nil {
 		return nil, ListFilesOutput{}, err
 	}
@@ -259,7 +263,8 @@ func (s *Server) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in Sea
 }
 
 type NodeIDInput struct {
-	NodeID string `json:"node_id" jsonschema:"Gopan node UUID"`
+	Path   *string `json:"path,omitempty" jsonschema:"absolute node path instead of node_id"`
+	NodeID string  `json:"node_id,omitempty" jsonschema:"Gopan node UUID"`
 }
 
 func (s *Server) getFileInfo(ctx context.Context, _ *mcp.CallToolRequest, in NodeIDInput) (*mcp.CallToolResult, NodeOutput, error) {
@@ -267,7 +272,7 @@ func (s *Server) getFileInfo(ctx context.Context, _ *mcp.CallToolRequest, in Nod
 	if err != nil {
 		return nil, NodeOutput{}, err
 	}
-	id, err := parseID(in.NodeID)
+	id, err := s.nodeByPath(ctx, p.UserID, in.NodeID, in.Path)
 	if err != nil {
 		return nil, NodeOutput{}, err
 	}
@@ -287,9 +292,10 @@ func (s *Server) getFileInfo(ctx context.Context, _ *mcp.CallToolRequest, in Nod
 }
 
 type ReadTextInput struct {
-	NodeID   string `json:"node_id" jsonschema:"text file node UUID"`
-	Offset   int64  `json:"offset,omitempty" jsonschema:"byte offset, default 0"`
-	MaxBytes int64  `json:"max_bytes,omitempty" jsonschema:"maximum bytes to return, default and maximum 65536"`
+	Path     *string `json:"path,omitempty" jsonschema:"absolute node path instead of node_id"`
+	NodeID   string  `json:"node_id,omitempty" jsonschema:"text file node UUID"`
+	Offset   int64   `json:"offset,omitempty" jsonschema:"byte offset, default 0"`
+	MaxBytes int64   `json:"max_bytes,omitempty" jsonschema:"maximum bytes to return, default and maximum 65536"`
 }
 
 type ReadTextOutput struct {
@@ -304,7 +310,7 @@ func (s *Server) readTextFile(ctx context.Context, _ *mcp.CallToolRequest, in Re
 	if err != nil {
 		return nil, ReadTextOutput{}, err
 	}
-	id, err := parseID(in.NodeID)
+	id, err := s.nodeByPath(ctx, p.UserID, in.NodeID, in.Path)
 	if err != nil {
 		return nil, ReadTextOutput{}, err
 	}
@@ -319,8 +325,10 @@ func (s *Server) readTextFile(ctx context.Context, _ *mcp.CallToolRequest, in Re
 }
 
 type CreateFolderInput struct {
-	ParentID *string `json:"parent_id,omitempty" jsonschema:"parent folder UUID; omit for root"`
-	Name     string  `json:"name" jsonschema:"new folder name"`
+	ParentPath     *string `json:"parent_path,omitempty" jsonschema:"absolute parent folder path instead of parent_id"`
+	IdempotencyKey string  `json:"idempotency_key,omitempty" jsonschema:"stable retry key, maximum 128 bytes"`
+	ParentID       *string `json:"parent_id,omitempty" jsonschema:"parent folder UUID; omit for root"`
+	Name           string  `json:"name" jsonschema:"new folder name"`
 }
 
 func (s *Server) createFolder(ctx context.Context, _ *mcp.CallToolRequest, in CreateFolderInput) (*mcp.CallToolResult, NodeOutput, error) {
@@ -328,7 +336,7 @@ func (s *Server) createFolder(ctx context.Context, _ *mcp.CallToolRequest, in Cr
 	if err != nil {
 		return nil, NodeOutput{}, err
 	}
-	parentID, err := parseOptionalID(in.ParentID)
+	parentID, err := s.parentByPath(ctx, p.UserID, in.ParentID, in.ParentPath)
 	if err != nil {
 		return nil, NodeOutput{}, err
 	}
@@ -337,8 +345,10 @@ func (s *Server) createFolder(ctx context.Context, _ *mcp.CallToolRequest, in Cr
 }
 
 type RenameInput struct {
-	NodeID string `json:"node_id" jsonschema:"node UUID"`
-	Name   string `json:"name" jsonschema:"new file or folder name"`
+	Path           *string `json:"path,omitempty" jsonschema:"absolute node path instead of node_id"`
+	IdempotencyKey string  `json:"idempotency_key,omitempty" jsonschema:"stable retry key, maximum 128 bytes"`
+	NodeID         string  `json:"node_id,omitempty" jsonschema:"node UUID"`
+	Name           string  `json:"name" jsonschema:"new file or folder name"`
 }
 
 func (s *Server) renameNode(ctx context.Context, _ *mcp.CallToolRequest, in RenameInput) (*mcp.CallToolResult, NodeOutput, error) {
@@ -346,7 +356,7 @@ func (s *Server) renameNode(ctx context.Context, _ *mcp.CallToolRequest, in Rena
 	if err != nil {
 		return nil, NodeOutput{}, err
 	}
-	id, err := parseID(in.NodeID)
+	id, err := s.nodeByPath(ctx, p.UserID, in.NodeID, in.Path)
 	if err != nil {
 		return nil, NodeOutput{}, err
 	}
@@ -355,6 +365,8 @@ func (s *Server) renameNode(ctx context.Context, _ *mcp.CallToolRequest, in Rena
 }
 
 type MoveCopyInput struct {
+	TargetPath     *string  `json:"target_path,omitempty" jsonschema:"absolute destination folder path instead of target_folder_id"`
+	IdempotencyKey string   `json:"idempotency_key,omitempty" jsonschema:"stable retry key, maximum 128 bytes"`
 	NodeIDs        []string `json:"node_ids" jsonschema:"node UUIDs to process"`
 	TargetFolderID *string  `json:"target_folder_id,omitempty" jsonschema:"destination folder UUID; omit for root"`
 }
@@ -380,7 +392,7 @@ func (s *Server) moveOrCopy(ctx context.Context, in MoveCopyInput, copyMode bool
 	if err != nil {
 		return nil, NodesOutput{}, err
 	}
-	target, err := parseOptionalID(in.TargetFolderID)
+	target, err := s.parentByPath(ctx, p.UserID, in.TargetFolderID, in.TargetPath)
 	if err != nil {
 		return nil, NodesOutput{}, err
 	}
@@ -401,7 +413,8 @@ func (s *Server) moveOrCopy(ctx context.Context, in MoveCopyInput, copyMode bool
 }
 
 type NodeIDsInput struct {
-	NodeIDs []string `json:"node_ids" jsonschema:"node UUIDs to process"`
+	IdempotencyKey string   `json:"idempotency_key,omitempty" jsonschema:"stable retry key, maximum 128 bytes"`
+	NodeIDs        []string `json:"node_ids" jsonschema:"node UUIDs to process"`
 }
 
 type SuccessOutput struct {
@@ -442,6 +455,7 @@ func (s *Server) restoreNodes(ctx context.Context, _ *mcp.CallToolRequest, in No
 }
 
 type PrepareUploadInput struct {
+	ParentPath     *string `json:"parent_path,omitempty" jsonschema:"absolute parent folder path instead of parent_id"`
 	ParentID       *string `json:"parent_id,omitempty" jsonschema:"destination folder UUID; omit for root"`
 	Name           string  `json:"name" jsonschema:"target file name"`
 	Size           int64   `json:"size" jsonschema:"file size in bytes"`
@@ -506,7 +520,7 @@ func (s *Server) prepareUpload(ctx context.Context, _ *mcp.CallToolRequest, in P
 	if err != nil {
 		return nil, UploadOutput{}, err
 	}
-	parent, err := parseOptionalID(in.ParentID)
+	parent, err := s.parentByPath(ctx, p.UserID, in.ParentID, in.ParentPath)
 	if err != nil {
 		return nil, UploadOutput{}, err
 	}
@@ -598,6 +612,7 @@ type DownloadOutput struct {
 }
 
 type PrepareDownloadInput struct {
+	Paths   []string `json:"paths,omitempty" jsonschema:"absolute file or folder paths instead of node_id/node_ids"`
 	NodeID  *string  `json:"node_id,omitempty" jsonschema:"single node UUID; use node_ids for a batch"`
 	NodeIDs []string `json:"node_ids,omitempty" jsonschema:"one or more file or folder UUIDs"`
 }
@@ -608,6 +623,21 @@ func (s *Server) prepareDownload(ctx context.Context, _ *mcp.CallToolRequest, in
 		return nil, DownloadOutput{}, err
 	}
 	rawIDs := append([]string(nil), in.NodeIDs...)
+	if len(in.Paths) > 0 {
+		if in.NodeID != nil || len(in.NodeIDs) > 0 {
+			return nil, DownloadOutput{}, &service.Error{Code: "INVALID_INPUT", Message: "paths 与节点 ID 不能同时提供"}
+		}
+		if len(in.Paths) > 100 {
+			return nil, DownloadOutput{}, &service.Error{Code: "INVALID_INPUT", Message: "最多 100 个路径"}
+		}
+		for _, path := range in.Paths {
+			id, err := s.nodeByPath(ctx, p.UserID, "", &path)
+			if err != nil {
+				return nil, DownloadOutput{}, err
+			}
+			rawIDs = append(rawIDs, id.String())
+		}
+	}
 	if in.NodeID != nil && *in.NodeID != "" {
 		rawIDs = append(rawIDs, *in.NodeID)
 	}
@@ -652,16 +682,21 @@ func (s *Server) prepareDownload(ctx context.Context, _ *mcp.CallToolRequest, in
 }
 
 func (s *Server) registerTools(server *mcp.Server) {
+	mcp.AddTool(server, &mcp.Tool{Name: "wait_upload", Description: "Wait up to 25 seconds for an upload to become ready, failed, or aborted. On timeout returns latest status; repeat if nonterminal."}, s.waitUpload)
+	mcp.AddTool(server, &mcp.Tool{Name: "resolve_path", Description: "Resolve an absolute, case-sensitive Gopan path to a node ID. / is the virtual root."}, s.resolvePath)
+	mcp.AddTool(server, &mcp.Tool{Name: "create_directories", Description: "Atomically create missing parent directories; reuse existing directories. Supports persistent idempotency."}, mutation(s, "create_directories", "files:write", (*Server).createDirectories))
+	mcp.AddTool(server, &mcp.Tool{Name: "list_trash", Description: "List recoverable trash with deletion times and cursor pagination. Use returned IDs with restore_nodes or batch_nodes."}, s.listTrash)
+	mcp.AddTool(server, &mcp.Tool{Name: "batch_nodes", Description: "Move, copy, trash, or restore up to 100 nodes with individual success/error results. dry_run simulates then rolls back; preview IDs are not usable. idempotency_key replays the original entire result; use a new key to retry failed items."}, s.batchMutation)
 	mcp.AddTool(server, &mcp.Tool{Name: "list_files", Description: "List files and folders in a Gopan folder with cursor pagination."}, s.listFiles)
 	mcp.AddTool(server, &mcp.Tool{Name: "search_files", Description: "Search the user's Gopan files and folders by name."}, s.searchFiles)
 	mcp.AddTool(server, &mcp.Tool{Name: "get_file_info", Description: "Get metadata for one Gopan file or folder."}, s.getFileInfo)
 	mcp.AddTool(server, &mcp.Tool{Name: "read_text_file", Description: "Read up to 64 KiB from a UTF-8 text file without downloading binary content into context."}, s.readTextFile)
-	mcp.AddTool(server, &mcp.Tool{Name: "create_folder", Description: "Create a folder in Gopan."}, s.createFolder)
-	mcp.AddTool(server, &mcp.Tool{Name: "rename_node", Description: "Rename one Gopan file or folder."}, s.renameNode)
-	mcp.AddTool(server, &mcp.Tool{Name: "move_nodes", Description: "Move multiple files or folders in one operation."}, s.moveNodes)
-	mcp.AddTool(server, &mcp.Tool{Name: "copy_nodes", Description: "Copy multiple files or folders in one operation."}, s.copyNodes)
-	mcp.AddTool(server, &mcp.Tool{Name: "trash_nodes", Description: "Move files or folders to the recoverable trash."}, s.trashNodes)
-	mcp.AddTool(server, &mcp.Tool{Name: "restore_nodes", Description: "Restore files or folders from trash."}, s.restoreNodes)
+	mcp.AddTool(server, &mcp.Tool{Name: "create_folder", Description: "Create a folder in Gopan."}, mutation(s, "create_folder", "files:write", (*Server).createFolder))
+	mcp.AddTool(server, &mcp.Tool{Name: "rename_node", Description: "Rename one Gopan file or folder."}, mutation(s, "rename_node", "files:write", (*Server).renameNode))
+	mcp.AddTool(server, &mcp.Tool{Name: "move_nodes", Description: "Move multiple files or folders in one operation."}, mutation(s, "move_nodes", "files:write", (*Server).moveNodes))
+	mcp.AddTool(server, &mcp.Tool{Name: "copy_nodes", Description: "Copy multiple files or folders in one operation."}, mutation(s, "copy_nodes", "files:write", (*Server).copyNodes))
+	mcp.AddTool(server, &mcp.Tool{Name: "trash_nodes", Description: "Move files or folders to the recoverable trash."}, mutation(s, "trash_nodes", "files:delete", (*Server).trashNodes))
+	mcp.AddTool(server, &mcp.Tool{Name: "restore_nodes", Description: "Restore files or folders from trash."}, mutation(s, "restore_nodes", "files:delete", (*Server).restoreNodes))
 	mcp.AddTool(server, &mcp.Tool{Name: "prepare_upload", Description: "Create a direct upload target. Optional SHA-256 enables instant upload; bytes must be sent by the agent using another HTTP-capable tool."}, s.prepareUpload)
 	mcp.AddTool(server, &mcp.Tool{Name: "get_upload_parts", Description: "Refresh direct upload URLs and inspect uploaded multipart parts."}, s.getUploadParts)
 	mcp.AddTool(server, &mcp.Tool{Name: "complete_upload", Description: "Declare a direct upload complete and start server-side hashing, verification, deduplication, and commit."}, s.completeUpload)
