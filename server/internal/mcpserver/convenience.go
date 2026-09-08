@@ -29,9 +29,18 @@ func mutation[In, Out any](s *Server, name, scope string, handler func(*Server, 
 		if err = json.Unmarshal(args, &opts); err != nil {
 			return nil, zero, err
 		}
-		raw, err := s.nodes.MCPMutation(ctx, p.UserID, opts.Key, append([]byte(name+":"), args...), opts.DryRun, func(nodes *service.Nodes) (json.RawMessage, error) {
+		fingerprint := name + ":" + p.CredentialID.String() + ":"
+		if p.RootID != nil {
+			fingerprint += p.RootID.String()
+		}
+		raw, err := s.nodes.MCPMutation(ctx, p.UserID, opts.Key, append([]byte(fingerprint), args...), opts.DryRun, func(nodes *service.Nodes) (json.RawMessage, error) {
 			local := *s
 			local.nodes = nodes
+			var a map[string]any
+			_ = json.Unmarshal(args, &a)
+			if err := local.enforceRoot(ctx, p, name, a); err != nil {
+				return nil, err
+			}
 			_, out, err := handler(&local, ctx, req, in)
 			if err != nil {
 				return nil, err
@@ -40,6 +49,15 @@ func mutation[In, Out any](s *Server, name, scope string, handler func(*Server, 
 		})
 		if err != nil {
 			return nil, zero, err
+		}
+		if p.RootID != nil {
+			var result any
+			if err = json.Unmarshal(raw, &result); err != nil {
+				return nil, zero, err
+			}
+			if err = s.checkResultRoot(ctx, p, result); err != nil {
+				return nil, zero, err
+			}
 		}
 		err = json.Unmarshal(raw, &zero)
 		return nil, zero, err
@@ -94,7 +112,7 @@ func (s *Server) resolvePath(ctx context.Context, _ *mcp.CallToolRequest, in Pat
 	if err != nil {
 		return nil, PathOutput{}, err
 	}
-	n, err := s.nodes.ResolvePath(ctx, p.UserID, in.Path)
+	n, err := s.nodes.ResolvePathAt(ctx, p.UserID, in.Path, p.RootID)
 	out := PathOutput{Path: in.Path, Root: n == nil}
 	if n != nil {
 		node := nodeFromStore(*n)
@@ -113,7 +131,7 @@ func (s *Server) createDirectories(ctx context.Context, _ *mcp.CallToolRequest, 
 	if err != nil {
 		return nil, PathOutput{}, err
 	}
-	n, err := s.nodes.EnsurePath(ctx, p.UserID, in.Path)
+	n, err := s.nodes.EnsurePathAt(ctx, p.UserID, in.Path, p.RootID)
 	out := PathOutput{Path: in.Path, Root: n == nil}
 	if n != nil {
 		node := nodeFromStore(*n)
@@ -140,7 +158,7 @@ func (s *Server) listTrash(ctx context.Context, _ *mcp.CallToolRequest, in Trash
 	if err != nil {
 		return nil, TrashOutput{}, err
 	}
-	page, err := s.nodes.Trash(ctx, p.UserID, in.Cursor)
+	page, err := s.nodes.MCPTrash(ctx, p, in.Cursor)
 	if err != nil {
 		return nil, TrashOutput{}, err
 	}
@@ -159,7 +177,7 @@ func (s *Server) parentByPath(ctx context.Context, owner uuid.UUID, id, path *st
 	if id != nil {
 		return nil, &service.Error{Code: "INVALID_INPUT", Message: "ID 和 path 只能提供一个"}
 	}
-	n, err := s.nodes.ResolvePath(ctx, owner, *path)
+	n, err := s.nodes.ResolvePathAt(ctx, owner, *path, rootFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +196,7 @@ func (s *Server) nodeByPath(ctx context.Context, owner uuid.UUID, id string, pat
 	if id != "" {
 		return uuid.Nil, &service.Error{Code: "INVALID_INPUT", Message: "node_id 和 path 只能提供一个"}
 	}
-	n, err := s.nodes.ResolvePath(ctx, owner, *path)
+	n, err := s.nodes.ResolvePathAt(ctx, owner, *path, rootFrom(ctx))
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -271,6 +289,9 @@ func (s *Server) batchNodes(ctx context.Context, _ *mcp.CallToolRequest, in Batc
 				return &service.Error{Code: "INVALID_INPUT", Message: "同一批次包含重复节点"}
 			}
 			seen[id] = true
+			if err := nodes.CheckMCPNode(ctx, p, id, in.Operation == "copy"); err != nil {
+				return err
+			}
 			n, err := nodes.Get(ctx, p.UserID, id)
 			if err != nil {
 				return err

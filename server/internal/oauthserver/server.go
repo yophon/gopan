@@ -35,11 +35,16 @@ func (s *Server) AuthorizationMetadata(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) ProtectedResourceMetadata(w http.ResponseWriter, r *http.Request) {
 	base := requestBaseURL(r)
+	resource, scopes := "/mcp", service.MCPScopes
+	if strings.HasSuffix(r.URL.Path, "/mcp/admin") {
+		resource = "/mcp/admin"
+		scopes = service.MCPAdminScopes
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"resource":                 base + "/mcp",
+		"resource":                 base + resource,
 		"authorization_servers":    []string{base},
 		"bearer_methods_supported": []string{"header"},
-		"scopes_supported":         service.MCPScopes,
+		"scopes_supported":         scopes,
 	})
 }
 

@@ -19,17 +19,19 @@ type principalKey struct{}
 type baseURLKey struct{}
 
 type Server struct {
-	nodes   *service.Nodes
-	uploads *service.Uploads
-	tokens  *service.MCPTokens
-	oauth   *service.OAuth
-	packer  *service.Packer
-	tickets *service.PackTickets
+	nodes             *service.Nodes
+	uploads           *service.Uploads
+	tokens            *service.MCPTokens
+	oauth             *service.OAuth
+	packer            *service.Packer
+	tickets           *service.PackTickets
+	admin             *service.Admin
+	adminDefaultQuota int64
 }
 
 func NewHandler(nodes *service.Nodes, uploads *service.Uploads, tokens *service.MCPTokens, oauth *service.OAuth, packer *service.Packer, tickets *service.PackTickets) http.Handler {
 	s := &Server{nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, packer: packer, tickets: tickets}
-	protocol := mcp.NewServer(&mcp.Implementation{Name: "gopan", Version: "2.2.0"}, nil)
+	protocol := mcp.NewServer(&mcp.Implementation{Name: "gopan", Version: "2.3.0"}, nil)
 	s.registerTools(protocol)
 	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return protocol }, &mcp.StreamableHTTPOptions{
 		Stateless: true, JSONResponse: true,
@@ -51,6 +53,31 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 			http.Error(w, "invalid MCP bearer token", http.StatusUnauthorized)
 			return
 		}
+		if s.nodes != nil {
+			if err = s.nodes.ApplyMCPPolicy(r.Context(), principal); err != nil {
+				http.Error(w, "MCP access denied", http.StatusForbidden)
+				return
+			}
+		}
+		hasAdmin := false
+		for scope := range principal.Scopes {
+			if strings.HasPrefix(scope, "admin:") {
+				hasAdmin = true
+			}
+		}
+		if s.admin != nil {
+			if !hasAdmin {
+				http.Error(w, "admin credential required", http.StatusForbidden)
+				return
+			}
+			if _, err = s.admin.Overview(r.Context(), principal.UserID); err != nil {
+				http.Error(w, "admin required", http.StatusForbidden)
+				return
+			}
+		} else if hasAdmin {
+			http.Error(w, "use the admin MCP endpoint", http.StatusForbidden)
+			return
+		}
 		ctx := context.WithValue(r.Context(), principalKey{}, principal)
 		ctx = context.WithValue(ctx, baseURLKey{}, requestBaseURL(r))
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -70,6 +97,9 @@ func (s *Server) authenticate(ctx context.Context, bearer string) (*service.MCPP
 
 func (s *Server) writeAuthenticateHeader(w http.ResponseWriter, r *http.Request) {
 	metadata := requestBaseURL(r) + "/.well-known/oauth-protected-resource"
+	if s.admin != nil {
+		metadata += "/mcp/admin"
+	}
 	w.Header().Set("WWW-Authenticate", `Bearer realm="gopan-mcp", resource_metadata="`+metadata+`"`)
 }
 
@@ -250,6 +280,17 @@ func (s *Server) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in Sea
 	p, err := principal(ctx, "files:read")
 	if err != nil {
 		return nil, SearchFilesOutput{}, err
+	}
+	if p.RootID != nil {
+		page, err := s.nodes.SearchInSubtree(ctx, *p.RootID, in.Query, in.Cursor)
+		if err != nil {
+			return nil, SearchFilesOutput{}, err
+		}
+		out := SearchFilesOutput{Items: make([]NodeOutput, 0, len(page.Items)), Total: page.Total, NextCursor: page.NextCursor}
+		for _, n := range page.Items {
+			out.Items = append(out.Items, nodeFromSearch(store.SearchNodesRow(n)))
+		}
+		return nil, out, nil
 	}
 	page, err := s.nodes.Search(ctx, p.UserID, in.Query, in.Cursor)
 	if err != nil {
@@ -528,6 +569,16 @@ func (s *Server) prepareUpload(ctx context.Context, _ *mcp.CallToolRequest, in P
 	if err != nil {
 		return nil, UploadOutput{}, err
 	}
+	if p.RootID != nil {
+		if init.Node != nil {
+			err = s.nodes.CheckMCPNode(ctx, p, init.Node.ID, true)
+		} else {
+			err = s.nodes.CheckMCPUpload(ctx, p, init.Transfer.Session.ID)
+		}
+		if err != nil {
+			return nil, UploadOutput{}, err
+		}
+	}
 	return nil, uploadOutput(init), nil
 }
 
@@ -682,25 +733,26 @@ func (s *Server) prepareDownload(ctx context.Context, _ *mcp.CallToolRequest, in
 }
 
 func (s *Server) registerTools(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{Name: "wait_upload", Description: "Wait up to 25 seconds for an upload to become ready, failed, or aborted. On timeout returns latest status; repeat if nonterminal."}, s.waitUpload)
-	mcp.AddTool(server, &mcp.Tool{Name: "resolve_path", Description: "Resolve an absolute, case-sensitive Gopan path to a node ID. / is the virtual root."}, s.resolvePath)
-	mcp.AddTool(server, &mcp.Tool{Name: "create_directories", Description: "Atomically create missing parent directories; reuse existing directories. Supports persistent idempotency."}, mutation(s, "create_directories", "files:write", (*Server).createDirectories))
-	mcp.AddTool(server, &mcp.Tool{Name: "list_trash", Description: "List recoverable trash with deletion times and cursor pagination. Use returned IDs with restore_nodes or batch_nodes."}, s.listTrash)
-	mcp.AddTool(server, &mcp.Tool{Name: "batch_nodes", Description: "Move, copy, trash, or restore up to 100 nodes with individual success/error results. dry_run simulates then rolls back; preview IDs are not usable. idempotency_key replays the original entire result; use a new key to retry failed items."}, s.batchMutation)
-	mcp.AddTool(server, &mcp.Tool{Name: "list_files", Description: "List files and folders in a Gopan folder with cursor pagination."}, s.listFiles)
-	mcp.AddTool(server, &mcp.Tool{Name: "search_files", Description: "Search the user's Gopan files and folders by name."}, s.searchFiles)
-	mcp.AddTool(server, &mcp.Tool{Name: "get_file_info", Description: "Get metadata for one Gopan file or folder."}, s.getFileInfo)
-	mcp.AddTool(server, &mcp.Tool{Name: "read_text_file", Description: "Read up to 64 KiB from a UTF-8 text file without downloading binary content into context."}, s.readTextFile)
-	mcp.AddTool(server, &mcp.Tool{Name: "create_folder", Description: "Create a folder in Gopan."}, mutation(s, "create_folder", "files:write", (*Server).createFolder))
-	mcp.AddTool(server, &mcp.Tool{Name: "rename_node", Description: "Rename one Gopan file or folder."}, mutation(s, "rename_node", "files:write", (*Server).renameNode))
-	mcp.AddTool(server, &mcp.Tool{Name: "move_nodes", Description: "Move multiple files or folders in one operation."}, mutation(s, "move_nodes", "files:write", (*Server).moveNodes))
-	mcp.AddTool(server, &mcp.Tool{Name: "copy_nodes", Description: "Copy multiple files or folders in one operation."}, mutation(s, "copy_nodes", "files:write", (*Server).copyNodes))
-	mcp.AddTool(server, &mcp.Tool{Name: "trash_nodes", Description: "Move files or folders to the recoverable trash."}, mutation(s, "trash_nodes", "files:delete", (*Server).trashNodes))
-	mcp.AddTool(server, &mcp.Tool{Name: "restore_nodes", Description: "Restore files or folders from trash."}, mutation(s, "restore_nodes", "files:delete", (*Server).restoreNodes))
-	mcp.AddTool(server, &mcp.Tool{Name: "prepare_upload", Description: "Create a direct upload target. Optional SHA-256 enables instant upload; bytes must be sent by the agent using another HTTP-capable tool."}, s.prepareUpload)
-	mcp.AddTool(server, &mcp.Tool{Name: "get_upload_parts", Description: "Refresh direct upload URLs and inspect uploaded multipart parts."}, s.getUploadParts)
-	mcp.AddTool(server, &mcp.Tool{Name: "complete_upload", Description: "Declare a direct upload complete and start server-side hashing, verification, deduplication, and commit."}, s.completeUpload)
-	mcp.AddTool(server, &mcp.Tool{Name: "get_upload_status", Description: "Poll an upload until ready or failed."}, s.getUploadStatus)
-	mcp.AddTool(server, &mcp.Tool{Name: "abort_upload", Description: "Abort an active upload and remove staged data."}, s.abortUpload)
-	mcp.AddTool(server, &mcp.Tool{Name: "prepare_download", Description: "Create a short-lived direct GET URL for one file, or a restricted ZIP ticket for folders and multiple nodes."}, s.prepareDownload)
+	s.registerControlTools(server)
+	addTool(s, server, &mcp.Tool{Name: "wait_upload", Description: "Wait up to 25 seconds for an upload to become ready, failed, or aborted. On timeout returns latest status; repeat if nonterminal."}, s.waitUpload)
+	addTool(s, server, &mcp.Tool{Name: "resolve_path", Description: "Resolve an absolute, case-sensitive Gopan path to a node ID. / is the virtual root."}, s.resolvePath)
+	addTool(s, server, &mcp.Tool{Name: "create_directories", Description: "Atomically create missing parent directories; reuse existing directories. Supports persistent idempotency."}, mutation(s, "create_directories", "files:write", (*Server).createDirectories))
+	addTool(s, server, &mcp.Tool{Name: "list_trash", Description: "List recoverable trash with deletion times and cursor pagination. Use returned IDs with restore_nodes or batch_nodes."}, s.listTrash)
+	addTool(s, server, &mcp.Tool{Name: "batch_nodes", Description: "Move, copy, trash, or restore up to 100 nodes with individual success/error results. dry_run simulates then rolls back; preview IDs are not usable. idempotency_key replays the original entire result; use a new key to retry failed items."}, s.batchMutation)
+	addTool(s, server, &mcp.Tool{Name: "list_files", Description: "List files and folders in a Gopan folder with cursor pagination."}, s.listFiles)
+	addTool(s, server, &mcp.Tool{Name: "search_files", Description: "Search the user's Gopan files and folders by name."}, s.searchFiles)
+	addTool(s, server, &mcp.Tool{Name: "get_file_info", Description: "Get metadata for one Gopan file or folder."}, s.getFileInfo)
+	addTool(s, server, &mcp.Tool{Name: "read_text_file", Description: "Read up to 64 KiB from a UTF-8 text file without downloading binary content into context."}, s.readTextFile)
+	addTool(s, server, &mcp.Tool{Name: "create_folder", Description: "Create a folder in Gopan."}, mutation(s, "create_folder", "files:write", (*Server).createFolder))
+	addTool(s, server, &mcp.Tool{Name: "rename_node", Description: "Rename one Gopan file or folder."}, mutation(s, "rename_node", "files:write", (*Server).renameNode))
+	addTool(s, server, &mcp.Tool{Name: "move_nodes", Description: "Move multiple files or folders in one operation."}, mutation(s, "move_nodes", "files:write", (*Server).moveNodes))
+	addTool(s, server, &mcp.Tool{Name: "copy_nodes", Description: "Copy multiple files or folders in one operation."}, mutation(s, "copy_nodes", "files:write", (*Server).copyNodes))
+	addTool(s, server, &mcp.Tool{Name: "trash_nodes", Description: "Move files or folders to the recoverable trash."}, mutation(s, "trash_nodes", "files:delete", (*Server).trashNodes))
+	addTool(s, server, &mcp.Tool{Name: "restore_nodes", Description: "Restore files or folders from trash."}, mutation(s, "restore_nodes", "files:delete", (*Server).restoreNodes))
+	addTool(s, server, &mcp.Tool{Name: "prepare_upload", Description: "Create a direct upload target. Optional SHA-256 enables instant upload; bytes must be sent by the agent using another HTTP-capable tool."}, s.prepareUpload)
+	addTool(s, server, &mcp.Tool{Name: "get_upload_parts", Description: "Refresh direct upload URLs and inspect uploaded multipart parts."}, s.getUploadParts)
+	addTool(s, server, &mcp.Tool{Name: "complete_upload", Description: "Declare a direct upload complete and start server-side hashing, verification, deduplication, and commit."}, s.completeUpload)
+	addTool(s, server, &mcp.Tool{Name: "get_upload_status", Description: "Poll an upload until ready or failed."}, s.getUploadStatus)
+	addTool(s, server, &mcp.Tool{Name: "abort_upload", Description: "Abort an active upload and remove staged data."}, s.abortUpload)
+	addTool(s, server, &mcp.Tool{Name: "prepare_download", Description: "Create a short-lived direct GET URL for one file, or a restricted ZIP ticket for folders and multiple nodes."}, s.prepareDownload)
 }

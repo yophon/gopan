@@ -22,6 +22,13 @@ var validMCPScopes = map[string]struct{}{
 	"files:delete":   {},
 	"files:upload":   {},
 	"files:download": {},
+	"shares:read":    {},
+	"shares:write":   {},
+	"audit:read":     {},
+	"admin:read":     {},
+	"admin:users":    {},
+	"admin:tasks":    {},
+	"admin:purge":    {},
 }
 
 var MCPScopes = []string{
@@ -30,10 +37,24 @@ var MCPScopes = []string{
 	"files:upload",
 	"files:write",
 	"files:delete",
+	"shares:read", "shares:write", "audit:read",
+}
+
+var MCPAdminScopes = []string{"admin:read", "admin:users", "admin:tasks", "admin:purge"}
+
+func requireScopeAccount(ctx context.Context, q *store.Queries, user uuid.UUID, scopes []string) error {
+	for _, scope := range scopes {
+		if strings.HasPrefix(scope, "admin:") {
+			return NewAdmin(q, 0).require(ctx, user)
+		}
+	}
+	return nil
 }
 
 type MCPPrincipal struct {
 	TokenID        uuid.UUID
+	CredentialID   uuid.UUID
+	RootID         *uuid.UUID
 	UserID         uuid.UUID
 	Username       string
 	CredentialType string
@@ -69,6 +90,9 @@ func (m *MCPTokens) Create(ctx context.Context, userID uuid.UUID, name string, s
 	if err != nil {
 		return "", store.McpToken{}, err
 	}
+	if err := requireScopeAccount(ctx, m.q, userID, scopes); err != nil {
+		return "", store.McpToken{}, err
+	}
 	raw := make([]byte, 24)
 	if _, err := rand.Read(raw); err != nil {
 		return "", store.McpToken{}, err
@@ -97,8 +121,17 @@ func normalizeMCPScopes(scopes []string) ([]string, error) {
 		seen[scope] = struct{}{}
 	}
 	out := make([]string, 0, len(seen))
+	admin, file := false, false
 	for scope := range seen {
+		if strings.HasPrefix(scope, "admin:") {
+			admin = true
+		} else {
+			file = true
+		}
 		out = append(out, scope)
+	}
+	if admin && file {
+		return nil, errf("INVALID_INPUT", "管理员权限需使用单独凭据，不能与文件权限混合")
 	}
 	sort.Strings(out)
 	return out, nil
@@ -139,7 +172,7 @@ func (m *MCPTokens) Authenticate(ctx context.Context, token string) (*MCPPrincip
 	}
 	_ = m.q.TouchMCPToken(ctx, row.ID)
 	return &MCPPrincipal{
-		TokenID: row.ID, UserID: row.UserID, Username: row.Username,
+		TokenID: row.ID, CredentialID: row.ID, UserID: row.UserID, Username: row.Username,
 		CredentialType: "api_key", Scopes: scopes,
 	}, nil
 }

@@ -82,6 +82,11 @@ OAuth 与 API Key 共用以下权限：
 - `files:upload`
 - `files:write`
 - `files:delete`
+- `shares:read`
+- `shares:write`
+- `audit:read`
+
+已有五项文件权限不自动升级为分享管理或审计权限，需要重新 OAuth 授权或创建新 Key。管理员权限是独立的 `admin:read`、`admin:users`、`admin:tasks`、`admin:purge`，只能由管理员授权，且不能与普通文件权限混在同一凭据里。
 
 ## 工具
 
@@ -108,8 +113,69 @@ OAuth 与 API Key 共用以下权限：
 | `create_directories` | `files:write` | 原子地递归创建目录，复用已有目录 |
 | `list_trash` | `files:read` | 分页列回收站，包含节点 ID、原父目录与删除时间 |
 | `batch_nodes` | 按操作使用 `files:write` 或 `files:delete` | 批量预览、逐项执行与错误反馈 |
+| `storage_status` | `files:read` | 已用/总配额、预留空间、可用空间、活跃上传和传输限制 |
+| `list_shares` | `shares:read` | 查看当前账号范围内的有效分享 |
+| `create_share` | `shares:write` | 创建分享，可设置密码、未来到期时间和幂等键 |
+| `revoke_share` | `shares:write` | 按分享 ID 撤销分享，支持幂等键 |
+| `list_audit` | `audit:read` | 分页读取 MCP 操作记录 |
 
-永久删除故意不暴露给第一版 MCP。
+文件接口共 26 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
+
+### 配额与分享
+
+`storage_status({})` 返回账号级配额与当前上传预留量。`available_bytes` 是查询瞬间的预估值，后台最终提交仍会重新检查配额；目录限定凭据也会看到账号级配额，不是目录单独配额。响应还包含当前凭据的 `root_id`、`scopes`、单 PUT 上限、分片大小和活跃上传上限。
+
+```json
+{"path":"/reports/result.pdf","password":"optional-password","expires_at":"2030-01-01T00:00:00Z","idempotency_key":"share-report-unique-id"}
+```
+
+上述是 `create_share` 示例，返回 `id`、`node_id`、`url`、`has_password` 和到期时间，不返回密码或密码哈希。没有密码的分享可被任何持有链接的人访问；无需对外分享时调用 `revoke_share({"share_id":"...","idempotency_key":"revoke-unique-id"})`。目录授权与分享链接是两种独立授权，修改 Agent 的目录范围不会自动撤销之前建立的分享。
+
+### 按目录授权
+
+网页“Agent 接入”在 API Key 和 OAuth 授权列表里提供“目录范围”。点击“全盘”或目录名，输入如 `/AI工作区`；留空保存表示恢复全盘访问。范围设置仅能通过账号网页登录管理，MCP 不提供修改自身范围的工具。
+
+- 范围绑定 API Key ID 或 OAuth **授权 ID**，因此 OAuth 刷新令牌轮换不会丢失限制。
+- 对该凭据，`/` 和省略的目标目录均映射到授权目录；路径相对这个虚拟根解析。
+- 列表、搜索、回收站、分享列表只返回范围内的节点；直接传入范围外 UUID、上传会话或移动目标同样会被拒绝。
+- 允许在目录内整理文件，但不能用该凭据重命名、移动、删除授权根目录本身。
+- 授权根目录删除或永久删除后，凭据拒绝访问，不会自动退回全盘权限。重新选择有效目录才能恢复访问。
+- 批量写操作在事务内重复校验，普通移动与 MCP 写操作共享按用户串行锁。幂等历史响应返回前也检查当前目录范围。
+- 新范围对后续 MCP 请求生效。已签发的 PUT/GET URL、ZIP 票据和已启动的后台传输具有原来的有效期，不会因改范围而瞬间失效；分享需要单独撤销。
+
+GraphQL 管理接口：`mcpAccessRoots`、`setMCPAccessRoot(credentialId, credentialType, rootPath)`。`credentialType` 为 `api_key` 或 `oauth`，`rootPath:null` 清除限制。管理员凭据不能设置文件目录范围。
+
+### 操作记录
+
+网页“Agent 接入 → 操作记录”可查看账号的 MCP 调用。MCP `list_audit({"limit":50,"before_id":123})` 按递减 ID 分页；目录限定凭据只能查看自己的调用历史，完整凭据可查看本账号历史。
+
+记录包含账号/凭据 ID、接口、工具名、必要的目标 ID/路径、时间和执行结果。不会记录密码、API Key、OAuth Token、完整请求、分享链接或预签名地址。`success` 表示成功，`partial` 表示批量部分成功，`failed` 表示失败；如果进程在结束记录前退出，可能保留 `started`，此时执行结果未知，应通过幂等键或状态查询确认。日志写入失败时工具不会开始执行。
+
+日志与幂等表均持久保存，应纳入数据库备份与容量管理。目录限制后的日志仍可能包含该凭据之前在其他范围内的操作历史，但不包含文件内容。
+
+### 独立管理员 MCP
+
+地址：`https://pan.example.com/mcp/admin`。具有管理员权限的 OAuth/API Key 才能调用；普通文件凭据调用返回 403，管理员凭据调用普通 `/mcp` 也返回 403。每个请求重新检查账号管理员身份和禁用状态，降权后立即拒绝后续请求。
+
+| 工具 | 权限 | 功能 |
+|---|---|---|
+| `admin_overview` | `admin:read` | 用户、对象存储和任务统计 |
+| `admin_list_users` | `admin:read` | 用户、配额、使用量与启停状态，不返回密码哈希 |
+| `admin_list_tasks` | `admin:read` | 分页查看任务类型、状态、尝试次数 |
+| `admin_list_audit` | `admin:read` | 实例所有账号的 MCP 操作记录 |
+| `admin_create_user` | `admin:users` | 创建账号及可选配额 |
+| `admin_set_quota` | `admin:users` | 设置配额 |
+| `admin_set_disabled` | `admin:users` | 启用/禁用账号，禁止禁用自己 |
+| `admin_reset_password` | `admin:users` | 生成新密码并撤销网页登录会话；不要自动重试 |
+| `admin_retry_failed_tasks` | `admin:tasks` | 重排失败任务 |
+| `admin_purge_nodes` | `admin:purge` | 按账号及节点 ID 永久删除选中的回收站节点 |
+
+```bash
+codex mcp add gopan-admin --url https://pan.example.com/mcp/admin
+codex mcp login gopan-admin --scopes admin:read,admin:users,admin:tasks,admin:purge
+```
+
+管理员写工具除密码重置外支持 `idempotency_key`。密码重置的随机密码只作为本次响应返回，不存入幂等响应表或日志。永久删除应先 `dry_run:true` 预览，实际执行必须传 `confirm:true`；不能永久删除仍处于正常目录的节点。管理员工具只提供明确列出的应用管理能力，不提供任意 SQL、Shell 或任意文件读取。
 
 ### 客户端要求与 OAuth
 
@@ -155,12 +221,14 @@ codex mcp login gopan
 
 `create_folder`、`create_directories`、`rename_node`、`move_nodes`、`copy_nodes`、`trash_nodes`、`restore_nodes`、`batch_nodes` 支持可选 `idempotency_key`（1–128 字节）。节点变更与响应记录在同一个数据库事务提交，因此进程重启、并发重试和响应丢失不会重复执行成功操作。
 
-- 同一用户的节点写操作共用键空间；建议每个逻辑操作使用新的 UUID。
+- 同一用户的节点写操作共用键空间；建议每个逻辑操作使用新的 UUID。请求指纹包含凭据和目录范围，换凭据或改范围不会重放另一授权下的结果。
 - 同键、同工具、同参数返回原始结果；同键改参数返回 `IDEMPOTENCY_CONFLICT`。
 - 原始响应是历史执行结果，不是节点当前状态；需要新状态时重新查询。
 - 整体失败会回滚且不保存键，修正问题后可重试。
 - 成功提交的记录持续保留，不自动过期，以防旧重试重复执行。大量自动化使用时需将此表纳入存储监控与备份。
 - 上传生命周期沿用传输会话的幂等机制；节点写操作键与上传键不共用键空间。
+
+上传初始化现在也将请求指纹与结果原子保存，覆盖秒传和普通传输。指纹包含名称、MIME、大小、SHA、传输模式及目标目录；同键改变这些参数会冲突。并发初始化会串行检查活跃会话数与配额预留，避免并发超额预留。客户端重连后使用原键获得原会话和刷新的缺失分片地址；完成的秒传重试返回原节点，不重复扣配额。
 
 `batch_nodes` 每批最多 100 个节点，操作为 `move`、`copy`、`trash` 或 `restore`。使用 ID 或路径选择源，恢复操作使用 ID。示例：
 

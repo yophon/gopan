@@ -52,3 +52,14 @@ mutation DecideOAuthAuthorization($input: OAuthAuthorizationInput!, $approved: B
     redirectUrl
   }
 }
+query McpAccessRoots {
+  mcpAccessRoots { credentialId credentialType rootId rootName }
+}
+
+mutation SetMcpAccessRoot($credentialId: ID!, $credentialType: String!, $rootPath: String) {
+  setMCPAccessRoot(credentialId: $credentialId, credentialType: $credentialType, rootPath: $rootPath)
+}
+
+query McpAudit($beforeId: Int64, $limit: Int) {
+  mcpAudit(beforeId: $beforeId, limit: $limit) { id credentialId credentialType endpoint tool status errorCode createdAt }
+}

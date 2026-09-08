@@ -271,13 +271,13 @@ func TestMCPEndToEndOverHTTP(t *testing.T) {
 	}
 	sess := e.connect(t, plain)
 
-	// 工具清单:21 个工具全部注册
+	// 工具清单:26 个工具全部注册
 	lt, err := sess.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(lt.Tools) != 21 {
-		t.Fatalf("应注册 21 个工具,got %d", len(lt.Tools))
+	if len(lt.Tools) != 26 {
+		t.Fatalf("应注册 26 个工具,got %d", len(lt.Tools))
 	}
 
 	// create_folder → list_files → search_files → get_file_info → rename → trash → restore
@@ -404,6 +404,31 @@ func TestMCPOAuthTokenOverHTTP(t *testing.T) {
 	// 授权范围外的 scope 照样被拒
 	if msg := callToolErr(t, sess, "trash_nodes", map[string]any{"node_ids": []string{folder.ID}}); !strings.Contains(msg, "FORBIDDEN") {
 		t.Fatalf("OAuth 未授权 files:delete 应 FORBIDDEN,got %q", msg)
+	}
+	grantPrincipal, err := e.oauth.Authenticate(ctx, tok.AccessToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootPath := "/oauth-made"
+	if err = e.nodes.SetMCPAccessRoot(ctx, e.alice, grantPrincipal.CredentialID, "oauth", &rootPath); err != nil {
+		t.Fatal(err)
+	}
+	rotated, err := e.oauth.Refresh(ctx, tok.RefreshToken, client.ClientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rotatedPrincipal, err := e.oauth.Authenticate(ctx, rotated.AccessToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rotatedPrincipal.CredentialID != grantPrincipal.CredentialID || rotatedPrincipal.TokenID == grantPrincipal.TokenID {
+		t.Fatal("OAuth grant identity did not survive rotation")
+	}
+	rotatedSession := e.connect(t, rotated.AccessToken)
+	var restricted NodeOutput
+	callTool(t, rotatedSession, "create_folder", map[string]any{"name": "inside-after-refresh"}, &restricted)
+	if restricted.ParentID == nil || *restricted.ParentID != folder.ID {
+		t.Fatal("OAuth refresh lost directory boundary")
 	}
 }
 

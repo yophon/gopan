@@ -95,12 +95,22 @@ func pathParts(path string) ([]string, error) {
 
 // ResolvePath uses exact, case-sensitive names. nil denotes the virtual root.
 func (s *Nodes) ResolvePath(ctx context.Context, owner uuid.UUID, path string) (*store.Node, error) {
+	return s.ResolvePathAt(ctx, owner, path, nil)
+}
+func (s *Nodes) ResolvePathAt(ctx context.Context, owner uuid.UUID, path string, root *uuid.UUID) (*store.Node, error) {
 	parts, err := pathParts(path)
 	if err != nil {
 		return nil, err
 	}
-	var parent *uuid.UUID
+	parent := root
 	var result *store.Node
+	if root != nil {
+		n, err := s.Get(ctx, owner, *root)
+		if err != nil || n.DeletedAt.Valid {
+			return nil, ErrNotFound
+		}
+		result = &n
+	}
 	for i, name := range parts {
 		n, err := s.q.GetActiveChildByName(ctx, store.GetActiveChildByNameParams{OwnerID: owner, ParentID: parent, Name: name})
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -120,12 +130,22 @@ func (s *Nodes) ResolvePath(ctx context.Context, owner uuid.UUID, path string) (
 
 // EnsurePath must run inside MCPMutation so recursive creation is atomic.
 func (s *Nodes) EnsurePath(ctx context.Context, owner uuid.UUID, path string) (*store.Node, error) {
+	return s.EnsurePathAt(ctx, owner, path, nil)
+}
+func (s *Nodes) EnsurePathAt(ctx context.Context, owner uuid.UUID, path string, root *uuid.UUID) (*store.Node, error) {
 	parts, err := pathParts(path)
 	if err != nil {
 		return nil, err
 	}
-	var parent *uuid.UUID
+	parent := root
 	var result *store.Node
+	if root != nil {
+		n, err := s.Get(ctx, owner, *root)
+		if err != nil || n.DeletedAt.Valid {
+			return nil, ErrNotFound
+		}
+		result = &n
+	}
 	for _, name := range parts {
 		n, err := s.q.GetActiveChildByName(ctx, store.GetActiveChildByNameParams{OwnerID: owner, ParentID: parent, Name: name})
 		if errors.Is(err, pgx.ErrNoRows) {

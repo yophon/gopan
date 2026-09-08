@@ -53,6 +53,24 @@ type MCPAPIKeyCreated struct {
 	Credential *MCPAPIKey `json:"credential"`
 }
 
+type MCPAccessRoot struct {
+	CredentialID   string `json:"credentialId"`
+	CredentialType string `json:"credentialType"`
+	RootID         string `json:"rootId"`
+	RootName       string `json:"rootName"`
+}
+
+type MCPAuditEvent struct {
+	ID             int64     `json:"id"`
+	CredentialID   string    `json:"credentialId"`
+	CredentialType string    `json:"credentialType"`
+	Endpoint       string    `json:"endpoint"`
+	Tool           string    `json:"tool"`
+	Status         string    `json:"status"`
+	ErrorCode      *string   `json:"errorCode,omitempty"`
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
 type Mutation struct {
 }
 

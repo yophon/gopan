@@ -25,7 +25,9 @@ const maxActiveSessions = 20
 var sha256Re = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type Uploads struct {
-	pool     *pgxpool.Pool
+	pool interface {
+		Begin(context.Context) (pgx.Tx, error)
+	}
 	q        *store.Queries
 	obj      *objstore.Store
 	nodes    *Nodes

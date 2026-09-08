@@ -267,6 +267,9 @@ func (s *Nodes) Move(ctx context.Context, owner uuid.UUID, ids []uuid.UUID, targ
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "mcp-write:"+owner.String()); err != nil {
+		return nil, err
+	}
 	qtx := s.q.WithTx(tx)
 
 	out := make([]store.Node, 0, len(ids))
