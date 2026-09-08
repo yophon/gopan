@@ -180,6 +180,9 @@ type UploadSession struct {
 	FailReason    *string
 	CreatedAt     pgtype.Timestamptz
 	ExpiresAt     pgtype.Timestamptz
+	ObjectKey     *string
+	NodeID        *uuid.UUID
+	FailCode      *string
 }
 
 type User struct {

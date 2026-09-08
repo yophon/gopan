@@ -63,6 +63,8 @@ make build        # 前端构建 + embed → server/gopan 单二进制
 
 ## 设计文档
 
+浏览器上传的 staging 隔离、配额复核、失败恢复和升级兼容说明见 [15 · 上传一致性修复](./doc/15-浏览器上传一致性修复.md)。
+
 Agent 接入与远程 MCP 工具见 [docs/MCP.md](./docs/MCP.md)。
 
 全部设计文档在 [doc/](./doc/):

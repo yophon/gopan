@@ -38,6 +38,11 @@ const FATAL_CODES = new Set([
   'NAME_CONFLICT',
   'BAD_SESSION_STATE',
   'UNAUTHENTICATED',
+  'UPLOAD_EXPIRED',
+  'HASH_MISMATCH',
+  'SIZE_MISMATCH',
+  'NOT_A_FOLDER',
+  'NOT_FOUND',
 ])
 
 type Session = UploadSessionQuery['uploadSession']
@@ -193,7 +198,8 @@ async function runTask(taskId: string) {
       try {
         const res = await request(UploadSessionDocument, { id: task.sessionId })
         session = res.uploadSession
-      } catch {
+      } catch (err) {
+        if (!['NOT_FOUND', 'UPLOAD_EXPIRED', 'BAD_SESSION_STATE'].includes(getErrorCode(err) ?? '')) throw err
         // 会话过期/不存在(48h)→ 清记录走全新上传
         store.removeRecord(task.sessionId)
         task.sessionId = null
@@ -236,12 +242,22 @@ async function runTask(taskId: string) {
     // 4. completing:etags 传空数组,服务端自己对账;
     //    MISSING_PART → 拉新会话补传缺片再试(至多 2 轮)
     task.status = 'completing'
-    for (let round = 0; ; round++) {
+    task.uploadedBytes = task.size
+    rt.completedBytes = task.size
+    let missingRounds = 0
+    for (;;) {
+      throwIfInterrupted(rt)
       try {
         await request(CompleteUploadDocument, { sessionId: task.sessionId!, etags: [] })
         break
       } catch (err) {
-        if (getErrorCode(err) === 'MISSING_PART' && round < 2) {
+        if (getErrorCode(err) === 'UPLOAD_PROCESSING') {
+          // Hashing large files runs in the server worker, not a long HTTP
+          // request. Poll without spending the network-failure retry budget.
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 1000))
+          continue
+        }
+        if (getErrorCode(err) === 'MISSING_PART' && missingRounds++ < 2) {
           const res = await request(UploadSessionDocument, { id: task.sessionId! })
           rt.session = res.uploadSession
           task.status = 'uploading'
@@ -311,6 +327,11 @@ function handleTaskError(task: UploadTask, rt: Runtime, err: unknown) {
   }
   // failed 是终态,断点记录一并清掉
   if (task.sessionId) store.removeRecord(task.sessionId)
+  if (code && FATAL_CODES.has(code)) {
+    // Manual retry must create a new session after deterministic rejection.
+    if (task.sessionId) void request(AbortUploadDocument, { sessionId: task.sessionId }).catch(() => {})
+    task.sessionId = null
+  }
 }
 
 // ---------- 分片上传 ----------
@@ -490,7 +511,6 @@ export function pauseTask(taskId: string) {
   const rt = runtimes.get(taskId)
   if (!task || !rt) return
   if (TERMINAL_STATUSES.includes(task.status) || task.status === 'paused') return
-  if (task.status === 'completing') return // 马上就好,不值得断
 
   if (task.status === 'queued') {
     task.status = 'paused'

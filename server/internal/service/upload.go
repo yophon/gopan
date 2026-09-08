@@ -107,23 +107,26 @@ func (s *Uploads) Init(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID
 	if active >= maxActiveSessions {
 		return nil, errf("TOO_MANY_SESSIONS", "进行中的上传过多,先完成或取消一些")
 	}
-	key := objstore.BlobKey(sha)
+	id := uuid.Must(uuid.NewV7())
+	key := "staging/browser/" + owner.String() + "/" + id.String()
 	uploadID, err := s.obj.NewMultipart(ctx, key, mimeByName(name))
 	if err != nil {
 		return nil, err
 	}
 	sess, err := s.q.CreateUploadSession(ctx, store.CreateUploadSessionParams{
-		ID: uuid.Must(uuid.NewV7()), OwnerID: owner,
+		ID: id, OwnerID: owner, ObjectKey: &key,
 		Sha256: sha, Size: size,
 		TargetParent: parentID, TargetName: name,
 		MinioUploadID: uploadID, PartSize: int32(s.partSize),
 		ExpiresAt: tstz(time.Now().Add(s.ttl)),
 	})
 	if err != nil {
+		_ = s.obj.AbortMultipart(context.WithoutCancel(ctx), key, uploadID)
 		return nil, err
 	}
 	view, err := s.sessionView(ctx, sess)
 	if err != nil {
+		_ = s.Abort(context.WithoutCancel(ctx), owner, id)
 		return nil, err
 	}
 	return &InitResult{Session: view}, nil
@@ -145,9 +148,17 @@ func (s *Uploads) Session(ctx context.Context, owner, id uuid.UUID) (*SessionVie
 }
 
 func (s *Uploads) sessionView(ctx context.Context, sess store.UploadSession) (*SessionView, error) {
-	key := objstore.BlobKey(sess.Sha256)
+	if sess.ObjectKey == nil || time.Now().After(sess.ExpiresAt.Time) {
+		return nil, errf("UPLOAD_EXPIRED", "上传会话已过期或需要重新上传")
+	}
+	key := *sess.ObjectKey
 	done, err := s.obj.ListParts(ctx, key, sess.MinioUploadID)
 	if err != nil {
+		// S3 may have sealed the object before the DB transaction committed.
+		// Keep this session resumable; Complete reconciles the sealed object.
+		if _, statErr := s.obj.Stat(ctx, key); statErr == nil {
+			return &SessionView{Session: sess}, nil
+		}
 		return nil, err
 	}
 	total := int((sess.Size + int64(sess.PartSize) - 1) / int64(sess.PartSize))
@@ -168,110 +179,6 @@ func (s *Uploads) sessionView(ctx context.Context, sess store.UploadSession) (*S
 		urls[n] = u
 	}
 	return &SessionView{Session: sess, PartURLs: urls, Uploaded: uploaded}, nil
-}
-
-func (s *Uploads) Complete(ctx context.Context, owner, id uuid.UUID, etags map[int]string) (*store.Node, error) {
-	sess, err := s.q.GetUploadSession(ctx, store.GetUploadSessionParams{ID: id, OwnerID: owner})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
-		}
-		return nil, err
-	}
-	if sess.Status != "uploading" {
-		return nil, errf("BAD_SESSION_STATE", "会话状态是 %s,不能完成", sess.Status)
-	}
-
-	key := objstore.BlobKey(sess.Sha256)
-	total := int((sess.Size + int64(sess.PartSize) - 1) / int64(sess.PartSize))
-	// 客户端没报 etag 的分片,从 MinIO 补齐(浏览器跨域可能读不到 ETag 响应头)
-	listed, err := s.obj.ListParts(ctx, key, sess.MinioUploadID)
-	if err != nil {
-		return nil, err
-	}
-	parts := make([]objstore.Part, 0, total)
-	for n := 1; n <= total; n++ {
-		etag, ok := etags[n]
-		if !ok {
-			etag, ok = listed[n]
-		}
-		if !ok {
-			return nil, errf("MISSING_PART", "第 %d 片未上传", n)
-		}
-		parts = append(parts, objstore.Part{Number: n, ETag: etag})
-	}
-	if err := s.setStatus(ctx, sess, "completing", ""); err != nil {
-		return nil, err
-	}
-	if err := s.obj.CompleteMultipart(ctx, key, sess.MinioUploadID, parts); err != nil {
-		_ = s.setStatus(ctx, sess, "uploading", "") // 回滚状态,允许重试
-		return nil, errf("COMPLETE_FAILED", "合并分片失败:%v", err)
-	}
-
-	// blob(pending verify)+ node + 配额,同事务
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-	qtx := s.q.WithTx(tx)
-
-	blob, err := qtx.UpsertBlob(ctx, store.UpsertBlobParams{
-		ID: uuid.Must(uuid.NewV7()), Sha256: sess.Sha256,
-		Size: sess.Size, Mime: mimeByName(sess.TargetName),
-	})
-	if err != nil {
-		return nil, err
-	}
-	if blob.Size != sess.Size {
-		return nil, errf("INVALID_INPUT", "同 hash 但大小不一致,拒绝")
-	}
-	name := sess.TargetName // init 时已解冲突;若期间又冲突,唯一索引兜底
-	node, err := qtx.CreateNode(ctx, store.CreateNodeParams{
-		ID: uuid.Must(uuid.NewV7()), OwnerID: owner, ParentID: sess.TargetParent,
-		Name: name, Kind: "file", BlobID: &blob.ID,
-	})
-	if isUniqueViolation(err) {
-		return nil, errf("NAME_CONFLICT", "目标位置已有同名文件,重新发起上传")
-	}
-	if err != nil {
-		return nil, err
-	}
-	if err := qtx.IncrementBlobRef(ctx, blob.ID); err != nil {
-		return nil, err
-	}
-	if err := qtx.AddUsedBytes(ctx, store.AddUsedBytesParams{ID: owner, UsedBytes: sess.Size}); err != nil {
-		return nil, err
-	}
-	if err := qtx.MarkAncestorsStale(ctx, node.ID); err != nil {
-		return nil, err
-	}
-	if err := qtx.SetUploadSessionStatus(ctx, store.SetUploadSessionStatusParams{
-		ID: sess.ID, OwnerID: owner, Status: "verifying",
-	}); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-
-	s.enqueue(ctx, "verify_hash", blob.ID)
-	return &node, nil
-}
-
-func (s *Uploads) Abort(ctx context.Context, owner, id uuid.UUID) error {
-	sess, err := s.q.GetUploadSession(ctx, store.GetUploadSessionParams{ID: id, OwnerID: owner})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNotFound
-		}
-		return err
-	}
-	if sess.Status != "uploading" {
-		return nil
-	}
-	_ = s.obj.AbortMultipart(ctx, objstore.BlobKey(sess.Sha256), sess.MinioUploadID)
-	return s.setStatus(ctx, sess, "aborted", "")
 }
 
 // linkBlob 秒传:只建引用。
@@ -314,8 +221,8 @@ func (s *Uploads) linkBlob(ctx context.Context, owner uuid.UUID, parentID *uuid.
 // CommitStreamed WebDAV 写入定稿:字节已流式转存到 tmpKey,sha/size 是服务端算的。
 // 覆盖语义:目标已有同名文件 → 换 blob 指向并调整引用与配额(不进回收站,
 // rclone sync 高频覆盖不能变成垃圾制造机);同名文件夹 → 冲突报错。
-// 与 completeUpload 走同一条 verify 管线:新 blob 仍标 pending 并入队 verify_hash,
-// 信任模型不分叉,verify 通过后自动触发派生物。
+// WebDAV/Agent 的新 blob 仍标 pending 并入队 verify_hash,通过后触发派生物。
+// 浏览器则在独立 staging 上先校验,定稿见 browser_upload.go。
 func (s *Uploads) CommitStreamed(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID, name, sha string, size int64, tmpKey string) (*store.Node, error) {
 	defer func() { _ = s.obj.Remove(context.WithoutCancel(ctx), tmpKey) }() // 成功失败都清临时对象
 

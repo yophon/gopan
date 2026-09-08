@@ -12,6 +12,45 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimCompletingUpload = `-- name: ClaimCompletingUpload :one
+SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code FROM upload_sessions
+WHERE status = 'completing' AND object_key IS NOT NULL AND expires_at > now()
+ORDER BY created_at
+LIMIT 1 FOR UPDATE SKIP LOCKED
+`
+
+func (q *Queries) ClaimCompletingUpload(ctx context.Context) (UploadSession, error) {
+	row := q.db.QueryRow(ctx, claimCompletingUpload)
+	var i UploadSession
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Sha256,
+		&i.Size,
+		&i.TargetParent,
+		&i.TargetName,
+		&i.MinioUploadID,
+		&i.PartSize,
+		&i.Status,
+		&i.FailReason,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.ObjectKey,
+		&i.NodeID,
+		&i.FailCode,
+	)
+	return i, err
+}
+
+const clearUploadObjectKey = `-- name: ClearUploadObjectKey :exec
+UPDATE upload_sessions SET object_key = NULL WHERE id = $1
+`
+
+func (q *Queries) ClearUploadObjectKey(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearUploadObjectKey, id)
+	return err
+}
+
 const countActiveSessions = `-- name: CountActiveSessions :one
 SELECT count(*) FROM upload_sessions
 WHERE owner_id = $1 AND status IN ('uploading','completing','verifying')
@@ -25,9 +64,9 @@ func (q *Queries) CountActiveSessions(ctx context.Context, ownerID uuid.UUID) (i
 }
 
 const createUploadSession = `-- name: CreateUploadSession :one
-INSERT INTO upload_sessions (id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at
+INSERT INTO upload_sessions (id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, expires_at, object_key)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code
 `
 
 type CreateUploadSessionParams struct {
@@ -40,6 +79,7 @@ type CreateUploadSessionParams struct {
 	MinioUploadID string
 	PartSize      int32
 	ExpiresAt     pgtype.Timestamptz
+	ObjectKey     *string
 }
 
 func (q *Queries) CreateUploadSession(ctx context.Context, arg CreateUploadSessionParams) (UploadSession, error) {
@@ -53,6 +93,7 @@ func (q *Queries) CreateUploadSession(ctx context.Context, arg CreateUploadSessi
 		arg.MinioUploadID,
 		arg.PartSize,
 		arg.ExpiresAt,
+		arg.ObjectKey,
 	)
 	var i UploadSession
 	err := row.Scan(
@@ -68,12 +109,46 @@ func (q *Queries) CreateUploadSession(ctx context.Context, arg CreateUploadSessi
 		&i.FailReason,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.ObjectKey,
+		&i.NodeID,
+		&i.FailCode,
 	)
 	return i, err
 }
 
+const failUploadSession = `-- name: FailUploadSession :exec
+UPDATE upload_sessions SET status = 'failed', fail_code = $2, fail_reason = $3
+WHERE id = $1
+`
+
+type FailUploadSessionParams struct {
+	ID         uuid.UUID
+	FailCode   *string
+	FailReason *string
+}
+
+func (q *Queries) FailUploadSession(ctx context.Context, arg FailUploadSessionParams) error {
+	_, err := q.db.Exec(ctx, failUploadSession, arg.ID, arg.FailCode, arg.FailReason)
+	return err
+}
+
+const finishUploadSession = `-- name: FinishUploadSession :exec
+UPDATE upload_sessions SET status = 'done', node_id = $2, fail_reason = NULL, fail_code = NULL
+WHERE id = $1
+`
+
+type FinishUploadSessionParams struct {
+	ID     uuid.UUID
+	NodeID *uuid.UUID
+}
+
+func (q *Queries) FinishUploadSession(ctx context.Context, arg FinishUploadSessionParams) error {
+	_, err := q.db.Exec(ctx, finishUploadSession, arg.ID, arg.NodeID)
+	return err
+}
+
 const getUploadSession = `-- name: GetUploadSession :one
-SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at FROM upload_sessions WHERE id = $1 AND owner_id = $2
+SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code FROM upload_sessions WHERE id = $1 AND owner_id = $2
 `
 
 type GetUploadSessionParams struct {
@@ -97,13 +172,48 @@ func (q *Queries) GetUploadSession(ctx context.Context, arg GetUploadSessionPara
 		&i.FailReason,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.ObjectKey,
+		&i.NodeID,
+		&i.FailCode,
+	)
+	return i, err
+}
+
+const getUploadSessionForUpdate = `-- name: GetUploadSessionForUpdate :one
+SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code FROM upload_sessions WHERE id = $1 AND owner_id = $2 FOR UPDATE
+`
+
+type GetUploadSessionForUpdateParams struct {
+	ID      uuid.UUID
+	OwnerID uuid.UUID
+}
+
+func (q *Queries) GetUploadSessionForUpdate(ctx context.Context, arg GetUploadSessionForUpdateParams) (UploadSession, error) {
+	row := q.db.QueryRow(ctx, getUploadSessionForUpdate, arg.ID, arg.OwnerID)
+	var i UploadSession
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Sha256,
+		&i.Size,
+		&i.TargetParent,
+		&i.TargetName,
+		&i.MinioUploadID,
+		&i.PartSize,
+		&i.Status,
+		&i.FailReason,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.ObjectKey,
+		&i.NodeID,
+		&i.FailCode,
 	)
 	return i, err
 }
 
 const listExpiredSessions = `-- name: ListExpiredSessions :many
-SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at FROM upload_sessions
-WHERE status = 'uploading' AND expires_at < now()
+SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code FROM upload_sessions
+WHERE (status IN ('uploading', 'completing') OR object_key IS NOT NULL) AND expires_at < now()
 LIMIT 100
 `
 
@@ -129,6 +239,9 @@ func (q *Queries) ListExpiredSessions(ctx context.Context) ([]UploadSession, err
 			&i.FailReason,
 			&i.CreatedAt,
 			&i.ExpiresAt,
+			&i.ObjectKey,
+			&i.NodeID,
+			&i.FailCode,
 		); err != nil {
 			return nil, err
 		}
@@ -177,4 +290,36 @@ func (q *Queries) SetUploadSessionStatus(ctx context.Context, arg SetUploadSessi
 		arg.FailReason,
 	)
 	return err
+}
+
+const tryLockUploadSession = `-- name: TryLockUploadSession :one
+SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code FROM upload_sessions WHERE id = $1 AND owner_id = $2 FOR UPDATE NOWAIT
+`
+
+type TryLockUploadSessionParams struct {
+	ID      uuid.UUID
+	OwnerID uuid.UUID
+}
+
+func (q *Queries) TryLockUploadSession(ctx context.Context, arg TryLockUploadSessionParams) (UploadSession, error) {
+	row := q.db.QueryRow(ctx, tryLockUploadSession, arg.ID, arg.OwnerID)
+	var i UploadSession
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Sha256,
+		&i.Size,
+		&i.TargetParent,
+		&i.TargetName,
+		&i.MinioUploadID,
+		&i.PartSize,
+		&i.Status,
+		&i.FailReason,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.ObjectKey,
+		&i.NodeID,
+		&i.FailCode,
+	)
+	return i, err
 }

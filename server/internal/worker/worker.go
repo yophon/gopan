@@ -65,6 +65,7 @@ func (w *Pool) Run(ctx context.Context, n int) {
 	}
 	go w.periodic(ctx, time.Hour, "session-cleanup", w.cleanupSessions)
 	if w.uploads != nil {
+		go w.periodic(ctx, 2*time.Second, "browser-upload-finalize", w.finalizeBrowserUploads)
 		go w.periodic(ctx, 2*time.Second, "agent-transfer-finalize", w.finalizeAgentTransfers)
 		go w.periodic(ctx, time.Hour, "agent-transfer-cleanup", w.uploads.CleanupAgentTransfers)
 	}
@@ -137,6 +138,15 @@ func (w *Pool) verifyHash(ctx context.Context, blobID uuid.UUID) error {
 		return err
 	}
 	if blob.Verified {
+		// Browser staging is verified before publication. Still deliver the
+		// durable derivative trigger, and finish late legacy/Agent references.
+		if err := w.q.MarkSessionsVerifyResult(ctx, store.MarkSessionsVerifyResultParams{Sha256: blob.Sha256, Status: "done"}); err != nil {
+			return err
+		}
+		if err := w.q.MarkTransferReadyBySha(ctx, &blob.Sha256); err != nil {
+			return err
+		}
+		w.enqueueDerivatives(ctx, blob)
 		return nil
 	}
 	key := objstore.BlobKey(blob.Sha256)
@@ -218,6 +228,15 @@ func (w *Pool) finalizeAgentTransfers(ctx context.Context) error {
 	}
 }
 
+func (w *Pool) finalizeBrowserUploads(ctx context.Context) error {
+	for {
+		processed, err := w.uploads.ProcessNextBrowserUpload(ctx)
+		if err != nil || !processed {
+			return err
+		}
+	}
+}
+
 func (w *Pool) periodic(ctx context.Context, every time.Duration, name string, fn func(context.Context) error) {
 	tick := time.NewTicker(every)
 	defer tick.Stop()
@@ -235,22 +254,17 @@ func (w *Pool) periodic(ctx context.Context, every time.Duration, name string, f
 
 // cleanupSessions 中止过期上传会话,释放 MinIO 的 multipart 暂存。
 func (w *Pool) cleanupSessions(ctx context.Context) error {
-	expired, err := w.q.ListExpiredSessions(ctx)
+	uploads := w.uploads
+	if uploads == nil {
+		uploads = service.NewUploads(w.pool, w.obj, w.nodes, 0, 0)
+	}
+	n, err := uploads.CleanupBrowserUploads(ctx)
 	if err != nil {
 		return err
 	}
-	for _, s := range expired {
-		_ = w.obj.AbortMultipart(ctx, objstore.BlobKey(s.Sha256), s.MinioUploadID)
-		reason := "会话过期"
-		if err := w.q.SetUploadSessionStatus(ctx, store.SetUploadSessionStatusParams{
-			ID: s.ID, OwnerID: s.OwnerID, Status: "aborted", FailReason: &reason,
-		}); err != nil {
-			return err
-		}
-	}
-	if len(expired) > 0 {
-		slog.Info("expired sessions aborted", "count", len(expired))
-		metrics.Cleanup.WithLabelValues("sessions").Add(float64(len(expired)))
+	if n > 0 {
+		slog.Info("expired sessions cleaned", "count", n)
+		metrics.Cleanup.WithLabelValues("sessions").Add(float64(n))
 	}
 	return nil
 }

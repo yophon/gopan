@@ -84,7 +84,7 @@ function statusText(task: UploadTask): string {
     case 'uploading':
       return `${formatBytes(task.speedBps)}/s`
     case 'completing':
-      return '合并中'
+      return '校验并保存中'
     case 'done':
       return task.instant ? '秒传' : '已完成'
     case 'paused':
@@ -97,7 +97,7 @@ function statusText(task: UploadTask): string {
 }
 
 function canPause(task: UploadTask): boolean {
-  return ['queued', 'hashing', 'initiating', 'uploading'].includes(task.status)
+  return ['queued', 'hashing', 'initiating', 'uploading', 'completing'].includes(task.status)
 }
 
 function isTerminal(task: UploadTask): boolean {
