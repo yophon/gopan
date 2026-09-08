@@ -86,6 +86,12 @@ await new Promise((r) => setTimeout(r, 3000))
 const evalJS = async (expr) =>
   (await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true })).result?.value
 
+// Run against a production-mode instance too: development skips CSP, while
+// production must allow the WebAssembly compilation used by hash-wasm uploads.
+const wasm = await evalJS(`WebAssembly.compile(new Uint8Array([0,97,115,109,1,0,0,0]))
+  .then(() => 'ok', e => e.message)`)
+if (wasm !== 'ok') die('上传哈希所需的 WebAssembly 被阻止: ' + wasm)
+
 // 切注册 tab → 填表单(dispatch input 让 v-model 生效)→ 提交
 await evalJS(`[...document.querySelectorAll('.el-tabs__item')].find(t => t.textContent.includes('注册'))?.click()`)
 await new Promise((r) => setTimeout(r, 600))
