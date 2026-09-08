@@ -158,6 +158,9 @@ func (o *OAuth) Authorize(ctx context.Context, userID uuid.UUID, in OAuthAuthori
 	if err != nil {
 		return "", err
 	}
+	if err := requireScopeAccount(ctx, o.q, userID, scopes); err != nil {
+		return "", err
+	}
 	redirect, _ := url.Parse(in.RedirectURI)
 	query := redirect.Query()
 	if in.State != "" {
@@ -269,7 +272,7 @@ func (o *OAuth) Authenticate(ctx context.Context, token string) (*MCPPrincipal, 
 	}
 	_ = o.q.TouchOAuthAccessToken(ctx, row.ID)
 	return &MCPPrincipal{
-		TokenID: row.ID, UserID: row.UserID, Username: row.Username,
+		TokenID: row.ID, CredentialID: row.GrantID, UserID: row.UserID, Username: row.Username,
 		CredentialType: "oauth", Scopes: scopeSet(intersectScopes(row.Scopes, row.GrantScopes)),
 	}, nil
 }

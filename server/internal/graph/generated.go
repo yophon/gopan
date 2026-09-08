@@ -80,6 +80,24 @@ type ComplexityRoot struct {
 		Token      func(childComplexity int) int
 	}
 
+	MCPAccessRoot struct {
+		CredentialID   func(childComplexity int) int
+		CredentialType func(childComplexity int) int
+		RootID         func(childComplexity int) int
+		RootName       func(childComplexity int) int
+	}
+
+	MCPAuditEvent struct {
+		CreatedAt      func(childComplexity int) int
+		CredentialID   func(childComplexity int) int
+		CredentialType func(childComplexity int) int
+		Endpoint       func(childComplexity int) int
+		ErrorCode      func(childComplexity int) int
+		ID             func(childComplexity int) int
+		Status         func(childComplexity int) int
+		Tool           func(childComplexity int) int
+	}
+
 	Mutation struct {
 		AbortUpload              func(childComplexity int, sessionID string) int
 		AdminCreateUser          func(childComplexity int, username string, password string, quotaBytes *int64) int
@@ -111,6 +129,7 @@ type ComplexityRoot struct {
 		RevokeMCPAPIKey          func(childComplexity int, id string) int
 		RevokeOAuthGrant         func(childComplexity int, id string) int
 		RevokeShare              func(childComplexity int, id string) int
+		SetMCPAccessRoot         func(childComplexity int, credentialID string, credentialType string, rootPath *string) int
 		VerifySharePassword      func(childComplexity int, token string, password string) int
 	}
 
@@ -176,6 +195,8 @@ type ComplexityRoot struct {
 		AppPasswords              func(childComplexity int) int
 		Children                  func(childComplexity int, parentID *string, cursor *string, order *NodeOrder, desc *bool) int
 		McpAPIKeys                func(childComplexity int) int
+		McpAccessRoots            func(childComplexity int) int
+		McpAudit                  func(childComplexity int, beforeID *int64, limit *int) int
 		Me                        func(childComplexity int) int
 		MyShares                  func(childComplexity int) int
 		Node                      func(childComplexity int, id string) int
@@ -243,6 +264,7 @@ type ComplexityRoot struct {
 // region    ************************** generated!.gotpl **************************
 
 type MutationResolver interface {
+	SetMCPAccessRoot(ctx context.Context, credentialID string, credentialType string, rootPath *string) (bool, error)
 	Register(ctx context.Context, username string, password string) (*AuthPayload, error)
 	Login(ctx context.Context, username string, password string) (*AuthPayload, error)
 	Refresh(ctx context.Context) (*AuthPayload, error)
@@ -280,6 +302,8 @@ type NodeResolver interface {
 	DownloadURL(ctx context.Context, obj *Node) (*string, error)
 }
 type QueryResolver interface {
+	McpAccessRoots(ctx context.Context) ([]*MCPAccessRoot, error)
+	McpAudit(ctx context.Context, beforeID *int64, limit *int) ([]*MCPAuditEvent, error)
 	Me(ctx context.Context) (*User, error)
 	Node(ctx context.Context, id string) (*Node, error)
 	Children(ctx context.Context, parentID *string, cursor *string, order *NodeOrder, desc *bool) (*NodePage, error)
@@ -470,6 +494,80 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MCPAPIKeyCreated.Token(childComplexity), true
+
+	case "MCPAccessRoot.credentialId":
+		if e.ComplexityRoot.MCPAccessRoot.CredentialID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MCPAccessRoot.CredentialID(childComplexity), true
+	case "MCPAccessRoot.credentialType":
+		if e.ComplexityRoot.MCPAccessRoot.CredentialType == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MCPAccessRoot.CredentialType(childComplexity), true
+	case "MCPAccessRoot.rootId":
+		if e.ComplexityRoot.MCPAccessRoot.RootID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MCPAccessRoot.RootID(childComplexity), true
+	case "MCPAccessRoot.rootName":
+		if e.ComplexityRoot.MCPAccessRoot.RootName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MCPAccessRoot.RootName(childComplexity), true
+
+	case "MCPAuditEvent.createdAt":
+		if e.ComplexityRoot.MCPAuditEvent.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MCPAuditEvent.CreatedAt(childComplexity), true
+	case "MCPAuditEvent.credentialId":
+		if e.ComplexityRoot.MCPAuditEvent.CredentialID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MCPAuditEvent.CredentialID(childComplexity), true
+	case "MCPAuditEvent.credentialType":
+		if e.ComplexityRoot.MCPAuditEvent.CredentialType == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MCPAuditEvent.CredentialType(childComplexity), true
+	case "MCPAuditEvent.endpoint":
+		if e.ComplexityRoot.MCPAuditEvent.Endpoint == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MCPAuditEvent.Endpoint(childComplexity), true
+	case "MCPAuditEvent.errorCode":
+		if e.ComplexityRoot.MCPAuditEvent.ErrorCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MCPAuditEvent.ErrorCode(childComplexity), true
+	case "MCPAuditEvent.id":
+		if e.ComplexityRoot.MCPAuditEvent.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MCPAuditEvent.ID(childComplexity), true
+	case "MCPAuditEvent.status":
+		if e.ComplexityRoot.MCPAuditEvent.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MCPAuditEvent.Status(childComplexity), true
+	case "MCPAuditEvent.tool":
+		if e.ComplexityRoot.MCPAuditEvent.Tool == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MCPAuditEvent.Tool(childComplexity), true
 
 	case "Mutation.abortUpload":
 		if e.ComplexityRoot.Mutation.AbortUpload == nil {
@@ -781,6 +879,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RevokeShare(childComplexity, args["id"].(string)), true
+	case "Mutation.setMCPAccessRoot":
+		if e.ComplexityRoot.Mutation.SetMCPAccessRoot == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setMCPAccessRoot_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetMCPAccessRoot(childComplexity, args["credentialId"].(string), args["credentialType"].(string), args["rootPath"].(*string)), true
 	case "Mutation.verifySharePassword":
 		if e.ComplexityRoot.Mutation.VerifySharePassword == nil {
 			break
@@ -1046,6 +1155,23 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.McpAPIKeys(childComplexity), true
+	case "Query.mcpAccessRoots":
+		if e.ComplexityRoot.Query.McpAccessRoots == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.McpAccessRoots(childComplexity), true
+	case "Query.mcpAudit":
+		if e.ComplexityRoot.Query.McpAudit == nil {
+			break
+		}
+
+		args, err := ec.field_Query_mcpAudit_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.McpAudit(childComplexity, args["beforeId"].(*int64), args["limit"].(*int)), true
 	case "Query.me":
 		if e.ComplexityRoot.Query.Me == nil {
 			break
@@ -1568,6 +1694,8 @@ type ShareAuth {
 enum NodeOrder { NAME, SIZE, UPDATED_AT }
 
 type Query {
+  mcpAccessRoots: [MCPAccessRoot!]!
+  mcpAudit(beforeId: Int64 = 0, limit: Int = 50): [MCPAuditEvent!]!
   me: User!
   node(id: ID!): Node!
   children(parentId: ID, cursor: String, order: NodeOrder = NAME, desc: Boolean = false): NodePage!
@@ -1605,6 +1733,7 @@ input OAuthAuthorizationInput {
 }
 
 type Mutation {
+  setMCPAccessRoot(credentialId: ID!, credentialType: String!, rootPath: String): Boolean!
   register(username: String!, password: String!): AuthPayload!
   login(username: String!, password: String!): AuthPayload!
   refresh: AuthPayload!
@@ -1647,6 +1776,9 @@ type Mutation {
   adminResetPassword(userId: ID!): String!
   adminRetryFailedTasks: Int!
 }
+
+type MCPAccessRoot { credentialId: ID!, credentialType: String!, rootId: ID!, rootName: String! }
+type MCPAuditEvent { id: Int64!, credentialId: ID!, credentialType: String!, endpoint: String!, tool: String!, status: String!, errorCode: String, createdAt: Time! }
 `, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
@@ -1739,6 +1871,42 @@ func (ec *executionContext) childFields_MCPAPIKeyCreated(ctx context.Context, fi
 		return ec.fieldContext_MCPAPIKeyCreated_credential(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type MCPAPIKeyCreated", field.Name)
+}
+
+func (ec *executionContext) childFields_MCPAccessRoot(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "credentialId":
+		return ec.fieldContext_MCPAccessRoot_credentialId(ctx, field)
+	case "credentialType":
+		return ec.fieldContext_MCPAccessRoot_credentialType(ctx, field)
+	case "rootId":
+		return ec.fieldContext_MCPAccessRoot_rootId(ctx, field)
+	case "rootName":
+		return ec.fieldContext_MCPAccessRoot_rootName(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type MCPAccessRoot", field.Name)
+}
+
+func (ec *executionContext) childFields_MCPAuditEvent(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_MCPAuditEvent_id(ctx, field)
+	case "credentialId":
+		return ec.fieldContext_MCPAuditEvent_credentialId(ctx, field)
+	case "credentialType":
+		return ec.fieldContext_MCPAuditEvent_credentialType(ctx, field)
+	case "endpoint":
+		return ec.fieldContext_MCPAuditEvent_endpoint(ctx, field)
+	case "tool":
+		return ec.fieldContext_MCPAuditEvent_tool(ctx, field)
+	case "status":
+		return ec.fieldContext_MCPAuditEvent_status(ctx, field)
+	case "errorCode":
+		return ec.fieldContext_MCPAuditEvent_errorCode(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_MCPAuditEvent_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type MCPAuditEvent", field.Name)
 }
 
 func (ec *executionContext) childFields_Node(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -2583,6 +2751,36 @@ func (ec *executionContext) field_Mutation_revokeShare_args(ctx context.Context,
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_setMCPAccessRoot_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "credentialId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["credentialId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "credentialType",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["credentialType"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "rootPath",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["rootPath"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_verifySharePassword_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -2654,6 +2852,28 @@ func (ec *executionContext) field_Query_children_args(ctx context.Context, rawAr
 		return nil, err
 	}
 	args["desc"] = arg3
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_mcpAudit_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "beforeId",
+		func(ctx context.Context, v any) (*int64, error) {
+			return ec.unmarshalOInt642ᚖint64(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["beforeId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
 	return args, nil
 }
 
@@ -3407,6 +3627,326 @@ func (ec *executionContext) fieldContext_MCPAPIKeyCreated_credential(_ context.C
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_MCPAPIKey(ctx, field)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MCPAccessRoot_credentialId(ctx context.Context, field graphql.CollectedField, obj *MCPAccessRoot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MCPAccessRoot_credentialId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CredentialID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MCPAccessRoot_credentialId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MCPAccessRoot", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _MCPAccessRoot_credentialType(ctx context.Context, field graphql.CollectedField, obj *MCPAccessRoot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MCPAccessRoot_credentialType(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CredentialType, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MCPAccessRoot_credentialType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MCPAccessRoot", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _MCPAccessRoot_rootId(ctx context.Context, field graphql.CollectedField, obj *MCPAccessRoot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MCPAccessRoot_rootId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RootID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MCPAccessRoot_rootId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MCPAccessRoot", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _MCPAccessRoot_rootName(ctx context.Context, field graphql.CollectedField, obj *MCPAccessRoot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MCPAccessRoot_rootName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RootName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MCPAccessRoot_rootName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MCPAccessRoot", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _MCPAuditEvent_id(ctx context.Context, field graphql.CollectedField, obj *MCPAuditEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MCPAuditEvent_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MCPAuditEvent_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MCPAuditEvent", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _MCPAuditEvent_credentialId(ctx context.Context, field graphql.CollectedField, obj *MCPAuditEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MCPAuditEvent_credentialId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CredentialID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MCPAuditEvent_credentialId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MCPAuditEvent", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _MCPAuditEvent_credentialType(ctx context.Context, field graphql.CollectedField, obj *MCPAuditEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MCPAuditEvent_credentialType(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CredentialType, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MCPAuditEvent_credentialType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MCPAuditEvent", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _MCPAuditEvent_endpoint(ctx context.Context, field graphql.CollectedField, obj *MCPAuditEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MCPAuditEvent_endpoint(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Endpoint, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MCPAuditEvent_endpoint(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MCPAuditEvent", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _MCPAuditEvent_tool(ctx context.Context, field graphql.CollectedField, obj *MCPAuditEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MCPAuditEvent_tool(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Tool, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MCPAuditEvent_tool(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MCPAuditEvent", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _MCPAuditEvent_status(ctx context.Context, field graphql.CollectedField, obj *MCPAuditEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MCPAuditEvent_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MCPAuditEvent_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MCPAuditEvent", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _MCPAuditEvent_errorCode(ctx context.Context, field graphql.CollectedField, obj *MCPAuditEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MCPAuditEvent_errorCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ErrorCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MCPAuditEvent_errorCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MCPAuditEvent", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _MCPAuditEvent_createdAt(ctx context.Context, field graphql.CollectedField, obj *MCPAuditEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MCPAuditEvent_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MCPAuditEvent_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MCPAuditEvent", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _Mutation_setMCPAccessRoot(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_setMCPAccessRoot(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetMCPAccessRoot(ctx, fc.Args["credentialId"].(string), fc.Args["credentialType"].(string), fc.Args["rootPath"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_setMCPAccessRoot(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setMCPAccessRoot_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -5521,6 +6061,82 @@ func (ec *executionContext) _PreviewInfo_durationSec(ctx context.Context, field 
 }
 func (ec *executionContext) fieldContext_PreviewInfo_durationSec(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("PreviewInfo", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Query_mcpAccessRoots(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_mcpAccessRoots(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().McpAccessRoots(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*MCPAccessRoot) graphql.Marshaler {
+			return ec.marshalNMCPAccessRoot2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐMCPAccessRootᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_mcpAccessRoots(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_MCPAccessRoot(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_mcpAudit(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_mcpAudit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().McpAudit(ctx, fc.Args["beforeId"].(*int64), fc.Args["limit"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*MCPAuditEvent) graphql.Marshaler {
+			return ec.marshalNMCPAuditEvent2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐMCPAuditEventᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_mcpAudit(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_MCPAuditEvent(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_mcpAudit_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Query_me(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -8342,6 +8958,132 @@ func (ec *executionContext) _MCPAPIKeyCreated(ctx context.Context, sel ast.Selec
 	return out
 }
 
+var mCPAccessRootImplementors = []string{"MCPAccessRoot"}
+
+func (ec *executionContext) _MCPAccessRoot(ctx context.Context, sel ast.SelectionSet, obj *MCPAccessRoot) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, mCPAccessRootImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MCPAccessRoot")
+		case "credentialId":
+			out.Values[i] = ec._MCPAccessRoot_credentialId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "credentialType":
+			out.Values[i] = ec._MCPAccessRoot_credentialType(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rootId":
+			out.Values[i] = ec._MCPAccessRoot_rootId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rootName":
+			out.Values[i] = ec._MCPAccessRoot_rootName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var mCPAuditEventImplementors = []string{"MCPAuditEvent"}
+
+func (ec *executionContext) _MCPAuditEvent(ctx context.Context, sel ast.SelectionSet, obj *MCPAuditEvent) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, mCPAuditEventImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MCPAuditEvent")
+		case "id":
+			out.Values[i] = ec._MCPAuditEvent_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "credentialId":
+			out.Values[i] = ec._MCPAuditEvent_credentialId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "credentialType":
+			out.Values[i] = ec._MCPAuditEvent_credentialType(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "endpoint":
+			out.Values[i] = ec._MCPAuditEvent_endpoint(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "tool":
+			out.Values[i] = ec._MCPAuditEvent_tool(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._MCPAuditEvent_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "errorCode":
+			out.Values[i] = ec._MCPAuditEvent_errorCode(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._MCPAuditEvent_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var mutationImplementors = []string{"Mutation"}
 
 func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -8362,6 +9104,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Mutation")
+		case "setMCPAccessRoot":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setMCPAccessRoot(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "register":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_register(ctx, field)
@@ -9092,6 +9841,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Query")
+		case "mcpAccessRoots":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_mcpAccessRoots(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "mcpAudit":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_mcpAudit(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "me":
 			field := field
 
@@ -10464,6 +11257,58 @@ func (ec *executionContext) marshalNMCPAPIKeyCreated2ᚖgithubᚗcomᚋyophonᚋ
 		return graphql.Null
 	}
 	return ec._MCPAPIKeyCreated(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMCPAccessRoot2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐMCPAccessRootᚄ(ctx context.Context, sel ast.SelectionSet, v []*MCPAccessRoot) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMCPAccessRoot2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐMCPAccessRoot(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMCPAccessRoot2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐMCPAccessRoot(ctx context.Context, sel ast.SelectionSet, v *MCPAccessRoot) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MCPAccessRoot(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMCPAuditEvent2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐMCPAuditEventᚄ(ctx context.Context, sel ast.SelectionSet, v []*MCPAuditEvent) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMCPAuditEvent2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐMCPAuditEvent(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMCPAuditEvent2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐMCPAuditEvent(ctx context.Context, sel ast.SelectionSet, v *MCPAuditEvent) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MCPAuditEvent(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNNode2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNode(ctx context.Context, sel ast.SelectionSet, v Node) graphql.Marshaler {

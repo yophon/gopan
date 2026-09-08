@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
@@ -11,18 +11,42 @@ import {
   OAuthGrantsDocument,
   RevokeMcpapiKeyDocument,
   RevokeOAuthGrantDocument,
+  McpAccessRootsDocument, SetMcpAccessRootDocument, McpAuditDocument,
 } from '@/api/gen/graphql'
 import { formatTime } from '@/utils/format'
-import { mcpScopeLabel, mcpScopeOptions } from '@/utils/mcpScopes'
+import { mcpScopeLabel, mcpScopeOptions, mcpAdminScopeOptions } from '@/utils/mcpScopes'
+import { useAuthStore } from '@/stores/auth'
 
 const visible = defineModel<boolean>({ required: true })
 const queryClient = useQueryClient()
 
 const endpoint = `${location.origin}/mcp`
-const activeTab = ref<'keys' | 'oauth'>('oauth')
+const activeTab = ref<'keys' | 'oauth' | 'audit'>('oauth')
+const auth = useAuthStore()
+const adminKey = ref(false)
+const scopeOptions = computed(() => adminKey.value ? mcpAdminScopeOptions : mcpScopeOptions)
+watch(adminKey, (value) => { selectedScopes.value = [value ? 'admin:read' : 'files:read'] })
 const newName = ref('')
 const selectedScopes = ref<string[]>(['files:read'])
 const createdKey = ref<string | null>(null)
+
+const { data: rootsData } = useQuery({ queryKey: ['mcpAccessRoots'], queryFn: () => request(McpAccessRootsDocument), enabled: visible })
+function rootLabel(id: string, kind: string) {
+  return rootsData.value?.mcpAccessRoots.find(x => x.credentialId === id && x.credentialType === kind)?.rootName ?? '全盘'
+}
+async function editRoot(id: string, kind: string) {
+  try {
+    const { value } = await ElMessageBox.prompt('输入允许访问的目录路径，例如 /AI工作区。留空表示全盘访问。修改后后续请求立即使用新范围。', '设置目录范围', { confirmButtonText: '保存范围', cancelButtonText: '取消' })
+    await request(SetMcpAccessRootDocument, { credentialId: id, credentialType: kind, rootPath: value?.trim() || null })
+    await queryClient.invalidateQueries({ queryKey: ['mcpAccessRoots'] })
+    ElMessage.success('目录范围已更新')
+  } catch (err) { if (err !== 'cancel' && err !== 'close') ElMessage.error(errorText(err, '范围更新失败')) }
+}
+const auditBefore = ref<number | undefined>()
+const { data: auditData, isFetching: auditFetching, refetch: refreshAudit } = useQuery({
+  queryKey: ['mcpAudit', auditBefore], queryFn: () => request(McpAuditDocument, { beforeId: auditBefore.value, limit: 50 }),
+  enabled: computed(() => visible.value && activeTab.value === 'audit'),
+})
 
 const { data: keysData, isFetching: keysFetching } = useQuery({
   queryKey: ['mcpAPIKeys'],
@@ -93,12 +117,19 @@ async function copy(text: string) {
       <el-button link type="primary" @click="copy(endpoint)">复制</el-button>
     </div>
 
+    <div v-if="auth.user?.isAdmin" class="endpoint-row">
+      <span class="endpoint-label">管理员 MCP</span>
+      <code class="mono endpoint-value">{{ endpoint }}/admin</code>
+      <el-button link type="primary" @click="copy(`${endpoint}/admin`)">复制</el-button>
+    </div>
+
     <el-alert type="info" :closable="false" class="connection-help">
       支持 OAuth 的客户端填写 MCP 地址后，选择登录并授权即可。上传和下载还需要客户端具备 HTTP 文件传输能力；文本读取、目录整理可直接通过 MCP 完成。
     </el-alert>
 
     <el-tabs v-model="activeTab">
       <el-tab-pane label="API Key" name="keys">
+        <el-switch v-if="auth.user?.isAdmin" v-model="adminKey" active-text="创建管理员专用 Key" />
         <p class="connection-help">适合 CI 或不支持 OAuth 的客户端。每个客户端使用单独的 Key，并选择所需权限。</p>
         <el-alert v-if="createdKey" type="success" :closable="false" class="created">
           <p class="created-label">新 API Key,仅显示一次</p>
@@ -124,7 +155,7 @@ async function copy(text: string) {
           </el-button>
           <el-checkbox-group v-model="selectedScopes" class="scope-picker">
             <el-checkbox
-              v-for="scope in mcpScopeOptions"
+              v-for="scope in scopeOptions"
               :key="scope.value"
               :value="scope.value"
             >
@@ -147,6 +178,12 @@ async function copy(text: string) {
           <el-table-column label="最近使用" width="170">
             <template #default="{ row }">
               {{ row.lastUsedAt ? formatTime(row.lastUsedAt) : '从未' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="目录范围" min-width="130">
+            <template #default="{ row }">
+              <span v-if="row.scopes.some((s: string) => s.startsWith('admin:'))">管理员接口</span>
+              <el-button v-else link type="primary" @click="editRoot(row.id, 'api_key')">{{ rootLabel(row.id, 'api_key') }}</el-button>
             </template>
           </el-table-column>
           <el-table-column label="" width="72" align="center">
@@ -187,6 +224,12 @@ async function copy(text: string) {
           <el-table-column label="授权时间" width="170">
             <template #default="{ row }">{{ formatTime(row.updatedAt) }}</template>
           </el-table-column>
+          <el-table-column label="目录范围" min-width="130">
+            <template #default="{ row }">
+              <span v-if="row.scopes.some((s: string) => s.startsWith('admin:'))">管理员接口</span>
+              <el-button v-else link type="primary" @click="editRoot(row.id, 'oauth')">{{ rootLabel(row.id, 'oauth') }}</el-button>
+            </template>
+          </el-table-column>
           <el-table-column label="" width="72" align="center">
             <template #default="{ row }">
               <el-popconfirm
@@ -202,6 +245,18 @@ async function copy(text: string) {
             </template>
           </el-table-column>
         </el-table>
+      </el-tab-pane>
+      <el-tab-pane label="操作记录" name="audit">
+        <el-button @click="auditBefore = undefined; refreshAudit()">刷新最新记录</el-button>
+        <el-table :data="auditData?.mcpAudit ?? []" v-loading="auditFetching" empty-text="暂无 MCP 操作记录">
+          <el-table-column label="时间" width="170"><template #default="{ row }">{{ formatTime(row.createdAt) }}</template></el-table-column>
+          <el-table-column label="操作" prop="tool" min-width="170" />
+          <el-table-column label="接口" prop="endpoint" width="80" />
+          <el-table-column label="结果" prop="status" width="90" />
+          <el-table-column label="错误码" prop="errorCode" min-width="130" />
+          <el-table-column label="凭据 ID" prop="credentialId" min-width="270" />
+        </el-table>
+        <el-button :disabled="!auditData?.mcpAudit.length || auditFetching" @click="auditBefore = auditData?.mcpAudit.at(-1)?.id">更早记录</el-button>
       </el-tab-pane>
     </el-tabs>
   </el-dialog>

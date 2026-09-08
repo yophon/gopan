@@ -114,6 +114,9 @@ func (a *Admin) ResetPassword(ctx context.Context, callerID, target uuid.UUID) (
 	if err := a.require(ctx, callerID); err != nil {
 		return "", err
 	}
+	if _, err := a.q.GetUserByID(ctx, target); err != nil {
+		return "", ErrNotFound
+	}
 	raw := make([]byte, 12)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err

@@ -67,6 +67,26 @@ export type McpapiKeyCreated = {
   token: Scalars['String']['output'];
 };
 
+export type McpAccessRoot = {
+  __typename?: 'MCPAccessRoot';
+  credentialId: Scalars['ID']['output'];
+  credentialType: Scalars['String']['output'];
+  rootId: Scalars['ID']['output'];
+  rootName: Scalars['String']['output'];
+};
+
+export type McpAuditEvent = {
+  __typename?: 'MCPAuditEvent';
+  createdAt: Scalars['Time']['output'];
+  credentialId: Scalars['ID']['output'];
+  credentialType: Scalars['String']['output'];
+  endpoint: Scalars['String']['output'];
+  errorCode?: Maybe<Scalars['String']['output']>;
+  id: Scalars['Int64']['output'];
+  status: Scalars['String']['output'];
+  tool: Scalars['String']['output'];
+};
+
 export type Mutation = {
   __typename?: 'Mutation';
   abortUpload: Scalars['Boolean']['output'];
@@ -99,6 +119,7 @@ export type Mutation = {
   revokeMCPAPIKey: Scalars['Boolean']['output'];
   revokeOAuthGrant: Scalars['Boolean']['output'];
   revokeShare: Scalars['Boolean']['output'];
+  setMCPAccessRoot: Scalars['Boolean']['output'];
   verifySharePassword: ShareAuth;
 };
 
@@ -252,6 +273,13 @@ export type MutationRevokeShareArgs = {
 };
 
 
+export type MutationSetMcpAccessRootArgs = {
+  credentialId: Scalars['ID']['input'];
+  credentialType: Scalars['String']['input'];
+  rootPath?: InputMaybe<Scalars['String']['input']>;
+};
+
+
 export type MutationVerifySharePasswordArgs = {
   password: Scalars['String']['input'];
   token: Scalars['String']['input'];
@@ -361,6 +389,8 @@ export type Query = {
   appPasswords: Array<AppPassword>;
   children: NodePage;
   mcpAPIKeys: Array<McpapiKey>;
+  mcpAccessRoots: Array<McpAccessRoot>;
+  mcpAudit: Array<McpAuditEvent>;
   me: User;
   myShares: Array<Share>;
   node: Node;
@@ -379,6 +409,12 @@ export type QueryChildrenArgs = {
   desc?: InputMaybe<Scalars['Boolean']['input']>;
   order?: InputMaybe<NodeOrder>;
   parentId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+
+export type QueryMcpAuditArgs = {
+  beforeId?: InputMaybe<Scalars['Int64']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
 };
 
 
@@ -627,6 +663,28 @@ export type DecideOAuthAuthorizationMutationVariables = Exact<{
 
 export type DecideOAuthAuthorizationMutation = { __typename?: 'Mutation', decideOAuthAuthorization: { __typename?: 'OAuthAuthorizationResult', redirectUrl: string } };
 
+export type McpAccessRootsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type McpAccessRootsQuery = { __typename?: 'Query', mcpAccessRoots: Array<{ __typename?: 'MCPAccessRoot', credentialId: string, credentialType: string, rootId: string, rootName: string }> };
+
+export type SetMcpAccessRootMutationVariables = Exact<{
+  credentialId: Scalars['ID']['input'];
+  credentialType: Scalars['String']['input'];
+  rootPath?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type SetMcpAccessRootMutation = { __typename?: 'Mutation', setMCPAccessRoot: boolean };
+
+export type McpAuditQueryVariables = Exact<{
+  beforeId?: InputMaybe<Scalars['Int64']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+}>;
+
+
+export type McpAuditQuery = { __typename?: 'Query', mcpAudit: Array<{ __typename?: 'MCPAuditEvent', id: number, credentialId: string, credentialType: string, endpoint: string, tool: string, status: string, errorCode?: string | null, createdAt: string }> };
+
 export type ChildrenQueryVariables = Exact<{
   parentId?: InputMaybe<Scalars['ID']['input']>;
   cursor?: InputMaybe<Scalars['String']['input']>;
@@ -835,6 +893,9 @@ export const OAuthGrantsDocument = {"kind":"Document","definitions":[{"kind":"Op
 export const RevokeOAuthGrantDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RevokeOAuthGrant"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"revokeOAuthGrant"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<RevokeOAuthGrantMutation, RevokeOAuthGrantMutationVariables>;
 export const OAuthAuthorizationRequestDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"OAuthAuthorizationRequest"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"OAuthAuthorizationInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"oauthAuthorizationRequest"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"clientName"}},{"kind":"Field","name":{"kind":"Name","value":"scopes"}}]}}]}}]} as unknown as DocumentNode<OAuthAuthorizationRequestQuery, OAuthAuthorizationRequestQueryVariables>;
 export const DecideOAuthAuthorizationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DecideOAuthAuthorization"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"OAuthAuthorizationInput"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"approved"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Boolean"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"decideOAuthAuthorization"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}},{"kind":"Argument","name":{"kind":"Name","value":"approved"},"value":{"kind":"Variable","name":{"kind":"Name","value":"approved"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"redirectUrl"}}]}}]}}]} as unknown as DocumentNode<DecideOAuthAuthorizationMutation, DecideOAuthAuthorizationMutationVariables>;
+export const McpAccessRootsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"McpAccessRoots"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"mcpAccessRoots"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"credentialId"}},{"kind":"Field","name":{"kind":"Name","value":"credentialType"}},{"kind":"Field","name":{"kind":"Name","value":"rootId"}},{"kind":"Field","name":{"kind":"Name","value":"rootName"}}]}}]}}]} as unknown as DocumentNode<McpAccessRootsQuery, McpAccessRootsQueryVariables>;
+export const SetMcpAccessRootDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SetMcpAccessRoot"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"credentialId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"credentialType"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"rootPath"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"setMCPAccessRoot"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"credentialId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"credentialId"}}},{"kind":"Argument","name":{"kind":"Name","value":"credentialType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"credentialType"}}},{"kind":"Argument","name":{"kind":"Name","value":"rootPath"},"value":{"kind":"Variable","name":{"kind":"Name","value":"rootPath"}}}]}]}}]} as unknown as DocumentNode<SetMcpAccessRootMutation, SetMcpAccessRootMutationVariables>;
+export const McpAuditDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"McpAudit"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"beforeId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int64"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"mcpAudit"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"beforeId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"beforeId"}}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"credentialId"}},{"kind":"Field","name":{"kind":"Name","value":"credentialType"}},{"kind":"Field","name":{"kind":"Name","value":"endpoint"}},{"kind":"Field","name":{"kind":"Name","value":"tool"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"errorCode"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}}]} as unknown as DocumentNode<McpAuditQuery, McpAuditQueryVariables>;
 export const ChildrenDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Children"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"parentId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cursor"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"order"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"NodeOrder"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"desc"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Boolean"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"children"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"parentId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"parentId"}}},{"kind":"Argument","name":{"kind":"Name","value":"cursor"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cursor"}}},{"kind":"Argument","name":{"kind":"Name","value":"order"},"value":{"kind":"Variable","name":{"kind":"Name","value":"order"}}},{"kind":"Argument","name":{"kind":"Name","value":"desc"},"value":{"kind":"Variable","name":{"kind":"Name","value":"desc"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentId"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"size"}},{"kind":"Field","name":{"kind":"Name","value":"subtreeBytes"}},{"kind":"Field","name":{"kind":"Name","value":"subtreeCount"}},{"kind":"Field","name":{"kind":"Name","value":"statsStale"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"preview"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"thumbUrl"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"nextCursor"}},{"kind":"Field","name":{"kind":"Name","value":"total"}}]}}]}}]} as unknown as DocumentNode<ChildrenQuery, ChildrenQueryVariables>;
 export const NodePreviewDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"NodePreview"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"node"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"size"}},{"kind":"Field","name":{"kind":"Name","value":"preview"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"thumbUrl"}},{"kind":"Field","name":{"kind":"Name","value":"largeUrl"}},{"kind":"Field","name":{"kind":"Name","value":"contentUrl"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"durationSec"}}]}}]}}]}}]} as unknown as DocumentNode<NodePreviewQuery, NodePreviewQueryVariables>;
 export const RequestPreviewDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RequestPreview"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"nodeId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"requestPreview"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"nodeId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"nodeId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"contentUrl"}}]}}]}}]} as unknown as DocumentNode<RequestPreviewMutation, RequestPreviewMutationVariables>;

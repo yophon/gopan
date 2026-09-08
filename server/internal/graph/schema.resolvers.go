@@ -14,6 +14,20 @@ import (
 	"github.com/yophon/gopan/server/internal/store"
 )
 
+// SetMCPAccessRoot is the resolver for the setMCPAccessRoot field.
+func (r *mutationResolver) SetMCPAccessRoot(ctx context.Context, credentialID string, credentialType string, rootPath *string) (bool, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	id, err := parseID(credentialID)
+	if err != nil {
+		return false, err
+	}
+	err = r.Nodes.SetMCPAccessRoot(ctx, ident.UserID, id, credentialType, rootPath)
+	return err == nil, err
+}
+
 // Register is the resolver for the register field.
 func (r *mutationResolver) Register(ctx context.Context, username string, password string) (*AuthPayload, error) {
 	res, err := r.Auth.Register(ctx, username, password, httpx.ClientIP(ctx))
@@ -535,6 +549,52 @@ func (r *nodeResolver) DownloadURL(ctx context.Context, obj *Node) (*string, err
 		return nil, err
 	}
 	return &u, nil
+}
+
+// McpAccessRoots is the resolver for the mcpAccessRoots field.
+func (r *queryResolver) McpAccessRoots(ctx context.Context) ([]*MCPAccessRoot, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.Nodes.MCPAccessRoots(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*MCPAccessRoot, 0, len(rows))
+	for _, row := range rows {
+		name := "已删除的目录（拒绝访问）"
+		if n, e := r.Nodes.Get(ctx, ident.UserID, row.RootID); e == nil && !n.DeletedAt.Valid {
+			name = n.Name
+		}
+		out = append(out, &MCPAccessRoot{CredentialID: row.CredentialID, CredentialType: row.CredentialType, RootID: row.RootID.String(), RootName: name})
+	}
+	return out, nil
+}
+
+// McpAudit is the resolver for the mcpAudit field.
+func (r *queryResolver) McpAudit(ctx context.Context, beforeID *int64, limit *int) ([]*MCPAuditEvent, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var before int64
+	size := 50
+	if beforeID != nil {
+		before = *beforeID
+	}
+	if limit != nil {
+		size = *limit
+	}
+	rows, err := r.Nodes.MCPAudit(ctx, &service.MCPPrincipal{UserID: ident.UserID}, before, size)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*MCPAuditEvent, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, &MCPAuditEvent{ID: row.ID, CredentialID: row.CredentialID, CredentialType: row.CredentialType, Endpoint: row.Endpoint, Tool: row.Tool, Status: row.Status, ErrorCode: row.ErrorCode, CreatedAt: row.CreatedAt})
+	}
+	return out, nil
 }
 
 // Me is the resolver for the me field.

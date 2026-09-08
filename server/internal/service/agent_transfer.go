@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -49,6 +50,93 @@ func (s *Uploads) PrepareAgentUpload(
 	transport string,
 	idempotencyKey *string,
 ) (*AgentUploadInit, error) {
+	if idempotencyKey != nil {
+		key := strings.TrimSpace(*idempotencyKey)
+		if key == "" || len(key) > 128 {
+			return nil, errf("INVALID_INPUT", "idempotency_key 长度必须为 1–128")
+		}
+		idempotencyKey = &key
+	}
+	args, _ := json.Marshal(struct {
+		Parent      *uuid.UUID
+		Name        string
+		Size        int64
+		ContentType string
+		SHA         *string
+		Transport   string
+	}{parentID, name, size, contentType, declaredSHA, transport})
+	sum := sha256.Sum256(args)
+	hash := hex.EncodeToString(sum[:])
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(context.Background())
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "mcp-write:"+owner.String()); err != nil {
+		return nil, err
+	}
+	local := *s
+	local.pool = tx
+	local.q = store.New(tx)
+	local.nodes = &Nodes{pool: tx, q: local.q}
+	if idempotencyKey != nil {
+		var savedHash string
+		var nodeID, transferID *uuid.UUID
+		err = tx.QueryRow(ctx, `SELECT request_hash,node_id,transfer_id FROM mcp_upload_requests WHERE owner_id=$1 AND key=$2`, owner, *idempotencyKey).Scan(&savedHash, &nodeID, &transferID)
+		if err == nil {
+			if savedHash != hash {
+				return nil, errf("IDEMPOTENCY_CONFLICT", "幂等键已用于不同上传参数")
+			}
+			if nodeID != nil {
+				node, e := local.nodes.Get(ctx, owner, *nodeID)
+				if e != nil || node.DeletedAt.Valid {
+					return nil, ErrNotFound
+				}
+				return &AgentUploadInit{Mode: "instant", Node: &node}, nil
+			}
+			view, e := local.AgentTransfer(ctx, owner, *transferID, 1, maxPartURLsPerCall)
+			if e != nil {
+				return nil, e
+			}
+			return &AgentUploadInit{Mode: view.Session.Transport, Transfer: view}, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+	}
+	init, err := local.prepareAgentUpload(ctx, owner, parentID, name, size, contentType, declaredSHA, transport, idempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	cleanup := func() {
+		if init.Transfer != nil && init.Transfer.Session.MinioUploadID != nil {
+			c, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = s.obj.AbortMultipart(c, init.Transfer.Session.ObjectKey, *init.Transfer.Session.MinioUploadID)
+		}
+	}
+	if idempotencyKey != nil {
+		var nodeID, transferID *uuid.UUID
+		if init.Node != nil {
+			nodeID = &init.Node.ID
+		} else {
+			transferID = &init.Transfer.Session.ID
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO mcp_upload_requests(owner_id,key,request_hash,node_id,transfer_id) VALUES($1,$2,$3,$4,$5)`, owner, *idempotencyKey, hash, nodeID, transferID)
+		if err != nil {
+			cleanup()
+			return nil, err
+		}
+	}
+	if err = tx.Commit(ctx); err != nil {
+		// Commit may have reached PostgreSQL even if its response was lost. Do not
+		// abort the object here; the stored key/session makes recovery possible.
+		return nil, err
+	}
+	return init, nil
+}
+
+func (s *Uploads) prepareAgentUpload(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID, name string, size int64, contentType string, declaredSHA *string, transport string, idempotencyKey *string) (*AgentUploadInit, error) {
 	if size <= 0 || size > maxAgentUploadSize {
 		return nil, errf("INVALID_INPUT", "文件大小非法")
 	}
@@ -157,6 +245,9 @@ func (s *Uploads) PrepareAgentUpload(
 	}
 	view, err := s.agentTransferView(ctx, sess, 1, maxPartURLsPerCall)
 	if err != nil {
+		if minioUploadID != nil {
+			_ = s.obj.AbortMultipart(context.Background(), objectKey, *minioUploadID)
+		}
 		return nil, err
 	}
 	return &AgentUploadInit{Mode: transport, Transfer: view}, nil
