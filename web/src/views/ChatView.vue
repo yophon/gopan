@@ -2,15 +2,19 @@
 import { nextTick, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Paperclip, Promotion } from '@element-plus/icons-vue'
+import { useAuthStore } from '@/stores/auth'
 
 type Message = { id: string; text: string; time: string; mine: boolean }
 const draft = ref('')
 const messages = ref<Message[]>([])
+const auth = useAuthStore()
 const list = ref<HTMLElement | null>(null)
-const key = 'gopan_device_chat_messages'
 
-onMounted(() => {
-  try { messages.value = JSON.parse(localStorage.getItem(key) || '[]') } catch { messages.value = [] }
+onMounted(async () => {
+  try {
+    const res = await fetch('/chat/messages', { headers: { Authorization: `Bearer ${auth.accessToken}` } })
+    if (res.ok) messages.value = (await res.json()).reverse()
+  } catch { /* offline state remains empty */ }
   void scrollBottom()
 })
 
@@ -22,10 +26,11 @@ async function scrollBottom() {
 function send() {
   const text = draft.value.trim()
   if (!text) return
-  messages.value.push({ id: crypto.randomUUID(), text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), mine: true })
-  draft.value = ''
-  localStorage.setItem(key, JSON.stringify(messages.value))
-  void scrollBottom()
+  void (async () => {
+    const res = await fetch('/chat/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.accessToken}` }, body: JSON.stringify({ body: text }) })
+    if (!res.ok) { ElMessage.error('消息发送失败'); return }
+    const m = await res.json(); messages.value.push({ id: m.id, text: m.body, time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), mine: true }); draft.value = ''; void scrollBottom()
+  })()
 }
 
 function attach() {

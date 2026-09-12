@@ -138,6 +138,7 @@ func run() error {
 
 	mux := http.NewServeMux()
 	mux.Handle("POST /query", httpx.WithAuth(httpx.NewGraphQLHandler(es, cfg.DevMode), auth))
+	mux.Handle("/chat/messages", httpx.WithAuth(httpx.ChatHandler(pool), auth))
 	oauthHTTP := oauthserver.New(oauth)
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", oauthHTTP.AuthorizationMetadata)
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource", oauthHTTP.ProtectedResourceMetadata)
