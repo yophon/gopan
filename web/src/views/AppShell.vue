@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Connection, Delete, Folder, Key, Lock, Search, Setting, Share, SwitchButton } from '@element-plus/icons-vue'
+import { ChatDotRound, Connection, Delete, Folder, Key, Lock, Search, Setting, Share, SwitchButton } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { MeDocument } from '@/api/gen/graphql'
@@ -75,6 +75,10 @@ async function onLogout() {
         @keyup.enter="onSearch"
       />
       <el-menu router :default-active="activeMenu" class="menu">
+        <el-menu-item index="/chat">
+          <el-icon><ChatDotRound /></el-icon>
+          <span>我的设备</span>
+        </el-menu-item>
         <el-menu-item index="/drive">
           <el-icon><Folder /></el-icon>
           <span>我的文件</span>
