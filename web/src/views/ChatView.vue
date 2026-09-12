@@ -1,22 +1,41 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Paperclip, Promotion } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+import { enqueueFiles, setUploadDoneListener } from '@/uploader/manager'
+import type { UploadTask } from '@/stores/uploads'
 
 type Message = { id: string; text: string; time: string; mine: boolean }
 const draft = ref('')
 const messages = ref<Message[]>([])
 const auth = useAuthStore()
+let poller: number | undefined
 const list = ref<HTMLElement | null>(null)
 
 onMounted(async () => {
+  setUploadDoneListener((task: UploadTask) => {
+    if (task.parentId !== null) return
+    void postMessage(`📎 ${task.fileName}`)
+  })
   try {
     const res = await fetch('/chat/messages', { headers: { Authorization: `Bearer ${auth.accessToken}` } })
     if (res.ok) messages.value = (await res.json()).reverse()
   } catch { /* offline state remains empty */ }
   void scrollBottom()
+  poller = window.setInterval(async () => {
+    const res = await fetch('/chat/messages', { headers: { Authorization: `Bearer ${auth.accessToken}` } }); if (!res.ok) return
+    const incoming = ((await res.json()) as Array<{ id: string; body: string; createdAt: string }>).reverse()
+    const known = new Set(messages.value.map((m) => m.id)); for (const m of incoming) if (!known.has(m.id)) messages.value.push({ id: m.id, text: m.body, time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), mine: false }); void scrollBottom()
+  }, 5000)
 })
+onUnmounted(() => { if (poller) window.clearInterval(poller) })
+
+async function postMessage(body: string) {
+  const res = await fetch('/chat/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.accessToken}` }, body: JSON.stringify({ body }) })
+  if (!res.ok) return
+  const m = await res.json(); messages.value.push({ id: m.id, text: m.body, time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), mine: true }); void scrollBottom()
+}
 
 async function scrollBottom() {
   await nextTick()
@@ -34,7 +53,9 @@ function send() {
 }
 
 function attach() {
-  ElMessage.info('文件上传接口将在下一步接入，届时会复用 gopan 的分片/断点续传。')
+  const input = document.createElement('input'); input.type = 'file'; input.multiple = true
+  input.onchange = () => { const files = Array.from(input.files ?? []); if (files.length) { enqueueFiles(files, null); ElMessage.success(`已加入 ${files.length} 个上传任务`) } }
+  input.click()
 }
 </script>
 

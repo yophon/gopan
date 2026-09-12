@@ -90,11 +90,13 @@ const runtimes = new Map<string, Runtime>()
 // ---------- 外部钩子:任务 done 后刷新文件列表 ----------
 
 let invalidateChildren: (parentId: string | null) => void = () => {}
+let uploadDoneListener: (task: UploadTask) => void = () => {}
 
 /** 由 UI 层注入 vue-query 的 invalidate(manager 不依赖组件上下文) */
 export function setUploadInvalidator(fn: (parentId: string | null) => void) {
   invalidateChildren = fn
 }
+export function setUploadDoneListener(fn: (task: UploadTask) => void) { uploadDoneListener = fn }
 
 // ---------- 入队 ----------
 
@@ -284,6 +286,7 @@ function finishDone(task: UploadTask) {
   task.speedBps = 0
   task.error = null
   runtimes.delete(task.id)
+  uploadDoneListener(task)
   queueDoneToast(task)
   invalidateChildren(task.parentId)
 }
