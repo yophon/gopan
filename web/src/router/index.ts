@@ -28,6 +28,11 @@ const router = createRouter({
       children: [
         { path: '', redirect: '/drive' },
         {
+          path: 'chat',
+          name: 'chat',
+          component: () => import('@/views/ChatView.vue'),
+        },
+        {
           path: 'drive/:folderId?',
           name: 'drive',
           component: () => import('@/views/DriveView.vue'),
