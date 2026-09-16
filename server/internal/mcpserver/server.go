@@ -27,10 +27,11 @@ type Server struct {
 	tickets           *service.PackTickets
 	admin             *service.Admin
 	adminDefaultQuota int64
+	chats             *service.Chats
 }
 
-func NewHandler(nodes *service.Nodes, uploads *service.Uploads, tokens *service.MCPTokens, oauth *service.OAuth, packer *service.Packer, tickets *service.PackTickets) http.Handler {
-	s := &Server{nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, packer: packer, tickets: tickets}
+func NewHandler(nodes *service.Nodes, uploads *service.Uploads, tokens *service.MCPTokens, oauth *service.OAuth, packer *service.Packer, tickets *service.PackTickets, chats *service.Chats) http.Handler {
+	s := &Server{nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, packer: packer, tickets: tickets, chats: chats}
 	protocol := mcp.NewServer(&mcp.Implementation{Name: "gopan", Version: "2.3.0"}, nil)
 	s.registerTools(protocol)
 	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return protocol }, &mcp.StreamableHTTPOptions{
@@ -755,4 +756,6 @@ func (s *Server) registerTools(server *mcp.Server) {
 	addTool(s, server, &mcp.Tool{Name: "get_upload_status", Description: "Poll an upload until ready or failed."}, s.getUploadStatus)
 	addTool(s, server, &mcp.Tool{Name: "abort_upload", Description: "Abort an active upload and remove staged data."}, s.abortUpload)
 	addTool(s, server, &mcp.Tool{Name: "prepare_download", Description: "Create a short-lived direct GET URL for one file, or a restricted ZIP ticket for folders and multiple nodes."}, s.prepareDownload)
+	addTool(s, server, &mcp.Tool{Name: "chat_send", Description: "Send a text message or a saved file node to the account's file-transfer conversation ('我的设备'). node_id must be a node already saved by this account."}, mutation(s, "chat_send", "chat:write", (*Server).chatSend))
+	addTool(s, server, &mcp.Tool{Name: "chat_list", Description: "List recent messages in the '我的设备' conversation, oldest first, with optional before_id cursor."}, s.chatList)
 }

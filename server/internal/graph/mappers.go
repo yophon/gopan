@@ -71,6 +71,19 @@ func gqlAuth(r *service.AuthResult) *AuthPayload {
 	return &AuthPayload{AccessToken: r.AccessToken, User: gqlUser(r.User)}
 }
 
+func gqlChatMessage(m service.ChatMessage) *ChatMessage {
+	out := &ChatMessage{
+		ID:        m.ID.String(),
+		Body:      m.Body,
+		CreatedAt: m.CreatedAt,
+		NodeID:    "",
+	}
+	if m.NodeID != nil {
+		out.NodeID = m.NodeID.String()
+	}
+	return out
+}
+
 func gqlMCPAPIKey(t store.McpToken) *MCPAPIKey {
 	out := &MCPAPIKey{
 		ID: t.ID.String(), Name: t.Name, Scopes: t.Scopes, CreatedAt: t.CreatedAt.Time,

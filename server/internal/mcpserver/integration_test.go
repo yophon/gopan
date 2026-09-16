@@ -50,6 +50,7 @@ type mcpEnv struct {
 	tokens  *service.MCPTokens
 	oauth   *service.OAuth
 	tickets *service.PackTickets
+	chats   *service.Chats
 	alice   uuid.UUID // 主角
 	bob     uuid.UUID // 用于越权测试的第二个用户
 }
@@ -101,6 +102,7 @@ func setupEnv(t *testing.T) *mcpEnv {
 	secret := []byte("test-secret-test-secret-test-secret")
 	auth := service.NewAuth(q, secret, 15*time.Minute, 14*24*time.Hour, true, 1<<30)
 	nodes := service.NewNodes(pool)
+	chats := service.NewChats(pool, nodes)
 	uploads := service.NewUploads(pool, obj, nodes, 5<<20, time.Hour)
 	tokens := service.NewMCPTokens(q)
 	oauth := service.NewOAuth(q)
@@ -117,12 +119,12 @@ func setupEnv(t *testing.T) *mcpEnv {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(NewHandler(nodes, uploads, tokens, oauth, packer, tickets))
+	srv := httptest.NewServer(NewHandler(nodes, uploads, tokens, oauth, packer, tickets, chats))
 	t.Cleanup(srv.Close)
 	return &mcpEnv{
 		pool: pool, q: q, obj: obj, srv: srv,
-		s:     &Server{nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, packer: packer, tickets: tickets},
-		nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, tickets: tickets,
+		s:     &Server{nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, packer: packer, tickets: tickets, chats: chats},
+		nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, tickets: tickets, chats: chats,
 		alice: resA.User.ID, bob: resB.User.ID,
 	}
 }
@@ -276,8 +278,8 @@ func TestMCPEndToEndOverHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(lt.Tools) != 26 {
-		t.Fatalf("应注册 26 个工具,got %d", len(lt.Tools))
+	if len(lt.Tools) != 28 {
+		t.Fatalf("应注册 28 个工具,got %d", len(lt.Tools))
 	}
 
 	// create_folder → list_files → search_files → get_file_info → rename → trash → restore

@@ -164,6 +164,16 @@ type ShareAuth {
   accessToken: String!
 }
 
+# ---------- 文件传输助手(我的设备) ----------
+
+type ChatMessage {
+  id: ID!
+  body: String!
+  createdAt: Time!
+  # 附件节点;无附件时为 null。节点被删/彻删后仍为消息,此字段返回 null。
+  node: Node
+}
+
 # ---------- 查询 ----------
 
 enum NodeOrder { NAME, SIZE, UPDATED_AT }
@@ -185,6 +195,11 @@ type Query {
   mcpAPIKeys: [MCPAPIKey!]!
   oauthGrants: [OAuthGrant!]!
   oauthAuthorizationRequest(input: OAuthAuthorizationInput!): OAuthAuthorizationRequest!
+
+  # 文件传输助手(我的设备):最近 limit 条消息,升序(旧→新)。单用户单会话,append-only。
+  chatMessages(limit: Int = 200): [ChatMessage!]!
+  # 当前"我的设备"文件夹;从未创建过返回 null,不触发创建。
+  chatFolder: Node
 
   adminUsers: [AdminUser!]!
   adminOverview: AdminOverview!
@@ -243,6 +258,11 @@ type Mutation {
   revokeMCPAPIKey(id: ID!): Boolean!
   decideOAuthAuthorization(input: OAuthAuthorizationInput!, approved: Boolean!): OAuthAuthorizationResult!
   revokeOAuthGrant(id: ID!): Boolean!
+
+  # 文件传输助手(我的设备):body / nodeId 至少其一;nodeId 必须是当前用户的活跃文件节点。
+  sendChatMessage(body: String, nodeId: ID): ChatMessage!
+  # 幂等返回"我的设备"文件夹(首次调用才创建)。
+  ensureChatFolder: Node!
 
   adminCreateUser(username: String!, password: String!, quotaBytes: Int64): AdminUser!
   adminSetQuota(userId: ID!, quotaBytes: Int64!): AdminUser!

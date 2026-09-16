@@ -17,7 +17,7 @@
 | ![预览](doc/assets/preview.png) | ![分享访客页](doc/assets/share.png) |
 -->
 
-当前阶段:**v2.1.0——在 v2.0 管理端 / 规模 / WebDAV 之上交付 Remote MCP Agent 接入**。部署走 doc/09 上线手册,分全家桶 / 精简两档,2G 小机可关 Gotenberg 与自带反代。功能:分片直传/秒传/断点续传、图片/音视频/PDF/文本/Office 预览、文件与文件夹分享、打包下载、回收站、文件夹体积统计、管理端、WebDAV,以及 OAuth 2.1 / API Key 鉴权的远程 MCP 文件工具。
+当前阶段:**v2.2.0——在 v2.1 Remote MCP 之上交付「我的设备」文件传输助手(聊天 + 收发文件)**。部署走 doc/09 上线手册,分全家桶 / 精简两档,2G 小机可关 Gotenberg 与自带反代。功能:分片直传/秒传/断点续传、图片/音视频/PDF/文本/Office 预览、文件与文件夹分享、打包下载、回收站、文件夹体积统计、管理端、WebDAV、「我的设备」会话(文本 + 附件,浏览器与 MCP Agent 同一会话互通),以及 OAuth 2.1 / API Key 鉴权的远程 MCP 文件与会话工具(共 28 个)。
 
 ## 架构
 
@@ -102,6 +102,7 @@ Agent 接入与远程 MCP 工具见 [docs/MCP.md](./docs/MCP.md)。
 | [M8 · 规模](./doc/milestones/M8-规模.md) | keyset 分页(深页 31ms→7.5ms 且不随深度退化)、文件夹体积异步统计;v1.2.0 |
 | [M9 · WebDAV](./doc/milestones/M9-WebDAV.md) | 应用密码、流式转存走 verify 管线、rclone 真实验收;v1.3.0,v2 收官 |
 | [v2.1 · Remote MCP](./doc/milestones/v2.1-MCP.md) | 零安装 Remote MCP、Agent 直传、OAuth 2.1、API Key 与细粒度 scope |
+| [v2.2 · 文件传输助手](./doc/milestones/v2.2-文件传输助手.md) | 「我的设备」会话、上传即附消息、真实文件卡片、Agent 用 chat_send/chat_list 与浏览器同流 |
 
 ## 读法
 

@@ -214,6 +214,33 @@ extend type Mutation {
 - 访客 token 下,`node`/`children`/`searchNodes` 的入参 node 一律先过 `IsDescendant(shareRoot, id)`;`searchNodes` 范围限分享子树。
 - `refresh` 与 `login` 在 resolver 里写 Set-Cookie(httpOnly, Secure, SameSite=Lax, path=/query),GraphQL body 永远不带 refresh token。
 
+## v2.2 文件传输助手(我的设备)
+
+单用户单会话,append-only。ChatMessage 的 `node` 是附件,惰性解析:
+
+```graphql
+type ChatMessage {
+  id: ID!
+  body: String!
+  createdAt: Time!
+  node: Node        # 附件;无附件为 null;文件被删/彻删后仍为消息,此字段返回 null
+}
+
+extend type Query {
+  chatMessages(limit: Int = 200): [ChatMessage!]!  # 最近 limit 条,升序(旧→新)
+  chatFolder: Node                                # 当前指针;从未创建返回 null,不触发创建
+}
+extend type Mutation {
+  sendChatMessage(body: String, nodeId: ID): ChatMessage!  # 至少其一
+  ensureChatFolder: Node!                                  # 幂等创建"我的设备"
+}
+```
+
+- **不用 cursor 分页**:单用户 append-only,`limit ≤ 200` 全量即可;未来需翻历史再加 `after` 游标。
+- `sendChatMessage` 走 `UserFrom`(拒绝 guest);`nodeId` 必须是当前用户的活跃节点,否则 `NOT_FOUND`(防探测,服务层 `GetActiveNodeOwned` 单事务校验)。
+- `ChatMessage.node` resolver 捕获 `service.ErrNotFound` 返回 `(nil,nil)`——文件删除不传染消息读取,前端展示「文件已不存在」态。
+- 附件落点:网盘根目录固定文件夹「我的设备」,`ensureChatFolder` 用 advisory lock 保证并发只建一个;指针在 `users.chat_folder_id`,改名/移动不失效。
+
 ## 版本策略
 
 v1 不做 schema 版本化;字段只加不删,废弃用 `@deprecated`。前端 codegen 在 CI 里跑,schema 不兼容改动直接编译失败暴露。

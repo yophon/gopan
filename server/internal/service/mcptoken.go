@@ -24,6 +24,8 @@ var validMCPScopes = map[string]struct{}{
 	"files:download": {},
 	"shares:read":    {},
 	"shares:write":   {},
+	"chat:read":      {},
+	"chat:write":     {},
 	"audit:read":     {},
 	"admin:read":     {},
 	"admin:users":    {},
@@ -37,7 +39,9 @@ var MCPScopes = []string{
 	"files:upload",
 	"files:write",
 	"files:delete",
-	"shares:read", "shares:write", "audit:read",
+	"shares:read", "shares:write",
+	"chat:read", "chat:write",
+	"audit:read",
 }
 
 var MCPAdminScopes = []string{"admin:read", "admin:users", "admin:tasks", "admin:purge"}

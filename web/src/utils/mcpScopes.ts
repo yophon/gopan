@@ -6,6 +6,8 @@ export const mcpScopeOptions = [
   { value: 'files:delete', label: '移入回收站与恢复' },
   { value: 'shares:read', label: '查看分享' },
   { value: 'shares:write', label: '创建与撤销分享' },
+  { value: 'chat:read', label: '读取文件传输助手消息' },
+  { value: 'chat:write', label: '发送消息与文件到文件传输助手' },
   { value: 'audit:read', label: '查看操作记录' },
 ] as const
 

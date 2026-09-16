@@ -39,6 +39,8 @@ export interface UploadTask {
   error: string | null
   sessionId: string | null
   sha256: string | null
+  /** 上传完成后服务端 node id(秒传/分片两条路径各自捕获),供聊天等发文件消息 */
+  nodeId: string | null
 }
 
 /** localStorage 里的可恢复上传记录(gopan_uploads) */

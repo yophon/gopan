@@ -31,6 +31,7 @@ function makeTask(overrides: Partial<UploadTask> = {}): UploadTask {
     error: null,
     sessionId: null,
     sha256: null,
+    nodeId: null,
     ...overrides,
   }
 }

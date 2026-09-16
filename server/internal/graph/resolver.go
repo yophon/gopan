@@ -18,4 +18,5 @@ type Resolver struct {
 	AppPass   *service.AppPasswords
 	MCPTokens *service.MCPTokens
 	OAuth     *service.OAuth
+	Chats     *service.Chats
 }
