@@ -12,7 +12,7 @@ import (
 )
 
 const adminListUsers = `-- name: AdminListUsers :many
-SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at FROM users ORDER BY created_at
+SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at, chat_folder_id FROM users ORDER BY created_at
 `
 
 func (q *Queries) AdminListUsers(ctx context.Context) ([]User, error) {
@@ -33,6 +33,7 @@ func (q *Queries) AdminListUsers(ctx context.Context) ([]User, error) {
 			&i.IsAdmin,
 			&i.CreatedAt,
 			&i.DisabledAt,
+			&i.ChatFolderID,
 		); err != nil {
 			return nil, err
 		}
@@ -82,7 +83,7 @@ const adminSetUserDisabled = `-- name: AdminSetUserDisabled :one
 UPDATE users
 SET disabled_at = CASE WHEN $2::boolean THEN now() ELSE NULL END
 WHERE id = $1
-RETURNING id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at
+RETURNING id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at, chat_folder_id
 `
 
 type AdminSetUserDisabledParams struct {
@@ -102,12 +103,13 @@ func (q *Queries) AdminSetUserDisabled(ctx context.Context, arg AdminSetUserDisa
 		&i.IsAdmin,
 		&i.CreatedAt,
 		&i.DisabledAt,
+		&i.ChatFolderID,
 	)
 	return i, err
 }
 
 const adminSetUserQuota = `-- name: AdminSetUserQuota :one
-UPDATE users SET quota_bytes = $2 WHERE id = $1 RETURNING id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at
+UPDATE users SET quota_bytes = $2 WHERE id = $1 RETURNING id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at, chat_folder_id
 `
 
 type AdminSetUserQuotaParams struct {
@@ -127,6 +129,7 @@ func (q *Queries) AdminSetUserQuota(ctx context.Context, arg AdminSetUserQuotaPa
 		&i.IsAdmin,
 		&i.CreatedAt,
 		&i.DisabledAt,
+		&i.ChatFolderID,
 	)
 	return i, err
 }
@@ -134,7 +137,7 @@ func (q *Queries) AdminSetUserQuota(ctx context.Context, arg AdminSetUserQuotaPa
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (id, username, password_hash, quota_bytes)
 VALUES ($1, $2, $3, $4)
-RETURNING id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at
+RETURNING id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at, chat_folder_id
 `
 
 type CreateUserParams struct {
@@ -161,12 +164,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.IsAdmin,
 		&i.CreatedAt,
 		&i.DisabledAt,
+		&i.ChatFolderID,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at FROM users WHERE id = $1
+SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at, chat_folder_id FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -181,12 +185,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.IsAdmin,
 		&i.CreatedAt,
 		&i.DisabledAt,
+		&i.ChatFolderID,
 	)
 	return i, err
 }
 
 const getUserByIDForUpdate = `-- name: GetUserByIDForUpdate :one
-SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at FROM users WHERE id = $1 FOR UPDATE
+SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at, chat_folder_id FROM users WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) GetUserByIDForUpdate(ctx context.Context, id uuid.UUID) (User, error) {
@@ -201,12 +206,13 @@ func (q *Queries) GetUserByIDForUpdate(ctx context.Context, id uuid.UUID) (User,
 		&i.IsAdmin,
 		&i.CreatedAt,
 		&i.DisabledAt,
+		&i.ChatFolderID,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at FROM users WHERE username = $1
+SELECT id, username, password_hash, quota_bytes, used_bytes, is_admin, created_at, disabled_at, chat_folder_id FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -221,6 +227,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.IsAdmin,
 		&i.CreatedAt,
 		&i.DisabledAt,
+		&i.ChatFolderID,
 	)
 	return i, err
 }

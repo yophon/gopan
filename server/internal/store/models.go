@@ -30,12 +30,50 @@ type Blob struct {
 	DerefAt   pgtype.Timestamptz
 }
 
+type ChatMessage struct {
+	ID        uuid.UUID
+	OwnerID   uuid.UUID
+	Body      string
+	NodeID    *uuid.UUID
+	CreatedAt pgtype.Timestamptz
+}
+
 type Derivative struct {
 	BlobID    uuid.UUID
 	Kind      string
 	MinioKey  string
 	Size      int64
 	CreatedAt pgtype.Timestamptz
+}
+
+type McpAccessRoot struct {
+	CredentialID   uuid.UUID
+	CredentialType string
+	OwnerID        uuid.UUID
+	RootID         uuid.UUID
+	UpdatedAt      pgtype.Timestamptz
+}
+
+type McpAudit struct {
+	ID             int64
+	OwnerID        uuid.UUID
+	CredentialID   uuid.UUID
+	CredentialType string
+	Endpoint       string
+	Tool           string
+	Targets        []byte
+	Status         string
+	ErrorCode      *string
+	CreatedAt      pgtype.Timestamptz
+	FinishedAt     pgtype.Timestamptz
+}
+
+type McpOperation struct {
+	OwnerID     uuid.UUID
+	Key         string
+	RequestHash string
+	Response    []byte
+	CreatedAt   pgtype.Timestamptz
 }
 
 type McpToken struct {
@@ -47,6 +85,15 @@ type McpToken struct {
 	CreatedAt  pgtype.Timestamptz
 	LastUsedAt pgtype.Timestamptz
 	RevokedAt  pgtype.Timestamptz
+}
+
+type McpUploadRequest struct {
+	OwnerID     uuid.UUID
+	Key         string
+	RequestHash string
+	NodeID      *uuid.UUID
+	TransferID  *uuid.UUID
+	CreatedAt   pgtype.Timestamptz
 }
 
 type Node struct {
@@ -194,4 +241,5 @@ type User struct {
 	IsAdmin      bool
 	CreatedAt    pgtype.Timestamptz
 	DisabledAt   pgtype.Timestamptz
+	ChatFolderID *uuid.UUID
 }

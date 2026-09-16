@@ -174,7 +174,7 @@ func TestAuthenticateRejectsUnknownScheme(t *testing.T) {
 }
 
 func TestWithAuthRejectsBadAuthorizationHeader(t *testing.T) {
-	h := NewHandler(nil, nil, service.NewMCPTokens(nil), service.NewOAuth(nil), nil, nil)
+	h := NewHandler(nil, nil, service.NewMCPTokens(nil), service.NewOAuth(nil), nil, nil, nil)
 	cases := []struct{ name, header string }{
 		{"非 Bearer 方案", "Basic dXNlcjpwYXNz"},
 		{"未知前缀 token", "Bearer definitely-not-a-gopan-token"},

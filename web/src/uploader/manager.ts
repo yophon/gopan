@@ -118,6 +118,7 @@ export function enqueueFiles(files: File[], parentId: string | null) {
       error: null,
       sessionId: record?.sessionId ?? null,
       sha256: null,
+      nodeId: null,
     }
     runtimes.set(task.id, {
       file,
@@ -220,6 +221,7 @@ async function runTask(taskId: string) {
         // 秒传:直接 done,进度条瞬间满
         task.instant = true
         task.uploadedBytes = task.size
+        task.nodeId = res.initUpload.node?.id ?? null
         finishDone(task)
         return
       }
@@ -247,10 +249,12 @@ async function runTask(taskId: string) {
     task.uploadedBytes = task.size
     rt.completedBytes = task.size
     let missingRounds = 0
+    let doneNodeId: string | null = null
     for (;;) {
       throwIfInterrupted(rt)
       try {
-        await request(CompleteUploadDocument, { sessionId: task.sessionId!, etags: [] })
+        const res = await request(CompleteUploadDocument, { sessionId: task.sessionId!, etags: [] })
+        doneNodeId = res.completeUpload.id
         break
       } catch (err) {
         if (getErrorCode(err) === 'UPLOAD_PROCESSING') {
@@ -271,6 +275,7 @@ async function runTask(taskId: string) {
       }
     }
     task.uploadedBytes = task.size
+    task.nodeId = doneNodeId
     finishDone(task)
   } catch (err) {
     handleTaskError(task, rt, err)
@@ -287,6 +292,7 @@ function finishDone(task: UploadTask) {
   task.error = null
   runtimes.delete(task.id)
   uploadDoneListener(task)
+  task.nodeId = null // 防重复消费:listener 已可通过 Task 读到 nodeId
   queueDoneToast(task)
   invalidateChildren(task.parentId)
 }

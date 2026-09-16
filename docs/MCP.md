@@ -84,6 +84,8 @@ OAuth 与 API Key 共用以下权限：
 - `files:delete`
 - `shares:read`
 - `shares:write`
+- `chat:read`   —— 读取「我的设备」会话消息
+- `chat:write`  —— 向「我的设备」会话发送文本与会话内文件
 - `audit:read`
 
 已有五项文件权限不自动升级为分享管理或审计权限，需要重新 OAuth 授权或创建新 Key。管理员权限是独立的 `admin:read`、`admin:users`、`admin:tasks`、`admin:purge`，只能由管理员授权，且不能与普通文件权限混在同一凭据里。
@@ -118,8 +120,31 @@ OAuth 与 API Key 共用以下权限：
 | `create_share` | `shares:write` | 创建分享，可设置密码、未来到期时间和幂等键 |
 | `revoke_share` | `shares:write` | 按分享 ID 撤销分享，支持幂等键 |
 | `list_audit` | `audit:read` | 分页读取 MCP 操作记录 |
+| `chat_send` | `chat:write` | 发送文本或已保存的文件节点到「我的设备」会话 |
+| `chat_list` | `chat:read` | 分页读取「我的设备」会话消息（升序） |
 
-文件接口共 26 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
+文件与会话接口共 28 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
+
+### 我的设备会话
+
+「我的设备」是每个账号唯一的文件传输会话，网页端与 Agent 写的是同一条消息流，append-only（消息不可删除）。`chat_send` 一次只收一个动作——发 `text` 或发 `node_id`：
+
+```json
+{"text":"今晚把合同发我"}
+{"node_id":"6b8a…","idempotency_key":"send-contract-retry"}
+```
+
+`node_id` 必须是当前账号已保存的文件/文件夹节点；传他人或已删除的节点返回 `NOT_FOUND`（防探测）。附件本身走既定上传路径（`prepare_upload` 等），会话消息只引用节点、不承载字节。`chat_list` 返回升序（旧→新），`limit` 上限 200，`before_id` 是消息 ID 游标，用于读取更早的历史：
+
+```json
+{"limit":50,"before_id":"018f…"}
+```
+
+```json
+{"items":[{"id":"018f…","body":"今晚把这份交我","created_at":"2026-09-15T10:00:00Z"}]}
+```
+
+消息携带 `node_id` 时表示文件附件，Agent 可以接着用 `get_file_info` / `prepare_download` 取回引用文件。浏览器端轮询拉取最近 200 条即与 Agent 写入保持同步。
 
 ### 配额与分享
 

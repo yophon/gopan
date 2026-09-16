@@ -11,7 +11,7 @@ import (
 
 func TestHandlerRegistersToolsAndRequiresBearer(t *testing.T) {
 	// NewHandler 会立即推导并校验所有工具 schema；能构造成功即覆盖 schema 回归。
-	h := NewHandler(nil, nil, service.NewMCPTokens(nil), service.NewOAuth(nil), nil, nil)
+	h := NewHandler(nil, nil, service.NewMCPTokens(nil), service.NewOAuth(nil), nil, nil, nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/mcp", nil))
 	if rec.Code != http.StatusUnauthorized {

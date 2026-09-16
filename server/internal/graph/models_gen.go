@@ -40,6 +40,15 @@ type AuthPayload struct {
 	User        *User  `json:"user"`
 }
 
+type ChatMessage struct {
+	ID        string    `json:"id"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+	Node      *Node     `json:"node,omitempty"`
+	// 由列表转换器置位,供 node 字段 resolver 恢复真实 uuid
+	NodeID string `json:"-"`
+}
+
 type MCPAPIKey struct {
 	ID         string     `json:"id"`
 	Name       string     `json:"name"`

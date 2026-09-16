@@ -7,12 +7,37 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/yophon/gopan/server/internal/httpx"
 	"github.com/yophon/gopan/server/internal/service"
 	"github.com/yophon/gopan/server/internal/store"
 )
+
+// Node is the resolver for the node field.
+func (r *chatMessageResolver) Node(ctx context.Context, obj *ChatMessage) (*Node, error) {
+	if obj.NodeID == "" {
+		return nil, nil
+	}
+	nid, err := parseID(obj.NodeID)
+	if err != nil {
+		return nil, err
+	}
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	n, err := r.getNodeFull(ctx, ident.UserID, nid)
+	if err != nil {
+		// 文件被删/回收/彻删:消息仍展示为普通文本,"文件已不存在"由前端兜底
+		if errors.Is(err, service.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return n, nil
+}
 
 // SetMCPAccessRoot is the resolver for the setMCPAccessRoot field.
 func (r *mutationResolver) SetMCPAccessRoot(ctx context.Context, credentialID string, credentialType string, rootPath *string) (bool, error) {
@@ -445,6 +470,47 @@ func (r *mutationResolver) RevokeOAuthGrant(ctx context.Context, id string) (boo
 	return true, nil
 }
 
+// SendChatMessage is the resolver for the sendChatMessage field.
+func (r *mutationResolver) SendChatMessage(ctx context.Context, body *string, nodeID *string) (*ChatMessage, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case nodeID != nil:
+		nid, err := parseID(*nodeID)
+		if err != nil {
+			return nil, err
+		}
+		msg, err := r.Chats.SendNode(ctx, ident.UserID, nid)
+		if err != nil {
+			return nil, err
+		}
+		return gqlChatMessage(msg), nil
+	case body != nil:
+		msg, err := r.Chats.SendText(ctx, ident.UserID, *body)
+		if err != nil {
+			return nil, err
+		}
+		return gqlChatMessage(msg), nil
+	default:
+		return nil, &service.Error{Code: "INVALID_INPUT", Message: "body 与 nodeId 至少提供一个"}
+	}
+}
+
+// EnsureChatFolder is the resolver for the ensureChatFolder field.
+func (r *mutationResolver) EnsureChatFolder(ctx context.Context) (*Node, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	n, err := r.Chats.EnsureFolder(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return gqlNode(n), nil
+}
+
 // AdminCreateUser is the resolver for the adminCreateUser field.
 func (r *mutationResolver) AdminCreateUser(ctx context.Context, username string, password string, quotaBytes *int64) (*AdminUser, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -848,6 +914,44 @@ func (r *queryResolver) OauthAuthorizationRequest(ctx context.Context, input OAu
 	return &OAuthAuthorizationRequest{ClientName: view.ClientName, Scopes: view.Scopes}, nil
 }
 
+// ChatMessages is the resolver for the chatMessages field.
+func (r *queryResolver) ChatMessages(ctx context.Context, limit *int) ([]*ChatMessage, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	limitN := 200
+	if limit != nil {
+		limitN = *limit
+	}
+	msgs, err := r.Chats.ListRecent(ctx, ident.UserID, nil, limitN)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*ChatMessage, 0, len(msgs))
+	for _, m := range msgs {
+		out = append(out, gqlChatMessage(m))
+	}
+	return out, nil
+}
+
+// ChatFolder 是 chatFolder 字段的 resolver。
+// 从未创建过"我的设备"文件夹时返回 null(不触发创建)。
+func (r *queryResolver) ChatFolder(ctx context.Context) (*Node, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	n, err := r.Chats.ChatFolder(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if n == nil {
+		return nil, nil
+	}
+	return gqlNode(*n), nil
+}
+
 // AdminUsers is the resolver for the adminUsers field.
 func (r *queryResolver) AdminUsers(ctx context.Context) ([]*AdminUser, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -888,6 +992,9 @@ func (r *queryResolver) AdminOverview(ctx context.Context) (*AdminOverview, erro
 	}, nil
 }
 
+// ChatMessage returns ChatMessageResolver implementation.
+func (r *Resolver) ChatMessage() ChatMessageResolver { return &chatMessageResolver{r} }
+
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
@@ -898,7 +1005,8 @@ func (r *Resolver) Node() NodeResolver { return &nodeResolver{r} }
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
 type (
-	mutationResolver struct{ *Resolver }
-	nodeResolver     struct{ *Resolver }
-	queryResolver    struct{ *Resolver }
+	chatMessageResolver struct{ *Resolver }
+	mutationResolver    struct{ *Resolver }
+	nodeResolver        struct{ *Resolver }
+	queryResolver       struct{ *Resolver }
 )

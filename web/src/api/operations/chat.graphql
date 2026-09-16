@@ -1,0 +1,53 @@
+query ChatMessages($limit: Int) {
+  chatMessages(limit: $limit) {
+    id
+    body
+    createdAt
+    node {
+      id
+      parentId
+      name
+      kind
+      size
+      preview {
+        kind
+        thumbUrl
+      }
+    }
+  }
+}
+
+mutation SendChatMessage($body: String, $nodeId: ID) {
+  sendChatMessage(body: $body, nodeId: $nodeId) {
+    id
+    body
+    createdAt
+    node {
+      id
+      parentId
+      name
+      kind
+      size
+      preview {
+        kind
+        thumbUrl
+      }
+    }
+  }
+}
+
+mutation EnsureChatFolder {
+  ensureChatFolder {
+    id
+    parentId
+    name
+  }
+}
+
+query ChatFolderInfo {
+  chatFolder {
+    id
+    parentId
+    name
+  }
+}

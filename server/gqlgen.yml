@@ -29,6 +29,14 @@ models:
         resolver: true
       preview:
         resolver: true
+  ChatMessage:
+    extraFields:
+      NodeID:
+        type: string
+        description: "由列表转换器置位,供 node 字段 resolver 恢复真实 uuid"
+    fields:
+      node:
+        resolver: true
   ID:
     model: github.com/99designs/gqlgen/graphql.String
   Int64:
