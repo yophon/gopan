@@ -6,8 +6,9 @@
 // 直到第一次有人真用浏览器点注册才暴露。CDP 手搓,零 npm 依赖。
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
+import { fileURLToPath } from 'node:url'
 
 const BASE = process.env.GOPAN_URL ?? 'http://127.0.0.1:8080'
 const PORT = 9223
@@ -113,14 +114,24 @@ const url = await evalJS('location.pathname')
 const messages = await evalJS(`[...document.querySelectorAll('.el-message, .el-form-item__error')].map(e => e.textContent).join(' | ')`)
 if (url !== '/drive') die(`BROWSER PROBE FAILED:仍在 ${url},页面提示:${messages || '(无)'}`)
 
-// Agent 凭证入口 → 五档 scope → 创建 API Key(明文只显示一次)
+// 弹窗里的 scope 档位数直接从 mcpScopes.ts 数出来,别写死:曾经写死 5,后来 shares/chat/audit
+// 陆续加进来,这个断言就一直失败,探针等于没跑。
+const scopeSrc = readFileSync(fileURLToPath(new URL('../../web/src/utils/mcpScopes.ts', import.meta.url)), 'utf8')
+const agentScopeCount = [
+  ...scopeSrc
+    .slice(scopeSrc.indexOf('mcpScopeOptions'), scopeSrc.indexOf('mcpAdminScopeOptions'))
+    .matchAll(/\{ value:/g),
+].length
+if (agentScopeCount === 0) die('未能从 mcpScopes.ts 解析出 scope 档位数')
+
+// Agent 凭证入口 → 各档 scope → 创建 API Key(明文只显示一次)
 await evalJS(`document.querySelector('button[title="Agent API Key 与 OAuth"]')?.click()`)
 await new Promise((r) => setTimeout(r, 600))
 const dialogReady = await evalJS(`(() => {
   const dialog = [...document.querySelectorAll('.el-dialog')].find(d => d.textContent.includes('Agent 接入'))
   if (!dialog) return 'dialog missing'
   const scopes = dialog.querySelectorAll('.el-checkbox').length
-  if (scopes !== 5) return 'scopes=' + scopes
+  if (scopes !== ${agentScopeCount}) return 'scopes=' + scopes + ',期望 ${agentScopeCount}'
   const input = dialog.querySelector('input[placeholder*="Codex"]')
   if (!input) return 'name input missing'
   input.value = 'browser-probe'

@@ -14,7 +14,7 @@ func TestChatSendAndList(t *testing.T) {
 	e := setupEnv(t)
 	ctx := context.Background()
 
-	plain, _, err := e.tokens.Create(ctx, e.alice, "chat", []string{"chat:read", "chat:write"})
+	plain, _, err := e.tokens.Create(ctx, e.alice, "chat", []string{"chat:read", "chat:write", "files:write"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,6 +28,7 @@ func TestChatSendAndList(t *testing.T) {
 	}
 
 	// 2. 发文件消息:节点用 create_folder 的文件夹(服务端 SendNode 只校验属主活跃)
+	// create_folder 走 files:write,所以上面的 token 需要同时带该 scope。
 	var folder NodeOutput
 	callTool(t, sess, "create_folder", map[string]any{"name": "chat-files"}, &folder)
 	var file ChatMessageOutput
