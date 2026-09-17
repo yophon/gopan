@@ -226,7 +226,7 @@ const getNodeWithBlob = `-- name: GetNodeWithBlob :one
 SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256, b.verified AS blob_verified
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
-WHERE n.id = $1 AND n.owner_id = $2
+WHERE n.id = $1 AND n.owner_id = $2 AND n.deleted_at IS NULL
 `
 
 type GetNodeWithBlobParams struct {
@@ -253,6 +253,8 @@ type GetNodeWithBlobRow struct {
 	BlobVerified *bool
 }
 
+// 单节点带 blob 元信息。只取活跃节点:调用方(节点详情/预览/下载、聊天里的文件卡片、
+// 分享根节点)拿到的都必须是可直接访问的节点,回收站里的节点一律按不存在处理。
 func (q *Queries) GetNodeWithBlob(ctx context.Context, arg GetNodeWithBlobParams) (GetNodeWithBlobRow, error) {
 	row := q.db.QueryRow(ctx, getNodeWithBlob, arg.ID, arg.OwnerID)
 	var i GetNodeWithBlobRow
