@@ -11,6 +11,9 @@ import {
   RevokeAppPasswordDocument,
 } from '@/api/gen/graphql'
 import { formatTime } from '@/utils/format'
+import { useBreakpoints } from '@/composables/breakpoints'
+
+const { isMobile } = useBreakpoints()
 
 const visible = defineModel<boolean>({ required: true })
 
@@ -56,7 +59,13 @@ async function copy(text: string) {
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="WebDAV 应用密码" width="560px" @closed="created = null">
+  <el-dialog
+    v-model="visible"
+    title="WebDAV 应用密码"
+    width="min(560px, 94vw)"
+    :fullscreen="isMobile"
+    @closed="created = null"
+  >
     <p class="hint">
       在 Finder / 资源管理器 / rclone / 手机文件 App 里挂载:地址
       <code class="mono">{{ davUrl }}</code>
@@ -91,10 +100,10 @@ async function copy(text: string) {
 
     <el-table v-loading="isFetching" :data="items" row-key="id" empty-text="还没有应用密码">
       <el-table-column label="设备" prop="name" min-width="140" />
-      <el-table-column label="创建于" width="170">
+      <el-table-column v-if="!isMobile" label="创建于" width="170">
         <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
       </el-table-column>
-      <el-table-column label="最近使用" width="170">
+      <el-table-column v-if="!isMobile" label="最近使用" width="170">
         <template #default="{ row }">{{ row.lastUsedAt ? formatTime(row.lastUsedAt) : '从未' }}</template>
       </el-table-column>
       <el-table-column label="" width="80" align="center">

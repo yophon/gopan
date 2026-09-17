@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, RefreshRight } from '@element-plus/icons-vue'
+import { MoreFilled, Plus, RefreshRight } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
@@ -18,12 +18,48 @@ import {
 import type { AdminUsersQuery } from '@/api/gen/graphql'
 import { useAuthStore } from '@/stores/auth'
 import { formatBytes, formatTime } from '@/utils/format'
+import { useBreakpoints } from '@/composables/breakpoints'
+import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
+import type { SheetItem } from '@/components/nodes/types'
 
 type AdminUser = AdminUsersQuery['adminUsers'][number]
 
 const GB = 1 << 30
 const auth = useAuthStore()
+const { isMobile } = useBreakpoints()
 const queryClient = useQueryClient()
+
+// ---------- 手机:账号操作菜单 ----------
+
+const userSheet = ref<{ visible: boolean; user: AdminUser | null }>({
+  visible: false,
+  user: null,
+})
+
+const userSheetItems = computed<SheetItem[]>(() => {
+  const u = userSheet.value.user
+  if (!u) return []
+  return [
+    { key: 'quota', label: '调整配额' },
+    { key: 'reset', label: '重置密码' },
+    // 自己不能禁用自己,与桌面表格里的条件保持一致
+    ...(u.id === auth.user?.id
+      ? []
+      : [{ key: 'toggle', label: u.disabled ? '启用账号' : '禁用账号', danger: !u.disabled }]),
+  ]
+})
+
+function openUserSheet(user: AdminUser) {
+  userSheet.value = { visible: true, user }
+}
+
+function onUserSheetSelect(key: string) {
+  const u = userSheet.value.user
+  if (!u) return
+  if (key === 'quota') void onSetQuota(u)
+  if (key === 'reset') void onResetPassword(u)
+  if (key === 'toggle') void onToggleDisabled(u)
+}
 
 const { data: usersData, isFetching } = useQuery({
   queryKey: ['adminUsers'],
@@ -185,7 +221,7 @@ const retryMutation = useMutation({
       <el-button type="primary" :icon="Plus" @click="createVisible = true">新建用户</el-button>
     </div>
 
-    <el-table v-loading="isFetching" :data="users" row-key="id">
+    <el-table v-if="!isMobile" v-loading="isFetching" :data="users" row-key="id">
       <el-table-column label="用户名" min-width="180">
         <template #default="{ row }">
           <span class="name-cell">
@@ -219,7 +255,37 @@ const retryMutation = useMutation({
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="createVisible" title="新建用户" width="420px">
+    <!-- 手机:账号卡片,逐项操作走底部菜单(表格 800px 起,手机上横向滚动太难受) -->
+    <div v-else v-loading="isFetching" class="user-cards">
+      <div v-for="u in users" :key="u.id" class="user-card">
+        <div class="user-main">
+          <div class="user-name">
+            {{ u.username }}
+            <el-tag v-if="u.isAdmin" size="small" type="warning">admin</el-tag>
+            <el-tag v-if="u.disabled" size="small" type="danger">已禁用</el-tag>
+          </div>
+          <div class="user-meta">
+            {{ formatBytes(u.usedBytes) }} / {{ formatBytes(u.quotaBytes) }}
+          </div>
+        </div>
+        <el-button
+          class="user-more"
+          link
+          :icon="MoreFilled"
+          title="账号操作"
+          aria-label="账号操作"
+          @click="openUserSheet(u)"
+        />
+      </div>
+      <el-empty v-if="!users.length && !isFetching" description="还没有用户" />
+    </div>
+
+    <el-dialog
+      v-model="createVisible"
+      title="新建用户"
+      width="min(420px, 94vw)"
+      :fullscreen="isMobile"
+    >
       <el-form label-width="72px" @submit.prevent>
         <el-form-item label="用户名">
           <el-input v-model="createForm.username" placeholder="2~32 个字符" />
@@ -244,12 +310,54 @@ const retryMutation = useMutation({
         </el-button>
       </template>
     </el-dialog>
+
+    <NodeActionSheet
+      v-model:visible="userSheet.visible"
+      :title="userSheet.user?.username"
+      :items="userSheetItems"
+      @select="onUserSheetSelect"
+    />
   </div>
 </template>
 
 <style scoped>
 .page-title {
   margin: 0 0 16px;
+}
+.user-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+}
+.user-main {
+  flex: 1;
+  min-width: 0;
+}
+.user-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-meta {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.user-more {
+  width: var(--touch-target);
+  height: var(--touch-target);
+  font-size: 18px;
 }
 .cards {
   display: grid;

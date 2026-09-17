@@ -9,7 +9,8 @@ export interface NodeListItem {
   kind: string
   /** 生成类型的 size 是可选可空的(文件夹没有),这里跟着放宽 */
   size?: number | null
-  updatedAt: string
+  /** 回收站/分享列表没有 updatedAt,用它们的自有时间字段顶替(可能是 null) */
+  updatedAt?: string | null
   parentId?: string | null
   preview?: { kind: string; thumbUrl?: string | null } | null
   subtreeBytes?: number | null

@@ -2,15 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import {
-  Document,
-  Folder,
-  Headset,
-  Memo,
-  Picture,
-  Reading,
-  VideoCamera,
-} from '@element-plus/icons-vue'
+import { FolderOpened } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
@@ -18,11 +10,17 @@ import { SearchNodesDocument } from '@/api/gen/graphql'
 import type { SearchNodesQuery } from '@/api/gen/graphql'
 import { formatBytes, formatTime } from '@/utils/format'
 import { openPreview } from '@/composables/preview'
+import { useBreakpoints } from '@/composables/breakpoints'
+import NodeCardList from '@/components/nodes/NodeCardList.vue'
+import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
+import NodeIcon from '@/components/nodes/NodeIcon.vue'
+import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 
 type Item = SearchNodesQuery['searchNodes']['items'][number]
 
 const route = useRoute()
 const router = useRouter()
+const { isMobile } = useBreakpoints()
 
 const q = computed(() => (typeof route.query.q === 'string' ? route.query.q.trim() : ''))
 
@@ -64,7 +62,7 @@ function onLoadMore() {
 
 // ---------- 交互 ----------
 
-function onRowDblclick(row: Item) {
+function onOpen(row: NodeListItem) {
   if (row.kind === 'FOLDER') {
     void router.push(`/drive/${row.id}`)
     return
@@ -80,49 +78,31 @@ function onRowDblclick(row: Item) {
 }
 
 /** 跳到所在文件夹 */
-function onLocate(row: Item) {
+function onLocate(row: NodeListItem) {
   void router.push(row.parentId ? `/drive/${row.parentId}` : '/drive')
-}
-
-// ---------- 图标 / 缩略图 ----------
-
-const thumbErrors = ref(new Set<string>())
-
-function onThumbError(id: string) {
-  const next = new Set(thumbErrors.value)
-  next.add(id)
-  thumbErrors.value = next
-}
-
-function showThumb(row: Item): boolean {
-  return (
-    row.kind === 'FILE' &&
-    (row.preview.kind === 'IMAGE' || row.preview.kind === 'VIDEO') &&
-    !!row.preview.thumbUrl &&
-    !thumbErrors.value.has(row.id)
-  )
-}
-
-function fileIcon(row: Item) {
-  if (row.kind === 'FOLDER') return Folder
-  switch (row.preview.kind) {
-    case 'IMAGE':
-      return Picture
-    case 'VIDEO':
-      return VideoCamera
-    case 'AUDIO':
-      return Headset
-    case 'PDF':
-      return Reading
-    case 'TEXT':
-      return Memo
-    default:
-      return Document
-  }
 }
 
 function asItem(row: unknown): Item {
   return row as Item
+}
+
+// ---------- 手机 ----------
+
+const sheet = ref<{ visible: boolean; node: NodeListItem | null }>({
+  visible: false,
+  node: null,
+})
+
+const sheetItems: SheetItem[] = [
+  { key: 'open', label: '打开 / 预览' },
+  { key: 'locate', label: '所在目录', icon: FolderOpened },
+]
+
+function onSheetSelect(key: string) {
+  const node = sheet.value.node
+  if (!node) return
+  if (key === 'open') onOpen(node)
+  if (key === 'locate') onLocate(node)
 }
 </script>
 
@@ -132,27 +112,19 @@ function asItem(row: unknown): Item {
       搜索「{{ q }}」
       <span v-if="!loading" class="result-count">{{ total }} 个结果</span>
     </h3>
+
     <el-table
+      v-if="!isMobile"
       v-loading="loading && items.length === 0"
       :data="items"
       row-key="id"
       empty-text="没有匹配的文件"
-      @row-dblclick="onRowDblclick"
+      @row-dblclick="(row: unknown) => onOpen(asItem(row))"
     >
       <el-table-column label="名称" min-width="320">
         <template #default="{ row }">
           <span class="name-cell">
-            <img
-              v-if="showThumb(asItem(row))"
-              class="name-thumb"
-              :src="asItem(row).preview.thumbUrl!"
-              alt=""
-              loading="lazy"
-              @error="onThumbError(asItem(row).id)"
-            />
-            <el-icon v-else class="name-icon">
-              <component :is="fileIcon(asItem(row))" />
-            </el-icon>
+            <NodeIcon :node="asItem(row)" :size="28" />
             {{ asItem(row).name }}
           </span>
         </template>
@@ -167,15 +139,32 @@ function asItem(row: unknown): Item {
       </el-table-column>
       <el-table-column label="操作" width="120" align="center">
         <template #default="{ row }">
-          <el-button link type="primary" @click.stop="onLocate(asItem(row))">
-            所在目录
-          </el-button>
+          <el-button link type="primary" @click.stop="onLocate(asItem(row))">所在目录</el-button>
         </template>
       </el-table-column>
     </el-table>
+
+    <NodeCardList
+      v-else
+      :items="items"
+      mode="list"
+      :selection-mode="false"
+      :selected-ids="[]"
+      :loading="loading && items.length === 0"
+      @open="onOpen"
+      @menu="(node) => (sheet = { visible: true, node })"
+    />
+
     <div v-if="nextCursor" class="load-more">
       <el-button :loading="loading" @click="onLoadMore">加载更多</el-button>
     </div>
+
+    <NodeActionSheet
+      v-model:visible="sheet.visible"
+      :title="sheet.node?.name"
+      :items="sheetItems"
+      @select="onSheetSelect"
+    />
   </div>
 </template>
 
@@ -193,17 +182,6 @@ function asItem(row: unknown): Item {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-.name-icon {
-  color: var(--el-color-primary);
-}
-.name-thumb {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  object-fit: cover;
-  background: var(--el-fill-color-light);
 }
 .load-more {
   display: flex;

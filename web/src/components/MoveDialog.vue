@@ -4,6 +4,7 @@ import type Node from 'element-plus/es/components/tree/src/model/node'
 
 import { request } from '@/api/client'
 import { ChildrenDocument } from '@/api/gen/graphql'
+import { useBreakpoints } from '@/composables/breakpoints'
 
 /**
  * 移动目标选择器:el-tree 懒加载目录树。
@@ -22,6 +23,9 @@ const props = defineProps<{
   /** 复制模式只改文案,选择逻辑一致 */
   mode?: 'move' | 'copy'
 }>()
+
+/** 手机上目录树必须全屏,否则点不准 */
+const { isMobile } = useBreakpoints()
 
 const emit = defineEmits<{
   confirm: [targetParentId: string | null]
@@ -66,7 +70,8 @@ function onOpen() {
   <el-dialog
     v-model="visible"
     :title="props.mode === 'copy' ? '复制到' : '移动到'"
-    width="420px"
+    width="min(420px, 94vw)"
+    :fullscreen="isMobile"
     destroy-on-close
     @open="onOpen"
   >

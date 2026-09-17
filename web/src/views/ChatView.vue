@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   DataBoard,
@@ -27,6 +27,7 @@ import {
   SendChatMessageDocument,
 } from '@/api/gen/graphql'
 import { openPreview } from '@/composables/preview'
+import { useBreakpoints } from '@/composables/breakpoints'
 import { enqueueFiles, setUploadDoneListener } from '@/uploader/manager'
 import { mergeChatMessages, type ChatMsg } from '@/utils/chat'
 import { formatBytes } from '@/utils/format'
@@ -67,6 +68,32 @@ const queryClient = useQueryClient()
 // ---------- 发送文本 ----------
 
 const draft = ref('')
+const { isMobile } = useBreakpoints()
+
+// ---------- 手机键盘 ----------
+// iOS 上键盘弹起时布局视口不会变小,固定 100% 高度的聊天页会把输入框盖在键盘下面。
+// 用 visualViewport 的真实高度顶替页面高度,键盘一弹一收都跟着变。
+const viewportHeight = ref<number | null>(null)
+
+function syncViewport() {
+  viewportHeight.value = window.visualViewport?.height ?? null
+}
+
+onMounted(() => {
+  if (!window.visualViewport) return
+  syncViewport()
+  window.visualViewport.addEventListener('resize', syncViewport)
+  window.visualViewport.addEventListener('scroll', syncViewport)
+})
+
+onBeforeUnmount(() => {
+  window.visualViewport?.removeEventListener('resize', syncViewport)
+  window.visualViewport?.removeEventListener('scroll', syncViewport)
+})
+
+const pageHeightStyle = computed(() =>
+  isMobile.value && viewportHeight.value ? { height: `${viewportHeight.value}px` } : {},
+)
 
 const sendMutation = useMutation({
   mutationFn: (body: string) => request(SendChatMessageDocument, { body }),
@@ -192,7 +219,7 @@ function timeOf(iso: string): string {
 </script>
 
 <template>
-  <div class="chat-page">
+  <div class="chat-page" :style="pageHeightStyle">
     <header class="chat-header">
       <div>
         <h2>我的设备</h2>
@@ -259,5 +286,5 @@ h2 { margin: 0 0 4px; font-size: 20px; }
 .dl:hover { color: var(--el-color-primary); }
 time { font-size: 11px; color: var(--el-text-color-secondary); margin-top: 4px; }
 .composer { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid var(--el-border-color-light); }
-@media (max-width: 640px) { .composer :deep(.el-button) { padding: 8px; } .bubble { max-width: 85%; } }
+@media (max-width: 767px) { .composer :deep(.el-button) { padding: 8px; } .bubble { max-width: 85%; } }
 </style>
