@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -171,7 +172,9 @@ func WithLogging(next http.Handler) http.Handler {
 	})
 }
 
-// SPAHandler 服务 embed 的前端产物,任意未知路径回落到 index.html。
+// SPAHandler 服务 embed 的前端产物。已知静态文件直接给;带扩展名的未知路径
+// 返回 404 而不是回落 index.html(否则 /sw.js 缺失时会拿到 HTML,MIME 报错还难查);
+// 其余路径回落 index.html 交给前端路由。
 func SPAHandler(dist fs.FS) http.Handler {
 	fileServer := http.FileServerFS(dist)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +182,23 @@ func SPAHandler(dist fs.FS) http.Handler {
 		if p != "" {
 			if f, err := dist.Open(p); err == nil {
 				f.Close()
+				switch {
+				case strings.HasPrefix(p, "assets/"):
+					// 指纹产物:内容不变,钉死缓存
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				case p == "sw.js" || p == "manifest.webmanifest":
+					// SW 与清单必须每次真实请求,发版才生效
+					w.Header().Set("Cache-Control", "no-cache")
+				}
+				if strings.HasSuffix(p, ".webmanifest") {
+					// Go 内建 mime 表不一定认识 .webmanifest,nosniff 下猜错就是拒载
+					w.Header().Set("Content-Type", "application/manifest+json")
+				}
 				fileServer.ServeHTTP(w, r)
+				return
+			}
+			if path.Ext(p) != "" {
+				http.NotFound(w, r)
 				return
 			}
 		}
@@ -188,6 +207,7 @@ func SPAHandler(dist fs.FS) http.Handler {
 			http.Error(w, "gopan: 前端未构建,先跑 make build", http.StatusNotFound)
 			return
 		}
+		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(idx)
 	})

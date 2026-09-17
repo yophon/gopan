@@ -26,3 +26,6 @@ app.use(VueQueryPlugin, {
 })
 
 app.mount('#app')
+
+// PWA:只在生产环境注册 service worker(见 src/pwa/register.ts)
+void import('./pwa/register').then((m) => m.registerPwa())
