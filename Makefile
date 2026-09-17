@@ -23,6 +23,7 @@ dev-web:
 build:
 	cd web && pnpm install --frozen-lockfile && pnpm build
 	rm -rf server/cmd/gopan/dist && mkdir -p server/cmd/gopan/dist
+	touch server/cmd/gopan/dist/.gitkeep
 	cp -r web/dist/* server/cmd/gopan/dist/
 	cd server && CGO_ENABLED=0 go build -o gopan ./cmd/gopan
 	@echo "==> server/gopan"
