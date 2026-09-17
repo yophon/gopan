@@ -81,6 +81,12 @@ ws.onmessage = (e) => {
 await new Promise((r) => (ws.onopen = r))
 await send('Page.enable')
 await send('Runtime.enable')
+
+// 钉死桌面视口:headless 默认窗口只有 ~746px 宽,会落进手机断点(≤767),
+// 于是侧栏被抽屉替换、断言全部失准。移动端断言在文件末尾另开一段覆盖。
+const DESKTOP_VIEWPORT = { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false }
+await send('Emulation.setDeviceMetricsOverride', DESKTOP_VIEWPORT)
+
 await send('Page.navigate', { url: `${BASE}/login` })
 await new Promise((r) => setTimeout(r, 3000))
 
