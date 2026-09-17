@@ -23,6 +23,8 @@ import {
 import type { Variables } from 'graphql-request'
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core'
 import { formatBytes } from '@/utils/format'
+import { useBreakpoints } from '@/composables/breakpoints'
+import { useSwipe } from '@vueuse/core'
 import { closePreview, previewNext, previewPrev, previewState } from '@/composables/preview'
 
 // pdfjs-dist 体积大(~1MB),按需异步加载,只有真正预览 PDF 时才拉
@@ -197,6 +199,25 @@ function onViewOriginal() {
   if (url) window.open(url, '_blank', 'noopener')
 }
 
+// ---------- 手机:滑动切换 ----------
+
+const { isMobile } = useBreakpoints()
+/** 图片处于放大状态(scale ≠ 1)时,左右滑动要让位给拖动看图 */
+const imageMagnified = ref(false)
+/** 视频/音频播放中时,滑动让位给播放器快进 */
+const videoPlaying = ref(false)
+
+const previewBodyRef = ref<HTMLElement | null>(null)
+
+useSwipe(previewBodyRef, {
+  threshold: 60,
+  onSwipeEnd(_e, direction) {
+    if (!isMobile.value || imageMagnified.value || videoPlaying.value) return
+    if (direction === 'left' && hasNext.value) previewNext()
+    else if (direction === 'right' && hasPrev.value) previewPrev()
+  },
+})
+
 // ---------- 快捷键 ----------
 
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
@@ -225,7 +246,11 @@ function formatDuration(sec: number | null | undefined): string {
 <template>
   <Teleport to="body">
     <Transition name="preview-fade">
-      <div v-if="previewState.visible" class="preview-overlay" @click.self="closePreview()">
+      <div
+        v-if="previewState.visible"
+        class="preview-overlay"
+        @click.self="!isMobile && closePreview()"
+      >
         <!-- 顶部栏 -->
         <header class="preview-header">
           <div class="preview-title" :title="node?.name">
@@ -259,7 +284,7 @@ function formatDuration(sec: number | null | undefined): string {
 
         <!-- 左右切换 -->
         <button
-          v-if="hasPrev"
+          v-if="hasPrev && !isMobile"
           class="nav-btn nav-prev"
           title="上一个 (←)"
           @click="previewPrev()"
@@ -267,7 +292,7 @@ function formatDuration(sec: number | null | undefined): string {
           <el-icon :size="22"><ArrowLeft /></el-icon>
         </button>
         <button
-          v-if="hasNext"
+          v-if="hasNext && !isMobile"
           class="nav-btn nav-next"
           title="下一个 (→)"
           @click="previewNext()"
@@ -276,7 +301,7 @@ function formatDuration(sec: number | null | undefined): string {
         </button>
 
         <!-- 内容区:key=当前节点,切换即整体重建,播放器/PDF 状态不串 -->
-        <main :key="currentId ?? 'none'" class="preview-body">
+        <main :key="currentId ?? 'none'" ref="previewBodyRef" class="preview-body">
           <div v-if="initialLoading" v-loading="true" class="preview-loading" element-loading-background="transparent" />
 
           <el-empty
@@ -288,6 +313,7 @@ function formatDuration(sec: number | null | undefined): string {
           <!-- IMAGE:滚轮缩放 / 拖拽平移 / 双击复位 -->
           <ImageViewer
             v-else-if="preview?.kind === 'IMAGE' && (preview.largeUrl || preview.contentUrl)"
+            v-model:magnified="imageMagnified"
             :src="(preview.largeUrl ?? preview.contentUrl)!"
             :alt="node?.name"
           />
@@ -298,6 +324,8 @@ function formatDuration(sec: number | null | undefined): string {
             class="preview-video"
             controls
             autoplay
+            @play="videoPlaying = true"
+            @pause="videoPlaying = false"
             :poster="preview.largeUrl ?? undefined"
             :src="preview.contentUrl"
           />
@@ -458,6 +486,21 @@ function formatDuration(sec: number | null | undefined): string {
   right: 20px;
 }
 
+/* ---------- 手机 ---------- */
+@media (max-width: 767px) {
+  .preview-header {
+    height: 48px;
+    padding: var(--sat) 8px 0 12px;
+    gap: 8px;
+  }
+  .header-btn :deep(span) {
+    display: none; /* 「查看原图 / 下载」文字藏掉,只留图标 */
+  }
+  .header-btn :deep(.el-icon) {
+    margin: 0;
+  }
+}
+
 /* ---------- 内容区 ---------- */
 .preview-body {
   flex: 1;
@@ -466,6 +509,13 @@ function formatDuration(sec: number | null | undefined): string {
   align-items: center;
   justify-content: center;
   padding: 8px 76px 24px;
+}
+
+/* 手机:两侧没有导航按钮了,内边距收窄;底部留安全区 */
+@media (max-width: 767px) {
+  .preview-body {
+    padding: 8px 12px calc(12px + var(--sab));
+  }
 }
 .preview-loading {
   width: 200px;

@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  isLongPress,
-  pinchScale,
-  pinchTranslate,
-  swipeAxis,
-  twoPointerMetrics,
-} from './gesture'
+import { isLongPress, pinchScale, pinchTranslate, twoPointerMetrics } from './gesture'
 
 describe('isLongPress', () => {
   it('按够时间且没怎么动才算长按', () => {
@@ -25,28 +19,6 @@ describe('isLongPress', () => {
 
   it('阈值可覆盖', () => {
     expect(isLongPress(0, 30, 900, 500, 40)).toBe(true)
-  })
-})
-
-describe('swipeAxis', () => {
-  it('横轴优先:斜着划先判左右', () => {
-    expect(swipeAxis(-80, 70)).toBe('left')
-    expect(swipeAxis(80, -70)).toBe('right')
-  })
-
-  it('明显的纵向滑动判上下', () => {
-    expect(swipeAxis(10, -90)).toBe('up')
-    expect(swipeAxis(-10, 90)).toBe('down')
-  })
-
-  it('阈值内算没滑动(达到阈值即算滑动)', () => {
-    expect(swipeAxis(20, 10)).toBeNull()
-    expect(swipeAxis(59, 59)).toBeNull()
-    expect(swipeAxis(60, 60)).toBe('right')
-  })
-
-  it('阈值可覆盖', () => {
-    expect(swipeAxis(30, 0, 20)).toBe('right')
   })
 })
 
