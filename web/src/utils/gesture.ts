@@ -15,22 +15,6 @@ export function isLongPress(
   return Math.hypot(dx, dy) <= moveThreshold
 }
 
-/** 滑动方向:横轴优先(手指斜着划时不要误判成上下);阈值内算"没滑动" */
-export function swipeAxis(
-  dx: number,
-  dy: number,
-  threshold = 60,
-): 'left' | 'right' | 'up' | 'down' | null {
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    if (dx <= -threshold) return 'left'
-    if (dx >= threshold) return 'right'
-    return null
-  }
-  if (dy <= -threshold) return 'up'
-  if (dy >= threshold) return 'down'
-  return null
-}
-
 /** 双指缩放:baseDist → dist 的变化乘到 baseScale 上,并钳到 [min, max] */
 export function pinchScale(
   baseDist: number,
