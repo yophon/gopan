@@ -1,53 +1,30 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { ChatDotRound, Connection, Delete, Folder, Key, Lock, Search, Setting, Share, SwitchButton } from '@element-plus/icons-vue'
+import { useQueryClient } from '@tanstack/vue-query'
+import { Menu as MenuIcon } from '@element-plus/icons-vue'
 
-import { request } from '@/api/client'
-import { MeDocument } from '@/api/gen/graphql'
 import { useAuthStore } from '@/stores/auth'
-import { formatBytes } from '@/utils/format'
+import { useBreakpoints } from '@/composables/breakpoints'
 import UploadDrawer from '@/components/UploadDrawer.vue'
 import PreviewModal from '@/components/preview/PreviewModal.vue'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import AppPasswordsDialog from '@/components/AppPasswordsDialog.vue'
 import MCPAccessDialog from '@/components/MCPAccessDialog.vue'
+import SideNav from '@/components/SideNav.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const queryClient = useQueryClient()
 
-const activeMenu = computed(() => (route.path.startsWith('/drive') ? '/drive' : route.path))
+const { isMobile } = useBreakpoints()
 
-// ---------- 搜索 ----------
+// ---------- 移动端导航抽屉 ----------
 
-const searchInput = ref(typeof route.query.q === 'string' ? route.query.q : '')
-
-function onSearch() {
-  const q = searchInput.value.trim()
-  if (!q) return
-  void router.push({ path: '/search', query: { q } })
-}
-
-// ---------- 配额 ----------
-
-// 上传完成 / 彻删 / 复制的 onSuccess 都会 invalidate ['me'],用量条实时跟进
-const { data: meData } = useQuery({
-  queryKey: ['me'],
-  queryFn: () => request(MeDocument),
-})
-const me = computed(() => meData.value?.me ?? null)
-const quotaPercent = computed(() => {
-  if (!me.value || me.value.quotaBytes <= 0) return 0
-  return Math.min(100, Math.round((me.value.usedBytes / me.value.quotaBytes) * 100))
-})
-const quotaStatus = computed(() => {
-  if (quotaPercent.value >= 90) return 'exception'
-  if (quotaPercent.value >= 70) return 'warning'
-  return undefined
-})
+const navOpen = ref(false)
+// 兜底:任何来源的跳转(不只是菜单)都把抽屉收起来
+watch(() => route.fullPath, () => (navOpen.value = false))
 
 // ---------- 账户 ----------
 
@@ -56,6 +33,7 @@ const davDialogVisible = ref(false)
 const mcpDialogVisible = ref(false)
 
 async function onLogout() {
+  navOpen.value = false
   await auth.logoutAction()
   queryClient.clear()
   await router.push('/login')
@@ -64,62 +42,48 @@ async function onLogout() {
 
 <template>
   <el-container class="shell">
-    <el-aside width="220px" class="aside">
-      <div class="brand">gopan 云盘</div>
-      <el-input
-        v-model="searchInput"
-        class="search-input"
-        placeholder="搜索文件"
-        :prefix-icon="Search"
-        clearable
-        @keyup.enter="onSearch"
+    <el-aside v-if="!isMobile" width="220px" class="aside">
+      <SideNav
+        @open-dav="davDialogVisible = true"
+        @open-mcp="mcpDialogVisible = true"
+        @open-pwd="pwdDialogVisible = true"
+        @logout="onLogout"
       />
-      <el-menu router :default-active="activeMenu" class="menu">
-        <el-menu-item index="/chat">
-          <el-icon><ChatDotRound /></el-icon>
-          <span>我的设备</span>
-        </el-menu-item>
-        <el-menu-item index="/drive">
-          <el-icon><Folder /></el-icon>
-          <span>我的文件</span>
-        </el-menu-item>
-        <el-menu-item index="/shares">
-          <el-icon><Share /></el-icon>
-          <span>我的分享</span>
-        </el-menu-item>
-        <el-menu-item index="/trash">
-          <el-icon><Delete /></el-icon>
-          <span>回收站</span>
-        </el-menu-item>
-        <el-menu-item v-if="me?.isAdmin" index="/admin">
-          <el-icon><Setting /></el-icon>
-          <span>管理</span>
-        </el-menu-item>
-      </el-menu>
-      <div v-if="me" class="quota-area">
-        <el-progress
-          :percentage="quotaPercent"
-          :status="quotaStatus"
-          :stroke-width="6"
-          :show-text="false"
-        />
-        <span class="quota-text">
-          {{ formatBytes(me.usedBytes) }} / {{ formatBytes(me.quotaBytes) }}
-        </span>
-      </div>
-      <div class="user-area">
-        <span class="username" :title="auth.user?.username">{{ auth.user?.username }}</span>
-        <span class="user-actions">
-          <el-button link :icon="Connection" title="WebDAV 应用密码" @click="davDialogVisible = true" />
-          <el-button link :icon="Key" title="Agent API Key 与 OAuth" @click="mcpDialogVisible = true" />
-          <el-button link :icon="Lock" title="修改密码" @click="pwdDialogVisible = true" />
-          <el-button link type="danger" :icon="SwitchButton" title="退出" @click="onLogout" />
-        </span>
-      </div>
     </el-aside>
-    <el-main class="main">
-      <router-view />
-    </el-main>
+
+    <el-container class="body" direction="vertical">
+      <header v-if="isMobile" class="topbar">
+        <el-button
+          text
+          class="topbar-btn"
+          :icon="MenuIcon"
+          title="打开导航"
+          aria-label="打开导航"
+          @click="navOpen = true"
+        />
+        <span class="topbar-title">gopan 云盘</span>
+      </header>
+      <el-main class="main">
+        <router-view />
+      </el-main>
+    </el-container>
+
+    <el-drawer
+      v-model="navOpen"
+      direction="ltr"
+      size="82%"
+      :with-header="false"
+      class="nav-drawer"
+    >
+      <SideNav
+        @navigate="navOpen = false"
+        @open-dav="davDialogVisible = true"
+        @open-mcp="mcpDialogVisible = true"
+        @open-pwd="pwdDialogVisible = true"
+        @logout="onLogout"
+      />
+    </el-drawer>
+
     <UploadDrawer />
     <PreviewModal />
     <ChangePasswordDialog v-model="pwdDialogVisible" />
@@ -133,51 +97,47 @@ async function onLogout() {
   height: 100%;
 }
 .aside {
-  display: flex;
-  flex-direction: column;
   border-right: 1px solid var(--el-border-color-light);
 }
-.brand {
-  padding: 20px 16px 12px;
-  font-size: 18px;
-  font-weight: 600;
+.body {
+  min-width: 0;
 }
-.search-input {
-  padding: 0 12px 8px;
-}
-.menu {
-  flex: 1;
-  border-right: none;
-}
-.quota-area {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 16px 4px;
-}
-.quota-text {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-.user-area {
+.topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 16px 12px;
+  gap: 4px;
+  height: calc(48px + var(--sat));
+  padding: var(--sat) 8px 0;
+  border-bottom: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
 }
-.username {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--el-text-color-regular);
+.topbar-btn {
+  width: var(--touch-target);
+  height: var(--touch-target);
+  font-size: 20px;
 }
-.user-actions {
-  display: flex;
-  flex: none;
+.topbar-title {
+  font-size: 16px;
+  font-weight: 600;
 }
 .main {
   padding: 16px 24px;
   overflow: auto;
+}
+
+/* 手机:内边距收到 12px,底部留安全区,内容区不横向溢出 */
+@media (max-width: 767px) {
+  .main {
+    padding: 12px 12px calc(12px + var(--sab));
+    overflow-x: hidden;
+  }
+}
+</style>
+
+<style>
+/* 抽屉是 teleport 到 body 的,内部样式写在这里更稳(不给 scoped 打洞) */
+.nav-drawer .el-drawer__body {
+  padding: 0;
+  overflow: hidden;
 }
 </style>
