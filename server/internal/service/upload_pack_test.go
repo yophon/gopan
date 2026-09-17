@@ -433,6 +433,11 @@ func TestNodeInfoReadTextAndGetWithBlob(t *testing.T) {
 	if _, err := uploads.NodeInfo(ctx, owner, txt.ID); err != service.ErrNotFound {
 		t.Fatalf("软删节点应 NOT_FOUND,got %v", err)
 	}
+	// GetWithBlob 同样只认活跃节点:聊天里的文件卡片靠它退化成「文件已不存在」,
+	// 节点详情/预览/下载也不能再从 id 取到回收站里的内容。
+	if _, err := nodes.GetWithBlob(ctx, owner, txt.ID); err != service.ErrNotFound {
+		t.Fatalf("软删节点 GetWithBlob 应 NOT_FOUND,got %v", err)
+	}
 }
 
 func TestPackEntriesSizeAndErrorFormat(t *testing.T) {

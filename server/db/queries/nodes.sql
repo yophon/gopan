@@ -10,10 +10,12 @@ SELECT * FROM nodes WHERE id = $1;
 SELECT * FROM nodes WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL;
 
 -- name: GetNodeWithBlob :one
+-- 单节点带 blob 元信息。只取活跃节点:调用方(节点详情/预览/下载、聊天里的文件卡片、
+-- 分享根节点)拿到的都必须是可直接访问的节点,回收站里的节点一律按不存在处理。
 SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256, b.verified AS blob_verified
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
-WHERE n.id = $1 AND n.owner_id = $2;
+WHERE n.id = $1 AND n.owner_id = $2 AND n.deleted_at IS NULL;
 
 -- name: ListChildrenAll :many
 -- WebDAV PROPFIND:目录全量列表(协议无分页,客户端自己排序)
