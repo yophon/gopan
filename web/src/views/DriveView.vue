@@ -5,23 +5,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useEventListener } from '@vueuse/core'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+  Check,
   CopyDocument,
-  DataBoard,
   Delete,
-  Document,
   Download,
   EditPen,
-  Folder,
   FolderAdd,
   Grid,
-  Headset,
-  Memo,
-  Picture,
+  List,
   Rank,
-  Reading,
   Share,
   Upload,
-  VideoCamera,
 } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
@@ -38,24 +32,25 @@ import {
 } from '@/api/gen/graphql'
 import type { ChildrenQuery } from '@/api/gen/graphql'
 import { enqueueFiles } from '@/uploader/manager'
-import { formatBytes, formatTime } from '@/utils/format'
 import { openPreview } from '@/composables/preview'
+import { useBreakpoints } from '@/composables/breakpoints'
 import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 import MoveDialog from '@/components/MoveDialog.vue'
 import ShareDialog from '@/components/ShareDialog.vue'
+import NodeTable from '@/components/nodes/NodeTable.vue'
+import NodeCardList from '@/components/nodes/NodeCardList.vue'
+import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
+import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 
 type ChildItem = ChildrenQuery['children']['items'][number]
-
-/** 文件夹体积:异步统计,statsStale 时数字可能滞后,展示上弱化并加提示 */
-function folderSizeText(row: ChildItem): string {
-  if (row.subtreeBytes == null) return '—'
-  const text = formatBytes(row.subtreeBytes)
-  return row.statsStale ? `约 ${text}` : text
-}
 
 const route = useRoute()
 const router = useRouter()
 const queryClient = useQueryClient()
+const auth = useAuthStore()
+const ui = useUiStore()
+const { isMobile } = useBreakpoints()
 
 /** 当前文件夹 id;null = 根目录 */
 const folderId = computed<string | null>(() => {
@@ -69,7 +64,7 @@ const { data, isFetching } = useQuery({
   queryKey: ['children', folderId],
   queryFn: () => request(ChildrenDocument, { parentId: folderId.value }),
 })
-const items = computed(() => data.value?.children.items ?? [])
+const items = computed<ChildItem[]>(() => data.value?.children.items ?? [])
 
 interface Crumb {
   id: string
@@ -92,12 +87,25 @@ const { data: crumbs } = useQuery({
 })
 
 // ---------- 多选 ----------
+// 桌面表格与手机卡片共用这一份选中状态:手机上由 ui.selectionMode 决定
+// 轻点是"打开"还是"勾选"。
 
-const selection = ref<ChildItem[]>([])
+const selection = ref<NodeListItem[]>([])
 const selectedIds = computed(() => selection.value.map((n) => n.id))
+const showSelectionBar = computed(() => isMobile.value && ui.selectionMode)
 
-function onSelectionChange(rows: ChildItem[]) {
-  selection.value = rows
+function toggleSelect(node: NodeListItem) {
+  const hit = selection.value.find((n) => n.id === node.id)
+  if (hit) {
+    selection.value = selection.value.filter((n) => n.id !== node.id)
+  } else {
+    selection.value = [...selection.value, node]
+  }
+}
+
+function clearSelection() {
+  selection.value = []
+  ui.selectionMode = false
 }
 
 // ---------- 变更 ----------
@@ -132,7 +140,7 @@ const moveMutation = useMutation({
     request(MoveNodesDocument, vars),
   onSuccess: () => {
     ElMessage.success('移动成功')
-    selection.value = []
+    clearSelection()
     invalidate()
   },
   onError: (err) => ElMessage.error(errorText(err)),
@@ -143,7 +151,7 @@ const copyMutation = useMutation({
     request(CopyNodesDocument, vars),
   onSuccess: () => {
     ElMessage.success('复制成功')
-    selection.value = []
+    clearSelection()
     invalidate()
     void queryClient.invalidateQueries({ queryKey: ['me'] }) // 复制占配额
   },
@@ -154,14 +162,14 @@ const deleteMutation = useMutation({
   mutationFn: (vars: { ids: string[] }) => request(DeleteNodesDocument, vars),
   onSuccess: () => {
     ElMessage.success('已放入回收站')
-    selection.value = []
+    clearSelection()
     invalidate()
     void queryClient.invalidateQueries({ queryKey: ['trash'] })
   },
   onError: (err) => ElMessage.error(errorText(err)),
 })
 
-// ---------- 工具栏操作 ----------
+// ---------- 操作 ----------
 
 async function onCreateFolder() {
   try {
@@ -177,18 +185,16 @@ async function onCreateFolder() {
   }
 }
 
-async function onRename() {
-  const target = selection.value[0]
-  if (!target || selection.value.length !== 1) return
+async function onRename(node: NodeListItem) {
   try {
     const { value } = await ElMessageBox.prompt('请输入新名称', '重命名', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
-      inputValue: target.name,
+      inputValue: node.name,
       inputPattern: /\S+/,
       inputErrorMessage: '名称不能为空',
     })
-    renameMutation.mutate({ id: target.id, name: value.trim() })
+    renameMutation.mutate({ id: node.id, name: value.trim() })
   } catch {
     // 取消
   }
@@ -196,28 +202,41 @@ async function onRename() {
 
 const moveDialogVisible = ref(false)
 const copyDialogVisible = ref(false)
+/** 移动/复制对话框的目标:桌面取多选,手机长按菜单取单个 */
+const pendingIds = ref<string[]>([])
 
-function onMove() {
-  if (selection.value.length === 0) return
+function openMove(ids: string[]) {
+  if (ids.length === 0) return
+  pendingIds.value = [...ids]
   moveDialogVisible.value = true
 }
 
-function onMoveConfirm(targetParentId: string | null) {
-  moveMutation.mutate({ ids: selectedIds.value, targetParentId })
-}
-
-function onCopy() {
-  if (selection.value.length === 0) return
+function openCopy(ids: string[]) {
+  if (ids.length === 0) return
+  pendingIds.value = [...ids]
   copyDialogVisible.value = true
 }
 
-function onCopyConfirm(targetParentId: string | null) {
-  copyMutation.mutate({ ids: selectedIds.value, targetParentId })
+function onMoveConfirm(targetParentId: string | null) {
+  moveMutation.mutate({ ids: pendingIds.value, targetParentId })
 }
 
-function onDelete() {
-  if (selection.value.length === 0) return
-  deleteMutation.mutate({ ids: selectedIds.value })
+function onCopyConfirm(targetParentId: string | null) {
+  copyMutation.mutate({ ids: pendingIds.value, targetParentId })
+}
+
+async function onDelete(ids: string[]) {
+  if (ids.length === 0) return
+  try {
+    await ElMessageBox.confirm(
+      `确定将${ids.length > 1 ? `所选的 ${ids.length} 个` : ''}项目放入回收站?`,
+      '删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return // 取消
+  }
+  deleteMutation.mutate({ ids })
 }
 
 // ---------- 上传 ----------
@@ -235,7 +254,7 @@ function onFilesChosen(e: Event) {
   if (files.length > 0) enqueueFiles(files, folderId.value)
 }
 
-// 整页拖拽:dragenter/leave 用计数器抵消子元素冒泡
+// 整页拖拽:dragenter/leave 用计数器抵消子元素冒泡(桌面专属,触屏不会触发)
 const dragDepth = ref(0)
 const dragging = computed(() => dragDepth.value > 0)
 
@@ -381,7 +400,6 @@ useEventListener(window, 'drop', async (e: DragEvent) => {
 
 // ---------- 下载 ----------
 
-const auth = useAuthStore()
 const downloadingId = ref<string | null>(null)
 
 function clickA(href: string, download?: string) {
@@ -394,7 +412,7 @@ function clickA(href: string, download?: string) {
   a.remove()
 }
 
-async function onDownload(row: ChildItem) {
+async function onDownload(row: NodeListItem) {
   if (row.kind === 'FOLDER') {
     // 文件夹走服务端流式 zip;token 15 分钟有效,点击即用
     clickA(`/pack?nodes=${row.id}&token=${encodeURIComponent(auth.accessToken ?? '')}`)
@@ -427,23 +445,98 @@ function openShare(row: { id: string; name: string }) {
   shareDialogVisible.value = true
 }
 
-function onShareSelected() {
-  const target = selection.value[0]
-  if (target && selection.value.length === 1) openShare(target)
+// ---------- 打开 ----------
+// 桌面:双击表格行;手机:轻点卡片。语义一致,只是触发方式不同。
+
+function onOpen(row: NodeListItem) {
+  if (row.kind === 'FOLDER') {
+    void router.push(`/drive/${row.id}`)
+    return
+  }
+  // 多选状态下不触发预览,避免误操作
+  if (selection.value.length > 1) return
+  const files = items.value.filter((n) => n.kind === 'FILE')
+  const idx = files.findIndex((n) => n.id === row.id)
+  if (idx >= 0) {
+    openPreview(
+      files.map((n) => n.id),
+      idx,
+    )
+  }
 }
 
-// ---------- 右键菜单 ----------
+// ---------- 触屏操作菜单 ----------
 
-const contextMenu = ref<{ visible: boolean; x: number; y: number; row: ChildItem | null }>({
+const sheet = ref<{ visible: boolean; node: NodeListItem | null }>({
+  visible: false,
+  node: null,
+})
+
+function openSheet(node: NodeListItem) {
+  sheet.value = { visible: true, node }
+}
+
+/** 长按菜单比桌面右键菜单全:桌面漏掉的重命名/移动/复制在这里补齐 */
+const sheetItems = computed<SheetItem[]>(() => {
+  const node = sheet.value.node
+  if (!node) return []
+  return [
+    { key: 'open', label: node.kind === 'FOLDER' ? '打开' : '预览' },
+    { key: 'download', label: node.kind === 'FOLDER' ? '打包下载' : '下载', icon: Download },
+    { key: 'share', label: '分享', icon: Share },
+    { key: 'rename', label: '重命名', icon: EditPen },
+    { key: 'move', label: '移动', icon: Rank },
+    { key: 'copy', label: '复制', icon: CopyDocument },
+    { key: 'select', label: '选择', icon: Check },
+    { key: 'delete', label: '删除', icon: Delete, danger: true },
+  ]
+})
+
+function onSheetSelect(key: string) {
+  const node = sheet.value.node
+  if (!node) return
+  switch (key) {
+    case 'open':
+      onOpen(node)
+      break
+    case 'download':
+      void onDownload(node)
+      break
+    case 'share':
+      openShare(node)
+      break
+    case 'rename':
+      void onRename(node)
+      break
+    case 'move':
+      openMove([node.id])
+      break
+    case 'copy':
+      openCopy([node.id])
+      break
+    case 'select':
+      if (!ui.selectionMode) {
+        ui.selectionMode = true
+        toggleSelect(node)
+      }
+      break
+    case 'delete':
+      void onDelete([node.id])
+      break
+  }
+}
+
+// ---------- 右键菜单(桌面) ----------
+
+const contextMenu = ref<{ visible: boolean; x: number; y: number; row: NodeListItem | null }>({
   visible: false,
   x: 0,
   y: 0,
   row: null,
 })
 
-function onRowContextmenu(row: ChildItem, _col: unknown, e: MouseEvent) {
-  e.preventDefault()
-  contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, row }
+function onRowContextmenu(row: NodeListItem, x: number, y: number) {
+  contextMenu.value = { visible: true, x, y, row }
 }
 
 function closeContextMenu() {
@@ -467,79 +560,10 @@ function onContextShare() {
   closeContextMenu()
   if (row) openShare(row)
 }
-
-// ---------- 导航 ----------
-
-/** el-table 的 slot row 是宽类型 DefaultRow,这里收窄回业务类型 */
-function asChild(row: unknown): ChildItem {
-  return row as ChildItem
-}
-
-function onRowDblclick(row: ChildItem) {
-  if (row.kind === 'FOLDER') {
-    void router.push(`/drive/${row.id}`)
-    return
-  }
-  // 多选状态下双击不触发预览,避免误操作
-  if (selection.value.length > 1) return
-  const files = items.value.filter((n) => n.kind === 'FILE')
-  const idx = files.findIndex((n) => n.id === row.id)
-  if (idx >= 0) {
-    openPreview(
-      files.map((n) => n.id),
-      idx,
-    )
-  }
-}
-
-// ---------- 图标 / 缩略图 ----------
-
-/** 缩略图 URL 是乐观签发的,派生物可能还没生成;onerror 记下 id,回落到图标 */
-const thumbErrors = ref(new Set<string>())
-
-function onThumbError(id: string) {
-  const next = new Set(thumbErrors.value)
-  next.add(id)
-  thumbErrors.value = next
-}
-
-function showThumb(row: ChildItem): boolean {
-  return (
-    row.kind === 'FILE' &&
-    (row.preview.kind === 'IMAGE' || row.preview.kind === 'VIDEO') &&
-    !!row.preview.thumbUrl &&
-    !thumbErrors.value.has(row.id)
-  )
-}
-
-function fileIcon(row: ChildItem) {
-  if (row.kind === 'FOLDER') return Folder
-  switch (row.preview.kind) {
-    case 'IMAGE':
-      return Picture
-    case 'VIDEO':
-      return VideoCamera
-    case 'AUDIO':
-      return Headset
-    case 'PDF':
-      return Reading
-    case 'TEXT':
-      return Memo
-    case 'OFFICE': {
-      // OFFICE 内部再按扩展名细分:表格 / 演示 / 文档
-      const ext = row.name.split('.').pop()?.toLowerCase() ?? ''
-      if (['xls', 'xlsx', 'csv', 'ods'].includes(ext)) return Grid
-      if (['ppt', 'pptx', 'odp'].includes(ext)) return DataBoard
-      return Document
-    }
-    default:
-      return Document
-  }
-}
 </script>
 
 <template>
-  <div class="drive">
+  <div class="drive" :class="{ 'has-selection-bar': showSelectionBar }">
     <el-breadcrumb separator="/" class="breadcrumb">
       <el-breadcrumb-item :to="{ path: '/drive' }">我的文件</el-breadcrumb-item>
       <el-breadcrumb-item
@@ -551,34 +575,31 @@ function fileIcon(row: ChildItem) {
       </el-breadcrumb-item>
     </el-breadcrumb>
 
-    <div class="toolbar">
-      <el-button type="primary" :icon="Upload" @click="onPickFiles">
-        上传文件
-      </el-button>
-      <el-button :icon="FolderAdd" @click="onCreateFolder">
-        新建文件夹
-      </el-button>
-      <el-button
-        :icon="EditPen"
-        :disabled="selection.length !== 1"
-        @click="onRename"
-      >
+    <!-- 桌面工具栏:保持原样 -->
+    <div v-if="!isMobile" class="toolbar">
+      <el-button type="primary" :icon="Upload" @click="onPickFiles">上传文件</el-button>
+      <el-button :icon="FolderAdd" @click="onCreateFolder">新建文件夹</el-button>
+      <el-button :icon="EditPen" :disabled="selection.length !== 1" @click="selection[0] && onRename(selection[0])">
         重命名
       </el-button>
-      <el-button :icon="Rank" :disabled="selection.length === 0" @click="onMove">
+      <el-button :icon="Rank" :disabled="selection.length === 0" @click="openMove(selectedIds)">
         移动
       </el-button>
-      <el-button :icon="CopyDocument" :disabled="selection.length === 0" @click="onCopy">
+      <el-button :icon="CopyDocument" :disabled="selection.length === 0" @click="openCopy(selectedIds)">
         复制
       </el-button>
-      <el-button :icon="Share" :disabled="selection.length !== 1" @click="onShareSelected">
+      <el-button
+        :icon="Share"
+        :disabled="selection.length !== 1"
+        @click="selection[0] && openShare(selection[0])"
+      >
         分享
       </el-button>
       <el-popconfirm
         title="确定将所选项目放入回收站?"
         confirm-button-text="删除"
         cancel-button-text="取消"
-        @confirm="onDelete"
+        @confirm="onDelete(selectedIds)"
       >
         <template #reference>
           <el-button type="danger" :icon="Delete" :disabled="selection.length === 0">
@@ -586,88 +607,100 @@ function fileIcon(row: ChildItem) {
           </el-button>
         </template>
       </el-popconfirm>
-      <span v-if="selection.length > 0" class="selection-hint">
-        已选 {{ selection.length }} 项
-      </span>
+      <span v-if="selection.length > 0" class="selection-hint">已选 {{ selection.length }} 项</span>
     </div>
 
-    <el-table
-      v-loading="isFetching"
-      :data="items"
-      row-key="id"
-      empty-text="这里空空如也"
-      @selection-change="onSelectionChange"
-      @row-dblclick="onRowDblclick"
-      @row-contextmenu="(row: any, col: any, e: MouseEvent) => onRowContextmenu(asChild(row), col, e)"
-    >
-      <el-table-column type="selection" width="44" />
-      <el-table-column label="名称" min-width="320">
-        <template #default="{ row }">
-          <span class="name-cell" :class="{ folder: asChild(row).kind === 'FOLDER' }">
-            <img
-              v-if="showThumb(asChild(row))"
-              class="name-thumb"
-              :src="asChild(row).preview.thumbUrl!"
-              alt=""
-              loading="lazy"
-              @error="onThumbError(asChild(row).id)"
-            />
-            <el-icon v-else class="name-icon">
-              <component :is="fileIcon(asChild(row))" />
-            </el-icon>
-            {{ asChild(row).name }}
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="大小" width="120">
-        <template #default="{ row }">
-          <span
-            v-if="asChild(row).kind === 'FOLDER'"
-            class="folder-size"
-            :class="{ stale: asChild(row).statsStale }"
-            :title="asChild(row).statsStale ? '统计中,数字可能滞后' : `${asChild(row).subtreeCount ?? 0} 个文件`"
-          >
-            {{ folderSizeText(asChild(row)) }}
-          </span>
-          <template v-else>{{ formatBytes(asChild(row).size) }}</template>
-        </template>
-      </el-table-column>
-      <el-table-column label="修改时间" width="180">
-        <template #default="{ row }">
-          {{ formatTime(asChild(row).updatedAt) }}
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="80" align="center">
-        <template #default="{ row }">
-          <el-button
-            link
-            type="primary"
-            :icon="Download"
-            :loading="downloadingId === asChild(row).id"
-            :title="asChild(row).kind === 'FOLDER' ? '打包下载' : '下载'"
-            @click.stop="onDownload(asChild(row))"
-          />
-        </template>
-      </el-table-column>
-    </el-table>
+    <!-- 手机工具栏:四个入口,重命名/移动等交给长按菜单与多选底栏 -->
+    <div v-else class="toolbar mobile">
+      <el-button type="primary" :icon="Upload" @click="onPickFiles">上传文件</el-button>
+      <el-button :icon="FolderAdd" @click="onCreateFolder">新建文件夹</el-button>
+      <el-button
+        :icon="ui.viewMode === 'grid' ? List : Grid"
+        :title="ui.viewMode === 'grid' ? '切换为列表' : '切换为网格'"
+        :aria-label="ui.viewMode === 'grid' ? '切换为列表' : '切换为网格'"
+        @click="ui.toggleViewMode()"
+      />
+      <el-button
+        :icon="Check"
+        :type="ui.selectionMode ? 'primary' : undefined"
+        title="多选"
+        aria-label="多选"
+        @click="ui.selectionMode = !ui.selectionMode; !ui.selectionMode && clearSelection()"
+      />
+    </div>
+
+    <NodeTable
+      v-if="!isMobile"
+      :items="items"
+      :loading="isFetching"
+      :selected-ids="selectedIds"
+      :downloading-id="downloadingId"
+      @select="(rows) => (selection = rows)"
+      @open="onOpen"
+      @menu="onRowContextmenu"
+      @download="onDownload"
+    />
+
+    <NodeCardList
+      v-else
+      :items="items"
+      :mode="ui.viewMode"
+      :selection-mode="ui.selectionMode"
+      :selected-ids="selectedIds"
+      :downloading-id="downloadingId"
+      :loading="isFetching"
+      @open="onOpen"
+      @menu="openSheet"
+      @toggle="toggleSelect"
+    />
+
+    <!-- 手机多选底栏 -->
+    <div v-if="showSelectionBar" class="selection-bar">
+      <span class="selection-count">已选 {{ selection.length }}</span>
+      <div class="selection-actions">
+        <el-button size="small" :icon="EditPen" :disabled="selection.length !== 1" @click="selection[0] && onRename(selection[0])">
+          重命名
+        </el-button>
+        <el-button size="small" :icon="Rank" :disabled="!selection.length" @click="openMove(selectedIds)">
+          移动
+        </el-button>
+        <el-button size="small" :icon="CopyDocument" :disabled="!selection.length" @click="openCopy(selectedIds)">
+          复制
+        </el-button>
+        <el-button size="small" :icon="Share" :disabled="selection.length !== 1" @click="selection[0] && openShare(selection[0])">
+          分享
+        </el-button>
+        <el-button size="small" type="danger" :icon="Delete" :disabled="!selection.length" @click="onDelete(selectedIds)">
+          删除
+        </el-button>
+        <el-button size="small" @click="clearSelection">取消</el-button>
+      </div>
+    </div>
+
+    <NodeActionSheet
+      v-model:visible="sheet.visible"
+      :title="sheet.node?.name"
+      :items="sheetItems"
+      @select="onSheetSelect"
+    />
 
     <MoveDialog
       v-model="moveDialogVisible"
-      :exclude-ids="selectedIds"
+      :exclude-ids="pendingIds"
       @confirm="onMoveConfirm"
     />
 
     <MoveDialog
       v-model="copyDialogVisible"
       mode="copy"
-      :exclude-ids="selectedIds"
+      :exclude-ids="pendingIds"
       @confirm="onCopyConfirm"
     />
 
     <!-- 隐藏文件选择器(多选) -->
     <input ref="fileInput" type="file" multiple class="hidden-input" @change="onFilesChosen" />
 
-    <!-- 整页拖拽遮罩 -->
+    <!-- 整页拖拽遮罩(桌面) -->
     <div v-if="dragging" class="drop-overlay">
       <div class="drop-hint">
         <el-icon :size="40"><Upload /></el-icon>
@@ -675,7 +708,7 @@ function fileIcon(row: ChildItem) {
       </div>
     </div>
 
-    <!-- 右键菜单:下载/打包下载 + 分享 -->
+    <!-- 右键菜单:下载/打包下载 + 分享(桌面) -->
     <ul
       v-if="contextMenu.visible"
       class="context-menu"
@@ -708,25 +741,6 @@ function fileIcon(row: ChildItem) {
   margin-left: 12px;
   color: var(--el-text-color-secondary);
   font-size: 13px;
-}
-.name-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.name-cell.folder {
-  cursor: pointer;
-}
-.name-icon {
-  color: var(--el-color-primary);
-}
-.name-thumb {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  object-fit: cover;
-  background: var(--el-fill-color-light);
 }
 .hidden-input {
   display: none;
@@ -779,10 +793,44 @@ function fileIcon(row: ChildItem) {
 .context-menu-item:hover {
   background: var(--el-fill-color-light);
 }
-.folder-size {
+
+/* 手机:工具栏可换行,多选时给底部操作栏留出空间 */
+@media (max-width: 767px) {
+  .toolbar.mobile {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .toolbar.mobile :deep(.el-button + .el-button) {
+    margin-left: 0;
+  }
+  .drive.has-selection-bar {
+    padding-bottom: 64px;
+  }
+}
+
+.selection-bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3100;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px calc(8px + var(--sab));
+  border-top: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+}
+.selection-count {
+  font-size: 12px;
   color: var(--el-text-color-secondary);
 }
-.folder-size.stale {
-  opacity: 0.6;
+.selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.selection-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 </style>
