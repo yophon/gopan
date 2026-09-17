@@ -174,7 +174,7 @@ async function submitRegister() {
   background-color: var(--el-fill-color-light);
 }
 .login-card {
-  width: 380px;
+  width: min(380px, 92vw);
 }
 .title {
   margin: 0 0 16px;

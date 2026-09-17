@@ -19,6 +19,8 @@ const props = defineProps<{
   selectionMode: boolean
   selected: boolean
   downloading?: boolean
+  /** 覆盖第二行文案(回收站要显示删除时间、分享要显示有效期) */
+  secondary?: string
 }>()
 
 const emit = defineEmits<{
@@ -51,7 +53,8 @@ const iconSize = computed(() => (props.mode === 'grid' ? 64 : 40))
 
     <div class="info">
       <div class="name" :title="node.name">{{ node.name }}</div>
-      <div class="meta">
+      <div v-if="props.secondary" class="meta">{{ props.secondary }}</div>
+      <div v-else class="meta">
         <span>{{ meta }}</span>
         <span class="dot">·</span>
         <span :title="time">{{ time }}</span>

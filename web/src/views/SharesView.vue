@@ -1,18 +1,23 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
-import { CopyDocument, Document, Folder, Lock } from '@element-plus/icons-vue'
+import { CopyDocument, Delete, Document, Folder, Lock, View } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
 import { MySharesDocument, RevokeShareDocument } from '@/api/gen/graphql'
 import type { MySharesQuery } from '@/api/gen/graphql'
 import { formatTime } from '@/utils/format'
+import { useBreakpoints } from '@/composables/breakpoints'
+import NodeCardList from '@/components/nodes/NodeCardList.vue'
+import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
+import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 
 type ShareItem = MySharesQuery['myShares'][number]
 
 const queryClient = useQueryClient()
+const { isMobile } = useBreakpoints()
 
 const { data, isFetching } = useQuery({
   queryKey: ['myShares'],
@@ -54,12 +59,67 @@ function expireText(row: ShareItem): string {
   if (!row.expiresAt) return '永久有效'
   return (isExpired(row) ? '已过期 ' : '至 ') + formatTime(row.expiresAt)
 }
+
+// ---------- 手机卡片 ----------
+
+/** 卡片用节点形状渲染,靠 id 映射回分享记录拿 token/有效期 */
+const byNodeId = computed(() => new Map(items.value.map((s) => [s.node.id, s])))
+
+const cardItems = computed<NodeListItem[]>(() =>
+  items.value.map((s) => ({
+    id: s.node.id,
+    name: s.node.name,
+    kind: s.node.kind,
+    updatedAt: s.createdAt,
+  })),
+)
+
+function cardSecondary(node: NodeListItem): string {
+  const share = byNodeId.value.get(node.id)
+  if (!share) return ''
+  return `${formatTime(share.createdAt)} · ${expireText(share)}`
+}
+
+const sheet = ref<{ visible: boolean; node: NodeListItem | null }>({
+  visible: false,
+  node: null,
+})
+
+/** 不同分享可能指向同名节点,这里按行内点击的目标节点取分享记录 */
+const sheetItems: SheetItem[] = [
+  { key: 'open', label: '打开链接', icon: View },
+  { key: 'copy', label: '复制链接', icon: CopyDocument },
+  { key: 'revoke', label: '取消分享', icon: Delete, danger: true },
+]
+
+function onSheetSelect(key: string) {
+  const node = sheet.value.node
+  if (!node) return
+  const share = byNodeId.value.get(node.id)
+  if (!share) return
+  if (key === 'open') {
+    window.open(shareUrl(share), '_blank', 'noopener')
+    return
+  }
+  if (key === 'copy') {
+    void onCopy(share)
+    return
+  }
+  revokeMutation.mutate({ id: share.id })
+}
 </script>
 
 <template>
   <div class="shares">
     <h3 class="page-title">我的分享</h3>
-    <el-table v-loading="isFetching" :data="items" row-key="id" empty-text="还没有创建过分享">
+
+    <el-table
+      v-if="!isMobile"
+      v-loading="isFetching"
+      :data="items"
+      row-key="id"
+      empty-text="还没有创建过分享"
+    >
       <el-table-column label="内容" min-width="280">
         <template #default="{ row }">
           <span class="name-cell">
@@ -101,6 +161,24 @@ function expireText(row: ShareItem): string {
         </template>
       </el-table-column>
     </el-table>
+
+    <NodeCardList
+      v-else
+      :items="cardItems"
+      mode="list"
+      :selection-mode="false"
+      :selected-ids="[]"
+      :loading="isFetching"
+      :secondary="cardSecondary"
+      @menu="(node) => (sheet = { visible: true, node })"
+    />
+
+    <NodeActionSheet
+      v-model:visible="sheet.visible"
+      :title="sheet.node?.name"
+      :items="sheetItems"
+      @select="onSheetSelect"
+    />
   </div>
 </template>
 

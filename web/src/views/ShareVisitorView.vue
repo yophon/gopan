@@ -4,16 +4,9 @@ import { useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
 import {
-  Document,
   Download,
-  Folder,
-  Headset,
   Link,
   Lock,
-  Memo,
-  Picture,
-  Reading,
-  VideoCamera,
   WarningFilled,
 } from '@element-plus/icons-vue'
 
@@ -29,11 +22,17 @@ import {
 import type { ChildrenQuery } from '@/api/gen/graphql'
 import { formatBytes, formatTime } from '@/utils/format'
 import { openPreview } from '@/composables/preview'
+import { useBreakpoints } from '@/composables/breakpoints'
 import PreviewModal from '@/components/preview/PreviewModal.vue'
+import NodeCardList from '@/components/nodes/NodeCardList.vue'
+import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
+import NodeIcon from '@/components/nodes/NodeIcon.vue'
+import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 
 type ChildItem = ChildrenQuery['children']['items'][number]
 
 const route = useRoute()
+const { isMobile } = useBreakpoints()
 const token = computed(() => String(route.params.token ?? ''))
 
 // ---------- 访客凭证:sessionStorage 按分享隔离,30 分钟过期后走重验 ----------
@@ -165,7 +164,7 @@ const { data: childrenData, isFetching: listLoading } = useQuery({
 })
 const items = computed(() => childrenData.value?.children.items ?? [])
 
-function enterFolder(row: ChildItem) {
+function enterFolder(row: { id: string; name: string }) {
   navStack.value = [...navStack.value, { id: row.id, name: row.name }]
 }
 
@@ -174,7 +173,7 @@ function jumpTo(index: number) {
   navStack.value = navStack.value.slice(0, index + 1)
 }
 
-function onRowDblclick(row: ChildItem) {
+function onOpen(row: NodeListItem) {
   if (row.kind === 'FOLDER') {
     enterFolder(row)
     return
@@ -187,6 +186,25 @@ function onRowDblclick(row: ChildItem) {
       idx,
     )
   }
+}
+
+// ---------- 手机 ----------
+
+const visitorSheet = ref<{ visible: boolean; node: NodeListItem | null }>({
+  visible: false,
+  node: null,
+})
+
+const visitorSheetItems: SheetItem[] = [
+  { key: 'open', label: '打开 / 预览' },
+  { key: 'download', label: '下载', icon: Download },
+]
+
+function onVisitorSheetSelect(key: string) {
+  const node = visitorSheet.value.node
+  if (!node) return
+  if (key === 'open') onOpen(node)
+  if (key === 'download') void onDownload(node)
 }
 
 // ---------- 下载 ----------
@@ -233,41 +251,7 @@ function previewRootFile() {
 }
 
 // ---------- 图标 / 缩略图 ----------
-
-const thumbErrors = ref(new Set<string>())
-
-function onThumbError(id: string) {
-  const next = new Set(thumbErrors.value)
-  next.add(id)
-  thumbErrors.value = next
-}
-
-function showThumb(row: ChildItem): boolean {
-  return (
-    row.kind === 'FILE' &&
-    (row.preview.kind === 'IMAGE' || row.preview.kind === 'VIDEO') &&
-    !!row.preview.thumbUrl &&
-    !thumbErrors.value.has(row.id)
-  )
-}
-
-function fileIcon(row: ChildItem) {
-  if (row.kind === 'FOLDER') return Folder
-  switch (row.preview.kind) {
-    case 'IMAGE':
-      return Picture
-    case 'VIDEO':
-      return VideoCamera
-    case 'AUDIO':
-      return Headset
-    case 'PDF':
-      return Reading
-    case 'TEXT':
-      return Memo
-    default:
-      return Document
-  }
-}
+// 缩略图与图标回落统一走 components/nodes/NodeIcon.vue,这里不再各写一份
 
 function asChild(row: unknown): ChildItem {
   return row as ChildItem
@@ -367,26 +351,17 @@ const dead = computed(
           </div>
 
           <el-table
+            v-if="!isMobile"
             v-loading="listLoading"
             :data="items"
             row-key="id"
             empty-text="这个文件夹是空的"
-            @row-dblclick="onRowDblclick"
+            @row-dblclick="(row: unknown) => onOpen(asChild(row))"
           >
             <el-table-column label="名称" min-width="320">
               <template #default="{ row }">
                 <span class="name-cell" :class="{ folder: asChild(row).kind === 'FOLDER' }">
-                  <img
-                    v-if="showThumb(asChild(row))"
-                    class="name-thumb"
-                    :src="asChild(row).preview.thumbUrl!"
-                    alt=""
-                    loading="lazy"
-                    @error="onThumbError(asChild(row).id)"
-                  />
-                  <el-icon v-else class="name-icon">
-                    <component :is="fileIcon(asChild(row))" />
-                  </el-icon>
+                  <NodeIcon :node="asChild(row)" :size="28" />
                   {{ asChild(row).name }}
                 </span>
               </template>
@@ -412,6 +387,18 @@ const dead = computed(
               </template>
             </el-table-column>
           </el-table>
+
+          <NodeCardList
+            v-else
+            :items="items"
+            mode="list"
+            :selection-mode="false"
+            :selected-ids="[]"
+            :downloading-id="downloadingId"
+            :loading="listLoading"
+            @open="onOpen"
+            @menu="(node) => (visitorSheet = { visible: true, node })"
+          />
         </div>
       </template>
     </main>
@@ -422,6 +409,13 @@ const dead = computed(
     </footer>
 
     <PreviewModal v-if="guestToken" :guest-token="guestToken" />
+
+    <NodeActionSheet
+      v-model:visible="visitorSheet.visible"
+      :title="visitorSheet.node?.name"
+      :items="visitorSheetItems"
+      @select="onVisitorSheetSelect"
+    />
   </div>
 </template>
 
@@ -454,6 +448,16 @@ const dead = computed(
   flex-direction: column;
   align-items: center;
   padding: 32px 24px;
+}
+
+/* 手机:访客大概率用手机打开,边距收窄 */
+@media (max-width: 767px) {
+  .visitor-header {
+    padding: 12px 14px;
+  }
+  .visitor-main {
+    padding: 16px 12px calc(16px + var(--sab));
+  }
 }
 .state-box {
   margin-top: 10vh;

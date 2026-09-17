@@ -293,6 +293,19 @@ function onResumeFileChosen(e: Event) {
   box-shadow: var(--el-box-shadow);
   overflow: hidden;
 }
+
+/* 手机:容器撑到两边,面板随之满宽,底部留安全区 */
+@media (max-width: 767px) {
+  .upload-drawer {
+    right: 12px;
+    bottom: calc(12px + var(--sab));
+    left: 12px;
+  }
+  .panel {
+    width: auto;
+    max-height: 70vh;
+  }
+}
 .panel-header {
   display: flex;
   align-items: center;

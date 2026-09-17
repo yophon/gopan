@@ -14,16 +14,26 @@ import {
 } from '@/api/gen/graphql'
 import type { TrashQuery } from '@/api/gen/graphql'
 import { formatBytes, formatTime } from '@/utils/format'
+import { useBreakpoints } from '@/composables/breakpoints'
+import NodeCardList from '@/components/nodes/NodeCardList.vue'
+import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
+import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 
 type TrashItem = TrashQuery['trash']['items'][number]
 
 const queryClient = useQueryClient()
+const { isMobile } = useBreakpoints()
 
 const { data, isFetching } = useQuery({
   queryKey: ['trash'],
   queryFn: () => request(TrashDocument, {}),
 })
 const items = computed(() => data.value?.trash.items ?? [])
+
+/** 手机卡片按"删除时间"展示,映射成通用节点形状即可复用 NodeCardList */
+const cardItems = computed<NodeListItem[]>(() =>
+  items.value.map((i) => ({ ...i, updatedAt: i.deletedAt })),
+)
 
 const selection = ref<TrashItem[]>([])
 const selectedIds = computed(() => selection.value.map((n) => n.id))
@@ -104,6 +114,37 @@ async function onPurgeTrash() {
     // 取消
   }
 }
+
+// ---------- 手机的逐项操作 ----------
+
+const sheet = ref<{ visible: boolean; node: NodeListItem | null }>({
+  visible: false,
+  node: null,
+})
+
+const sheetItems: SheetItem[] = [
+  { key: 'restore', label: '还原', icon: RefreshLeft },
+  { key: 'purge', label: '彻底删除', icon: Delete, danger: true },
+]
+
+async function onSheetSelect(key: string) {
+  const node = sheet.value.node
+  if (!node) return
+  if (key === 'restore') {
+    restoreMutation.mutate({ ids: [node.id] })
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`彻底删除「${node.name}」后无法恢复,确定继续?`, '彻底删除', {
+      type: 'warning',
+      confirmButtonText: '彻底删除',
+      cancelButtonText: '取消',
+    })
+    purgeMutation.mutate({ ids: [node.id] })
+  } catch {
+    // 取消
+  }
+}
 </script>
 
 <template>
@@ -111,31 +152,37 @@ async function onPurgeTrash() {
     <h2 class="page-title">回收站</h2>
 
     <div class="toolbar">
-      <el-button
-        type="primary"
-        :icon="RefreshLeft"
-        :disabled="selection.length === 0"
-        @click="onRestore"
-      >
-        还原
-      </el-button>
-      <el-button
-        type="danger"
-        :icon="Delete"
-        :disabled="selection.length === 0"
-        @click="onPurge"
-      >
-        彻底删除
-      </el-button>
+      <template v-if="!isMobile">
+        <el-button
+          type="primary"
+          :icon="RefreshLeft"
+          :disabled="selection.length === 0"
+          @click="onRestore"
+        >
+          还原
+        </el-button>
+        <el-button
+          type="danger"
+          :icon="Delete"
+          :disabled="selection.length === 0"
+          @click="onPurge"
+        >
+          彻底删除
+        </el-button>
+      </template>
       <el-button type="danger" plain :disabled="items.length === 0" @click="onPurgeTrash">
         清空回收站
       </el-button>
-      <span v-if="selection.length > 0" class="selection-hint">
+      <span v-if="!isMobile && selection.length > 0" class="selection-hint">
         已选 {{ selection.length }} 项
+      </span>
+      <span v-else-if="isMobile && items.length > 0" class="selection-hint">
+        长按条目可还原或彻底删除
       </span>
     </div>
 
     <el-table
+      v-if="!isMobile"
       v-loading="isFetching"
       :data="items"
       row-key="id"
@@ -165,6 +212,23 @@ async function onPurgeTrash() {
         </template>
       </el-table-column>
     </el-table>
+
+    <NodeCardList
+      v-else
+      :items="cardItems"
+      mode="list"
+      :selection-mode="false"
+      :selected-ids="[]"
+      :loading="isFetching"
+      @menu="(node) => (sheet = { visible: true, node })"
+    />
+
+    <NodeActionSheet
+      v-model:visible="sheet.visible"
+      :title="sheet.node?.name"
+      :items="sheetItems"
+      @select="onSheetSelect"
+    />
   </div>
 </template>
 
