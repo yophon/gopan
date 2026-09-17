@@ -1,0 +1,64 @@
+/*
+ * 全站响应式兜底。断点数值必须与 src/composables/breakpoints.ts 一致
+ * (responsiveCss.test.ts 会读两个文件做一致性断言):
+ *   手机  max-width 767px  → 卡片列表 + 抽屉导航
+ *   紧凑  768px ~ 1023px   → 仍是表格,隐藏次要列
+ *   桌面  min-width 1024px → 现状不变
+ *
+ * 这里只放"跨组件的兜底"和纯 CSS 的显隐开关;某个组件自己的移动端样式
+ * 留在那个组件的 <style scoped> 里,别把页面细节堆到这个文件。
+ */
+
+:root {
+  /* 刘海屏安全区,组件里写 calc(12px + var(--sab)) 即可 */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  /* 触屏最小可点区域 */
+  --touch-target: 40px;
+}
+
+/* Element Plus 兜底:固定宽度的 dialog / message-box 在窄屏一律钳进视口。
+   这条直接救掉 ElMessageBox.prompt 的新建文件夹 / 重命名 / 调配额。 */
+.el-dialog {
+  max-width: 94vw;
+}
+
+.el-message-box {
+  max-width: 90vw;
+}
+
+/* 纯 CSS 的显隐开关,能用它就别加 JS 分支 */
+@media (max-width: 767px) {
+  .only-desktop,
+  .only-compact {
+    display: none !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .only-mobile,
+  .only-desktop {
+    display: none !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .only-mobile,
+  .only-compact {
+    display: none !important;
+  }
+}
+
+/* 触屏设备:hover 态会"粘"在最后一次点过的元素上,去掉;可点区域抬到 40px */
+@media (hover: none) {
+  .el-button:not(.el-button--small) {
+    min-height: var(--touch-target);
+  }
+
+  .el-table__row:hover > td.el-table__cell,
+  .el-tree-node__content:hover {
+    background-color: transparent;
+  }
+}
