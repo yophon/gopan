@@ -203,7 +203,6 @@ const callbackURL = await Promise.race([
   callbackReceived,
   new Promise((resolve) => setTimeout(() => resolve(''), 3000)),
 ])
-browser.kill()
 callbackServer.close()
 if (!callbackURL) die('OAuth 回调超时')
 const callbackResult = new URL(callbackURL)
@@ -241,4 +240,88 @@ const initialized = await fetch(`${BASE}/mcp`, {
 })
 if (!initialized.ok) die(`OAuth MCP initialize 失败:${initialized.status}`)
 
-console.log('BROWSER PROBE PASSED(API Key → OAuth code/token → MCP initialize)')
+// ---------- 手机视口段:响应式布局与触屏入口 ----------
+// 桌面流程跑通后,切到 390x844 再验一轮:这一段兜住"固定宽度容器"和
+// "手机上唯一操作入口是右键菜单"这两类回归。
+const MOBILE_VIEWPORT = { width: 390, height: 844, deviceScaleFactor: 3, mobile: true }
+await send('Emulation.setDeviceMetricsOverride', MOBILE_VIEWPORT)
+await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 })
+await send('Page.navigate', { url: `${BASE}/drive` })
+await new Promise((r) => setTimeout(r, 3000))
+
+const noOverflow = await evalJS(
+  'document.documentElement.scrollWidth <= window.innerWidth',
+)
+if (!noOverflow) die(`BROWSER PROBE FAILED:/drive 在 390px 下横向溢出`)
+const shell = await evalJS(`(() => {
+  const aside = document.querySelector('.el-aside')
+  return {
+    asideVisible: !!aside && aside.offsetParent !== null,
+    topbar: !!document.querySelector('.topbar'),
+    table: !!document.querySelector('.el-table'),
+  }
+})()`)
+if (shell.asideVisible) die('BROWSER PROBE FAILED:手机视口下侧栏应隐藏')
+if (!shell.topbar) die('BROWSER PROBE FAILED:手机视口下应出现移动顶栏')
+if (shell.table) die('BROWSER PROBE FAILED:手机视口下不应渲染宽表格')
+
+// 手机上必须有触屏可达的操作入口:先建一个文件夹造出卡片,再长按它
+await evalJS(
+  `[...document.querySelectorAll('.toolbar button')].find(b => b.textContent.includes('新建文件夹'))?.click()`,
+)
+await new Promise((r) => setTimeout(r, 800))
+await evalJS(`(() => {
+  const input = document.querySelector('.el-message-box__input input')
+  if (!input) return
+  input.value = 'probe-mobile'
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+})()`)
+await evalJS(
+  `[...document.querySelectorAll('.el-message-box__btns button')].find(b => b.textContent.includes('创建'))?.click()`,
+)
+await new Promise((r) => setTimeout(r, 1500))
+const cardCount = await evalJS('document.querySelectorAll(".node-card").length')
+if (cardCount < 1) die(`BROWSER PROBE FAILED:手机视口下没有卡片列表(cards=${cardCount})`)
+
+// 长按(touchStart 按住 700ms)→ 底部操作菜单
+const cardPoint = await evalJS(`(() => {
+  const r = document.querySelector('.node-card').getBoundingClientRect()
+  return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
+})()`)
+await send('Input.dispatchTouchEvent', {
+  type: 'touchStart',
+  touchPoints: [{ x: cardPoint.x, y: cardPoint.y, id: 1 }],
+})
+await new Promise((r) => setTimeout(r, 700))
+await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+await new Promise((r) => setTimeout(r, 800))
+const sheetItems = await evalJS(
+  `[...document.querySelectorAll('.sheet-item')].map(i => i.textContent.trim())`,
+)
+// 建的是文件夹:下载显示为「打包下载」;必须含桌面右键菜单没有的「重命名」
+const required = ['分享', '重命名', '移动', '复制', '选择', '删除']
+if (!required.every((l) => sheetItems.includes(l))) {
+  die(`BROWSER PROBE FAILED:长按菜单条目不全,实际:${sheetItems.join('/')}`)
+}
+
+// SW 只在产物里存在 sw.js 时断言(指向旧版本部署时跳过)
+const swOk = await fetch(`${BASE}/sw.js`).then((r) => r.ok).catch(() => false)
+if (swOk) {
+  const registered = await evalJS(
+    `navigator.serviceWorker.getRegistrations().then(rs => rs.length >= 1)`,
+  )
+  if (!registered) die('BROWSER PROBE FAILED:sw.js 存在但未注册')
+}
+// SW 放行 POST /query(allowlist 的底线)
+const queryStatus = await fetch(`${BASE}/query`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ query: 'query { __typename }' }),
+}).then((r) => r.status)
+if (queryStatus !== 200) die(`BROWSER PROBE FAILED:POST /query 被 SW 影响(${queryStatus})`)
+
+// 恢复桌面视口,给后续可能的断言一个干净状态
+await send('Emulation.setDeviceMetricsOverride', DESKTOP_VIEWPORT)
+console.log('BROWSER PROBE PASSED(桌面全流程 + 手机视口布局与长按菜单)')
+browser.kill()
+process.exit(0)
