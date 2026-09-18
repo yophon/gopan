@@ -22,7 +22,7 @@ func clientIPOf(t *testing.T, mutate func(r *http.Request)) string {
 	})
 	req := httptest.NewRequest("POST", "/query", nil)
 	mutate(req)
-	WithAuth(inner, newAuthNoDB()).ServeHTTP(httptest.NewRecorder(), req)
+	WithAuth(inner, newAuthNoDB(), nil).ServeHTTP(httptest.NewRecorder(), req)
 	return got
 }
 
@@ -56,12 +56,13 @@ func TestClientIP(t *testing.T) {
 		t.Fatalf("伪造 XFF/X-Real-IP 不应被信任,got %q", got)
 	}
 
-	// 畸形 RemoteAddr(无端口):SplitHostPort 失败,当前实现记为空串。
-	// 这里锁定现状:至少不能把畸形串原样透传或 panic。
+	// 畸形 RemoteAddr(无端口):SplitHostPort 失败,回退成原值。
+	// 不返回空串是有意的 —— 空串会让所有畸形请求共用一个限速桶;而 RemoteAddr
+	// 由 net/http 依 TCP 连接设置,客户端控制不了,原样保留没有风险。
 	if got := clientIPOf(t, func(r *http.Request) {
 		r.RemoteAddr = "203.0.113.7"
-	}); got != "" {
-		t.Fatalf("无端口 RemoteAddr 当前应得空串,got %q", got)
+	}); got != "203.0.113.7" {
+		t.Fatalf("无端口 RemoteAddr 应回退成原值,got %q", got)
 	}
 }
 
@@ -70,7 +71,7 @@ func TestClearRefreshCookie(t *testing.T) {
 		ClearRefreshCookie(r.Context(), false)
 	})
 	rec := httptest.NewRecorder()
-	WithAuth(inner, newAuthNoDB()).ServeHTTP(rec, httptest.NewRequest("POST", "/query", nil))
+	WithAuth(inner, newAuthNoDB(), nil).ServeHTTP(rec, httptest.NewRequest("POST", "/query", nil))
 
 	cookies := rec.Result().Cookies()
 	if len(cookies) != 1 {

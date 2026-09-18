@@ -98,7 +98,7 @@ func setup(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(dav.Handler(ap, dav.NewBackend(q, obj, nodes, uploads)))
+	srv := httptest.NewServer(dav.Handler(ap, dav.NewBackend(q, obj, nodes, uploads), nil))
 	t.Cleanup(srv.Close)
 	return &env{
 		pool: pool, srv: srv,

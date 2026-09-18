@@ -138,7 +138,7 @@ func run() error {
 	}})
 
 	mux := http.NewServeMux()
-	mux.Handle("POST /query", httpx.WithAuth(httpx.NewGraphQLHandler(es, cfg.DevMode), auth))
+	mux.Handle("POST /query", httpx.WithAuth(httpx.NewGraphQLHandler(es, cfg.DevMode), auth, cfg.TrustedProxies))
 	oauthHTTP := oauthserver.New(oauth)
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", oauthHTTP.AuthorizationMetadata)
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource", oauthHTTP.ProtectedResourceMetadata)
@@ -152,7 +152,7 @@ func run() error {
 	mux.Handle("GET /mcp-download/{ticket}", httpx.MCPPackHandler(packTickets, packer))
 	mux.Handle("GET /pack", httpx.PackHandler(auth, packer))
 	// WebDAV:应用密码 Basic 认证,/dav 与 /dav/ 都接(Finder/资源管理器会裸打前缀)
-	davHandler := dav.Handler(appPass, dav.NewBackend(q, obj, nodes, uploads))
+	davHandler := dav.Handler(appPass, dav.NewBackend(q, obj, nodes, uploads), cfg.TrustedProxies)
 	mux.Handle("/dav", davHandler)
 	mux.Handle("/dav/", davHandler)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {

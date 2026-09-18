@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -19,6 +20,10 @@ type Config struct {
 	RefreshTTL   time.Duration
 	TrashTTL     time.Duration // 回收站保留期,过期自动彻删
 	DevMode      bool // 关闭 cookie Secure、开 introspection
+	// 信任其转发头的反代来源(IP 或 CIDR,逗号分隔)。空 = 谁都不信,一律用 RemoteAddr。
+	// **生产在 nginx / docker 端口发布之后必须配**:否则后端看到的永远是网关地址,
+	// 登录限速会退化成"全站共用一个桶",设备列表里的 IP 也没有意义。
+	TrustedProxies []*net.IPNet
 
 	// 对象存储
 	S3Endpoint       string // 服务端内部访问地址
@@ -67,6 +72,12 @@ func Load() (*Config, error) {
 		FFmpegPath:   env("FFMPEG_PATH", "ffmpeg"),
 		FFprobePath:  env("FFPROBE_PATH", "ffprobe"),
 	}
+	tp, err := parseCIDRs(env("TRUSTED_PROXIES", ""))
+	if err != nil {
+		return nil, fmt.Errorf("GOPAN_TRUSTED_PROXIES: %w", err)
+	}
+	c.TrustedProxies = tp
+
 	if c.DBURL == "" {
 		return nil, fmt.Errorf("GOPAN_DB_URL is required")
 	}
@@ -128,4 +139,34 @@ func envInt64(key string, def int64) int64 {
 		}
 	}
 	return def
+}
+
+// parseCIDRs 解析逗号分隔的 IP/CIDR 列表;裸 IP 按单机掩码补齐(/32 或 /128)。
+// 非法输入直接报错而不是静默忽略 —— 配错了就会静默退化成"谁都不信",
+// 而这种情况的表现是"IP 全是网关地址",不报错很难发现。
+func parseCIDRs(s string) ([]*net.IPNet, error) {
+	var out []*net.IPNet
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if !strings.Contains(part, "/") {
+			ip := net.ParseIP(part)
+			if ip == nil {
+				return nil, fmt.Errorf("非法地址 %q", part)
+			}
+			if ip.To4() != nil {
+				part += "/32"
+			} else {
+				part += "/128"
+			}
+		}
+		_, n, err := net.ParseCIDR(part)
+		if err != nil {
+			return nil, fmt.Errorf("非法 CIDR %q: %w", part, err)
+		}
+		out = append(out, n)
+	}
+	return out, nil
 }
