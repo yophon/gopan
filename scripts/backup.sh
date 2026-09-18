@@ -70,6 +70,7 @@ if [ -n "$BACKUP_OFFSITE_SSH" ]; then
           "find $BACKUP_OFFSITE_DIR -maxdepth 1 -type f \( -name 'db-*.dump' -o -name 'minio-*.tar.gz' \) -mtime +$BACKUP_OFFSITE_KEEP_DAYS -delete" \
           || echo "[$(date '+%F %T')] 警告:异地旧备份清理失败(备份本身不受影响)" >&2
       date -Is > "$BACKUP_DIR/.offsite-ok"
+      rm -f "$BACKUP_DIR/.offsite-fail"   # 恢复了就把失败标记清掉,否则它会一直残留误导人
       echo "[$(date '+%F %T')] 异地完成:$(ssh -o BatchMode=yes "$BACKUP_OFFSITE_SSH" "du -sh $BACKUP_OFFSITE_DIR | cut -f1") at $BACKUP_OFFSITE_SSH"
     else
       echo "[$(date '+%F %T')] 警告:异地推送失败!本地备份已完成,异地副本未更新。" >&2
