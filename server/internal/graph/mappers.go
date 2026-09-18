@@ -231,6 +231,16 @@ func gqlShare(r store.ListMySharesRow) *Share {
 		t := r.ExpiresAt.Time
 		out.ExpiresAt = &t
 	}
+	stats := &ShareVisitStats{VerifyCount: r.VerifyCount, DownloadCount: r.DownloadCount}
+	if r.LastVisitAt.Valid {
+		t := r.LastVisitAt.Time
+		stats.LastVisitAt = &t
+	}
+	if r.LastVisitKind != "" {
+		kind := r.LastVisitKind
+		stats.LastVisitKind = &kind
+	}
+	out.VisitStats = stats
 	return out
 }
 

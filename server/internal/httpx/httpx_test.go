@@ -146,7 +146,7 @@ func TestRefreshCookieRoundtrip(t *testing.T) {
 
 func TestPackHandlerAuth(t *testing.T) {
 	auth := newAuthNoDB()
-	h := PackHandler(auth, nil) // 401 路径不触达 packer
+	h := PackHandler(auth, nil, nil, nil) // 401 路径不触达 packer
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "/pack?nodes=x", nil))

@@ -220,6 +220,7 @@ type ComplexityRoot struct {
 		Sessions                  func(childComplexity int) int
 		ShareInfo                 func(childComplexity int, token string) int
 		ShareRoot                 func(childComplexity int) int
+		ShareVisits               func(childComplexity int, shareID string, limit *int) int
 		Trash                     func(childComplexity int, cursor *string) int
 		UploadSession             func(childComplexity int, id string) int
 	}
@@ -242,6 +243,7 @@ type ComplexityRoot struct {
 		ID          func(childComplexity int) int
 		Node        func(childComplexity int) int
 		Token       func(childComplexity int) int
+		VisitStats  func(childComplexity int) int
 	}
 
 	ShareAuth struct {
@@ -254,6 +256,20 @@ type ComplexityRoot struct {
 		Name         func(childComplexity int) int
 		NeedPassword func(childComplexity int) int
 		Token        func(childComplexity int) int
+	}
+
+	ShareVisit struct {
+		CreatedAt func(childComplexity int) int
+		IP        func(childComplexity int) int
+		Kind      func(childComplexity int) int
+		UserAgent func(childComplexity int) int
+	}
+
+	ShareVisitStats struct {
+		DownloadCount func(childComplexity int) int
+		LastVisitAt   func(childComplexity int) int
+		LastVisitKind func(childComplexity int) int
+		VerifyCount   func(childComplexity int) int
 	}
 
 	TaskCount struct {
@@ -343,6 +359,7 @@ type QueryResolver interface {
 	SearchNodes(ctx context.Context, q string, cursor *string) (*NodePage, error)
 	Trash(ctx context.Context, cursor *string) (*NodePage, error)
 	MyShares(ctx context.Context) ([]*Share, error)
+	ShareVisits(ctx context.Context, shareID string, limit *int) ([]*ShareVisit, error)
 	UploadSession(ctx context.Context, id string) (*UploadSession, error)
 	ShareInfo(ctx context.Context, token string) (*ShareInfo, error)
 	ShareRoot(ctx context.Context) (*Node, error)
@@ -1357,6 +1374,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.ShareRoot(childComplexity), true
+	case "Query.shareVisits":
+		if e.ComplexityRoot.Query.ShareVisits == nil {
+			break
+		}
+
+		args, err := ec.field_Query_shareVisits_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.ShareVisits(childComplexity, args["shareId"].(string), args["limit"].(*int)), true
 	case "Query.trash":
 		if e.ComplexityRoot.Query.Trash == nil {
 			break
@@ -1465,6 +1493,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Share.Token(childComplexity), true
+	case "Share.visitStats":
+		if e.ComplexityRoot.Share.VisitStats == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Share.VisitStats(childComplexity), true
 
 	case "ShareAuth.accessToken":
 		if e.ComplexityRoot.ShareAuth.AccessToken == nil {
@@ -1503,6 +1537,56 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ShareInfo.Token(childComplexity), true
+
+	case "ShareVisit.createdAt":
+		if e.ComplexityRoot.ShareVisit.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareVisit.CreatedAt(childComplexity), true
+	case "ShareVisit.ip":
+		if e.ComplexityRoot.ShareVisit.IP == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareVisit.IP(childComplexity), true
+	case "ShareVisit.kind":
+		if e.ComplexityRoot.ShareVisit.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareVisit.Kind(childComplexity), true
+	case "ShareVisit.userAgent":
+		if e.ComplexityRoot.ShareVisit.UserAgent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareVisit.UserAgent(childComplexity), true
+
+	case "ShareVisitStats.downloadCount":
+		if e.ComplexityRoot.ShareVisitStats.DownloadCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareVisitStats.DownloadCount(childComplexity), true
+	case "ShareVisitStats.lastVisitAt":
+		if e.ComplexityRoot.ShareVisitStats.LastVisitAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareVisitStats.LastVisitAt(childComplexity), true
+	case "ShareVisitStats.lastVisitKind":
+		if e.ComplexityRoot.ShareVisitStats.LastVisitKind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareVisitStats.LastVisitKind(childComplexity), true
+	case "ShareVisitStats.verifyCount":
+		if e.ComplexityRoot.ShareVisitStats.VerifyCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareVisitStats.VerifyCount(childComplexity), true
 
 	case "TaskCount.count":
 		if e.ComplexityRoot.TaskCount.Count == nil {
@@ -1854,6 +1938,29 @@ type Share {
   hasPassword: Boolean!
   expiresAt: Time
   createdAt: Time!
+  # 访问统计。没有访问时返回全零对象(非空,前端不用判空)。
+  visitStats: ShareVisitStats!
+}
+
+# 一条分享访问记录。
+type ShareVisit {
+  # verify(访客进入)/ download(单文件下载)/ pack(打包下载)
+  kind: String!
+  ip: String
+  userAgent: String
+  createdAt: Time!
+}
+
+# 分享的访问汇总。
+#
+# 计数是**近 180 天**的:worker 会清理更早的记录,别当成历史总量。
+# downloadCount 的语义是"发起了下载"(下载走预签名直连对象存储,服务端观测不到
+# 完成时刻),单文件下载与打包合计在这里。
+type ShareVisitStats {
+  verifyCount: Int64!
+  downloadCount: Int64!
+  lastVisitAt: Time
+  lastVisitKind: String
 }
 
 type ShareInfo {
@@ -1899,6 +2006,8 @@ type Query {
   searchNodes(q: String!, cursor: String): NodePage!
   trash(cursor: String): NodePage!
   myShares: [Share!]!
+  # 某个分享最近的访问明细,只允许属主看
+  shareVisits(shareId: ID!, limit: Int = 50): [ShareVisit!]!
   uploadSession(id: ID!): UploadSession!
   shareInfo(token: String!): ShareInfo!
   shareRoot: Node!
@@ -2282,6 +2391,8 @@ func (ec *executionContext) childFields_Share(ctx context.Context, field graphql
 		return ec.fieldContext_Share_expiresAt(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Share_createdAt(ctx, field)
+	case "visitStats":
+		return ec.fieldContext_Share_visitStats(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Share", field.Name)
 }
@@ -2308,6 +2419,34 @@ func (ec *executionContext) childFields_ShareInfo(ctx context.Context, field gra
 		return ec.fieldContext_ShareInfo_expired(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ShareInfo", field.Name)
+}
+
+func (ec *executionContext) childFields_ShareVisit(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "kind":
+		return ec.fieldContext_ShareVisit_kind(ctx, field)
+	case "ip":
+		return ec.fieldContext_ShareVisit_ip(ctx, field)
+	case "userAgent":
+		return ec.fieldContext_ShareVisit_userAgent(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_ShareVisit_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ShareVisit", field.Name)
+}
+
+func (ec *executionContext) childFields_ShareVisitStats(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "verifyCount":
+		return ec.fieldContext_ShareVisitStats_verifyCount(ctx, field)
+	case "downloadCount":
+		return ec.fieldContext_ShareVisitStats_downloadCount(ctx, field)
+	case "lastVisitAt":
+		return ec.fieldContext_ShareVisitStats_lastVisitAt(ctx, field)
+	case "lastVisitKind":
+		return ec.fieldContext_ShareVisitStats_lastVisitKind(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ShareVisitStats", field.Name)
 }
 
 func (ec *executionContext) childFields_TaskCount(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3235,6 +3374,28 @@ func (ec *executionContext) field_Query_shareInfo_args(ctx context.Context, rawA
 		return nil, err
 	}
 	args["token"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_shareVisits_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "shareId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["shareId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
 	return args, nil
 }
 
@@ -6952,6 +7113,50 @@ func (ec *executionContext) fieldContext_Query_myShares(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_shareVisits(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_shareVisits(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().ShareVisits(ctx, fc.Args["shareId"].(string), fc.Args["limit"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*ShareVisit) graphql.Marshaler {
+			return ec.marshalNShareVisit2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐShareVisitᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_shareVisits(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ShareVisit(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_shareVisits_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_uploadSession(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7759,6 +7964,38 @@ func (ec *executionContext) fieldContext_Share_createdAt(_ context.Context, fiel
 	return graphql.NewScalarFieldContext("Share", field, false, false, errors.New("field of type Time does not have child fields"))
 }
 
+func (ec *executionContext) _Share_visitStats(ctx context.Context, field graphql.CollectedField, obj *Share) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Share_visitStats(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.VisitStats, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ShareVisitStats) graphql.Marshaler {
+			return ec.marshalNShareVisitStats2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐShareVisitStats(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Share_visitStats(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Share",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ShareVisitStats(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ShareAuth_accessToken(ctx context.Context, field graphql.CollectedField, obj *ShareAuth) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7895,6 +8132,190 @@ func (ec *executionContext) _ShareInfo_expired(ctx context.Context, field graphq
 }
 func (ec *executionContext) fieldContext_ShareInfo_expired(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ShareInfo", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _ShareVisit_kind(ctx context.Context, field graphql.CollectedField, obj *ShareVisit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareVisit_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ShareVisit_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareVisit", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ShareVisit_ip(ctx context.Context, field graphql.CollectedField, obj *ShareVisit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareVisit_ip(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IP, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ShareVisit_ip(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareVisit", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ShareVisit_userAgent(ctx context.Context, field graphql.CollectedField, obj *ShareVisit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareVisit_userAgent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserAgent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ShareVisit_userAgent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareVisit", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ShareVisit_createdAt(ctx context.Context, field graphql.CollectedField, obj *ShareVisit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareVisit_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ShareVisit_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareVisit", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _ShareVisitStats_verifyCount(ctx context.Context, field graphql.CollectedField, obj *ShareVisitStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareVisitStats_verifyCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.VerifyCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ShareVisitStats_verifyCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareVisitStats", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _ShareVisitStats_downloadCount(ctx context.Context, field graphql.CollectedField, obj *ShareVisitStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareVisitStats_downloadCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DownloadCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ShareVisitStats_downloadCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareVisitStats", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _ShareVisitStats_lastVisitAt(ctx context.Context, field graphql.CollectedField, obj *ShareVisitStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareVisitStats_lastVisitAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LastVisitAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ShareVisitStats_lastVisitAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareVisitStats", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _ShareVisitStats_lastVisitKind(ctx context.Context, field graphql.CollectedField, obj *ShareVisitStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareVisitStats_lastVisitKind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LastVisitKind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ShareVisitStats_lastVisitKind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareVisitStats", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _TaskCount_status(ctx context.Context, field graphql.CollectedField, obj *TaskCount) (ret graphql.Marshaler) {
@@ -10984,6 +11405,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "shareVisits":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_shareVisits(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "uploadSession":
 			field := field
 
@@ -11376,6 +11819,11 @@ func (ec *executionContext) _Share(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "visitStats":
+			out.Values[i] = ec._Share_visitStats(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -11470,6 +11918,112 @@ func (ec *executionContext) _ShareInfo(ctx context.Context, sel ast.SelectionSet
 		case "expired":
 			out.Values[i] = ec._ShareInfo_expired(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var shareVisitImplementors = []string{"ShareVisit"}
+
+func (ec *executionContext) _ShareVisit(ctx context.Context, sel ast.SelectionSet, obj *ShareVisit) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, shareVisitImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ShareVisit")
+		case "kind":
+			out.Values[i] = ec._ShareVisit_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "ip":
+			out.Values[i] = ec._ShareVisit_ip(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userAgent":
+			out.Values[i] = ec._ShareVisit_userAgent(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._ShareVisit_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var shareVisitStatsImplementors = []string{"ShareVisitStats"}
+
+func (ec *executionContext) _ShareVisitStats(ctx context.Context, sel ast.SelectionSet, obj *ShareVisitStats) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, shareVisitStatsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ShareVisitStats")
+		case "verifyCount":
+			out.Values[i] = ec._ShareVisitStats_verifyCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "downloadCount":
+			out.Values[i] = ec._ShareVisitStats_downloadCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastVisitAt":
+			out.Values[i] = ec._ShareVisitStats_lastVisitAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "lastVisitKind":
+			out.Values[i] = ec._ShareVisitStats_lastVisitKind(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:
@@ -12689,6 +13243,42 @@ func (ec *executionContext) marshalNShareInfo2ᚖgithubᚗcomᚋyophonᚋgopan�
 		return graphql.Null
 	}
 	return ec._ShareInfo(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNShareVisit2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐShareVisitᚄ(ctx context.Context, sel ast.SelectionSet, v []*ShareVisit) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNShareVisit2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐShareVisit(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNShareVisit2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐShareVisit(ctx context.Context, sel ast.SelectionSet, v *ShareVisit) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ShareVisit(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNShareVisitStats2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐShareVisitStats(ctx context.Context, sel ast.SelectionSet, v *ShareVisitStats) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ShareVisitStats(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNString2string(ctx context.Context, v any) (string, error) {

@@ -24,11 +24,27 @@ query MyShares {
     hasPassword
     expiresAt
     createdAt
+    visitStats {
+      verifyCount
+      downloadCount
+      lastVisitAt
+      lastVisitKind
+    }
     node {
       id
       name
       kind
     }
+  }
+}
+
+# 某个分享最近的访问明细,只有属主能看
+query ShareVisits($shareId: ID!, $limit: Int) {
+  shareVisits(shareId: $shareId, limit: $limit) {
+    kind
+    ip
+    userAgent
+    createdAt
   }
 }
 

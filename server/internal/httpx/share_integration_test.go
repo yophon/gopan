@@ -285,7 +285,7 @@ func unzipNames(t *testing.T, data []byte) ([]string, *zip.Reader) {
 
 func TestPackHandlerIntegration(t *testing.T) {
 	e := newPackEnv(t)
-	h := httpx.PackHandler(e.auth, e.packer)
+	h := httpx.PackHandler(e.auth, e.packer, nil, nil)
 	do := func(target string, hdr map[string]string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("GET", target, nil)
 		for k, v := range hdr {
@@ -378,7 +378,7 @@ func TestPackHandlerIntegration(t *testing.T) {
 func TestPackHandlerRateLimit(t *testing.T) {
 	e := newPackEnv(t)
 	e.packer.SetRateLimit(time.Hour, 1) // 一小时才回填一个,突发 1
-	h := httpx.PackHandler(e.auth, e.packer)
+	h := httpx.PackHandler(e.auth, e.packer, nil, nil)
 
 	req := httptest.NewRequest("GET", "/pack?nodes="+e.aFile.ID.String()+"&token="+e.token, nil)
 	rec := httptest.NewRecorder()

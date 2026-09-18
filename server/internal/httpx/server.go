@@ -138,7 +138,7 @@ func WithAuth(next http.Handler, auth *service.Auth, trustedProxies []*net.IPNet
 		ip := ClientIPFrom(r, trustedProxies)
 		ctx := context.WithValue(r.Context(), keyHTTP, &httpCarrier{w: w, r: r, ip: ip})
 		// UA 经 context 往 service 层带,省得为它给一串方法签名加参数。
-		ctx = service.WithClientMeta(ctx, service.ClientMeta{UA: r.UserAgent()})
+		ctx = service.WithClientMeta(ctx, service.ClientMeta{IP: ip, UA: r.UserAgent()})
 		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 			if id, err := auth.ParseAccess(strings.TrimPrefix(h, "Bearer ")); err == nil {
 				ctx = context.WithValue(ctx, keyIdentity, id)

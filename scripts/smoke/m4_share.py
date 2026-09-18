@@ -75,6 +75,28 @@ z2 = zipfile.ZipFile(io.BytesIO(http_get(f"/pack?nodes={a_id},{sub_id}&token={OW
 assert sorted(z2.namelist()) == ["a.txt", "sub/", "sub/b.txt"]
 print("== /pack OK ==")
 
+# ---- 访问统计:只统计真实访客事件 ----
+VS = "query{myShares{visitStats{verifyCount downloadCount lastVisitKind}}}"
+stats = gql(VS, token=OWNER)["myShares"][0]["visitStats"]
+assert stats["verifyCount"] == 1, f"验密成功 1 次;密码错/缺密码那两次不该计数:{stats}"
+assert stats["downloadCount"] == 2, f"访客单文件下载 1 次 + 打包 1 次:{stats}"
+assert stats["lastVisitKind"] == "pack", f"最近一次事件应是 pack:{stats}"
+
+# og 落地页与 shareInfo 是给爬虫/SPA 用的,访问它们绝不能改计数
+http_get(f"/s/{sh['token']}")
+gql(SI, {"t": sh["token"]})
+after = gql(VS, token=OWNER)["myShares"][0]["visitStats"]
+assert (after["verifyCount"], after["downloadCount"]) == (
+    stats["verifyCount"],
+    stats["downloadCount"],
+), f"og 落地页/shareInfo 不该计数:{stats} -> {after}"
+
+visits = gql("query($id:ID!,$n:Int){shareVisits(shareId:$id,limit:$n){kind ip}}",
+             {"id": sh["id"], "n": 50}, OWNER)["shareVisits"]
+assert len(visits) == 3, f"应有 3 条明细(verify + download + pack),实际 {len(visits)}:{visits}"
+assert {v["kind"] for v in visits} == {"verify", "download", "pack"}, visits
+print("== 访问统计 OK(og 爬虫与 shareInfo 不计数)==")
+
 page = http_get(f"/s/{sh['token']}").decode()
 assert "og:title" in page and "share-root" in page
 assert "og:title" not in http_get("/s/nosuchtoken").decode()
