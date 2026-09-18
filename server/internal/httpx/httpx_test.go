@@ -69,7 +69,7 @@ func newAuthNoDB() *service.Auth {
 func TestWithAuthBearer(t *testing.T) {
 	auth := newAuthNoDB()
 	uid := uuid.Must(uuid.NewV7())
-	token, err := auth.IssueAccess(uid, service.ScopeUser)
+	token, err := auth.IssueAccess(uid, service.ScopeUser, uuid.Nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestWithAuthBearer(t *testing.T) {
 func TestUserFromRejectsGuestScope(t *testing.T) {
 	auth := newAuthNoDB()
 	uid := uuid.Must(uuid.NewV7())
-	guestTok, _ := auth.IssueAccessFor(uid, "share:"+uuid.Must(uuid.NewV7()).String(), 30*time.Minute)
+	guestTok, _ := auth.IssueAccessFor(uid, "share:"+uuid.Must(uuid.NewV7()).String(), uuid.Nil, 30*time.Minute)
 
 	var err error
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

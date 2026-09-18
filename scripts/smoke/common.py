@@ -15,12 +15,15 @@ API = os.environ.get("GOPAN_API", "http://127.0.0.1:8080/query")
 BASE = API.rsplit("/", 1)[0]
 
 
-def gql(q, v=None, token=None, expect_code=None):
+def gql(q, v=None, token=None, expect_code=None, ua=None):
     req = urllib.request.Request(
         API,
         data=json.dumps({"query": q, "variables": v or {}}).encode(),
         headers={"Content-Type": "application/json"},
     )
+    if ua:
+        # 设备管理要按 UA 区分会话,所以这里得能改它
+        req.add_header("User-Agent", ua)
     if token:
         req.add_header("Authorization", "Bearer " + token)
     r = json.loads(urllib.request.urlopen(req).read())

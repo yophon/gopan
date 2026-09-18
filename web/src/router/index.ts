@@ -33,6 +33,11 @@ const router = createRouter({
           component: () => import('@/views/ChatView.vue'),
         },
         {
+          path: 'devices',
+          name: 'devices',
+          component: () => import('@/views/DevicesView.vue'),
+        },
+        {
           path: 'drive/:folderId?',
           name: 'drive',
           component: () => import('@/views/DriveView.vue'),

@@ -171,6 +171,16 @@ type RefreshToken struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type Session struct {
+	FamilyID   uuid.UUID
+	UserID     uuid.UUID
+	UserAgent  string
+	Ip         string
+	CreatedAt  pgtype.Timestamptz
+	LastSeenAt pgtype.Timestamptz
+	RevokedAt  pgtype.Timestamptz
+}
+
 type Share struct {
 	ID           uuid.UUID
 	Token        string

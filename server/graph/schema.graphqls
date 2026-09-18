@@ -11,6 +11,22 @@ type User {
   isAdmin: Boolean!
 }
 
+# 一个登录设备(按 refresh token family 分组)。
+type Session {
+  familyId: ID!
+  # 原始 UA(服务端截断到 512 字节),展示时由前端归类成"Chrome · Windows"这种
+  userAgent: String!
+  ip: String!
+  createdAt: Time!
+  lastSeenAt: Time!
+  # 被吊销的时刻:改密、管理员禁用、重放检测触发整族吊销
+  revokedAt: Time
+  # 这族 refresh token 还能不能用
+  active: Boolean!
+  # 是不是当前这个请求所在的会话(access token 里的 fid)
+  current: Boolean!
+}
+
 # ---------- WebDAV 应用密码 ----------
 
 type AppPassword {
@@ -185,6 +201,8 @@ type Query {
   mcpAccessRoots: [MCPAccessRoot!]!
   mcpAudit(beforeId: Int64 = 0, limit: Int = 50): [MCPAuditEvent!]!
   me: User!
+  # 登录设备列表,最近活跃的在前
+  sessions: [Session!]!
   node(id: ID!): Node!
   children(parentId: ID, cursor: String, order: NodeOrder = NAME, desc: Boolean = false): NodePage!
   searchNodes(q: String!, cursor: String): NodePage!
@@ -233,6 +251,8 @@ type Mutation {
   logout: Boolean!
 
   changePassword(oldPassword: String!, newPassword: String!): AuthPayload!
+  # 吊销一个登录设备。不能吊销当前会话 —— 那是 logout 该干的事。
+  revokeSession(familyId: ID!): Boolean!
 
   createFolder(parentId: ID, name: String!): Node!
   renameNode(id: ID!, name: String!): Node!

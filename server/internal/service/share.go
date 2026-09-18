@@ -167,7 +167,7 @@ func (s *Shares) Access(ctx context.Context, token, password, ip string) (string
 			return "", errf("BAD_SHARE_PASSWORD", "分享密码错误")
 		}
 	}
-	return s.auth.IssueAccessFor(sh.CreatedBy, "share:"+sh.ID.String(), GuestTTL)
+	return s.auth.IssueAccessFor(sh.CreatedBy, "share:"+sh.ID.String(), uuid.Nil, GuestTTL)
 }
 
 // Validate 校验访客 token 指向的分享仍有效,返回分享行。

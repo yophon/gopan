@@ -7,7 +7,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -23,6 +25,9 @@ const ScopeUser = "user"
 type Identity struct {
 	UserID uuid.UUID
 	Scope  string // "user" 或 "share:{shareId}"
+	// FamilyID 是当前 access token 所属的登录会话(来自 fid claim)。访客 token
+	// 与此前版本签发的 token 都是零值 —— 那种情况下"本机"标记不出来,不会出错。
+	FamilyID uuid.UUID
 }
 
 type Auth struct {
@@ -35,6 +40,11 @@ type Auth struct {
 
 	// 限速:每 key(IP)每分钟 10 次
 	limiter *keyedLimiter
+
+	// last_seen 的进程内节流:同一个 family 5 分钟内不再打库。
+	// SQL 里还有一层 WHERE 兜底(多实例/重启后也有用),这里是省掉那次必然 no-op 的写。
+	seenMu sync.Mutex
+	seen   map[uuid.UUID]time.Time
 }
 
 func NewAuth(q *store.Queries, secret []byte, accessTTL, refreshTTL time.Duration, registerOpen bool, defaultQuota int64) *Auth {
@@ -43,6 +53,7 @@ func NewAuth(q *store.Queries, secret []byte, accessTTL, refreshTTL time.Duratio
 		accessTTL: accessTTL, refreshTTL: refreshTTL,
 		registerOpen: registerOpen, defaultQuota: defaultQuota,
 		limiter: newKeyedLimiter(6*time.Second, 10),
+		seen:    make(map[uuid.UUID]time.Time),
 	}
 }
 
@@ -59,24 +70,28 @@ func (a *Auth) allow(key string) bool {
 
 type claims struct {
 	Scope string `json:"scope"`
+	// FID 是登录会话 id。omitempty + ParseAccess 忽略未知 claim,保证访客 token
+	// 和升级前签发的 token 都不受影响。
+	FID string `json:"fid,omitempty"`
 	jwt.RegisteredClaims
 }
 
-func (a *Auth) IssueAccess(userID uuid.UUID, scope string) (string, error) {
-	return a.IssueAccessFor(userID, scope, a.accessTTL)
+func (a *Auth) IssueAccess(userID uuid.UUID, scope string, familyID uuid.UUID) (string, error) {
+	return a.IssueAccessFor(userID, scope, familyID, a.accessTTL)
 }
 
 // IssueAccessFor 指定 TTL 签发(访客 token 用 30 分钟,与用户 access 不同)。
-func (a *Auth) IssueAccessFor(userID uuid.UUID, scope string, ttl time.Duration) (string, error) {
+// familyID 写进 fid claim,让请求能定位到"这是哪个登录会话";访客 token 传 uuid.Nil。
+func (a *Auth) IssueAccessFor(userID uuid.UUID, scope string, familyID uuid.UUID, ttl time.Duration) (string, error) {
 	now := time.Now()
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
-		Scope: scope,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   userID.String(),
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
-		},
-	})
+	c := claims{Scope: scope}
+	if familyID != uuid.Nil {
+		c.FID = familyID.String()
+	}
+	c.Subject = userID.String()
+	c.IssuedAt = jwt.NewNumericDate(now)
+	c.ExpiresAt = jwt.NewNumericDate(now.Add(ttl))
+	t := jwt.NewWithClaims(jwt.SigningMethodHS256, c)
 	return t.SignedString(a.secret)
 }
 
@@ -95,7 +110,13 @@ func (a *Auth) ParseAccess(token string) (*Identity, error) {
 	if err != nil {
 		return nil, ErrUnauthenticated
 	}
-	return &Identity{UserID: uid, Scope: c.Scope}, nil
+	var fid uuid.UUID
+	if c.FID != "" {
+		if parsed, err := uuid.Parse(c.FID); err == nil {
+			fid = parsed
+		}
+	}
+	return &Identity{UserID: uid, Scope: c.Scope, FamilyID: fid}, nil
 }
 
 // ---- 注册 / 登录 ----
@@ -134,7 +155,7 @@ func (a *Auth) Register(ctx context.Context, username, password, ip string) (*Au
 		}
 		return nil, err
 	}
-	return a.issuePair(ctx, u)
+	return a.issuePair(ctx, u, ip)
 }
 
 func (a *Auth) Login(ctx context.Context, username, password, ip string) (*AuthResult, error) {
@@ -154,18 +175,21 @@ func (a *Auth) Login(ctx context.Context, username, password, ip string) (*AuthR
 	if u.DisabledAt.Valid {
 		return nil, errf("ACCOUNT_DISABLED", "账号已被禁用")
 	}
-	return a.issuePair(ctx, u)
+	return a.issuePair(ctx, u, ip)
 }
 
-func (a *Auth) issuePair(ctx context.Context, u store.User) (*AuthResult, error) {
-	access, err := a.IssueAccess(u.ID, ScopeUser)
+func (a *Auth) issuePair(ctx context.Context, u store.User, ip string) (*AuthResult, error) {
+	// 先定 family 再签 access:access 里的 fid 必须指向这个新会话。
+	familyID := uuid.Must(uuid.NewV7())
+	access, err := a.IssueAccess(u.ID, ScopeUser, familyID)
 	if err != nil {
 		return nil, err
 	}
-	plain, err := a.newRefresh(ctx, u.ID, uuid.Must(uuid.NewV7()))
+	plain, err := a.newRefresh(ctx, u.ID, familyID)
 	if err != nil {
 		return nil, err
 	}
+	a.createSession(ctx, familyID, u.ID, ip)
 	return &AuthResult{User: u, AccessToken: access, RefreshToken: plain}, nil
 }
 
@@ -217,7 +241,7 @@ func (a *Auth) Refresh(ctx context.Context, plain string) (*AuthResult, error) {
 	if u.DisabledAt.Valid {
 		return nil, ErrUnauthenticated
 	}
-	access, err := a.IssueAccess(u.ID, ScopeUser)
+	access, err := a.IssueAccess(u.ID, ScopeUser, rt.FamilyID)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +289,11 @@ func (a *Auth) ChangePassword(ctx context.Context, userID uuid.UUID, oldPw, newP
 	if err := a.q.RevokeAllUserFamilies(ctx, userID); err != nil {
 		return nil, err
 	}
-	return a.issuePair(ctx, u)
+	// 设备列表也要标失效,否则页面上还显示着"在线",实际 token 已经不能用了。
+	if err := a.q.RevokeAllSessions(ctx, userID); err != nil {
+		return nil, err
+	}
+	return a.issuePair(ctx, u, ip)
 }
 
 func (a *Auth) GetUser(ctx context.Context, id uuid.UUID) (store.User, error) {
@@ -277,6 +305,108 @@ func (a *Auth) GetUser(ctx context.Context, id uuid.UUID) (store.User, error) {
 		return store.User{}, err
 	}
 	return u, nil
+}
+
+// ---- 登录会话(设备管理)----
+
+// sessionMaxUA 截断 UA。它是客户端完全可控的字符串,不该让它把行撑爆。
+const sessionMaxUA = 512
+
+// createSession 记一条登录设备。**尽力而为**:设备列表少一行,好过用户登不进来。
+func (a *Auth) createSession(ctx context.Context, familyID, userID uuid.UUID, ip string) {
+	ua := ClientMetaFrom(ctx).UA
+	if len(ua) > sessionMaxUA {
+		ua = ua[:sessionMaxUA]
+	}
+	if err := a.q.CreateSession(ctx, store.CreateSessionParams{
+		FamilyID: familyID, UserID: userID, UserAgent: ua, Ip: ip,
+	}); err != nil {
+		slog.Warn("create session", "err", err)
+	}
+}
+
+// AuthSession 是设备列表的一行。
+type AuthSession struct {
+	FamilyID   uuid.UUID
+	UserAgent  string
+	IP         string
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	RevokedAt  *time.Time
+	// Active 表示这一族的 refresh token 还能用(没被吊销、没过期)。
+	Active bool
+	// Current 是当前请求所在的会话(来自 access token 的 fid claim)。
+	Current bool
+}
+
+func (a *Auth) ListSessions(ctx context.Context, userID, currentFamily uuid.UUID) ([]AuthSession, error) {
+	rows, err := a.q.ListSessions(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]AuthSession, 0, len(rows))
+	for _, r := range rows {
+		v := AuthSession{
+			FamilyID: r.FamilyID, UserAgent: r.UserAgent, IP: r.Ip,
+			CreatedAt: r.CreatedAt.Time, LastSeenAt: r.LastSeenAt.Time,
+			Active: r.Active, Current: r.FamilyID == currentFamily,
+		}
+		if r.RevokedAt.Valid {
+			t := r.RevokedAt.Time
+			v.RevokedAt = &t
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+// RevokeSession 吊销一个会话:标记 sessions 行 + 吊销整族 refresh token。
+// 两件事必须一起做 —— 只标记前者的话,那个设备的 token 还能继续用。
+//
+// 拒绝吊销当前会话:那是「退出登录」该走的路,分开两条路径才不会被误操作把自己踢下线。
+func (a *Auth) RevokeSession(ctx context.Context, userID, currentFamily, familyID uuid.UUID) error {
+	if familyID == currentFamily {
+		return errf("CANNOT_REVOKE_CURRENT", "当前设备请用「退出登录」")
+	}
+	n, err := a.q.RevokeSession(ctx, store.RevokeSessionParams{
+		FamilyID: familyID, UserID: userID,
+	})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		// 不存在 / 已吊销 / 不属于这个用户 —— 一律 NotFound,不泄露存在性
+		return ErrNotFound
+	}
+	return a.q.RevokeRefreshFamily(ctx, familyID)
+}
+
+// TouchSession 推进 last_seen。两层节流:进程内 map 先挡掉绝大多数调用,
+// SQL 的 WHERE 再兜一层(重启或多实例时). 尽力而为,失败只记日志。
+func (a *Auth) TouchSession(ctx context.Context, familyID uuid.UUID) {
+	if familyID == uuid.Nil {
+		return
+	}
+	now := time.Now()
+	a.seenMu.Lock()
+	if last, ok := a.seen[familyID]; ok && now.Sub(last) < 5*time.Minute {
+		a.seenMu.Unlock()
+		return
+	}
+	a.seen[familyID] = now
+	// 容量保护:顺手清掉一小时前的条目,免得 map 随登录次数无限长
+	if len(a.seen) > 4096 {
+		for k, t := range a.seen {
+			if now.Sub(t) > time.Hour {
+				delete(a.seen, k)
+			}
+		}
+	}
+	a.seenMu.Unlock()
+
+	if err := a.q.TouchSession(ctx, familyID); err != nil {
+		slog.Warn("touch session", "err", err)
+	}
 }
 
 func hashToken(plain string) string {
