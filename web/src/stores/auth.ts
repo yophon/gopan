@@ -56,6 +56,7 @@ export const useAuthStore = defineStore('auth', () => {
       setAuth(data.refresh)
       return true
     } catch {
+      clear()
       return false
     }
   }

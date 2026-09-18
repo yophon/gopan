@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -10,6 +10,13 @@ import { errorText } from '@/api/errors'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const idIssuer = ref(''), idReady = ref(false), legacy = ref(false)
+onMounted(async () => {
+  try { const r=await fetch('/api/auth/id/config'); if(r.ok) idIssuer.value=(await r.json()).issuer || '' }
+  catch { ElMessage.error('账号服务连接失败，请刷新重试') }
+  finally { idReady.value=true }
+})
+function identityLogin() { location.assign('/api/auth/id/start?return='+encodeURIComponent(redirectTarget())) }
 
 const activeTab = ref<'login' | 'register'>('login')
 const submitting = ref(false)
@@ -90,7 +97,13 @@ async function submitRegister() {
   <div class="login-page">
     <el-card class="login-card">
       <h1 class="title">gopan 云盘</h1>
-      <el-tabs v-model="activeTab" stretch>
+      <p v-if="!idReady">正在连接账号服务…</p>
+      <template v-else-if="idIssuer && !legacy">
+        <p>使用 Yophon ID 打开你的文件。</p>
+        <el-button type="primary" class="submit-btn" @click="identityLogin">使用 Yophon ID 登录</el-button>
+        <el-button link class="submit-btn" @click="legacy=true">其他账号使用密码登录</el-button>
+      </template>
+      <el-tabs v-else v-model="activeTab" stretch>
         <el-tab-pane label="登录" name="login">
           <el-form
             ref="loginFormRef"

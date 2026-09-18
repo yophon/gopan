@@ -10,16 +10,17 @@ import (
 )
 
 type Config struct {
-	Listen       string
-	PprofListen  string
-	DBURL        string
-	JWTSecret    []byte
-	RegisterOpen bool
-	DefaultQuota int64
-	AccessTTL    time.Duration
-	RefreshTTL   time.Duration
-	TrashTTL     time.Duration // 回收站保留期,过期自动彻删
-	DevMode      bool // 关闭 cookie Secure、开 introspection
+	IDIssuer, IDOrigin, IDClientID, IDSecret, IDSubject, IDUserID string
+	Listen                                                        string
+	PprofListen                                                   string
+	DBURL                                                         string
+	JWTSecret                                                     []byte
+	RegisterOpen                                                  bool
+	DefaultQuota                                                  int64
+	AccessTTL                                                     time.Duration
+	RefreshTTL                                                    time.Duration
+	TrashTTL                                                      time.Duration // 回收站保留期,过期自动彻删
+	DevMode                                                       bool          // 关闭 cookie Secure、开 introspection
 	// 信任其转发头的反代来源(IP 或 CIDR,逗号分隔)。空 = 谁都不信,一律用 RemoteAddr。
 	// **生产在 nginx / docker 端口发布之后必须配**:否则后端看到的永远是网关地址,
 	// 登录限速会退化成"全站共用一个桶",设备列表里的 IP 也没有意义。
@@ -31,9 +32,9 @@ type Config struct {
 	S3Key            string
 	S3Secret         string
 	S3Bucket         string
-	S3Region         string // 显式 region,免去签名前的 GetBucketLocation 探测
-	S3UseSSL         bool // 内部地址是否走 TLS
-	S3PublicUseSSL   bool // 外部地址是否走 TLS(生产经反代通常 true,内网 false)
+	S3Region         string        // 显式 region,免去签名前的 GetBucketLocation 探测
+	S3UseSSL         bool          // 内部地址是否走 TLS
+	S3PublicUseSSL   bool          // 外部地址是否走 TLS(生产经反代通常 true,内网 false)
 	PartSize         int64         // 分片大小,S3 规定除末片外 ≥5MiB
 	SessionTTL       time.Duration // 上传会话有效期
 	PresignPutTTL    time.Duration
@@ -46,6 +47,7 @@ type Config struct {
 
 func Load() (*Config, error) {
 	c := &Config{
+		IDIssuer: env("ID_ISSUER", ""), IDOrigin: env("ID_ORIGIN", ""), IDClientID: env("ID_CLIENT_ID", "gopan"), IDSecret: env("ID_SECRET", ""), IDSubject: env("ID_SUBJECT", ""), IDUserID: env("ID_USER_ID", ""),
 		Listen:       env("LISTEN", ":8080"),
 		PprofListen:  env("PPROF_LISTEN", "127.0.0.1:6060"),
 		DBURL:        env("DB_URL", ""),

@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib" // goose 走 database/sql,需要 pgx 的 stdlib 驱动
 	"github.com/pressly/goose/v3"
@@ -138,6 +140,22 @@ func run() error {
 	}})
 
 	mux := http.NewServeMux()
+	if cfg.IDIssuer != "" {
+		userID, err := uuid.Parse(cfg.IDUserID)
+		if err != nil {
+			return fmt.Errorf("invalid GOPAN_ID_USER_ID")
+		}
+		provider, err := service.NewIDProvider(service.IDConfig{Issuer: cfg.IDIssuer, Origin: cfg.IDOrigin, ClientID: cfg.IDClientID, Secret: cfg.IDSecret, Subject: cfg.IDSubject, UserID: userID, Development: cfg.DevMode}, pool, auth)
+		if err != nil {
+			return err
+		}
+		mux.Handle("/api/auth/id/", provider.Handler(func(r *http.Request) string { return httpx.ClientIPFrom(r, cfg.TrustedProxies) }))
+	} else {
+		mux.HandleFunc("GET /api/auth/id/config", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"issuer":""}`))
+		})
+	}
 	mux.Handle("POST /query", httpx.WithAuth(httpx.NewGraphQLHandler(es, cfg.DevMode), auth, cfg.TrustedProxies))
 	oauthHTTP := oauthserver.New(oauth)
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", oauthHTTP.AuthorizationMetadata)

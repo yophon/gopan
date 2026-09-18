@@ -85,7 +85,8 @@ describe('auth store', () => {
 
     plainRequestMock.mockRejectedValue(new Error('no cookie'))
     await expect(auth.tryRefresh()).resolves.toBe(false)
-    // 失败不清已有登录态(由调用方决定)
-    expect(auth.accessToken).toBe('fresh')
+    // A revoked/failed refresh must not leave a stale private identity visible.
+    expect(auth.accessToken).toBeNull()
+    expect(auth.user).toBeNull()
   })
 })

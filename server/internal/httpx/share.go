@@ -54,7 +54,7 @@ func PackHandler(auth *service.Auth, packer *service.Packer, shares *service.Sha
 		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 			token = strings.TrimPrefix(h, "Bearer ")
 		}
-		ident, err := auth.ParseAccess(token)
+		ident, err := auth.ParseAccessContext(r.Context(), token)
 		if err != nil {
 			http.Error(w, "未登录或凭证已过期", http.StatusUnauthorized)
 			return
