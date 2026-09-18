@@ -11,6 +11,8 @@ export interface NodeListItem {
   size?: number | null
   /** 回收站/分享列表没有 updatedAt,用它们的自有时间字段顶替(可能是 null) */
   updatedAt?: string | null
+  /** 回收站条目:预计被彻删的时刻(deleted_at + TRASH_TTL),其它页面不填 */
+  purgeAt?: string | null
   parentId?: string | null
   preview?: { kind: string; thumbUrl?: string | null } | null
   subtreeBytes?: number | null

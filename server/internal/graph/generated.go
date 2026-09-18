@@ -153,6 +153,7 @@ type ComplexityRoot struct {
 		Name         func(childComplexity int) int
 		ParentID     func(childComplexity int) int
 		Preview      func(childComplexity int) int
+		PurgeAt      func(childComplexity int) int
 		Sha256       func(childComplexity int) int
 		Size         func(childComplexity int) int
 		StatsStale   func(childComplexity int) int
@@ -1017,6 +1018,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Node.Preview(childComplexity), true
+	case "Node.purgeAt":
+		if e.ComplexityRoot.Node.PurgeAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Node.PurgeAt(childComplexity), true
 	case "Node.sha256":
 		if e.ComplexityRoot.Node.Sha256 == nil {
 			break
@@ -1692,6 +1699,9 @@ type Node {
   createdAt: Time!
   updatedAt: Time!
   deletedAt: Time
+  # 回收站里的节点:预计被彻删的时刻(deleted_at + GOPAN_TRASH_TTL)。
+  # 只有 trash 查询会填,其它路径一律 null —— 让前端不必知道运维配的保留期是多少。
+  purgeAt: Time
   preview: PreviewInfo!
   downloadUrl: String
   # 子树统计(仅文件夹;异步重算,statsStale=true 表示数字可能滞后)
@@ -2043,6 +2053,8 @@ func (ec *executionContext) childFields_Node(ctx context.Context, field graphql.
 		return ec.fieldContext_Node_updatedAt(ctx, field)
 	case "deletedAt":
 		return ec.fieldContext_Node_deletedAt(ctx, field)
+	case "purgeAt":
+		return ec.fieldContext_Node_purgeAt(ctx, field)
 	case "preview":
 		return ec.fieldContext_Node_preview(ctx, field)
 	case "downloadUrl":
@@ -5792,6 +5804,29 @@ func (ec *executionContext) _Node_deletedAt(ctx context.Context, field graphql.C
 	)
 }
 func (ec *executionContext) fieldContext_Node_deletedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Node", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _Node_purgeAt(ctx context.Context, field graphql.CollectedField, obj *Node) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Node_purgeAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PurgeAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Node_purgeAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Node", field, false, false, errors.New("field of type Time does not have child fields"))
 }
 
@@ -9909,6 +9944,11 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 			}
 		case "deletedAt":
 			out.Values[i] = ec._Node_deletedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "purgeAt":
+			out.Values[i] = ec._Node_purgeAt(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}

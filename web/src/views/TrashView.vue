@@ -14,6 +14,7 @@ import {
 } from '@/api/gen/graphql'
 import type { TrashQuery } from '@/api/gen/graphql'
 import { formatBytes, formatTime } from '@/utils/format'
+import { trashExpiry, trashExpiryText } from '@/utils/trash'
 import { useBreakpoints } from '@/composables/breakpoints'
 import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
@@ -22,7 +23,7 @@ import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 type TrashItem = TrashQuery['trash']['items'][number]
 
 const queryClient = useQueryClient()
-const { isMobile } = useBreakpoints()
+const { isMobile, isCompact } = useBreakpoints()
 
 const { data, isFetching } = useQuery({
   queryKey: ['trash'],
@@ -34,6 +35,16 @@ const items = computed(() => data.value?.trash.items ?? [])
 const cardItems = computed<NodeListItem[]>(() =>
   items.value.map((i) => ({ ...i, updatedAt: i.deletedAt })),
 )
+
+/** 卡片第二行:删除于 … · 还剩 N 天 */
+function cardSecondary(node: NodeListItem): string {
+  return `删除于 ${formatTime(node.updatedAt)} · ${trashExpiryText(node.purgeAt)}`
+}
+
+/** 快到期/已过期给个警示色,正常档不上色 */
+function expiryClass(purgeAt: string | null | undefined): string {
+  return trashExpiry(purgeAt).level === 'normal' ? '' : 'expiry-urgent'
+}
 
 const selection = ref<TrashItem[]>([])
 const selectedIds = computed(() => selection.value.map((n) => n.id))
@@ -211,6 +222,14 @@ async function onSheetSelect(key: string) {
           {{ formatTime(asTrash(row).deletedAt) }}
         </template>
       </el-table-column>
+      <!-- 1024 以下收起:再加一列这张表就挤了(COMPACT 档就是为这种事留的) -->
+      <el-table-column v-if="!isCompact" label="到期" width="140">
+        <template #default="{ row }">
+          <span :class="expiryClass(asTrash(row).purgeAt)">
+            {{ trashExpiryText(asTrash(row).purgeAt) }}
+          </span>
+        </template>
+      </el-table-column>
     </el-table>
 
     <NodeCardList
@@ -220,6 +239,7 @@ async function onSheetSelect(key: string) {
       :selection-mode="false"
       :selected-ids="[]"
       :loading="isFetching"
+      :secondary="cardSecondary"
       @menu="(node) => (sheet = { visible: true, node })"
     />
 
@@ -255,5 +275,8 @@ async function onSheetSelect(key: string) {
 }
 .name-icon {
   color: var(--el-color-primary);
+}
+.expiry-urgent {
+  color: var(--el-color-danger);
 }
 </style>

@@ -3,6 +3,7 @@ package graph
 import (
 	"context"
 	"sort"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -129,6 +130,8 @@ type nodeRow struct {
 	BlobSize   *int64
 	BlobMime   *string
 	BlobSha256 *string
+	// PurgeAt 只在回收站列表里填(deleted_at + TRASH_TTL),别处一律留 nil。
+	PurgeAt *time.Time
 }
 
 func gqlNodeRow(r nodeRow) *Node {
@@ -138,6 +141,7 @@ func gqlNodeRow(r nodeRow) *Node {
 		out.Mime = r.BlobMime
 		out.Sha256 = r.BlobSha256
 	}
+	out.PurgeAt = r.PurgeAt
 	return out
 }
 

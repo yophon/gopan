@@ -26,6 +26,11 @@ import { formatBytes } from '@/utils/format'
 import { useBreakpoints } from '@/composables/breakpoints'
 import { useSwipe } from '@vueuse/core'
 import { closePreview, previewNext, previewPrev, previewState } from '@/composables/preview'
+import {
+  currentConnection,
+  prefetchBudget,
+  useNeighborPrefetch,
+} from '@/composables/prefetch'
 
 // pdfjs-dist 体积大(~1MB),按需异步加载,只有真正预览 PDF 时才拉
 const PdfViewer = defineAsyncComponent(() => import('./PdfViewer.vue'))
@@ -216,6 +221,26 @@ useSwipe(previewBodyRef, {
     if (direction === 'left' && hasNext.value) previewNext()
     else if (direction === 'right' && hasPrev.value) previewPrev()
   },
+})
+
+// ---------- 邻居预取:当前图就位后,把前后各一张提前拉进浏览器缓存 ----------
+// 只在 IMAGE 上做(视频/PDF 抢带宽会让正在看的内容变卡),且必须等当前这张加载完
+// —— 预签名只有 15 分钟寿命,提前太久拿到的 URL 等用户翻过去已经过期了。
+
+const { run: runPrefetch, clear: clearPrefetch } = useNeighborPrefetch({
+  ids: () => previewState.ids,
+  index: () => previewState.index,
+  currentKind: () => preview.value?.kind,
+  fetchPreview: async (id) => (await req(NodePreviewDocument, { id })).node.preview,
+  budget: () => prefetchBudget(currentConnection()),
+})
+
+watch([currentId, () => preview.value?.kind, isFetching], ([id, kind, fetching]) => {
+  if (!id || fetching || kind !== 'IMAGE') {
+    clearPrefetch()
+    return
+  }
+  void runPrefetch()
 })
 
 // ---------- 快捷键 ----------

@@ -89,6 +89,9 @@ type Node {
   createdAt: Time!
   updatedAt: Time!
   deletedAt: Time
+  # 回收站里的节点:预计被彻删的时刻(deleted_at + GOPAN_TRASH_TTL)。
+  # 只有 trash 查询会填,其它路径一律 null —— 让前端不必知道运维配的保留期是多少。
+  purgeAt: Time
   preview: PreviewInfo!
   downloadUrl: String
   # 子树统计(仅文件夹;异步重算,statsStale=true 表示数字可能滞后)
