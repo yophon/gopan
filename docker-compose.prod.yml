@@ -84,6 +84,9 @@ services:
       GOPAN_JWT_SECRET_FILE: /run/secrets/jwt_secret
       GOPAN_REGISTER_OPEN: ${GOPAN_REGISTER_OPEN:-true}
       GOPAN_DEFAULT_QUOTA: ${GOPAN_DEFAULT_QUOTA:-107374182400}
+      # 回收站保留期,到期由 worker 每小时扫描彻删。回收站页面显示的"还剩 N 天"读的就是它。
+      # ⚠ 调小会让下一轮清理立刻删掉历史回收站内容,改之前先备份。
+      GOPAN_TRASH_TTL: ${GOPAN_TRASH_TTL:-720h}
     secrets:
       - jwt_secret
     # 默认只绑 127.0.0.1:18080,给宿主反代用;caddy profile 下反代走容器网络,不影响

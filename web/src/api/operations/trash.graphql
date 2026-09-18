@@ -8,6 +8,7 @@ query Trash($cursor: String) {
       size
       updatedAt
       deletedAt
+      purgeAt
       preview {
         kind
         thumbUrl

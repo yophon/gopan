@@ -94,6 +94,7 @@ type Node struct {
 	CreatedAt    time.Time    `json:"createdAt"`
 	UpdatedAt    time.Time    `json:"updatedAt"`
 	DeletedAt    *time.Time   `json:"deletedAt,omitempty"`
+	PurgeAt      *time.Time   `json:"purgeAt,omitempty"`
 	Preview      *PreviewInfo `json:"preview"`
 	DownloadURL  *string      `json:"downloadUrl,omitempty"`
 	SubtreeBytes *int64       `json:"subtreeBytes,omitempty"`

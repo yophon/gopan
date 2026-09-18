@@ -776,13 +776,21 @@ func (r *queryResolver) Trash(ctx context.Context, cursor *string) (*NodePage, e
 	if err != nil {
 		return nil, err
 	}
+	// 到期时刻由服务端算:前端不该知道运维配的保留期。worker 的清理与这里的展示
+	// 读同一个 config 来源,否则会出现"界面说还剩 3 天、内容已经被删"。
+	ttl := r.Cfg.TrashTTL
 	return gqlPage(page, func(row store.ListTrashRow) *Node {
+		var purgeAt *time.Time
+		if row.DeletedAt.Valid {
+			t := row.DeletedAt.Time.Add(ttl)
+			purgeAt = &t
+		}
 		return gqlNodeRow(nodeRow{Node: store.Node{
 			ID: row.ID, OwnerID: row.OwnerID, ParentID: row.ParentID, Name: row.Name,
 			Kind: row.Kind, BlobID: row.BlobID, DeletedAt: row.DeletedAt,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 			SubtreeBytes: row.SubtreeBytes, SubtreeCount: row.SubtreeCount, StatsStale: row.StatsStale,
-		}, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256})
+		}, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256, PurgeAt: purgeAt})
 	}), nil
 }
 
