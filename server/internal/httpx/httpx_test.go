@@ -79,7 +79,7 @@ func TestWithAuthBearer(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotIdent, gotErr = IdentityFrom(r.Context())
 	})
-	h := WithAuth(inner, auth)
+	h := WithAuth(inner, auth, nil)
 
 	// 合法 Bearer → 身份进 ctx
 	req := httptest.NewRequest("POST", "/query", nil)
@@ -115,7 +115,7 @@ func TestUserFromRejectsGuestScope(t *testing.T) {
 	})
 	req := httptest.NewRequest("POST", "/query", nil)
 	req.Header.Set("Authorization", "Bearer "+guestTok)
-	WithAuth(inner, auth).ServeHTTP(httptest.NewRecorder(), req)
+	WithAuth(inner, auth, nil).ServeHTTP(httptest.NewRecorder(), req)
 	if err != service.ErrForbidden {
 		t.Fatalf("访客 scope 走 UserFrom 应 FORBIDDEN,got %v", err)
 	}
@@ -131,7 +131,7 @@ func TestRefreshCookieRoundtrip(t *testing.T) {
 	req := httptest.NewRequest("POST", "/query", nil)
 	req.AddCookie(&http.Cookie{Name: "gopan_rt", Value: "incoming-token"})
 	rec := httptest.NewRecorder()
-	WithAuth(inner, auth).ServeHTTP(rec, req)
+	WithAuth(inner, auth, nil).ServeHTTP(rec, req)
 
 	if readBack != "incoming-token" {
 		t.Fatalf("应读到请求 cookie,got %q", readBack)

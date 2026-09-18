@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/net/webdav"
 
+	"github.com/yophon/gopan/server/internal/httpx"
 	"github.com/yophon/gopan/server/internal/objstore"
 	"github.com/yophon/gopan/server/internal/service"
 	"github.com/yophon/gopan/server/internal/store"
@@ -51,16 +52,16 @@ func NewBackend(q *store.Queries, obj *objstore.Store, nodes *service.Nodes, upl
 }
 
 // Handler 组装认证 + webdav 协议处理,挂 /dav 前缀。
-func Handler(ap *service.AppPasswords, b *Backend) http.Handler {
+func Handler(ap *service.AppPasswords, b *Backend, trustedProxies []*net.IPNet) http.Handler {
 	h := &webdav.Handler{
 		Prefix:     "/dav",
 		FileSystem: b,
 		LockSystem: webdav.NewMemLS(),
 	}
-	return withBasicAuth(h, ap)
+	return withBasicAuth(h, ap, trustedProxies)
 }
 
-func withBasicAuth(next http.Handler, ap *service.AppPasswords) http.Handler {
+func withBasicAuth(next http.Handler, ap *service.AppPasswords, trustedProxies []*net.IPNet) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, pass, ok := r.BasicAuth()
 		if !ok {
@@ -68,7 +69,7 @@ func withBasicAuth(next http.Handler, ap *service.AppPasswords) http.Handler {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		ip := httpx.ClientIPFrom(r, trustedProxies)
 		owner, err := ap.Authenticate(r.Context(), user, pass, ip)
 		if err != nil {
 			status := http.StatusUnauthorized

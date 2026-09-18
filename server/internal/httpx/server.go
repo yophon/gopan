@@ -93,10 +93,49 @@ func queryDepth(sel ast.SelectionSet, frags map[string]*ast.FragmentDefinition, 
 	return max
 }
 
+// ClientIPFrom 算客户端地址。只有 RemoteAddr 落在 trustedProxies 里时才认
+// X-Forwarded-For —— 那个头客户端能随便伪造,RemoteAddr 伪造不了。
+//
+// 取 XFF 里**最右一个不属于可信代理**的地址:nginx 的 $proxy_add_x_forwarded_for
+// 是把上游已有的值追加在后面,所以最右那段才是直连反代的真实客户端,别人往左边
+// 塞多少假地址都不影响结果。
+//
+// trustedProxies 为空时行为与历史一致:直接用 RemoteAddr(server_more_test.go 里
+// "伪造 XFF 不被信任"的断言正是钉这个默认值)。
+func ClientIPFrom(r *http.Request, trustedProxies []*net.IPNet) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	if !ipInAny(host, trustedProxies) {
+		return host
+	}
+	parts := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		if cand := strings.TrimSpace(parts[i]); cand != "" && !ipInAny(cand, trustedProxies) {
+			return cand
+		}
+	}
+	return host
+}
+
+func ipInAny(host string, nets []*net.IPNet) bool {
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	for _, n := range nets {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 // Middleware:注入 http 载体 + 解析 Bearer(解析失败不拦截,由 resolver 决定是否需要身份)。
-func WithAuth(next http.Handler, auth *service.Auth) http.Handler {
+func WithAuth(next http.Handler, auth *service.Auth, trustedProxies []*net.IPNet) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		ip := ClientIPFrom(r, trustedProxies)
 		ctx := context.WithValue(r.Context(), keyHTTP, &httpCarrier{w: w, r: r, ip: ip})
 		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 			if id, err := auth.ParseAccess(strings.TrimPrefix(h, "Bearer ")); err == nil {
