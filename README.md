@@ -17,7 +17,7 @@
 | ![预览](doc/assets/preview.png) | ![分享访客页](doc/assets/share.png) |
 -->
 
-当前阶段:**v2.3.0——在 v2.2「我的设备」之上把手机端真正做出来:手机浏览器完整可用(响应式布局 + 长按菜单 + 预览手势),并可添加到主屏(PWA)**。
+当前阶段:**v2.4.0——在 v2.3 的手机端之上补齐"运维与可观测":备份接入异地副本并经恢复演练验证、登录设备可见可管、分享访问可查;顺带修掉一个反代下的客户端 IP 缺陷**。
 ## 架构
 
 ```mermaid
@@ -103,6 +103,8 @@ Agent 接入与远程 MCP 工具见 [docs/MCP.md](./docs/MCP.md)。
 | [v2.1 · Remote MCP](./doc/milestones/v2.1-MCP.md) | 零安装 Remote MCP、Agent 直传、OAuth 2.1、API Key 与细粒度 scope |
 | [v2.2 · 文件传输助手](./doc/milestones/v2.2-文件传输助手.md) | 「我的设备」会话、上传即附消息、真实文件卡片、Agent 用 chat_send/chat_list 与浏览器同流 |
 | [M10 · 移动端与 PWA](./doc/milestones/M10-移动端与PWA.md) | 两个断点、卡片列表与长按菜单、预览手势、SW allowlist 缓存;v2.3.0 |
+
+| [M11 · 备份与可观测](./doc/milestones/M11-备份与可观测.md) | rsync 异地副本 + 恢复演练(6 条字节级判据)、登录设备管理、分享访问统计、可信代理修复、磁盘回收 8G;v2.4.0 |
 
 ## 读法
 
