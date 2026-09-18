@@ -105,6 +105,23 @@ func (r *mutationResolver) ChangePassword(ctx context.Context, oldPassword strin
 	return gqlAuth(res), nil
 }
 
+// RevokeSession is the resolver for the revokeSession field.
+func (r *mutationResolver) RevokeSession(ctx context.Context, familyID string) (bool, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	fid, err := parseID(familyID)
+	if err != nil {
+		return false, err
+	}
+	// 传当前 family 进去:服务层会拒绝"吊销自己",那条路是 logout。
+	if err := r.Auth.RevokeSession(ctx, ident.UserID, ident.FamilyID, fid); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // CreateFolder is the resolver for the createFolder field.
 func (r *mutationResolver) CreateFolder(ctx context.Context, parentID *string, name string) (*Node, error) {
 	id, err := httpx.UserFrom(ctx)
@@ -674,6 +691,23 @@ func (r *queryResolver) Me(ctx context.Context) (*User, error) {
 		return nil, err
 	}
 	return gqlUser(u), nil
+}
+
+// Sessions is the resolver for the sessions field.
+func (r *queryResolver) Sessions(ctx context.Context) ([]*Session, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.Auth.ListSessions(ctx, ident.UserID, ident.FamilyID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*Session, 0, len(rows))
+	for _, s := range rows {
+		out = append(out, gqlAuthSession(s))
+	}
+	return out, nil
 }
 
 // Node is the resolver for the node field.

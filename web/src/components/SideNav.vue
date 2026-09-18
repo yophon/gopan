@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
-import { ChatDotRound, Connection, Delete, Folder, Key, Lock, Search, Setting, Share, SwitchButton } from '@element-plus/icons-vue'
+import { ChatDotRound, Connection, Delete, Folder, Key, Lock, Monitor, Search, Setting, Share, SwitchButton } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { MeDocument } from '@/api/gen/graphql'
@@ -71,7 +71,11 @@ const quotaStatus = computed(() => {
     <el-menu router :default-active="activeMenu" class="menu" @select="emit('navigate')">
       <el-menu-item index="/chat">
         <el-icon><ChatDotRound /></el-icon>
-        <span>我的设备</span>
+        <span>传输助手</span>
+      </el-menu-item>
+      <el-menu-item index="/devices">
+        <el-icon><Monitor /></el-icon>
+        <span>登录设备</span>
       </el-menu-item>
       <el-menu-item index="/drive">
         <el-icon><Folder /></el-icon>

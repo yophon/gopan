@@ -105,6 +105,10 @@ func (a *Admin) SetDisabled(ctx context.Context, callerID, target uuid.UUID, dis
 		if err := a.q.RevokeAllUserFamilies(ctx, target); err != nil {
 			return store.User{}, err
 		}
+		// 设备列表也要标失效,否则界面上还显示着"在线"。
+		if err := a.q.RevokeAllSessions(ctx, target); err != nil {
+			return store.User{}, err
+		}
 	}
 	return u, nil
 }
@@ -130,6 +134,9 @@ func (a *Admin) ResetPassword(ctx context.Context, callerID, target uuid.UUID) (
 		return "", err
 	}
 	if err := a.q.RevokeAllUserFamilies(ctx, target); err != nil {
+		return "", err
+	}
+	if err := a.q.RevokeAllSessions(ctx, target); err != nil {
 		return "", err
 	}
 	return plain, nil

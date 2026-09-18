@@ -1,0 +1,16 @@
+query Sessions {
+  sessions {
+    familyId
+    userAgent
+    ip
+    createdAt
+    lastSeenAt
+    revokedAt
+    active
+    current
+  }
+}
+
+mutation RevokeSession($familyId: ID!) {
+  revokeSession(familyId: $familyId)
+}

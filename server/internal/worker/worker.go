@@ -72,6 +72,7 @@ func (w *Pool) Run(ctx context.Context, n int) {
 	go w.periodic(ctx, time.Hour, "blob-gc", w.gcBlobs)
 	go w.periodic(ctx, time.Hour, "trash-cleanup", w.cleanupTrash)
 	go w.periodic(ctx, 24*time.Hour, "refresh-cleanup", w.cleanupRefreshTokens)
+	go w.periodic(ctx, 24*time.Hour, "auth-session-cleanup", w.cleanupAuthSessions)
 	go w.periodic(ctx, time.Minute, "subtree-stats", w.recomputeStats)
 	<-ctx.Done()
 }
@@ -275,6 +276,16 @@ func (w *Pool) cleanupTrash(ctx context.Context) error {
 	if n > 0 {
 		slog.Info("trash cleanup", "purged_roots", n, "ttl", w.trashTTL)
 		metrics.Cleanup.WithLabelValues("trash").Add(float64(n))
+	}
+	return err
+}
+
+// cleanupAuthSessions 删掉 90 天没活动的登录设备记录。会话列表只对近期有意义。
+func (w *Pool) cleanupAuthSessions(ctx context.Context) error {
+	n, err := w.q.DeleteStaleSessions(ctx)
+	if n > 0 {
+		slog.Info("auth sessions cleanup", "deleted", n)
+		metrics.Cleanup.WithLabelValues("auth_sessions").Add(float64(n))
 	}
 	return err
 }

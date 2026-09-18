@@ -137,6 +137,7 @@ type ComplexityRoot struct {
 		RevokeAppPassword        func(childComplexity int, id string) int
 		RevokeMCPAPIKey          func(childComplexity int, id string) int
 		RevokeOAuthGrant         func(childComplexity int, id string) int
+		RevokeSession            func(childComplexity int, familyID string) int
 		RevokeShare              func(childComplexity int, id string) int
 		SendChatMessage          func(childComplexity int, body *string, nodeID *string) int
 		SetMCPAccessRoot         func(childComplexity int, credentialID string, credentialType string, rootPath *string) int
@@ -216,10 +217,22 @@ type ComplexityRoot struct {
 		OauthAuthorizationRequest func(childComplexity int, input OAuthAuthorizationInput) int
 		OauthGrants               func(childComplexity int) int
 		SearchNodes               func(childComplexity int, q string, cursor *string) int
+		Sessions                  func(childComplexity int) int
 		ShareInfo                 func(childComplexity int, token string) int
 		ShareRoot                 func(childComplexity int) int
 		Trash                     func(childComplexity int, cursor *string) int
 		UploadSession             func(childComplexity int, id string) int
+	}
+
+	Session struct {
+		Active     func(childComplexity int) int
+		CreatedAt  func(childComplexity int) int
+		Current    func(childComplexity int) int
+		FamilyID   func(childComplexity int) int
+		IP         func(childComplexity int) int
+		LastSeenAt func(childComplexity int) int
+		RevokedAt  func(childComplexity int) int
+		UserAgent  func(childComplexity int) int
 	}
 
 	Share struct {
@@ -286,6 +299,7 @@ type MutationResolver interface {
 	Refresh(ctx context.Context) (*AuthPayload, error)
 	Logout(ctx context.Context) (bool, error)
 	ChangePassword(ctx context.Context, oldPassword string, newPassword string) (*AuthPayload, error)
+	RevokeSession(ctx context.Context, familyID string) (bool, error)
 	CreateFolder(ctx context.Context, parentID *string, name string) (*Node, error)
 	RenameNode(ctx context.Context, id string, name string) (*Node, error)
 	MoveNodes(ctx context.Context, ids []string, targetParentID *string) ([]*Node, error)
@@ -323,6 +337,7 @@ type QueryResolver interface {
 	McpAccessRoots(ctx context.Context) ([]*MCPAccessRoot, error)
 	McpAudit(ctx context.Context, beforeID *int64, limit *int) ([]*MCPAuditEvent, error)
 	Me(ctx context.Context) (*User, error)
+	Sessions(ctx context.Context) ([]*Session, error)
 	Node(ctx context.Context, id string) (*Node, error)
 	Children(ctx context.Context, parentID *string, cursor *string, order *NodeOrder, desc *bool) (*NodePage, error)
 	SearchNodes(ctx context.Context, q string, cursor *string) (*NodePage, error)
@@ -919,6 +934,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RevokeOAuthGrant(childComplexity, args["id"].(string)), true
+	case "Mutation.revokeSession":
+		if e.ComplexityRoot.Mutation.RevokeSession == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_revokeSession_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RevokeSession(childComplexity, args["familyId"].(string)), true
 	case "Mutation.revokeShare":
 		if e.ComplexityRoot.Mutation.RevokeShare == nil {
 			break
@@ -1308,6 +1334,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.SearchNodes(childComplexity, args["q"].(string), args["cursor"].(*string)), true
+	case "Query.sessions":
+		if e.ComplexityRoot.Query.Sessions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.Sessions(childComplexity), true
 	case "Query.shareInfo":
 		if e.ComplexityRoot.Query.ShareInfo == nil {
 			break
@@ -1347,6 +1379,55 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.UploadSession(childComplexity, args["id"].(string)), true
+
+	case "Session.active":
+		if e.ComplexityRoot.Session.Active == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Session.Active(childComplexity), true
+	case "Session.createdAt":
+		if e.ComplexityRoot.Session.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Session.CreatedAt(childComplexity), true
+	case "Session.current":
+		if e.ComplexityRoot.Session.Current == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Session.Current(childComplexity), true
+	case "Session.familyId":
+		if e.ComplexityRoot.Session.FamilyID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Session.FamilyID(childComplexity), true
+	case "Session.ip":
+		if e.ComplexityRoot.Session.IP == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Session.IP(childComplexity), true
+	case "Session.lastSeenAt":
+		if e.ComplexityRoot.Session.LastSeenAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Session.LastSeenAt(childComplexity), true
+	case "Session.revokedAt":
+		if e.ComplexityRoot.Session.RevokedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Session.RevokedAt(childComplexity), true
+	case "Session.userAgent":
+		if e.ComplexityRoot.Session.UserAgent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Session.UserAgent(childComplexity), true
 
 	case "Share.createdAt":
 		if e.ComplexityRoot.Share.CreatedAt == nil {
@@ -1621,6 +1702,22 @@ type User {
   isAdmin: Boolean!
 }
 
+# 一个登录设备(按 refresh token family 分组)。
+type Session {
+  familyId: ID!
+  # 原始 UA(服务端截断到 512 字节),展示时由前端归类成"Chrome · Windows"这种
+  userAgent: String!
+  ip: String!
+  createdAt: Time!
+  lastSeenAt: Time!
+  # 被吊销的时刻:改密、管理员禁用、重放检测触发整族吊销
+  revokedAt: Time
+  # 这族 refresh token 还能不能用
+  active: Boolean!
+  # 是不是当前这个请求所在的会话(access token 里的 fid)
+  current: Boolean!
+}
+
 # ---------- WebDAV 应用密码 ----------
 
 type AppPassword {
@@ -1795,6 +1892,8 @@ type Query {
   mcpAccessRoots: [MCPAccessRoot!]!
   mcpAudit(beforeId: Int64 = 0, limit: Int = 50): [MCPAuditEvent!]!
   me: User!
+  # 登录设备列表,最近活跃的在前
+  sessions: [Session!]!
   node(id: ID!): Node!
   children(parentId: ID, cursor: String, order: NodeOrder = NAME, desc: Boolean = false): NodePage!
   searchNodes(q: String!, cursor: String): NodePage!
@@ -1843,6 +1942,8 @@ type Mutation {
   logout: Boolean!
 
   changePassword(oldPassword: String!, newPassword: String!): AuthPayload!
+  # 吊销一个登录设备。不能吊销当前会话 —— 那是 logout 该干的事。
+  revokeSession(familyId: ID!): Boolean!
 
   createFolder(parentId: ID, name: String!): Node!
   renameNode(id: ID!, name: String!): Node!
@@ -2143,6 +2244,28 @@ func (ec *executionContext) childFields_PreviewInfo(ctx context.Context, field g
 		return ec.fieldContext_PreviewInfo_durationSec(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type PreviewInfo", field.Name)
+}
+
+func (ec *executionContext) childFields_Session(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "familyId":
+		return ec.fieldContext_Session_familyId(ctx, field)
+	case "userAgent":
+		return ec.fieldContext_Session_userAgent(ctx, field)
+	case "ip":
+		return ec.fieldContext_Session_ip(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Session_createdAt(ctx, field)
+	case "lastSeenAt":
+		return ec.fieldContext_Session_lastSeenAt(ctx, field)
+	case "revokedAt":
+		return ec.fieldContext_Session_revokedAt(ctx, field)
+	case "active":
+		return ec.fieldContext_Session_active(ctx, field)
+	case "current":
+		return ec.fieldContext_Session_current(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Session", field.Name)
 }
 
 func (ec *executionContext) childFields_Share(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -2858,6 +2981,20 @@ func (ec *executionContext) field_Mutation_revokeOAuthGrant_args(ctx context.Con
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_revokeSession_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "familyId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["familyId"] = arg0
 	return args, nil
 }
 
@@ -4393,6 +4530,50 @@ func (ec *executionContext) fieldContext_Mutation_changePassword(ctx context.Con
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_changePassword_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_revokeSession(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_revokeSession(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RevokeSession(ctx, fc.Args["familyId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_revokeSession(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_revokeSession_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -6531,6 +6712,38 @@ func (ec *executionContext) fieldContext_Query_me(_ context.Context, field graph
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_sessions(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_sessions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().Sessions(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Session) graphql.Marshaler {
+			return ec.marshalNSession2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSessionᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_sessions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Session(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_node(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7213,6 +7426,190 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Session_familyId(ctx context.Context, field graphql.CollectedField, obj *Session) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Session_familyId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FamilyID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Session_familyId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Session", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _Session_userAgent(ctx context.Context, field graphql.CollectedField, obj *Session) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Session_userAgent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserAgent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Session_userAgent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Session", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Session_ip(ctx context.Context, field graphql.CollectedField, obj *Session) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Session_ip(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IP, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Session_ip(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Session", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Session_createdAt(ctx context.Context, field graphql.CollectedField, obj *Session) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Session_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Session_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Session", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _Session_lastSeenAt(ctx context.Context, field graphql.CollectedField, obj *Session) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Session_lastSeenAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LastSeenAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Session_lastSeenAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Session", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _Session_revokedAt(ctx context.Context, field graphql.CollectedField, obj *Session) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Session_revokedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RevokedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Session_revokedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Session", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _Session_active(ctx context.Context, field graphql.CollectedField, obj *Session) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Session_active(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Active, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Session_active(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Session", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _Session_current(ctx context.Context, field graphql.CollectedField, obj *Session) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Session_current(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Current, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Session_current(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Session", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _Share_id(ctx context.Context, field graphql.CollectedField, obj *Share) (ret graphql.Marshaler) {
@@ -9668,6 +10065,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "revokeSession":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_revokeSession(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createFolder":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createFolder(ctx, field)
@@ -10448,6 +10852,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "sessions":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_sessions(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "node":
 			field := field
 
@@ -10813,6 +11239,79 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			})
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var sessionImplementors = []string{"Session"}
+
+func (ec *executionContext) _Session(ctx context.Context, sel ast.SelectionSet, obj *Session) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, sessionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Session")
+		case "familyId":
+			out.Values[i] = ec._Session_familyId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "userAgent":
+			out.Values[i] = ec._Session_userAgent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "ip":
+			out.Values[i] = ec._Session_ip(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._Session_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastSeenAt":
+			out.Values[i] = ec._Session_lastSeenAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "revokedAt":
+			out.Values[i] = ec._Session_revokedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "active":
+			out.Values[i] = ec._Session_active(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "current":
+			out.Values[i] = ec._Session_current(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -12106,6 +12605,32 @@ func (ec *executionContext) unmarshalNPreviewKind2githubᚗcomᚋyophonᚋgopan�
 
 func (ec *executionContext) marshalNPreviewKind2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐPreviewKind(ctx context.Context, sel ast.SelectionSet, v PreviewKind) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNSession2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSessionᚄ(ctx context.Context, sel ast.SelectionSet, v []*Session) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNSession2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSession(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNSession2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSession(ctx context.Context, sel ast.SelectionSet, v *Session) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Session(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNShare2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐShare(ctx context.Context, sel ast.SelectionSet, v Share) graphql.Marshaler {

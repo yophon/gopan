@@ -160,6 +160,17 @@ type PreviewInfo struct {
 type Query struct {
 }
 
+type Session struct {
+	FamilyID   string     `json:"familyId"`
+	UserAgent  string     `json:"userAgent"`
+	IP         string     `json:"ip"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	LastSeenAt time.Time  `json:"lastSeenAt"`
+	RevokedAt  *time.Time `json:"revokedAt,omitempty"`
+	Active     bool       `json:"active"`
+	Current    bool       `json:"current"`
+}
+
 type Share struct {
 	ID          string     `json:"id"`
 	Token       string     `json:"token"`

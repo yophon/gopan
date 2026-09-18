@@ -145,6 +145,23 @@ func gqlNodeRow(r nodeRow) *Node {
 	return out
 }
 
+// gqlAuthSession 映射一个登录设备(与上传会话的 gqlSession 区分开)。
+func gqlAuthSession(s service.AuthSession) *Session {
+	out := &Session{
+		FamilyID:  s.FamilyID.String(),
+		UserAgent: s.UserAgent,
+		IP:        s.IP,
+		Active:    s.Active,
+		Current:   s.Current,
+	}
+	out.CreatedAt = s.CreatedAt
+	out.LastSeenAt = s.LastSeenAt
+	if s.RevokedAt != nil {
+		out.RevokedAt = s.RevokedAt
+	}
+	return out
+}
+
 func gqlPage[T any](p *service.Page[T], conv func(T) *Node) *NodePage {
 	items := make([]*Node, 0, len(p.Items))
 	for _, it := range p.Items {

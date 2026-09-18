@@ -227,7 +227,7 @@ func newPackEnv(t *testing.T) *packEnv {
 		t.Fatal(err)
 	}
 	owner := res.User.ID
-	token, err := auth.IssueAccess(owner, service.ScopeUser)
+	token, err := auth.IssueAccess(owner, service.ScopeUser, uuid.Nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,7 +354,7 @@ func TestPackHandlerIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	guestTok, err := e.auth.IssueAccessFor(e.owner, "share:"+sh.ID.String(), 30*time.Minute)
+	guestTok, err := e.auth.IssueAccessFor(e.owner, "share:"+sh.ID.String(), uuid.Nil, 30*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +366,7 @@ func TestPackHandlerIntegration(t *testing.T) {
 	}
 
 	// 非法 scope(既不是 user 也不是 share:{id})→ 403 FORBIDDEN
-	weirdTok, err := e.auth.IssueAccessFor(e.owner, "bogus-scope", 30*time.Minute)
+	weirdTok, err := e.auth.IssueAccessFor(e.owner, "bogus-scope", uuid.Nil, 30*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}

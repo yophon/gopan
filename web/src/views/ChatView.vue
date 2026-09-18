@@ -222,7 +222,7 @@ function timeOf(iso: string): string {
   <div class="chat-page" :style="pageHeightStyle">
     <header class="chat-header">
       <div>
-        <h2>我的设备</h2>
+        <h2>传输助手</h2>
         <span>在电脑和手机之间传输消息与文件</span>
       </div>
       <el-tag type="success" effect="plain">已连接</el-tag>
