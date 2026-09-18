@@ -6,6 +6,7 @@ import (
 	"html"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -47,7 +48,7 @@ func ShareLanding(dist fs.FS, shares *service.Shares) http.Handler {
 
 // PackHandler 文件夹/多选打包下载:流式 zip,唯一经过 Go 的字节流。
 // GET /pack?nodes=id1,id2&token=<access>(下载链接没法带 Authorization 头,token 走查询串)。
-func PackHandler(auth *service.Auth, packer *service.Packer) http.Handler {
+func PackHandler(auth *service.Auth, packer *service.Packer, shares *service.Shares, trustedProxies []*net.IPNet) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := r.URL.Query().Get("token")
 		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
@@ -72,7 +73,11 @@ func PackHandler(auth *service.Auth, packer *service.Packer) http.Handler {
 			}
 			ids = append(ids, id)
 		}
-		servePack(w, r, packer, ident, ids)
+		// /pack 不经过 WithAuth,ClientMeta 得在这里补上(分享统计要用)
+		r = r.WithContext(service.WithClientMeta(r.Context(), service.ClientMeta{
+			IP: ClientIPFrom(r, trustedProxies), UA: r.UserAgent(),
+		}))
+		servePack(w, r, packer, ident, ids, shares)
 	})
 }
 
@@ -85,11 +90,11 @@ func MCPPackHandler(tickets *service.PackTickets, packer *service.Packer) http.H
 			http.Error(w, "下载票据无效或已过期", http.StatusUnauthorized)
 			return
 		}
-		servePack(w, r, packer, ident, ids)
+		servePack(w, r, packer, ident, ids, nil) // 票据是 Agent 拿的,不计入分享访问
 	})
 }
 
-func servePack(w http.ResponseWriter, r *http.Request, packer *service.Packer, ident *service.Identity, ids []uuid.UUID) {
+func servePack(w http.ResponseWriter, r *http.Request, packer *service.Packer, ident *service.Identity, ids []uuid.UUID, shares *service.Shares) {
 	// 打包是唯一过 Go 的字节流:限频 + 全局并发上限
 	release, err := packer.Gate(ident)
 	if err != nil {
@@ -127,6 +132,15 @@ func servePack(w http.ResponseWriter, r *http.Request, packer *service.Packer, i
 		}
 		http.Error(w, msg, status)
 		return
+	}
+
+	// 访客的打包下载计入访问统计。必须放在**鉴权与收集都成功之后** ——
+	// 越权请求(节点不在分享子树内)会以 404 从上面 return,不该算成一次下载。
+	// user scope 是属主自己下的,不计。
+	if shares != nil && ident.Scope != service.ScopeUser {
+		if sid, ok := service.ShareScopeID(ident.Scope); ok {
+			shares.RecordVisit(r.Context(), sid, "pack")
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/zip")

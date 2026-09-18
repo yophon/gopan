@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -167,7 +168,49 @@ func (s *Shares) Access(ctx context.Context, token, password, ip string) (string
 			return "", errf("BAD_SHARE_PASSWORD", "分享密码错误")
 		}
 	}
+	// 走到这里才算"真实访客进入":密码错、已失效都在上面 return 了,不会计数。
+	// 无密码分享由前端自动空密码调一次,同样命中 —— 两类分享统一。
+	//
+	// 注意别把埋点挪进 Info()/ShareLanding:那是 og 落地页,微信/群聊爬虫会猛抓,
+	// 计数会立刻虚高。
+	s.RecordVisit(ctx, sh.ID, "verify")
 	return s.auth.IssueAccessFor(sh.CreatedBy, "share:"+sh.ID.String(), uuid.Nil, GuestTTL)
+}
+
+// RecordVisit 记一次分享访问事件。**尽力而为**:统计失败不能让访客的访问失败。
+// kind 取 verify(访客进入)/ download(单文件下载 URL 签发)/ pack(打包下载)。
+func (s *Shares) RecordVisit(ctx context.Context, shareID uuid.UUID, kind string) {
+	ip, ua := ClientMetaFrom(ctx).IP, ClientMetaFrom(ctx).UA
+	if len(ua) > sessionMaxUA {
+		ua = ua[:sessionMaxUA]
+	}
+	if err := s.q.RecordShareVisit(ctx, store.RecordShareVisitParams{
+		ShareID: shareID, Kind: kind, Ip: ptrIfNotEmpty(ip), UserAgent: ptrIfNotEmpty(ua),
+	}); err != nil {
+		slog.Warn("record share visit", "share", shareID, "kind", kind, "err", err)
+	}
+}
+
+// ListVisits 列出某个分享最近的访问明细。只允许属主看。
+func (s *Shares) ListVisits(ctx context.Context, ownerID, shareID uuid.UUID, limit int32) ([]store.ListShareVisitsRow, error) {
+	sh, err := s.q.GetShareByID(ctx, shareID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if sh.CreatedBy != ownerID {
+		return nil, ErrNotFound // 不泄露"这个分享存不存在"
+	}
+	return s.q.ListShareVisits(ctx, store.ListShareVisitsParams{ShareID: shareID, Limit: limit})
+}
+
+func ptrIfNotEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 // Validate 校验访客 token 指向的分享仍有效,返回分享行。

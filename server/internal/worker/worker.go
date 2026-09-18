@@ -73,6 +73,7 @@ func (w *Pool) Run(ctx context.Context, n int) {
 	go w.periodic(ctx, time.Hour, "trash-cleanup", w.cleanupTrash)
 	go w.periodic(ctx, 24*time.Hour, "refresh-cleanup", w.cleanupRefreshTokens)
 	go w.periodic(ctx, 24*time.Hour, "auth-session-cleanup", w.cleanupAuthSessions)
+	go w.periodic(ctx, 24*time.Hour, "share-visit-cleanup", w.cleanupShareVisits)
 	go w.periodic(ctx, time.Minute, "subtree-stats", w.recomputeStats)
 	<-ctx.Done()
 }
@@ -276,6 +277,17 @@ func (w *Pool) cleanupTrash(ctx context.Context) error {
 	if n > 0 {
 		slog.Info("trash cleanup", "purged_roots", n, "ttl", w.trashTTL)
 		metrics.Cleanup.WithLabelValues("trash").Add(float64(n))
+	}
+	return err
+}
+
+// cleanupShareVisits 清掉 180 天前的分享访问记录。所以对外说的"访问次数"
+// 是近 180 天的语义 —— 前端说明里要写清楚,别当成历史总量。
+func (w *Pool) cleanupShareVisits(ctx context.Context) error {
+	n, err := w.q.DeleteExpiredShareVisits(ctx)
+	if n > 0 {
+		slog.Info("share visits cleanup", "deleted", n)
+		metrics.Cleanup.WithLabelValues("share_visits").Add(float64(n))
 	}
 	return err
 }

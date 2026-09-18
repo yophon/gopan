@@ -192,6 +192,15 @@ type Share struct {
 	CreatedAt    pgtype.Timestamptz
 }
 
+type ShareVisit struct {
+	ID        int64
+	ShareID   uuid.UUID
+	Kind      string
+	Ip        *string
+	UserAgent *string
+	CreatedAt pgtype.Timestamptz
+}
+
 type Task struct {
 	ID        uuid.UUID
 	Kind      string

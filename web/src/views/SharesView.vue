@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
-import { CopyDocument, Delete, Document, Folder, Lock, View } from '@element-plus/icons-vue'
+import { CopyDocument, DataLine, Delete, Document, Folder, Lock, View } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
@@ -12,12 +12,13 @@ import { formatTime } from '@/utils/format'
 import { useBreakpoints } from '@/composables/breakpoints'
 import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
+import ShareVisitsDialog from '@/components/ShareVisitsDialog.vue'
 import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 
 type ShareItem = MySharesQuery['myShares'][number]
 
 const queryClient = useQueryClient()
-const { isMobile } = useBreakpoints()
+const { isMobile, isCompact } = useBreakpoints()
 
 const { data, isFetching } = useQuery({
   queryKey: ['myShares'],
@@ -36,6 +37,25 @@ const revokeMutation = useMutation({
 
 function asShare(row: unknown): ShareItem {
   return row as ShareItem
+}
+
+// ---------- 访问记录 ----------
+
+const visitsDialog = ref<{ visible: boolean; shareId: string; shareName: string }>({
+  visible: false,
+  shareId: '',
+  shareName: '',
+})
+
+function openVisits(row: ShareItem) {
+  visitsDialog.value = { visible: true, shareId: row.id, shareName: row.node.name }
+}
+
+/** 桌面按钮与手机卡片共用的一句话。计数是近 180 天的,不是历史总量。 */
+function visitText(row: ShareItem): string {
+  const v = row.visitStats
+  if (v.verifyCount + v.downloadCount === 0) return '暂无访问'
+  return `访问 ${v.verifyCount} · 下载 ${v.downloadCount}`
 }
 
 function shareUrl(row: ShareItem): string {
@@ -77,7 +97,7 @@ const cardItems = computed<NodeListItem[]>(() =>
 function cardSecondary(node: NodeListItem): string {
   const share = byNodeId.value.get(node.id)
   if (!share) return ''
-  return `${formatTime(share.createdAt)} · ${expireText(share)}`
+  return `${formatTime(share.createdAt)} · ${expireText(share)} · ${visitText(share)}`
 }
 
 const sheet = ref<{ visible: boolean; node: NodeListItem | null }>({
@@ -89,6 +109,7 @@ const sheet = ref<{ visible: boolean; node: NodeListItem | null }>({
 const sheetItems: SheetItem[] = [
   { key: 'open', label: '打开链接', icon: View },
   { key: 'copy', label: '复制链接', icon: CopyDocument },
+  { key: 'visits', label: '访问记录', icon: DataLine },
   { key: 'revoke', label: '取消分享', icon: Delete, danger: true },
 ]
 
@@ -103,6 +124,10 @@ function onSheetSelect(key: string) {
   }
   if (key === 'copy') {
     void onCopy(share)
+    return
+  }
+  if (key === 'visits') {
+    openVisits(share)
     return
   }
   revokeMutation.mutate({ id: share.id })
@@ -143,6 +168,14 @@ function onSheetSelect(key: string) {
           <span :class="{ expired: isExpired(asShare(row)) }">{{ expireText(asShare(row)) }}</span>
         </template>
       </el-table-column>
+      <!-- 1024 以下收起:这张表列已经不少了 -->
+      <el-table-column v-if="!isCompact" label="访问" width="170">
+        <template #default="{ row }">
+          <el-button link type="primary" @click="openVisits(asShare(row))">
+            {{ visitText(asShare(row)) }}
+          </el-button>
+        </template>
+      </el-table-column>
       <el-table-column label="操作" width="180" align="center">
         <template #default="{ row }">
           <el-button link type="primary" :icon="CopyDocument" @click="onCopy(asShare(row))">
@@ -178,6 +211,12 @@ function onSheetSelect(key: string) {
       :title="sheet.node?.name"
       :items="sheetItems"
       @select="onSheetSelect"
+    />
+
+    <ShareVisitsDialog
+      v-model:visible="visitsDialog.visible"
+      :share-id="visitsDialog.shareId"
+      :share-name="visitsDialog.shareName"
     />
   </div>
 </template>

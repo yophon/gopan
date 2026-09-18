@@ -370,6 +370,7 @@ func (r *mutationResolver) CreateShare(ctx context.Context, nodeID string, passw
 	out := &Share{
 		ID: sh.ID.String(), Token: sh.Token, Node: node,
 		HasPassword: sh.PasswordHash != nil, CreatedAt: sh.CreatedAt.Time,
+		VisitStats: &ShareVisitStats{}, // 刚建的分享还没有访问
 	}
 	if sh.ExpiresAt.Valid {
 		t := sh.ExpiresAt.Time
@@ -631,6 +632,14 @@ func (r *nodeResolver) DownloadURL(ctx context.Context, obj *Node) (*string, err
 	if err != nil {
 		return nil, err
 	}
+	// 访客下载单个文件也算一次访问(属主自己下载不算)。
+	// 语义是"签发了下载 URL"而不是"字节传完了" —— 下载走预签名直连对象存储,
+	// 服务端观测不到完成时刻。
+	if ident.Scope != service.ScopeUser {
+		if sid, ok := service.ShareScopeID(ident.Scope); ok {
+			r.Shares.RecordVisit(ctx, sid, "download")
+		}
+	}
 	return &u, nil
 }
 
@@ -841,6 +850,33 @@ func (r *queryResolver) MyShares(ctx context.Context) ([]*Share, error) {
 	out := make([]*Share, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, gqlShare(row))
+	}
+	return out, nil
+}
+
+// ShareVisits is the resolver for the shareVisits field.
+func (r *queryResolver) ShareVisits(ctx context.Context, shareID string, limit *int) ([]*ShareVisit, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sid, err := parseID(shareID)
+	if err != nil {
+		return nil, err
+	}
+	n := int32(50)
+	if limit != nil && *limit > 0 && *limit <= 200 {
+		n = int32(*limit)
+	}
+	rows, err := r.Shares.ListVisits(ctx, ident.UserID, sid, n)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*ShareVisit, 0, len(rows))
+	for _, v := range rows {
+		item := &ShareVisit{Kind: v.Kind, IP: v.Ip, UserAgent: v.UserAgent}
+		item.CreatedAt = v.CreatedAt.Time
+		out = append(out, item)
 	}
 	return out, nil
 }

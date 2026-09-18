@@ -2,11 +2,12 @@ package service
 
 import "context"
 
-// ClientMeta 是请求级的客户端信息(IP 之外的东西,主要是 UA)。
+// ClientMeta 是请求级的客户端信息。HTTP 层塞进 context,service 层按需取 ——
+// 这样加字段不必再改一串方法签名,大量老调用点也不受影响。
 //
-// IP 一直由调用方显式传参(见 Login/Register),这里只管附加信息 —— 这样加字段
-// 不必再改一串方法签名,老调用点(大量测试)也不受影响。
+// IP 在 Login/Register 那边仍是显式参数(那里本来就要用它做限速键),值同源。
 type ClientMeta struct {
+	IP string
 	UA string
 }
 

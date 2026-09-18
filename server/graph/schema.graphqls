@@ -163,6 +163,29 @@ type Share {
   hasPassword: Boolean!
   expiresAt: Time
   createdAt: Time!
+  # 访问统计。没有访问时返回全零对象(非空,前端不用判空)。
+  visitStats: ShareVisitStats!
+}
+
+# 一条分享访问记录。
+type ShareVisit {
+  # verify(访客进入)/ download(单文件下载)/ pack(打包下载)
+  kind: String!
+  ip: String
+  userAgent: String
+  createdAt: Time!
+}
+
+# 分享的访问汇总。
+#
+# 计数是**近 180 天**的:worker 会清理更早的记录,别当成历史总量。
+# downloadCount 的语义是"发起了下载"(下载走预签名直连对象存储,服务端观测不到
+# 完成时刻),单文件下载与打包合计在这里。
+type ShareVisitStats {
+  verifyCount: Int64!
+  downloadCount: Int64!
+  lastVisitAt: Time
+  lastVisitKind: String
 }
 
 type ShareInfo {
@@ -208,6 +231,8 @@ type Query {
   searchNodes(q: String!, cursor: String): NodePage!
   trash(cursor: String): NodePage!
   myShares: [Share!]!
+  # 某个分享最近的访问明细,只允许属主看
+  shareVisits(shareId: ID!, limit: Int = 50): [ShareVisit!]!
   uploadSession(id: ID!): UploadSession!
   shareInfo(token: String!): ShareInfo!
   shareRoot: Node!

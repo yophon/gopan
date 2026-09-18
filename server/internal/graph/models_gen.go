@@ -172,12 +172,13 @@ type Session struct {
 }
 
 type Share struct {
-	ID          string     `json:"id"`
-	Token       string     `json:"token"`
-	Node        *Node      `json:"node"`
-	HasPassword bool       `json:"hasPassword"`
-	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
+	ID          string           `json:"id"`
+	Token       string           `json:"token"`
+	Node        *Node            `json:"node"`
+	HasPassword bool             `json:"hasPassword"`
+	ExpiresAt   *time.Time       `json:"expiresAt,omitempty"`
+	CreatedAt   time.Time        `json:"createdAt"`
+	VisitStats  *ShareVisitStats `json:"visitStats"`
 }
 
 type ShareAuth struct {
@@ -190,6 +191,20 @@ type ShareInfo struct {
 	Kind         NodeKind `json:"kind"`
 	NeedPassword bool     `json:"needPassword"`
 	Expired      bool     `json:"expired"`
+}
+
+type ShareVisit struct {
+	Kind      string    `json:"kind"`
+	IP        *string   `json:"ip,omitempty"`
+	UserAgent *string   `json:"userAgent,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type ShareVisitStats struct {
+	VerifyCount   int64      `json:"verifyCount"`
+	DownloadCount int64      `json:"downloadCount"`
+	LastVisitAt   *time.Time `json:"lastVisitAt,omitempty"`
+	LastVisitKind *string    `json:"lastVisitKind,omitempty"`
 }
 
 type TaskCount struct {
