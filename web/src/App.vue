@@ -1,4 +1,21 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { onMounted, onBeforeUnmount } from 'vue'
+import { useQueryClient } from '@tanstack/vue-query'
+import { useAuthStore } from './stores/auth'
+import { request } from './api/client'
+import { MeDocument } from './api/gen/graphql'
+const auth=useAuthStore(), queryClient=useQueryClient()
+let timer:ReturnType<typeof setInterval>, checking=false
+async function check() {
+  if (!auth.accessToken || checking) return
+  checking=true
+  try { await request(MeDocument) } catch { if(!auth.accessToken) queryClient.clear() }
+  finally { checking=false }
+}
+function resume() { if(!document.hidden) void check() }
+onMounted(()=>{timer=setInterval(check,30000);document.addEventListener('visibilitychange',resume)})
+onBeforeUnmount(()=>{clearInterval(timer);document.removeEventListener('visibilitychange',resume)})
+</script>
 
 <template>
   <router-view />

@@ -140,7 +140,7 @@ func WithAuth(next http.Handler, auth *service.Auth, trustedProxies []*net.IPNet
 		// UA 经 context 往 service 层带,省得为它给一串方法签名加参数。
 		ctx = service.WithClientMeta(ctx, service.ClientMeta{IP: ip, UA: r.UserAgent()})
 		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
-			if id, err := auth.ParseAccess(strings.TrimPrefix(h, "Bearer ")); err == nil {
+			if id, err := auth.ParseAccessContext(ctx, strings.TrimPrefix(h, "Bearer ")); err == nil {
 				ctx = context.WithValue(ctx, keyIdentity, id)
 				auth.TouchSession(ctx, id.FamilyID) // 推进 last_seen,节流在 Auth 内部
 			}

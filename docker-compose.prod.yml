@@ -72,6 +72,12 @@ services:
     restart: unless-stopped
     environment:
       GOPAN_DB_URL: postgres://gopan:${POSTGRES_PASSWORD:?}@postgres:5432/gopan?sslmode=disable
+      GOPAN_ID_ISSUER: ${GOPAN_ID_ISSUER:-}
+      GOPAN_ID_ORIGIN: ${GOPAN_ID_ORIGIN:-}
+      GOPAN_ID_CLIENT_ID: ${GOPAN_ID_CLIENT_ID:-gopan}
+      GOPAN_ID_SECRET: ${GOPAN_ID_SECRET:-}
+      GOPAN_ID_SUBJECT: ${GOPAN_ID_SUBJECT:-}
+      GOPAN_ID_USER_ID: ${GOPAN_ID_USER_ID:-}
       GOPAN_S3_ENDPOINT: minio:9000
       GOPAN_S3_PUBLIC_ENDPOINT: ${GOPAN_DOMAIN:?}          # 预签名 host = 对外域名
       GOPAN_S3_PUBLIC_USE_SSL: "true"                       # 浏览器经反代走 https

@@ -31,6 +31,7 @@ type Identity struct {
 }
 
 type Auth struct {
+	identity     *IDProvider
 	q            *store.Queries
 	secret       []byte
 	accessTTL    time.Duration
@@ -96,6 +97,39 @@ func (a *Auth) IssueAccessFor(userID uuid.UUID, scope string, familyID uuid.UUID
 }
 
 func (a *Auth) ParseAccess(token string) (*Identity, error) {
+	return a.ParseAccessContext(context.Background(), token)
+}
+
+func (a *Auth) ParseAccessContext(ctx context.Context, token string) (*Identity, error) {
+	id, err := a.parseAccess(token)
+	if err != nil {
+		return nil, err
+	}
+	if id.Scope == ScopeUser {
+		if err = a.checkIdentity(ctx, id.UserID, id.FamilyID); err != nil {
+			return nil, err
+		}
+	}
+	return id, nil
+}
+
+func (a *Auth) checkIdentity(ctx context.Context, user, family uuid.UUID) error {
+	if a.identity != nil && user == a.identity.Config.UserID {
+		return a.identity.Check(ctx, user, family)
+	}
+	if a.q != nil && family != uuid.Nil {
+		linked, err := a.q.HasIdentitySession(ctx, family)
+		if err != nil {
+			return err
+		}
+		if linked {
+			return ErrUnauthenticated
+		}
+	}
+	return nil
+}
+
+func (a *Auth) parseAccess(token string) (*Identity, error) {
 	var c claims
 	_, err := jwt.ParseWithClaims(token, &c, func(t *jwt.Token) (any, error) {
 		if t.Method != jwt.SigningMethodHS256 {
@@ -169,6 +203,9 @@ func (a *Auth) Login(ctx context.Context, username, password, ip string) (*AuthR
 			[]byte("$2a$12$C6UzMDM.H6dfI/f/IKcEeO7ccuNM97xf1nRZDqCVYyk1uUkFTB0P6"), []byte(password))
 		return nil, errf("BAD_CREDENTIALS", "用户名或密码错误")
 	}
+	if a.identity != nil && u.ID == a.identity.Config.UserID {
+		return nil, errf("ID_REQUIRED", "请使用 Yophon ID 登录")
+	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
 		return nil, errf("BAD_CREDENTIALS", "用户名或密码错误")
 	}
@@ -231,6 +268,9 @@ func (a *Auth) Refresh(ctx context.Context, plain string) (*AuthResult, error) {
 		_ = a.q.RevokeRefreshFamily(ctx, rt.FamilyID)
 		return nil, ErrUnauthenticated
 	}
+	if err := a.checkIdentity(ctx, rt.UserID, rt.FamilyID); err != nil {
+		return nil, err
+	}
 	if err := a.q.MarkRefreshTokenUsed(ctx, rt.ID); err != nil {
 		return nil, err
 	}
@@ -266,6 +306,9 @@ func (a *Auth) Logout(ctx context.Context, plain string) error {
 // ChangePassword 验旧密码后换新,吊销全部 refresh family(其它设备下线),
 // 当场重新签发一对 token 让当前会话无感续命。
 func (a *Auth) ChangePassword(ctx context.Context, userID uuid.UUID, oldPw, newPw, ip string) (*AuthResult, error) {
+	if a.identity != nil && userID == a.identity.Config.UserID {
+		return nil, errf("ID_REQUIRED", "请在 Yophon ID 修改密码")
+	}
 	if !a.allow("chpw:" + ip) {
 		return nil, ErrRateLimited
 	}
