@@ -75,11 +75,16 @@ abstract class NodeActionsViewModel(protected val repo: NodesRepository) : ViewM
     private val _inputError = MutableStateFlow<InputError?>(null)
     val inputError: StateFlow<InputError?> = _inputError.asStateFlow()
 
+    /** 移动 / 复制失败的提示:全屏目标选择器会盖住页面的 Snackbar,所以显示在选择器里 */
+    private val _pickerError = MutableStateFlow<UiText?>(null)
+    val pickerError: StateFlow<UiText?> = _pickerError.asStateFlow()
+
     private val _effects = Channel<NodeEffect>(Channel.BUFFERED)
     val effects: Flow<NodeEffect> = _effects.receiveAsFlow()
 
     fun showDialog(dialog: NodeDialog) {
         _inputError.value = null
+        _pickerError.value = null
         _dialog.value = dialog
     }
 
@@ -87,6 +92,7 @@ abstract class NodeActionsViewModel(protected val repo: NodesRepository) : ViewM
         if (_busy.value) return
         _dialog.value = null
         _inputError.value = null
+        _pickerError.value = null
     }
 
     fun showActions(node: Node) = showDialog(NodeDialog.Actions(node))
@@ -120,8 +126,14 @@ abstract class NodeActionsViewModel(protected val repo: NodesRepository) : ViewM
     fun copyTo(ids: List<String>, target: Crumb, rootName: String) =
         runMutation(UiText.Res(R.string.drive_msg_copied, target.name.ifEmpty { rootName })) { repo.copy(ids, target.id) }
 
-    /** P2/P3 才有的功能(打开、下载、上传):先给一句提示 */
-    fun notYet() = send(NodeEffect.Message(UiText.Res(R.string.drive_coming_soon)))
+    /** P2/P3 才有的功能(打开、下载、上传):先关掉弹层(否则提示被 BottomSheet 盖住),再给一句提示 */
+    fun notYet() {
+        if (!_busy.value) {
+            _dialog.value = null
+            _inputError.value = null
+        }
+        send(NodeEffect.Message(UiText.Res(R.string.drive_coming_soon)))
+    }
 
     fun message(text: UiText) = send(NodeEffect.Message(text))
 
@@ -132,23 +144,28 @@ abstract class NodeActionsViewModel(protected val repo: NodesRepository) : ViewM
      * 跑一次变更:成功 → 关弹层、提示、[afterMutation];失败 → 提示错误。
      * [inputName] 非空表示来自输入对话框:同名冲突 / 输入无效贴在输入框下而不是关掉对话框。
      */
-    protected fun runMutation(success: UiText, inputName: String? = null, block: suspend () -> Unit) {
+    protected fun runMutation(success: UiText, inputName: String? = null, block: suspend () -> Unit) =
+        runMutationFor(inputName, block) { success }
+
+    /** 同 [runMutation],成功文案取决于服务端返回(例如同名时服务端自动改的名字) */
+    protected fun <T> runMutationFor(inputName: String? = null, block: suspend () -> T, success: (T) -> UiText) {
         if (_busy.value) return
         viewModelScope.launch {
             _busy.value = true
             val result = gopanResult { block() }
             _busy.value = false
-            result.onSuccess {
+            result.onSuccess { value ->
                 _dialog.value = null
                 _inputError.value = null
-                send(NodeEffect.Message(success))
+                _pickerError.value = null
+                send(NodeEffect.Message(success(value)))
                 afterMutation()
             }.onFailure { e ->
                 val ge = e as? GopanException ?: e.toGopanException()
-                if (inputName != null && ge.code in INPUT_ERROR_CODES) {
-                    _inputError.value = InputError(inputName, inputMessage(ge))
-                } else {
-                    send(NodeEffect.Message(UiText.Plain(ge.message ?: ge.code)))
+                when {
+                    inputName != null && ge.code in INPUT_ERROR_CODES -> _inputError.value = InputError(inputName, inputMessage(ge))
+                    _dialog.value is NodeDialog.Picker -> _pickerError.value = UiText.Plain(ge.message ?: ge.code)
+                    else -> send(NodeEffect.Message(UiText.Plain(ge.message ?: ge.code)))
                 }
             }
         }

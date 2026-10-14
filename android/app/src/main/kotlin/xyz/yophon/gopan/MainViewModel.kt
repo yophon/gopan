@@ -22,7 +22,8 @@ class MainViewModel @Inject constructor(
 
     val authState: StateFlow<AuthState> = sessionStore.state
 
-    val themeMode: StateFlow<ThemeMode> = preferences.preferences
-        .map { it.theme }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ThemeMode.SYSTEM)
+    /** null = 偏好还没读出来(冷启动最初几毫秒);Eagerly:Activity 重建时直接拿到上次的值,不再出现 null */
+    val themeMode: StateFlow<ThemeMode?> = preferences.preferences
+        .map<_, ThemeMode?> { it.theme }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 }

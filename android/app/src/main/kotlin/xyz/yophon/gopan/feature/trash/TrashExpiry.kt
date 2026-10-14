@@ -3,25 +3,21 @@ package xyz.yophon.gopan.feature.trash
 import xyz.yophon.gopan.core.ui.format.parseTime
 import java.time.Instant
 
-/** 服务端默认保留期;只在 purgeAt 缺失时用来兜底估算 */
-const val TRASH_RETENTION_DAYS = 30
-
 private const val DAY_MS = 86_400_000L
 
+enum class TrashExpiryLevel { NORMAL, SOON, EXPIRED }
+
+/** 距彻删还剩几天与紧迫程度;[days] 为 null 表示服务端没给 purgeAt(不展示) */
+data class TrashExpiry(val days: Int?, val level: TrashExpiryLevel)
+
 /**
- * 距彻删还剩几天(向上取整):优先用服务端给的 purgeAt(保留期由运维配置),没有就按 deletedAt + 30 天估。
- * 不足一天(含已到期、等清理任务扫到)返回 0,界面显示「今天清理」;两个时间都没有返回 null。
+ * 与网页端 web/src/utils/trash.ts 一致:只认服务端给的 purgeAt(保留期由运维配置,客户端不估算);
+ * 剩余时间向上取整成天;≤ 1 天是临期(界面标警示色);已过 purgeAt 是「已到期,待清理」(清理任务每小时扫一次)。
  */
-fun trashDaysLeft(
-    deletedAt: String?,
-    purgeAt: String?,
-    now: Instant,
-    retentionDays: Int = TRASH_RETENTION_DAYS,
-): Int? {
-    val purge = parseTime(purgeAt)
-        ?: parseTime(deletedAt)?.plusMillis(retentionDays * DAY_MS)
-        ?: return null
-    val remaining = purge.toEpochMilli() - now.toEpochMilli()
-    if (remaining < DAY_MS) return 0
-    return ((remaining + DAY_MS - 1) / DAY_MS).toInt()
+fun trashExpiry(purgeAt: String?, now: Instant): TrashExpiry {
+    val purge = parseTime(purgeAt) ?: return TrashExpiry(null, TrashExpiryLevel.NORMAL)
+    val left = purge.toEpochMilli() - now.toEpochMilli()
+    if (left <= 0) return TrashExpiry(0, TrashExpiryLevel.EXPIRED)
+    val days = ((left + DAY_MS - 1) / DAY_MS).toInt()
+    return TrashExpiry(days, if (days <= 1) TrashExpiryLevel.SOON else TrashExpiryLevel.NORMAL)
 }

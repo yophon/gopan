@@ -48,6 +48,7 @@ class FolderPickerViewModel @Inject constructor(
     private var token: Long? = null
     private var excludeIds: Set<String> = emptySet()
     private var loadJob: Job? = null
+    private var loadMoreJob: Job? = null
 
     /** 对话框打开时调用;同一 token 重复调用(旋转屏幕)不重置 */
     fun open(token: Long, excludeIds: Collection<String>) {
@@ -81,6 +82,8 @@ class FolderPickerViewModel @Inject constructor(
 
     private fun loadCurrent() {
         loadJob?.cancel()
+        // 换了目录:在途翻页属于旧目录,取消(游标不绑定 parentId,旧页会拼进新目录)
+        loadMoreJob?.cancel()
         val parentId = _state.value.current.id
         loadJob = viewModelScope.launch {
             _state.update { it.copy(status = ListStatus.Loading, folders = emptyList(), nextCursor = null, isLoadingMore = false) }
@@ -102,12 +105,13 @@ class FolderPickerViewModel @Inject constructor(
         val cursor = s.nextCursor ?: return
         if (s.isLoadingMore || s.status != ListStatus.Content) return
         val parentId = s.current.id
-        viewModelScope.launch {
+        loadMoreJob = viewModelScope.launch {
             _state.update { it.copy(isLoadingMore = true) }
             gopanResult { repo.children(parentId, cursor, DriveSortOrder.NAME, false) }
                 .onSuccess { page ->
                     _state.update {
-                        it.copy(folders = mergePages(it.folders, page.items.pickFolders()), nextCursor = page.nextCursor, isLoadingMore = false)
+                        if (it.current.id != parentId) it.copy(isLoadingMore = false)
+                        else it.copy(folders = mergePages(it.folders, page.items.pickFolders()), nextCursor = page.nextCursor, isLoadingMore = false)
                     }
                 }
                 .onFailure { _state.update { it.copy(isLoadingMore = false) } }

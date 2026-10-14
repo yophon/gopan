@@ -11,7 +11,7 @@
     <string name="account_section_about">关于</string>
 
     <string name="account_item_trash">回收站</string>
-    <string name="account_item_trash_hint">已删除的文件保留 30 天</string>
+    <string name="account_item_trash_hint">已删除的文件在这里保留一段时间,可还原</string>
     <string name="account_item_change_password">修改密码</string>
     <string name="account_item_sessions">登录设备</string>
     <string name="account_item_app_passwords">应用密码(WebDAV)</string>

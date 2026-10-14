@@ -243,8 +243,9 @@ private fun PasswordPanel(
     val selectedTab = tabs.indexOf(state.mode).coerceAtLeast(0)
 
     var username by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    var confirm by rememberSaveable { mutableStateOf("") }
+    // 密码不进 saved-state Bundle(会交给 system_server 保存);旋转屏幕丢一次输入是可接受的代价
+    var password by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
 
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current

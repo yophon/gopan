@@ -2,6 +2,7 @@ package xyz.yophon.gopan.core.prefs
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -33,7 +34,11 @@ data class UserPreferences(
     val driveSort: DriveSort = DriveSort(),
 )
 
-private val Context.prefsDataStore: DataStore<Preferences> by preferencesDataStore(name = "user_prefs")
+// 文件损坏(断电、磁盘满)时换成空偏好重写,而不是让每次读写都抛 CorruptionException
+private val Context.prefsDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "user_prefs",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+)
 
 /** 进程内唯一的偏好 DataStore(DI 根用它提供 DataStore<Preferences>) */
 fun userPreferencesDataStore(context: Context): DataStore<Preferences> = context.prefsDataStore

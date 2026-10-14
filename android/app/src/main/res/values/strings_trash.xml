@@ -3,7 +3,7 @@
 <resources>
     <string name="trash_title">回收站</string>
     <string name="trash_empty">回收站是空的</string>
-    <string name="trash_empty_desc">删除的文件会在这里保留 30 天</string>
+    <string name="trash_empty_desc">删除的文件会在这里保留一段时间,到期自动清理</string>
 
     <string name="trash_action_restore">还原</string>
     <string name="trash_action_purge">彻底删除</string>
@@ -11,7 +11,7 @@
 
     <string name="trash_deleted_at">删除于 %1$s</string>
     <string name="trash_days_left">还剩 %1$d 天</string>
-    <string name="trash_today">今天清理</string>
+    <string name="trash_today">已到期,待清理</string>
     <string name="trash_original_size">原大小 %1$s</string>
 
     <string name="trash_purge_title">彻底删除</string>

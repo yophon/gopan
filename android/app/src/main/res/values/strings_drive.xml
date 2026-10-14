@@ -27,7 +27,7 @@
     <string name="drive_empty_title">这个文件夹是空的</string>
     <string name="drive_empty_desc">点右下角的「新建」创建文件夹</string>
     <string name="drive_total_count">共 %1$d 项</string>
-    <string name="drive_offline_banner">网络不可用,显示的是 %1$s 的缓存内容</string>
+    <string name="drive_offline_banner">网络不可用,显示的是 %1$s 缓存的第一页</string>
     <string name="drive_load_more_failed">加载更多失败</string>
 
     <string name="drive_selected_count">已选 %1$d 项</string>
@@ -49,14 +49,14 @@
     <string name="drive_dialog_rename_hint">新名称</string>
 
     <string name="drive_name_error_empty">名称不能为空</string>
-    <string name="drive_name_error_illegal">名称不能包含 / 或 \\</string>
+    <string name="drive_name_error_illegal">名称不能包含 /</string>
     <string name="drive_name_error_reserved">名称不能是 . 或 ..</string>
     <string name="drive_name_error_too_long">名称太长(最多 255 字节)</string>
     <string name="drive_name_conflict">同名已存在</string>
 
     <string name="drive_delete_title">删除</string>
-    <string name="drive_delete_confirm_one">将「%1$s」移到回收站?30 天内可以还原。</string>
-    <string name="drive_delete_confirm_many">将所选 %1$d 项移到回收站?30 天内可以还原。</string>
+    <string name="drive_delete_confirm_one">将「%1$s」移到回收站?到期前可以在回收站还原。</string>
+    <string name="drive_delete_confirm_many">将所选 %1$d 项移到回收站?到期前可以在回收站还原。</string>
 
     <string name="drive_msg_created">已创建「%1$s」</string>
     <string name="drive_msg_renamed">已重命名</string>
@@ -67,8 +67,8 @@
     <string name="drive_details_name">名称</string>
     <string name="drive_details_type">类型</string>
     <string name="drive_details_size">大小</string>
-    <string name="drive_details_items">包含</string>
-    <string name="drive_details_items_value">%1$d 项</string>
+    <string name="drive_details_items">文件数</string>
+    <string name="drive_details_items_value">%1$d 个文件</string>
     <string name="drive_details_created">创建时间</string>
     <string name="drive_details_updated">修改时间</string>
     <string name="drive_details_deleted">删除时间</string>
@@ -92,4 +92,7 @@
     <string name="drive_picker_empty">没有子文件夹</string>
     <string name="drive_picker_up">上一级</string>
     <string name="drive_picker_close">关闭</string>
+    <string name="drive_a11y_selected">已选中</string>
+    <string name="drive_a11y_not_selected">未选中</string>
+    <string name="drive_pref_save_failed">偏好保存失败</string>
 </resources>

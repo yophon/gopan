@@ -1,7 +1,9 @@
 package xyz.yophon.gopan.feature.search
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -58,6 +60,7 @@ import xyz.yophon.gopan.feature.drive.NodeDialogHost
 import xyz.yophon.gopan.feature.drive.NodeEffect
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
 import xyz.yophon.gopan.feature.drive.NodeRow
+import xyz.yophon.gopan.feature.drive.SEARCH_ACTIONS
 import xyz.yophon.gopan.feature.drive.isNearEnd
 import xyz.yophon.gopan.feature.drive.nodeSecondaryText
 import xyz.yophon.gopan.feature.drive.resolve
@@ -71,6 +74,7 @@ import xyz.yophon.gopan.feature.drive.resolve
 fun SearchScreen(
     onBack: () -> Unit,
     onOpenFolder: (folderId: String) -> Unit,
+    onOpenRoot: () -> Unit,
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -145,8 +149,11 @@ fun SearchScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
+        // 键盘弹起时结果末尾、加载更多与重试不被挡住
         val contentModifier = Modifier
             .padding(padding)
+            .consumeWindowInsets(padding)
+            .imePadding()
             .fillMaxSize()
         when {
             state.isIdle -> EmptyState(
@@ -169,7 +176,15 @@ fun SearchScreen(
         }
     }
 
-    NodeDialogHost(dialog = dialog, busy = busy, inputError = inputError, viewModel = viewModel)
+    NodeDialogHost(
+        dialog = dialog,
+        busy = busy,
+        inputError = inputError,
+        viewModel = viewModel,
+        actions = SEARCH_ACTIONS,
+        // 「所在目录」:跳到结果的父文件夹(根目录下的直接回网盘首页)
+        onLocate = { node -> node.parentId?.let(onOpenFolder) ?: onOpenRoot() },
+    )
 }
 
 @Composable

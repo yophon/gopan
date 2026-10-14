@@ -2,6 +2,7 @@ package xyz.yophon.gopan.core.data
 
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import xyz.yophon.gopan.graphql.fragment.NodeItem
 import xyz.yophon.gopan.graphql.type.NodeKind as GqlNodeKind
 import xyz.yophon.gopan.graphql.type.PreviewKind as GqlPreviewKind
@@ -16,8 +17,13 @@ enum class PreviewKind { NONE, IMAGE, PDF, NATIVE_PDF, VIDEO, AUDIO, TEXT, OFFIC
 @Serializable
 data class NodePreview(
     val kind: PreviewKind = PreviewKind.NONE,
-    /** 15 分钟有效的预签名缩略图地址;只在列表里即取即用,缓存图片按 [Node.imageCacheKey] */
-    val thumbUrl: String? = null,
+    /** 服务端给过缩略图:离线回退缓存时据此只从图片磁盘缓存里读(按 [Node.imageCacheKey]) */
+    val hasThumbnail: Boolean = false,
+    /**
+     * 15 分钟有效的预签名缩略图地址,只在内存里即取即用。
+     * @Transient:不随列表缓存写进 Room —— 预签名 URL 不得持久化,过期后也毫无用处。
+     */
+    @Transient val thumbUrl: String? = null,
 )
 
 /**
@@ -51,11 +57,11 @@ data class Node(
     /** 缩略图/大图的内存与磁盘缓存 key:预签名 URL 会变,id + updatedAt 不变 */
     val imageCacheKey: String get() = "$id@${updatedAt.orEmpty()}"
 
-    /** 图片/视频文件且服务端给了缩略图地址 */
+    /** 图片/视频文件且服务端给过缩略图(在线时有 [NodePreview.thumbUrl],离线缓存里只剩标记) */
     val hasThumb: Boolean
         get() = kind == NodeKind.FILE &&
             (preview.kind == PreviewKind.IMAGE || preview.kind == PreviewKind.VIDEO) &&
-            !preview.thumbUrl.isNullOrEmpty()
+            (preview.hasThumbnail || !preview.thumbUrl.isNullOrEmpty())
 }
 
 /** 一页列表(children / searchNodes / trash 共用) */
@@ -83,6 +89,7 @@ fun NodeItem.toNode(): Node = Node(
     purgeAt = purgeAt,
     preview = NodePreview(
         kind = preview.kind.toDomain(),
+        hasThumbnail = !preview.thumbUrl.isNullOrEmpty(),
         thumbUrl = preview.thumbUrl,
     ),
     subtreeBytes = subtreeBytes,

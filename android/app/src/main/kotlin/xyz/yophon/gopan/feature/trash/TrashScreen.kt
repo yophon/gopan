@@ -37,6 +37,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -183,18 +184,25 @@ private fun TrashSelectionTopBar(state: TrashUiState, viewModel: TrashViewModel)
     )
 }
 
-/** 第二行:原大小 · 删除于 … · 还剩 N 天 / 今天清理 */
+/** 第二行:原大小 · 删除于 … · 还剩 N 天 / 已到期,待清理(与网页端一致,只认服务端给的 purgeAt) */
 @Composable
 private fun trashSecondary(node: Node, nowMillis: Long): String {
     val size = formatBytes(node.size ?: node.subtreeBytes)
     val deleted = stringResource(R.string.trash_deleted_at, formatRelativeTime(node.deletedAt))
-    val expiry = when (val days = trashDaysLeft(node.deletedAt, node.purgeAt, Instant.ofEpochMilli(nowMillis))) {
-        null -> "—"
-        0 -> stringResource(R.string.trash_today)
-        else -> stringResource(R.string.trash_days_left, days)
+    val expiry = trashExpiry(node.purgeAt, Instant.ofEpochMilli(nowMillis))
+    val text = when {
+        expiry.days == null -> "—"
+        expiry.level == TrashExpiryLevel.EXPIRED -> stringResource(R.string.trash_today)
+        else -> stringResource(R.string.trash_days_left, expiry.days)
     }
-    return "$size · $deleted · $expiry"
+    return "$size · $deleted · $text"
 }
+
+/** 临期(≤ 1 天)与已到期的条目第二行用警示色,与网页端的 expiry-urgent 一致 */
+@Composable
+private fun trashSecondaryColor(node: Node, nowMillis: Long): Color? =
+    if (trashExpiry(node.purgeAt, Instant.ofEpochMilli(nowMillis)).level == TrashExpiryLevel.NORMAL) null
+    else MaterialTheme.colorScheme.error
 
 @Composable
 private fun TrashList(state: TrashUiState, viewModel: TrashViewModel) {
@@ -209,6 +217,7 @@ private fun TrashList(state: TrashUiState, viewModel: TrashViewModel) {
             NodeRow(
                 node = node,
                 secondary = trashSecondary(node, state.nowMillis),
+                secondaryColor = trashSecondaryColor(node, state.nowMillis),
                 selectionMode = state.selectionMode,
                 selected = node.id in state.selection,
                 onClick = { viewModel.onItemClick(node) },

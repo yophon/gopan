@@ -9,6 +9,7 @@ import okhttp3.OkHttpClient
 import xyz.yophon.gopan.core.AppConfig
 import xyz.yophon.gopan.core.auth.SessionManager
 import xyz.yophon.gopan.core.auth.SessionStore
+import xyz.yophon.gopan.core.auth.SignOutHook
 import xyz.yophon.gopan.core.network.AuthInterceptor
 import xyz.yophon.gopan.core.network.GopanCookieJar
 import xyz.yophon.gopan.core.network.InMemorySecureStore
@@ -45,8 +46,20 @@ class TestHarness(
         AuthInterceptor(store, dagger.Lazy<TokenRefresher> { sessionManager }),
     )
 
+    /** 登出 / 会话失效时被调用的次数(验证清理钩子确实跑了) */
+    val signOutHookCalls = java.util.concurrent.atomic.AtomicInteger()
+
     init {
-        sessionManager = SessionManager(apollo, store, cookieJar, secureStore, scope)
+        sessionManager = SessionManager(
+            apollo,
+            store,
+            cookieJar,
+            secureStore,
+            scope,
+            config,
+            okHttp,
+            setOf(SignOutHook { signOutHookCalls.incrementAndGet() }),
+        )
     }
 
     override fun close() {

@@ -70,6 +70,7 @@ class TrashViewModel @Inject constructor(
 
     private var loadedVersion = -1L
     private var loadJob: Job? = null
+    private var loadMoreJob: Job? = null
 
     init {
         load(LoadMode.INITIAL)
@@ -88,6 +89,8 @@ class TrashViewModel @Inject constructor(
 
     private fun load(mode: LoadMode) {
         loadJob?.cancel()
+        // 列表重置时取消在途的翻页:否则旧游标拿到的页会拼进新列表
+        loadMoreJob?.cancel()
         loadJob = viewModelScope.launch {
             _state.update {
                 it.copy(
@@ -129,8 +132,8 @@ class TrashViewModel @Inject constructor(
     fun loadMore() {
         val s = _state.value
         val cursor = s.nextCursor ?: return
-        if (s.isLoadingMore || s.status != ListStatus.Content) return
-        viewModelScope.launch {
+        if (s.isLoadingMore || s.status != ListStatus.Content || loadJob?.isActive == true) return
+        loadMoreJob = viewModelScope.launch {
             _state.update { it.copy(isLoadingMore = true, loadMoreError = null) }
             gopanResult { repo.trash(cursor) }
                 .onSuccess { page ->

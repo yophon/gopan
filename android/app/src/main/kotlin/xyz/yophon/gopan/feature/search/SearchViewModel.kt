@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +23,7 @@ import xyz.yophon.gopan.core.network.toGopanException
 import xyz.yophon.gopan.feature.drive.ListStatus
 import xyz.yophon.gopan.feature.drive.NodeActionsViewModel
 import xyz.yophon.gopan.feature.drive.NodeEffect
+import xyz.yophon.gopan.feature.drive.UiText
 import javax.inject.Inject
 
 @Immutable
@@ -51,6 +53,7 @@ class SearchViewModel @Inject constructor(
 
     private val input = MutableStateFlow("")
     private var loadedVersion = -1L
+    private var loadMoreJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -80,6 +83,8 @@ class SearchViewModel @Inject constructor(
     }
 
     private suspend fun search(q: String, silent: Boolean) {
+        // 换了关键词(或重搜):在途的翻页属于旧结果,游标也不绑定关键词,必须取消,否则旧页会拼进新列表
+        loadMoreJob?.cancel()
         if (q.isEmpty()) {
             _state.update { SearchUiState() }
             return
@@ -101,7 +106,12 @@ class SearchViewModel @Inject constructor(
             }
             .onFailure { e ->
                 val ge = e as? GopanException ?: e.toGopanException()
-                _state.update { it.copy(status = ListStatus.Error(ge.message ?: ge.code), items = emptyList()) }
+                if (silent && _state.value.items.isNotEmpty()) {
+                    // 静默重搜失败:保留手上的结果,只提示
+                    message(UiText.Plain(ge.message ?: ge.code))
+                } else {
+                    _state.update { it.copy(status = ListStatus.Error(ge.message ?: ge.code), items = emptyList()) }
+                }
             }
     }
 
@@ -109,11 +119,15 @@ class SearchViewModel @Inject constructor(
         val s = _state.value
         val cursor = s.nextCursor ?: return
         if (s.isLoadingMore || s.status != ListStatus.Content) return
-        viewModelScope.launch {
+        loadMoreJob = viewModelScope.launch {
             _state.update { it.copy(isLoadingMore = true, loadMoreError = null) }
             gopanResult { repo.search(s.query, cursor) }
                 .onSuccess { page ->
-                    _state.update { it.copy(items = mergePages(it.items, page.items), nextCursor = page.nextCursor, isLoadingMore = false) }
+                    _state.update {
+                        // 期间关键词变了:丢弃这页
+                        if (it.query != s.query) it.copy(isLoadingMore = false)
+                        else it.copy(items = mergePages(it.items, page.items), nextCursor = page.nextCursor, isLoadingMore = false)
+                    }
                 }
                 .onFailure { e ->
                     val ge = e as? GopanException ?: e.toGopanException()

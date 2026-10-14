@@ -3,6 +3,7 @@ package xyz.yophon.gopan.core.auth
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -150,6 +151,57 @@ class SessionManagerTest {
         val logout = server.server.takeRequest()
         assertThat(logout.getHeader("Cookie")).contains("gopan_rt=rt1")
         assertThat(logout.getHeader("Authorization")).isNull()
+    }
+
+    @Test
+    fun `logout during an in-flight refresh does not resurrect the session`() = runBlocking {
+        h.sessionManager.loginWithPassword("alice", "secret")
+        server.refreshDelayMs = 400
+        val refreshing = async { h.sessionManager.refresh() }
+        delay(150) // refresh 已经在路上,它的响应会带一枚新 cookie
+
+        h.sessionManager.logout()
+        refreshing.await()
+
+        assertThat(h.store.state.value).isEqualTo(AuthState.SignedOut)
+        assertThat(h.store.accessToken).isNull()
+        // 迟到的 refresh 写进来的新 cookie 也被清掉,下次冷启动不会自动登回去
+        assertThat(h.cookieJar.hasCookie("gopan_rt")).isFalse()
+        assertThat(h.secureStore.get(SessionManager.KEY_LAST_USER)).isNull()
+    }
+
+    @Test
+    fun `after logout a stale 401 does not refresh with leftover credentials`() = runBlocking {
+        h.sessionManager.loginWithPassword("alice", "secret")
+        h.sessionManager.logout()
+        val before = server.refreshCount.get()
+
+        val outcome = h.sessionManager.refreshAfterUnauthenticated("t1")
+
+        assertThat(outcome).isEqualTo(xyz.yophon.gopan.core.network.RefreshOutcome.SignedOut)
+        assertThat(server.refreshCount.get()).isEqualTo(before)
+    }
+
+    @Test
+    fun `sign-out hooks run on logout and when the server rejects the session`() = runBlocking {
+        h.sessionManager.loginWithPassword("alice", "secret")
+        h.sessionManager.logout()
+        assertThat(h.signOutHookCalls.get()).isEqualTo(1)
+
+        h.sessionManager.loginWithPassword("alice", "secret")
+        server.refreshOk = false
+        assertThat(h.sessionManager.refresh()).isFalse()
+        assertThat(h.signOutHookCalls.get()).isEqualTo(2)
+    }
+
+    @Test
+    fun `refresh failing with a non-auth error after the server dropped the cookie signs out`() = runBlocking {
+        h.sessionManager.loginWithPassword("alice", "secret")
+        // 模拟服务端回了 INTERNAL 但已经删掉了 cookie:客户端不能停在"已登录、无凭证"
+        h.cookieJar.clear()
+
+        assertThat(h.sessionManager.refresh()).isFalse()
+        assertThat(h.store.state.value).isEqualTo(AuthState.SignedOut)
     }
 
     private val alice = UserSummary(id = "u1", username = "alice", quotaBytes = 1073741824, usedBytes = 12345, isAdmin = false)

@@ -36,7 +36,8 @@ class DriveLogicTest {
         assertThat(validateNodeName("")).isEqualTo(NameError.EMPTY)
         assertThat(validateNodeName("   ")).isEqualTo(NameError.EMPTY)
         assertThat(validateNodeName("a/b")).isEqualTo(NameError.ILLEGAL_CHAR)
-        assertThat(validateNodeName("a\\b")).isEqualTo(NameError.ILLEGAL_CHAR)
+        // 反斜杠服务端与网页端都允许,本地不额外禁
+        assertThat(validateNodeName("a\\b")).isNull()
         assertThat(validateNodeName("a\u0000b")).isEqualTo(NameError.ILLEGAL_CHAR)
         assertThat(validateNodeName(".")).isEqualTo(NameError.RESERVED)
         assertThat(validateNodeName("..")).isEqualTo(NameError.RESERVED)

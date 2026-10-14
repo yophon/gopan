@@ -319,4 +319,44 @@ class DriveViewModelTest {
         advanceUntilIdle()
         assertThat(repo.firstPageCalls).isEqualTo(2)
     }
+
+    @Test
+    fun `onResumed reloads a list older than ten minutes so thumbnail urls are fresh`() = runTest {
+        repo.listings[null] = listOf(page(file("a")))
+        repo.fetchedAtProvider = { System.currentTimeMillis() - DriveViewModel.STALE_AFTER_MS - 1_000 }
+        val vm = viewModel()
+        advanceUntilIdle()
+        assertThat(repo.firstPageCalls).isEqualTo(1)
+
+        repo.fetchedAtProvider = { System.currentTimeMillis() }
+        vm.onResumed()
+        advanceUntilIdle()
+        assertThat(repo.firstPageCalls).isEqualTo(2)
+
+        // 刚刷新过:不再重复
+        vm.onResumed()
+        advanceUntilIdle()
+        assertThat(repo.firstPageCalls).isEqualTo(2)
+    }
+
+    @Test
+    fun `failed refresh keeps the loaded pages instead of the cached first page`() = runTest {
+        repo.listings[null] = listOf(page(file("a"), nextCursor = "1"), page(file("b")))
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.loadMore()
+        advanceUntilIdle()
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("a", "b").inOrder()
+
+        // 断网刷新:仓库会回退到缓存的首页(只有 a),页面不该拿它覆盖已加载的两页
+        repo.cache[null] = page(file("a"))
+        repo.networkDown = true
+        vm.refresh()
+        advanceUntilIdle()
+
+        val s = vm.state.value
+        assertThat(s.items.map { it.id }).containsExactly("a", "b").inOrder()
+        assertThat(s.fromCache).isFalse()
+        assertThat(s.isRefreshing).isFalse()
+    }
 }

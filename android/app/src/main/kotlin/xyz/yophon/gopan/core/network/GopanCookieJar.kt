@@ -57,6 +57,13 @@ class GopanCookieJar(
         cookies.values.any { it.name == name }
     }
 
+    /** 未过期的同名 cookie 的值(登出时拿它去通知服务端吊销) */
+    fun valueOf(name: String): String? = synchronized(lock) {
+        ensureLoaded()
+        dropExpired()
+        cookies.values.firstOrNull { it.name == name }?.value
+    }
+
     fun clear() {
         synchronized(lock) {
             loaded = true

@@ -110,10 +110,15 @@ class NodesRepositoryImpl @Inject constructor(
             when (val r = resolveChain(folderId) { knownFolder(it) }) {
                 is ChainResult.Complete -> return r.chain
                 is ChainResult.Missing -> {
-                    val fromCache = userId?.let { uid ->
-                        runCatching { cache.findNode(uid, r.missingId) }.getOrNull()?.takeIf { it.isFolder }
+                    // 联网优先:本地缓存没有时效,节点被移动或改名后会给出错误的路径;只有网络不通时才退回缓存
+                    val found = try {
+                        node(r.missingId)
+                    } catch (e: GopanException) {
+                        if (!e.allowsCacheFallback) throw e
+                        userId?.let { uid ->
+                            runCatching { cache.findNode(uid, r.missingId) }.getOrNull()?.takeIf { it.isFolder }
+                        } ?: throw e
                     }
-                    val found = fromCache ?: node(r.missingId)
                     if (!found.isFolder) throw GopanException(GopanErrors.NOT_FOUND, GopanErrors.messageFor(GopanErrors.NOT_FOUND, null))
                     remember(found)
                 }
@@ -168,6 +173,11 @@ class NodesRepositoryImpl @Inject constructor(
     override suspend fun purgeTrash() {
         apollo.mutation(PurgeTrashMutation()).execute().requireData()
         bump()
+    }
+
+    /** 登出时清掉内存里记住的节点(Room 缓存由 [ListingCache.clear] 清) */
+    fun clearMemory() {
+        synchronized(knownFolders) { knownFolders.clear() }
     }
 
     // ---- 内部 ----

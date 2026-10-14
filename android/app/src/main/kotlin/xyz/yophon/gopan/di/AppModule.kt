@@ -3,6 +3,7 @@ package xyz.yophon.gopan.di
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import coil3.SingletonImageLoader
 import com.apollographql.apollo.ApolloClient
 import dagger.Binds
 import dagger.Module
@@ -10,13 +11,16 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import xyz.yophon.gopan.BuildConfig
 import xyz.yophon.gopan.core.AppConfig
 import xyz.yophon.gopan.core.auth.SessionManager
+import xyz.yophon.gopan.core.auth.SignOutHook
 import xyz.yophon.gopan.core.network.AuthInterceptor
 import xyz.yophon.gopan.core.network.EncryptedPrefsSecureStore
 import xyz.yophon.gopan.core.network.GopanCookieJar
@@ -92,6 +96,17 @@ object AppModule {
     @Singleton
     fun providePreferencesDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         userPreferencesDataStore(context)
+
+    /** 登出 / 会话失效:清掉上一个账号的缩略图(内存与磁盘) */
+    @Provides
+    @IntoSet
+    fun provideImageCacheSignOutHook(@ApplicationContext context: Context): SignOutHook = SignOutHook {
+        withContext(Dispatchers.IO) {
+            val loader = SingletonImageLoader.get(context)
+            loader.memoryCache?.clear()
+            loader.diskCache?.clear()
+        }
+    }
 }
 
 @Module

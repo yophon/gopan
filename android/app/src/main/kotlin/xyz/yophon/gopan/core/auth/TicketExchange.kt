@@ -1,5 +1,7 @@
 package xyz.yophon.gopan.core.auth
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -40,15 +42,23 @@ class TicketExchange @Inject constructor(
 
     /** 账号中心的 access token 用完即丢,不要持久化。成功返回时 AuthState 已是 SignedIn。 */
     suspend fun signIn(idAccessToken: String) {
-        val verifier = Pkce.generateVerifier()
-        val ticket = requestTicket(idAccessToken, Pkce.challenge(verifier))
-        exchange(ticket, verifier)
+        sessionManager.beginSignIn()
+        // 网络读写与 CookieJar(加密存储)都不能在主线程:调用方是 viewModelScope
+        withContext(Dispatchers.IO) {
+            val verifier = Pkce.generateVerifier()
+            val ticket = requestTicket(idAccessToken, Pkce.challenge(verifier))
+            exchange(ticket, verifier)
+        }
         if (!sessionManager.refresh()) {
             throw GopanException(GopanErrors.ID_SESSION_FAILED, "登录成功但会话建立失败,请重试")
         }
     }
 
-    internal suspend fun requestTicket(idAccessToken: String, challenge: String): Ticket {
+    internal suspend fun requestTicket(idAccessToken: String, challenge: String): Ticket = withContext(Dispatchers.IO) {
+        requestTicketBlocking(idAccessToken, challenge)
+    }
+
+    private suspend fun requestTicketBlocking(idAccessToken: String, challenge: String): Ticket {
         val body = json.encodeToString(TicketRequest(config.ticketClientId, challenge))
         val request = Request.Builder()
             .url(config.ticketUrl)

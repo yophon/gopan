@@ -43,6 +43,9 @@ class FakeNodesRepository : NodesRepository {
     val calls = ArrayList<String>()
     var firstPageCalls = 0
         private set
+
+    /** 联网成功时 Listing.fetchedAt 的取值;默认"刚刚",测"列表放久了"时改成很早的时刻 */
+    var fetchedAtProvider: () -> Long = { System.currentTimeMillis() }
     var lastOrder: Pair<DriveSortOrder, Boolean>? = null
         private set
 
@@ -55,7 +58,7 @@ class FakeNodesRepository : NodesRepository {
             val cached = cache[parentId] ?: throw error
             return Listing(cached.copy(nextCursor = null), fromCache = true, fetchedAt = 1_000L, error = error)
         }
-        return Listing(pageOf(parentId, null), fromCache = false, fetchedAt = 2_000L)
+        return Listing(pageOf(parentId, null), fromCache = false, fetchedAt = fetchedAtProvider())
     }
 
     override suspend fun children(parentId: String?, cursor: String?, order: DriveSortOrder, desc: Boolean): NodePage {

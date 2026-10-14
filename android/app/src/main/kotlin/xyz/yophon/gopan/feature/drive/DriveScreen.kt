@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.SelectAll
@@ -243,6 +244,9 @@ private fun SelectionTopBar(state: DriveUiState, viewModel: DriveViewModel) {
             IconButton(onClick = viewModel::selectAll, enabled = !state.allSelected) {
                 Icon(Icons.Outlined.SelectAll, contentDescription = stringResource(R.string.drive_select_all))
             }
+            IconButton(onClick = viewModel::renameSelected, enabled = state.selection.size == 1) {
+                Icon(Icons.Outlined.DriveFileRenameOutline, contentDescription = stringResource(R.string.drive_action_rename))
+            }
             IconButton(onClick = viewModel::moveSelected, enabled = hasSelection) {
                 Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = stringResource(R.string.drive_action_move))
             }
@@ -383,6 +387,8 @@ private fun OfflineBanner(fetchedAt: Long, onRetry: () -> Unit) {
 @Composable
 private fun NodeList(state: DriveUiState, viewModel: DriveViewModel) {
     val listState = rememberLazyListState()
+    // 换排序后新列表到达:回到顶部。否则 LazyColumn 按旧首项的 key 锚定,升降序一换直接跳到底
+    LaunchedEffect(state.scrollToTopToken) { if (state.scrollToTopToken > 0) listState.scrollToItem(0) }
     LoadMoreTrigger(
         itemCount = state.items.size,
         isNearEnd = { listState.isNearEnd() },
@@ -402,6 +408,7 @@ private fun NodeList(state: DriveUiState, viewModel: DriveViewModel) {
                 onClick = { viewModel.onItemClick(node) },
                 onLongClick = { viewModel.onItemLongClick(node) },
                 onMore = { viewModel.showActions(node) },
+                onThumbError = viewModel::onThumbError,
             )
         }
         if (state.nextCursor != null || state.isLoadingMore || state.loadMoreError != null) {
@@ -415,6 +422,7 @@ private fun NodeList(state: DriveUiState, viewModel: DriveViewModel) {
 @Composable
 private fun NodeGrid(state: DriveUiState, viewModel: DriveViewModel) {
     val gridState = rememberLazyGridState()
+    LaunchedEffect(state.scrollToTopToken) { if (state.scrollToTopToken > 0) gridState.scrollToItem(0) }
     LoadMoreTrigger(
         itemCount = state.items.size,
         isNearEnd = { gridState.isNearEnd() },
@@ -437,6 +445,7 @@ private fun NodeGrid(state: DriveUiState, viewModel: DriveViewModel) {
                 onClick = { viewModel.onItemClick(node) },
                 onLongClick = { viewModel.onItemLongClick(node) },
                 onMore = { viewModel.showActions(node) },
+                onThumbError = viewModel::onThumbError,
             )
         }
         if (state.nextCursor != null || state.isLoadingMore || state.loadMoreError != null) {

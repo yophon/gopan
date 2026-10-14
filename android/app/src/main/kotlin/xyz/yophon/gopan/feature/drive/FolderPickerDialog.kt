@@ -30,13 +30,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.yophon.gopan.R
@@ -55,6 +61,8 @@ fun FolderPickerDialog(
     token: Long,
     excludeIds: List<String>,
     busy: Boolean,
+    /** 移动 / 复制失败的提示:页面的 Snackbar 被本对话框盖住,所以显示在这里 */
+    error: String?,
     onPick: (Crumb) -> Unit,
     onDismiss: () -> Unit,
     viewModel: FolderPickerViewModel = hiltViewModel(key = "folder-picker"),
@@ -68,6 +76,7 @@ fun FolderPickerDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         BackHandler(enabled = state.canGoUp) { viewModel.up() }
+        DialogSystemBarsAppearance()
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             topBar = {
@@ -105,6 +114,16 @@ fun FolderPickerDialog(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        if (error != null) {
+                            Text(
+                                text = error,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier
+                                    .padding(top = 4.dp)
+                                    .testTag("picker:error"),
+                            )
+                        }
                         Button(
                             onClick = { onPick(state.current) },
                             enabled = !busy && state.status == ListStatus.Content,
@@ -129,6 +148,23 @@ fun FolderPickerDialog(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * 全屏对话框(decorFitsSystemWindows = false)有自己的窗口,不继承 Activity 的状态栏外观:
+ * 浅色主题下状态栏图标会是白字配浅色背景。按当前配色给它设一遍。
+ */
+@Composable
+private fun DialogSystemBarsAppearance() {
+    val view = LocalView.current
+    val light = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+    SideEffect {
+        val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = light
+            isAppearanceLightNavigationBars = light
         }
     }
 }

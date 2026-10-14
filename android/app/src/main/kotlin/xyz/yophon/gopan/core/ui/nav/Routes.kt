@@ -9,6 +9,14 @@ import kotlinx.serialization.Serializable
  * 新路由加在这里(共享文件,由 Integrate 阶段统一改)。
  */
 object Routes {
+    // ---- 根 NavHost:启动页 / 登录图 / 主界面,登录态一变整栈换掉 ----
+    @Serializable
+    data object Startup
+
+    /** 登录后的主界面(MainScaffold,里面是带底部导航的嵌套 NavHost) */
+    @Serializable
+    data object Main
+
     // ---- 未登录 ----
     @Serializable
     data object Login

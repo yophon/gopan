@@ -8,6 +8,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
+import xyz.yophon.gopan.core.auth.SignOutHook
 import xyz.yophon.gopan.core.data.db.CachedListingDao
 import xyz.yophon.gopan.core.data.db.GopanDatabase
 import xyz.yophon.gopan.core.data.db.RoomListingCache
@@ -28,6 +30,14 @@ object DataModule {
 
     @Provides
     fun provideCachedListingDao(db: GopanDatabase): CachedListingDao = db.cachedListingDao()
+
+    /** 登出 / 会话失效:上一个账号的目录缓存与内存里记住的节点一并清掉 */
+    @Provides
+    @IntoSet
+    fun provideListingSignOutHook(cache: ListingCache, repo: NodesRepositoryImpl): SignOutHook = SignOutHook {
+        repo.clearMemory()
+        cache.clear()
+    }
 }
 
 @Module

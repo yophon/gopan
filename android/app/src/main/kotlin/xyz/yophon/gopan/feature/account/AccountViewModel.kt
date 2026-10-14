@@ -89,22 +89,31 @@ class AccountViewModel @Inject constructor(
     }
 
     /** 下拉刷新 / 错误重试 */
-    fun refresh() = load()
+    fun refresh() = load(quiet = false)
 
-    private fun load() {
+    /** 页面回到前台:静默拉一次 me(别处复制、彻删、清空回收站后用量会变),失败不打扰 */
+    fun onResumed() {
+        if (!initialLoadDone) return
+        load(quiet = true)
+    }
+
+    private var initialLoadDone = false
+
+    private fun load(quiet: Boolean = false) {
         if (loadJob?.isActive == true) return
         loadJob = viewModelScope.launch {
             val hasUser = _state.value.user != null
-            _state.update { it.copy(loading = !hasUser, refreshing = hasUser, loadError = null) }
+            if (!quiet) _state.update { it.copy(loading = !hasUser, refreshing = hasUser, loadError = null) }
             val result = gopanResult { sessionManager.reloadUser() }
             result.onFailure { e ->
                 val ge = e as GopanException
                 // UNAUTHENTICATED 到这里说明 refresh 也失败了,SessionManager 已切到登录页,不再提示
-                if (!ge.isUnauthenticated) {
+                if (!ge.isUnauthenticated && !quiet) {
                     if (_state.value.user != null) postMessage(ge.message ?: "刷新失败") else _state.update { it.copy(loadError = ge.message) }
                 }
             }
-            _state.update { it.copy(loading = false, refreshing = false) }
+            initialLoadDone = true
+            if (!quiet) _state.update { it.copy(loading = false, refreshing = false) }
         }
     }
 

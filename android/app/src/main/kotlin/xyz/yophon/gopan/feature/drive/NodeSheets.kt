@@ -18,6 +18,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.RestoreFromTrash
@@ -41,6 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.Node
@@ -58,12 +60,20 @@ enum class NodeAction(@StringRes val label: Int, val icon: ImageVector, val dest
     DETAILS(R.string.drive_action_details, Icons.Outlined.Info),
     RESTORE(R.string.trash_action_restore, Icons.Outlined.RestoreFromTrash),
     PURGE(R.string.trash_action_purge, Icons.Outlined.DeleteForever, destructive = true),
+    LOCATE(R.string.search_action_locate, Icons.Outlined.FolderOpen),
 }
 
 val DRIVE_ACTIONS = listOf(NodeAction.RENAME, NodeAction.MOVE, NodeAction.COPY, NodeAction.DELETE, NodeAction.DETAILS)
+
+/** 搜索结果多一项「所在目录」(与网页端一致) */
+val SEARCH_ACTIONS = listOf(NodeAction.LOCATE) + DRIVE_ACTIONS
 val TRASH_ACTIONS = listOf(NodeAction.RESTORE, NodeAction.PURGE, NodeAction.DETAILS)
 
-/** 操作 BottomSheet:头部是节点本身,下面一行一个操作。选中后先收起动画再回调。 */
+/**
+ * 操作 BottomSheet:头部是节点本身,下面一行一个操作。
+ * 选中后先收起动画,再关掉弹层(onDismiss),最后回调操作 —— 若操作本身不换弹层(例如回收站的「还原」),
+ * 隐藏的 ModalBottomSheet 会留在组合里,它的全屏透明窗口会吞掉整页点击。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NodeActionSheet(
@@ -76,7 +86,10 @@ fun NodeActionSheet(
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
     fun pick(action: NodeAction) {
-        scope.launch { sheetState.hide() }.invokeOnCompletion { onAction(action) }
+        scope.launch { sheetState.hide() }.invokeOnCompletion {
+            onDismiss()
+            onAction(action)
+        }
     }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         ListItem(
@@ -221,6 +234,8 @@ fun NodeDialogHost(
     busy: Boolean,
     inputError: InputError?,
     viewModel: NodeActionsViewModel,
+    actions: List<NodeAction> = DRIVE_ACTIONS,
+    onLocate: ((Node) -> Unit)? = null,
 ) {
     val rootName = stringResource(R.string.drive_title_root)
     when (dialog) {
@@ -228,7 +243,7 @@ fun NodeDialogHost(
         is NodeDialog.Actions -> NodeActionSheet(
             node = dialog.node,
             secondary = nodeSecondaryText(dialog.node),
-            actions = DRIVE_ACTIONS,
+            actions = actions,
             onAction = { action ->
                 val node = dialog.node
                 when (action) {
@@ -237,6 +252,7 @@ fun NodeDialogHost(
                     NodeAction.COPY -> viewModel.requestCopy(listOf(node.id))
                     NodeAction.DELETE -> viewModel.requestDelete(listOf(node))
                     NodeAction.DETAILS -> viewModel.showDetails(node)
+                    NodeAction.LOCATE -> onLocate?.invoke(node)
                     NodeAction.RESTORE, NodeAction.PURGE -> Unit
                 }
             },
@@ -273,6 +289,7 @@ fun NodeDialogHost(
             token = dialog.token,
             excludeIds = dialog.ids,
             busy = busy,
+            error = viewModel.pickerError.collectAsStateWithLifecycle().value?.resolve(),
             onPick = { target ->
                 when (dialog.mode) {
                     PickerMode.MOVE -> viewModel.moveTo(dialog.ids, target, rootName)

@@ -54,12 +54,18 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
+import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import xyz.yophon.gopan.R
@@ -114,6 +120,8 @@ private fun FileCategory.tint(): Color = when (this) {
 /**
  * 图标,图片/视频有缩略图时盖上缩略图(加载中与失败都露出图标)。
  * 缓存 key 用 id + updatedAt:预签名 URL 15 分钟一换,不能拿 URL 当 key。
+ * 离线回退缓存时没有 URL(预签名地址不落盘),只从磁盘缓存按 key 读,读不到就显示图标,不发网络请求。
+ * [onThumbError]:在线加载失败时回调(多半是列表放久了、预签名过期),由页面决定要不要静默刷新列表。
  */
 @Composable
 fun NodeVisual(
@@ -121,6 +129,7 @@ fun NodeVisual(
     modifier: Modifier = Modifier,
     iconSize: Dp = 28.dp,
     shape: Shape = RoundedCornerShape(8.dp),
+    onThumbError: (() -> Unit)? = null,
 ) {
     val category = fileCategory(node)
     var thumbShown by remember(node.imageCacheKey) { mutableStateOf(false) }
@@ -128,16 +137,18 @@ fun NodeVisual(
         if (!thumbShown) {
             Icon(
                 imageVector = category.icon,
-                contentDescription = null,
+                contentDescription = stringResource(category.labelRes),
                 tint = category.tint(),
                 modifier = Modifier.size(iconSize),
             )
         }
         if (node.hasThumb) {
+            val url = node.preview.thumbUrl
             val request = ImageRequest.Builder(LocalPlatformContext.current)
-                .data(node.preview.thumbUrl)
+                .data(url ?: offlineThumbPlaceholder(node))
                 .memoryCacheKey(node.imageCacheKey)
                 .diskCacheKey(node.imageCacheKey)
+                .apply { if (url == null) networkCachePolicy(CachePolicy.DISABLED) }
                 .crossfade(true)
                 .build()
             AsyncImage(
@@ -145,12 +156,18 @@ fun NodeVisual(
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 onSuccess = { thumbShown = true },
-                onError = { thumbShown = false },
+                onError = {
+                    thumbShown = false
+                    if (url != null) onThumbError?.invoke()
+                },
                 modifier = Modifier.matchParentSize(),
             )
         }
     }
 }
+
+/** 离线时给 Coil 的占位地址:永远不会真的请求(网络策略关闭),只用来走磁盘缓存查找 */
+private fun offlineThumbPlaceholder(node: Node): String = "https://thumbnail.cache.invalid/${node.imageCacheKey}"
 
 /** 列表行的第二行:文件 = 大小 · 时间;文件夹 = 时间 · (约)子树体积 */
 @Composable
@@ -173,12 +190,18 @@ fun NodeRow(
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onMore: (() -> Unit)? = null,
+    onThumbError: (() -> Unit)? = null,
+    /** 第二行的强调色(回收站临期条目用);null 用默认的次要文字色 */
+    secondaryColor: Color? = null,
 ) {
     val container = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
     ListItem(
-        modifier = modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        modifier = modifier
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .selectionSemantics(selectionMode, selected)
+            .testTag("node:${node.name}"),
         colors = ListItemDefaults.colors(containerColor = container),
-        leadingContent = { NodeVisual(node, modifier = Modifier.size(44.dp)) },
+        leadingContent = { NodeVisual(node, modifier = Modifier.size(44.dp), onThumbError = onThumbError) },
         headlineContent = {
             Text(node.name, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
         },
@@ -188,7 +211,7 @@ fun NodeRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = secondaryColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
             )
         },
         trailingContent = when {
@@ -218,12 +241,15 @@ fun NodeCard(
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onMore: (() -> Unit)? = null,
+    onThumbError: (() -> Unit)? = null,
 ) {
     val shape = MaterialTheme.shapes.medium
     Card(
         modifier = modifier
             .clip(shape)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .selectionSemantics(selectionMode, selected)
+            .testTag("node:${node.name}"),
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
@@ -236,7 +262,7 @@ fun NodeCard(
                 .aspectRatio(1f)
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         ) {
-            NodeVisual(node, modifier = Modifier.fillMaxSize(), iconSize = 48.dp, shape = RectangleShape)
+            NodeVisual(node, modifier = Modifier.fillMaxSize(), iconSize = 48.dp, shape = RectangleShape, onThumbError = onThumbError)
             if (selectionMode) {
                 Checkbox(
                     checked = selected,
@@ -302,5 +328,16 @@ fun LoadMoreFooter(
                 TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
             }
         }
+    }
+}
+
+/** 多选模式下让读屏知道这是可勾选项及其状态("已选中 / 未选中") */
+@Composable
+private fun Modifier.selectionSemantics(selectionMode: Boolean, selected: Boolean): Modifier {
+    if (!selectionMode) return this
+    val state = stringResource(if (selected) R.string.drive_a11y_selected else R.string.drive_a11y_not_selected)
+    return semantics {
+        role = Role.Checkbox
+        stateDescription = state
     }
 }

@@ -14,7 +14,7 @@ class AccountUsageTest {
         assertThat(u.text).isEqualTo("123.0 MB / 10.0 GB")
         assertThat(u.percentText).isEqualTo("已用 1%")
         assertThat(u.level).isEqualTo(UsageLevel.NORMAL)
-        assertThat(u.unlimited).isFalse()
+        assertThat(u.noQuota).isFalse()
     }
 
     @Test
@@ -25,11 +25,11 @@ class AccountUsageTest {
     }
 
     @Test
-    fun `levels switch at 80 and 95 percent`() {
-        assertThat(UsageSummary(79, 100).level).isEqualTo(UsageLevel.NORMAL)
-        assertThat(UsageSummary(80, 100).level).isEqualTo(UsageLevel.WARN)
-        assertThat(UsageSummary(94, 100).level).isEqualTo(UsageLevel.WARN)
-        assertThat(UsageSummary(95, 100).level).isEqualTo(UsageLevel.CRITICAL)
+    fun `levels switch at 70 and 90 percent like the web sidebar`() {
+        assertThat(UsageSummary(69, 100).level).isEqualTo(UsageLevel.NORMAL)
+        assertThat(UsageSummary(70, 100).level).isEqualTo(UsageLevel.WARN)
+        assertThat(UsageSummary(89, 100).level).isEqualTo(UsageLevel.WARN)
+        assertThat(UsageSummary(90, 100).level).isEqualTo(UsageLevel.CRITICAL)
         assertThat(UsageSummary(100, 100).level).isEqualTo(UsageLevel.CRITICAL)
     }
 
@@ -43,15 +43,16 @@ class AccountUsageTest {
     }
 
     @Test
-    fun `zero or negative quota means unlimited`() {
+    fun `zero or negative quota means nothing can be uploaded`() {
+        // 服务端按 已用 + 新文件 > 配额 拒绝上传:配额 0 = 已满,不是"不限"
         val u = UsageSummary(usedBytes = 2 * gb, quotaBytes = 0)
-        assertThat(u.unlimited).isTrue()
-        assertThat(u.fraction).isEqualTo(0f)
-        assertThat(u.percent).isEqualTo(0)
-        assertThat(u.text).isEqualTo("2.0 GB")
-        assertThat(u.percentText).isEqualTo("不限配额")
-        assertThat(u.level).isEqualTo(UsageLevel.NORMAL)
-        assertThat(UsageSummary(1, -1).unlimited).isTrue()
+        assertThat(u.noQuota).isTrue()
+        assertThat(u.fraction).isEqualTo(1f)
+        assertThat(u.text).isEqualTo("2.0 GB / 0 B")
+        assertThat(u.percentText).isEqualTo("无可用配额")
+        assertThat(u.level).isEqualTo(UsageLevel.CRITICAL)
+        assertThat(UsageSummary(1, -1).noQuota).isTrue()
+        assertThat(UsageSummary(0, 0).text).isEqualTo("0 B / 0 B")
     }
 
     @Test

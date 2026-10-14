@@ -44,8 +44,9 @@ android {
         versionName = "3.0.0-p1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // AppAuth 的 RedirectUriReceiverActivity 由库 manifest 合并,这里只给 scheme
-        manifestPlaceholders["appAuthRedirectScheme"] = "xyz.yophon.gopan"
+        // AppAuth 的 RedirectUriReceiverActivity 由库 manifest 合并,这里只给 scheme;
+        // 取自 gopan.idRedirect(如 xyz.yophon.gopan:/oauthredirect → xyz.yophon.gopan),改回调地址时两者不会脱节
+        manifestPlaceholders["appAuthRedirectScheme"] = yophonIdRedirect.substringBefore(':')
 
         buildConfigField("String", "GOPAN_BASE_URL", "\"$gopanBaseUrl\"")
         buildConfigField("String", "YOPHON_ID_ISSUER", "\"$yophonIdIssuer\"")

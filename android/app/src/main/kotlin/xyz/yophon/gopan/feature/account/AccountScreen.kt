@@ -64,6 +64,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.Lifecycle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -95,6 +97,7 @@ fun AccountScreen(
     viewModel: AccountViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
     AccountContent(
         state = state,
         versionName = BuildConfig.VERSION_NAME,
@@ -145,8 +148,8 @@ internal fun AccountContent(
     val message = state.message
     LaunchedEffect(message?.id) {
         if (message != null) {
-            snackbarHostState.showSnackbar(message.text)
             onMessageShown(message.id)
+            snackbarHostState.showSnackbar(message.text)
         }
     }
 
@@ -465,9 +468,9 @@ private fun ChangePasswordDialog(
     onSubmit: (old: String, new: String, confirm: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var oldPassword by rememberSaveable { mutableStateOf("") }
-    var newPassword by rememberSaveable { mutableStateOf("") }
-    var confirm by rememberSaveable { mutableStateOf("") }
+    var oldPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
     var reveal by rememberSaveable { mutableStateOf(false) }
 
     val canSubmit = ChangePasswordForm.canSubmit(oldPassword, newPassword, confirm) && !state.busy

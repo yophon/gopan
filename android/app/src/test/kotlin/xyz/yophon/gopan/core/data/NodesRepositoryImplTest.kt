@@ -101,7 +101,7 @@ class NodesRepositoryImplTest {
         assertThat(folder.statsStale).isTrue()
         assertThat(image.size).isEqualTo(1234)
         assertThat(image.mime).isEqualTo("image/jpeg")
-        assertThat(image.preview).isEqualTo(NodePreview(PreviewKind.IMAGE, "https://s3/thumb?sig=1"))
+        assertThat(image.preview).isEqualTo(NodePreview(PreviewKind.IMAGE, hasThumbnail = true, thumbUrl = "https://s3/thumb?sig=1"))
         assertThat(image.hasThumb).isTrue()
         assertThat(image.imageCacheKey).isEqualTo("a1@2026-10-14T00:00:00Z")
 

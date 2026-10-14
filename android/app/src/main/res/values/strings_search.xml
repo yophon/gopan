@@ -6,4 +6,5 @@
     <string name="search_idle">输入关键词搜索文件和文件夹</string>
     <string name="search_empty">没有找到与「%1$s」相关的内容</string>
     <string name="search_result_count">共 %1$d 个结果</string>
+    <string name="search_action_locate">所在目录</string>
 </resources>
