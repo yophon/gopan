@@ -44,7 +44,73 @@ export function removeChatMessage(list: ChatMsg[], id: string): ChatMsg[] {
 
 /** 把 pending 消息转成与服务端消息同构的渲染项(node 恒为 null),尾随在正式消息之后 */
 export function pendingToChatMsg(p: PendingMsg): ChatMsg {
-  return { id: p.id, body: p.body, createdAt: p.createdAt, node: null }
+  return { id: p.id, body: p.body, createdAt: p.createdAt, source: 'web', node: null }
+}
+
+// ---------- 来源标记 ----------
+
+/** 非浏览器写入的消息在行尾标一下;web 不标(绝大多数) */
+export function sourceLabel(source: string): string {
+  switch (source) {
+    case 'mcp':
+      return 'Agent'
+    case 'webdav':
+      return 'WebDAV'
+    default:
+      return ''
+  }
+}
+
+// ---------- 图片 / 视频连发合并成一格 ----------
+
+/** 有缩略图的图片 / 视频消息(聊天里直接显示图) */
+export function isMediaMsg(m: ChatMsg): boolean {
+  const n = m.node
+  if (!n) return false
+  const k = n.preview?.kind
+  return (k === 'IMAGE' || k === 'VIDEO') && !!n.preview?.thumbUrl
+}
+
+export type RenderItem =
+  | { kind: 'single'; message: ChatMsg }
+  | { kind: 'media'; id: string; messages: ChatMsg[] }
+
+export const MEDIA_GROUP_WINDOW_MS = 2 * 60 * 1000
+export const MEDIA_GROUP_MAX = 9
+
+/**
+ * 服务端每个文件一条消息(上传完成即落),一次发 5 张图就是 5 条。展示层把
+ * 连续的图片/视频消息(前后相隔 ≤ 2 分钟、中间没有别的消息、pending 不算)
+ * 合成一个九宫格项;满 9 个另起一组;只有一条的不合并,仍按单条渲染。
+ * 输入须已升序。
+ */
+export function groupMedia(items: ChatMsg[]): RenderItem[] {
+  const out: RenderItem[] = []
+  let run: ChatMsg[] = []
+  const flush = () => {
+    if (run.length >= 2) {
+      out.push({ kind: 'media', id: run[0]!.id, messages: run })
+    } else if (run.length === 1) {
+      out.push({ kind: 'single', message: run[0]! })
+    }
+    run = []
+  }
+  for (const m of items) {
+    const groupable = isMediaMsg(m) && !isPendingId(m.id)
+    if (!groupable) {
+      flush()
+      out.push({ kind: 'single', message: m })
+      continue
+    }
+    const prev = run[run.length - 1]
+    if (prev) {
+      const gap = new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime()
+      if (!(gap >= 0 && gap <= MEDIA_GROUP_WINDOW_MS) || run.length >= MEDIA_GROUP_MAX) flush()
+    }
+    run.push(m)
+  }
+  flush()
+  return out
 }
 
 // ---------- 日期分隔 ----------

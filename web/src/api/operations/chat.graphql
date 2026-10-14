@@ -3,6 +3,7 @@ query ChatMessages($limit: Int, $before: ID, $query: String) {
     id
     body
     createdAt
+    source
     node {
       id
       parentId
@@ -22,6 +23,7 @@ mutation SendChatMessage($body: String, $nodeId: ID) {
     id
     body
     createdAt
+    source
     node {
       id
       parentId

@@ -5,6 +5,7 @@ import {
   dayLabel,
   escapeHtml,
   groupByDay,
+  groupMedia,
   isCollapsible,
   isPendingId,
   linkify,
@@ -13,6 +14,7 @@ import {
   pendingToChatMsg,
   removeChatMessage,
   sharePrefill,
+  sourceLabel,
   textByteLength,
   textFileName,
   uploadPercentage,
@@ -20,8 +22,75 @@ import {
 } from './chat'
 
 function msg(id: string, createdAt: string): ChatMsg {
-  return { id, body: `msg-${id}`, createdAt, node: null }
+  return { id, body: `msg-${id}`, createdAt, source: 'web', node: null }
 }
+
+function media(id: string, createdAt: string, kind: 'IMAGE' | 'VIDEO' | 'PDF' = 'IMAGE', thumb = true): ChatMsg {
+  return {
+    id,
+    body: '',
+    createdAt,
+    source: 'web',
+    node: {
+      id: `n-${id}`,
+      parentId: null,
+      name: `${id}.bin`,
+      kind: 'FILE',
+      size: 1,
+      preview: { kind, thumbUrl: thumb ? `/t/${id}` : null },
+    },
+  }
+}
+
+describe('sourceLabel', () => {
+  it('web 不标,mcp / webdav 各有标签', () => {
+    expect(sourceLabel('web')).toBe('')
+    expect(sourceLabel('mcp')).toBe('Agent')
+    expect(sourceLabel('webdav')).toBe('WebDAV')
+    expect(sourceLabel('')).toBe('')
+  })
+})
+
+describe('groupMedia', () => {
+  const t = (s: number) => `2026-01-01T00:${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}Z`
+
+  it('2 分钟内连续的图片合成一组,文本保持单条', () => {
+    const items = [msg('t1', t(0)), media('a', t(10)), media('b', t(20)), media('c', t(130)), msg('t2', t(140))]
+    const out = groupMedia(items)
+    expect(out.map((x) => x.kind)).toEqual(['single', 'media', 'single'])
+    expect(out[1]).toMatchObject({ kind: 'media', id: 'a' })
+    expect((out[1] as { messages: ChatMsg[] }).messages.map((m) => m.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('间隔超过 2 分钟就断开', () => {
+    const out = groupMedia([media('a', t(0)), media('b', t(121)), media('c', t(130))])
+    expect(out.map((x) => x.kind)).toEqual(['single', 'media'])
+    expect((out[1] as { messages: ChatMsg[] }).messages.map((m) => m.id)).toEqual(['b', 'c'])
+  })
+
+  it('中间夹一条文本或普通文件就断开', () => {
+    const out = groupMedia([media('a', t(0)), msg('x', t(1)), media('b', t(2)), media('c', t(3))])
+    expect(out.map((x) => x.kind)).toEqual(['single', 'single', 'media'])
+    const out2 = groupMedia([media('a', t(0)), media('p', t(1), 'PDF'), media('b', t(2))])
+    expect(out2.map((x) => x.kind)).toEqual(['single', 'single', 'single'])
+  })
+
+  it('满 9 个另起一组', () => {
+    const items = Array.from({ length: 11 }, (_, i) => media(`m${i}`, t(i)))
+    const out = groupMedia(items)
+    expect(out.map((x) => x.kind)).toEqual(['media', 'media'])
+    expect((out[0] as { messages: ChatMsg[] }).messages).toHaveLength(9)
+    expect((out[1] as { messages: ChatMsg[] }).messages).toHaveLength(2)
+  })
+
+  it('单张不合并;没有缩略图的图片、pending 消息不参与', () => {
+    const out = groupMedia([media('a', t(0)), msg('x', t(1)), media('b', t(2), 'IMAGE', false), media('c', t(3))])
+    expect(out.map((x) => x.kind)).toEqual(['single', 'single', 'single', 'single'])
+    const pendingLike: ChatMsg = { ...media('p', t(4)), id: 'pending-1' }
+    const out2 = groupMedia([media('a', t(3)), pendingLike, media('c', t(5))])
+    expect(out2.map((x) => x.kind)).toEqual(['single', 'single', 'single'])
+  })
+})
 
 describe('mergeChatMessages', () => {
   it('合并两批,按 createdAt 升序', () => {

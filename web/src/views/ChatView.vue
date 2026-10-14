@@ -52,7 +52,9 @@ import {
   PENDING_PREFIX,
   collapseText,
   groupByDay,
+  groupMedia,
   isCollapsible,
+  isMediaMsg,
   isPendingId,
   linkify,
   mergeChatMessages,
@@ -60,6 +62,7 @@ import {
   pendingToChatMsg,
   removeChatMessage,
   sharePrefill,
+  sourceLabel,
   textByteLength,
   textFileName,
   uploadPercentage,
@@ -187,7 +190,10 @@ const displayed = computed<ChatMsg[]>(() => {
   return [...messages.value, ...pending.value.map(pendingToChatMsg)]
 })
 
-const groups = computed(() => groupByDay(displayed.value))
+/** 按天分组后,每天内部再把连发的图片/视频合成九宫格项 */
+const groups = computed(() =>
+  groupByDay(displayed.value).map((g) => ({ key: g.key, label: g.label, items: groupMedia(g.items) })),
+)
 
 /** 正在发到传输助手文件夹的上传任务(完成/取消的不显示,完成后服务端消息会出现) */
 const uploadingTasks = computed(() =>
@@ -452,12 +458,7 @@ function uploadStatusText(task: UploadTask): string {
 
 // ---------- 文件卡片 / 预览 / 下载 ----------
 
-function isMedia(m: ChatMsg): boolean {
-  const n = m.node
-  if (!n) return false
-  const k = n.preview?.kind
-  return (k === 'IMAGE' || k === 'VIDEO') && !!n.preview?.thumbUrl
-}
+const isMedia = isMediaMsg
 
 function fileIcon(m: ChatMsg) {
   const n = m.node
@@ -661,17 +662,47 @@ function timeOf(iso: string): string {
 
       <template v-for="group in groups" :key="group.key">
         <div class="day-sep"><span>{{ group.label }}</span></div>
+        <template v-for="item in group.items" :key="item.kind === 'media' ? item.id : item.message.id">
+        <!-- 连发的图片 / 视频:九宫格 -->
+        <div v-if="item.kind === 'media'" class="message-row">
+          <div class="media-grid" :class="item.messages.length === 2 ? 'cols-2' : 'cols-3'">
+            <div
+              v-for="message in item.messages"
+              :key="message.id"
+              class="media-tile"
+              :title="message.node!.name"
+              @click="openChatFile(message)"
+              @contextmenu.prevent="openActions(message)"
+              @touchstart.passive="onTouchStart(message)"
+              @touchend="clearPress"
+              @touchmove.passive="clearPress"
+              @touchcancel="clearPress"
+            >
+              <img :src="message.node!.preview.thumbUrl!" :alt="message.node!.name" loading="lazy" />
+              <el-icon v-if="message.node!.preview.kind === 'VIDEO'" class="tile-badge"><VideoCamera /></el-icon>
+              <span v-if="!isMobile" class="tile-actions">
+                <el-icon title="下载" @click.stop="onDownload(message)"><Download /></el-icon>
+                <el-icon title="删除" @click.stop="confirmDelete(message)"><Delete /></el-icon>
+              </span>
+            </div>
+          </div>
+          <div class="row-foot">
+            <time>{{ timeOf(item.messages[item.messages.length - 1]!.createdAt) }}</time>
+            <span class="count-text">{{ item.messages.length }} 个文件</span>
+            <span v-if="sourceLabel(item.messages[0]!.source)" class="source-tag">{{ sourceLabel(item.messages[0]!.source) }}</span>
+          </div>
+        </div>
         <div
-          v-for="message in group.items"
-          :key="message.id"
+          v-else
           class="message-row"
-          :class="{ pending: isPendingId(message.id), failed: pendingById.get(message.id)?.status === 'failed' }"
-          @contextmenu.prevent="openActions(message)"
-          @touchstart.passive="onTouchStart(message)"
+          :class="{ pending: isPendingId(item.message.id), failed: pendingById.get(item.message.id)?.status === 'failed' }"
+          @contextmenu.prevent="openActions(item.message)"
+          @touchstart.passive="onTouchStart(item.message)"
           @touchend="clearPress"
           @touchmove.passive="clearPress"
           @touchcancel="clearPress"
         >
+          <template v-for="message in [item.message]" :key="message.id">
           <!-- 文件消息 -->
           <template v-if="message.node">
             <div v-if="isMedia(message)" class="media-card" @click="openChatFile(message)">
@@ -723,13 +754,16 @@ function timeOf(iso: string): string {
             <span v-else-if="isPendingId(message.id)" class="sending-text">发送中…</span>
             <template v-else>
               <time>{{ timeOf(message.createdAt) }}</time>
+              <span v-if="sourceLabel(message.source)" class="source-tag">{{ sourceLabel(message.source) }}</span>
               <span v-if="!isMobile" class="hover-actions">
                 <el-icon title="复制" @click="copyText(message.node ? message.node.name : message.body)"><DocumentCopy /></el-icon>
                 <el-icon title="删除" @click="confirmDelete(message)"><Delete /></el-icon>
               </span>
             </template>
           </div>
+          </template>
         </div>
+        </template>
       </template>
 
       <!-- 正在上传的文件:占位卡片,完成后由服务端消息接替 -->
@@ -844,6 +878,17 @@ h2 { margin: 0 0 4px; font-size: 20px; }
 .media-meta { display: flex; align-items: center; gap: 8px; padding: 6px 4px 2px; max-width: 240px; }
 .media-meta .file-name { flex: 1; font-size: 12px; font-weight: 400; }
 .media-meta .file-size { margin: 0; white-space: nowrap; }
+.media-grid { display: grid; gap: 4px; max-width: min(84%, 360px); width: 100%; }
+.media-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.media-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.media-tile { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: var(--el-fill-color-light); cursor: pointer; }
+.media-tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tile-badge { position: absolute; left: 6px; bottom: 6px; color: #fff; font-size: 16px; filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8)); }
+.tile-actions { position: absolute; right: 4px; top: 4px; display: inline-flex; gap: 4px; padding: 2px 4px; border-radius: 6px; background: rgba(0, 0, 0, 0.55); opacity: 0; transition: opacity 0.15s; }
+.tile-actions .el-icon { color: #fff; font-size: 14px; cursor: pointer; }
+.media-tile:hover .tile-actions { opacity: 1; }
+.count-text, .source-tag { font-size: 11px; color: var(--el-text-color-secondary); }
+.source-tag { padding: 0 5px; border-radius: 4px; background: var(--el-fill-color); }
 .row-foot { display: flex; align-items: center; gap: 6px; margin-top: 4px; min-height: 18px; }
 time, .sending-text { font-size: 11px; color: var(--el-text-color-secondary); }
 .fail-text { font-size: 11px; color: var(--el-color-danger); }
