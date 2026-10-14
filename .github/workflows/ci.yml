@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: server (go vet + go test)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: gopan
+          POSTGRES_PASSWORD: gopan
+          POSTGRES_DB: gopan_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gopan"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 30
+    env:
+      CGO_ENABLED: "0"
+      TEST_DB_URL: postgres://gopan:gopan@127.0.0.1:5432/gopan_test?sslmode=disable
+      TEST_S3_ENDPOINT: 127.0.0.1:9000
+    steps:
+      - uses: actions/checkout@v4
+
+      # service 容器不能改启动命令,MinIO 需要 `server /data`,所以作为一个 step 起
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=gopan -e MINIO_ROOT_PASSWORD=gopan-minio-dev \
+            minio/minio:latest server /data
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:9000/minio/health/live && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:9000/minio/health/live
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          check-latest: true
+          cache-dependency-path: server/go.sum
+
+      - name: go vet
+        working-directory: server
+        run: go vet ./...
+
+      # -p 1:集成测试包共用一个库,setup 会 DROP SCHEMA 重建,不能并行。
+      # 没有 ffmpeg / gotenberg:worker 的音视频与 Office 派生用例按设计 skip。
+      - name: go test
+        working-directory: server
+        run: go test -p 1 -count=1 ./...
+
+  web:
+    name: web (typecheck + vitest + build + codegen check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: pnpm install
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      # 前端 codegen 产物入库(doc/10),这里校验它与 schema/operations 一致。
+      # 不校验 sqlc/gqlgen:sqlc 会把 store/identity.go 手写的 IDLogin/IDSession
+      # 重新生成进 models.go,与仓库必然有差异(生成后需手工删掉这两个类型)。
+      - name: codegen is up to date
+        working-directory: web
+        run: |
+          pnpm codegen
+          git diff --exit-code -- src/api/gen
+
+      - name: typecheck
+        working-directory: web
+        run: pnpm typecheck
+
+      - name: vitest
+        working-directory: web
+        run: pnpm test
+
+      - name: build
+        working-directory: web
+        run: pnpm build

@@ -75,7 +75,35 @@ func TestGraphQLDepthLimit(t *testing.T) {
 	}
 }
 
-// devMode 开关:生产禁 introspection(非业务错误统一打码成 INTERNAL/内部错误),
+// 客户端把查询写错(字段拼错 / 语法错):gqlgen 的校验、语法错误原文透出,
+// code 分别是 GRAPHQL_VALIDATION_FAILED / GRAPHQL_PARSE_FAILED,不再被打码成"内部错误"。
+func TestGraphQLClientQueryErrorsPassThrough(t *testing.T) {
+	h := newGQL(false)
+
+	code, msg := errCode(t, gqlPost(t, h, `{ me { idd } }`))
+	if code != "GRAPHQL_VALIDATION_FAILED" {
+		t.Fatalf("字段拼错应 GRAPHQL_VALIDATION_FAILED,got %s/%s", code, msg)
+	}
+	if !strings.Contains(msg, "idd") {
+		t.Fatalf("校验错误应原文透出并点名字段,got %q", msg)
+	}
+
+	code, msg = errCode(t, gqlPost(t, h, `{ me { id `))
+	if code != "GRAPHQL_PARSE_FAILED" || msg == "内部错误" {
+		t.Fatalf("语法错误应 GRAPHQL_PARSE_FAILED 并保留原文,got %s/%s", code, msg)
+	}
+}
+
+// 未预期的错误仍然打码:resolver 用 nil 依赖跑出 panic,gqlgen 恢复后必须对外是
+// INTERNAL/内部错误,不能把 Go 的 panic 文案漏出去。shareInfo 是公开查询,不需要登录。
+func TestGraphQLUnknownErrorMasked(t *testing.T) {
+	code, msg := errCode(t, gqlPost(t, newGQL(false), `{ shareInfo(token: "abc") { token } }`))
+	if code != "INTERNAL" || msg != "内部错误" {
+		t.Fatalf("resolver panic 应打码为 INTERNAL/内部错误,got %s/%s", code, msg)
+	}
+}
+
+// devMode 开关:生产禁 introspection(禁用提示不是校验错误,仍打码成 INTERNAL/内部错误),
 // dev 放行且能查到 Query 类型。
 func TestGraphQLIntrospectionToggle(t *testing.T) {
 	q := `{ __schema { queryType { name } } }`

@@ -2,6 +2,8 @@
 
 自部署云盘。Go + GraphQL + Postgres + MinIO 后端,Vue 3 前端,单二进制交付。
 
+![CI](https://github.com/yophon/gopan/actions/workflows/ci.yml/badge.svg)
+
 **在线实例**:<https://drive.979687.xyz>(跑在 2 核 2G 的 VPS 上,精简档部署)
 
 <!--
@@ -17,7 +19,7 @@
 | ![预览](doc/assets/preview.png) | ![分享访客页](doc/assets/share.png) |
 -->
 
-当前阶段:**v2.5.0——传输助手整改:修掉"每次进页面只能发一条"的 bug,文件进会话改由服务端负责(任何渠道放进该文件夹即成消息),补齐粘贴/拖拽/多行/翻历史/删除/搜索/乐观上屏,多标签页 refresh 不再互踢**。
+当前阶段:**v2.6.0——安卓 App(Capacitor 壳,系统分享菜单直达传输助手)、PWA 也能接收文件分享、搜索结果可定位到上下文、GitHub Actions CI、GraphQL 校验错误原文透传**。
 ## 架构
 
 ```mermaid
@@ -106,6 +108,7 @@ Agent 接入与远程 MCP 工具见 [docs/MCP.md](./docs/MCP.md)。
 
 | [M11 · 备份与可观测](./doc/milestones/M11-备份与可观测.md) | rsync 异地副本 + 恢复演练(6 条字节级判据)、登录设备管理、分享访问统计、可信代理修复、磁盘回收 8G;v2.4.0 |
 | [v2.5 · 传输助手整改](./doc/milestones/v2.5-传输助手整改.md) | isIdle 修复、服务端自动落消息、乐观上屏/粘贴/拖拽/进度卡/翻历史/删除/搜索、refresh 宽限期 + 多标签互斥;v2.5.0 |
+| [v2.6 · 安卓 App 与分享](./doc/milestones/v2.6-安卓App与分享.md) | Capacitor 安卓壳 + 原生分享接收、PWA POST share_target、搜索定位上下文、CI、错误透传、手机端输入栏越界修复;v2.6.0 |
 
 ## 读法
 

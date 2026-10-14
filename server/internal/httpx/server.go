@@ -52,20 +52,41 @@ func NewGraphQLHandler(es graphql.ExecutableSchema, devMode bool) http.Handler {
 	if devMode {
 		srv.Use(extension.Introspection{})
 	}
-	srv.SetErrorPresenter(func(ctx context.Context, err error) *gqlerror.Error {
-		ge := graphql.DefaultErrorPresenter(ctx, err)
-		var se *service.Error
-		if errors.As(err, &se) {
-			ge.Message = se.Message
-			ge.Extensions = map[string]any{"code": se.Code}
-		} else {
-			slog.ErrorContext(ctx, "internal error", "err", err)
-			ge.Message = "内部错误"
-			ge.Extensions = map[string]any{"code": "INTERNAL"}
-		}
-		return ge
-	})
+	srv.SetErrorPresenter(presentError)
 	return srv
+}
+
+// gqlgen 在 resolver 之前就产出的错误:语法错误、字段/参数校验错误。这些来自客户端
+// 写错了查询,原文对调用方有用、对服务端无泄露,放行并只记 info。
+var clientQueryErrorCodes = map[string]bool{
+	"GRAPHQL_PARSE_FAILED":      true,
+	"GRAPHQL_VALIDATION_FAILED": true,
+}
+
+// presentError 把错误翻译成 extensions.code:
+//   - service.Error:业务错误,code / message 原样透出;
+//   - gqlgen 的语法/校验错误:原样透出(含 code),info 日志;
+//   - 其余(panic 恢复、DB/对象存储故障、未预期的 Go error):统一 INTERNAL/"内部错误",
+//     error 日志带原始错误。对外不泄露内部细节是底线,所以兜底一定是打码。
+func presentError(ctx context.Context, err error) *gqlerror.Error {
+	ge := graphql.DefaultErrorPresenter(ctx, err)
+	var se *service.Error
+	if errors.As(err, &se) {
+		ge.Message = se.Message
+		ge.Extensions = map[string]any{"code": se.Code}
+		return ge
+	}
+	var qe *gqlerror.Error
+	if errors.As(err, &qe) {
+		if code, _ := qe.Extensions["code"].(string); clientQueryErrorCodes[code] {
+			slog.InfoContext(ctx, "graphql query rejected", "code", code, "err", qe.Message)
+			return ge
+		}
+	}
+	slog.ErrorContext(ctx, "internal error", "err", err)
+	ge.Message = "内部错误"
+	ge.Extensions = map[string]any{"code": "INTERNAL"}
+	return ge
 }
 
 // queryDepth 计算 SelectionSet 的字段嵌套深度。Field 加一层;inline fragment
@@ -153,21 +174,39 @@ func WithAuth(next http.Handler, auth *service.Auth, trustedProxies []*net.IPNet
 // http/https 是给"预签名走独立子域"的部署留路(默认同域反代其实 'self' 就够);
 // style unsafe-inline 是 Element Plus 动态样式的现实;dev 跳过 CSP(vite 注入脚本会撞)。
 // hash-wasm 在上传 Worker 内编译 WebAssembly;仅放行 wasm,不放行 JS eval。
+//
+// 安卓壳(app/,Capacitor 远程模式)把线上页面装进 WebView 时会往 HTML 里注入一段内联的
+// bridge 脚本,被 script-src 'self' 挡住插件就全哑了。壳的 UA 带 "GopanApp/" 标记
+// (capacitor.config appendUserAgent),只对它的请求给 script-src 加 'unsafe-inline';
+// 普通浏览器的 CSP 不变。UA 可伪造,但伪造者只能放宽自己那次响应的 CSP,拿不到别人的。
 func WithSecurityHeaders(next http.Handler, devMode bool) http.Handler {
-	const csp = "default-src 'self'; img-src 'self' data: blob: http: https:; " +
+	const cspBase = "default-src 'self'; img-src 'self' data: blob: http: https:; " +
 		"media-src 'self' blob: http: https:; connect-src 'self' http: https:; " +
-		"style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; " +
-		"frame-ancestors 'none'"
+		"style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; frame-ancestors 'none'; "
+	const csp = cspBase + "script-src 'self' 'wasm-unsafe-eval'"
+	const cspApp = cspBase + "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "same-origin")
 		if !devMode {
-			h.Set("Content-Security-Policy", csp)
+			if IsAppWebView(r) {
+				h.Set("Content-Security-Policy", cspApp)
+			} else {
+				h.Set("Content-Security-Policy", csp)
+			}
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// AppUserAgentMark 是安卓壳 WebView 的 UA 标记(app/capacitor.config.ts appendUserAgent)。
+const AppUserAgentMark = "GopanApp/"
+
+// IsAppWebView 判断请求是否来自安卓壳。
+func IsAppWebView(r *http.Request) bool {
+	return strings.Contains(r.UserAgent(), AppUserAgentMark)
 }
 
 // statusRecorder 捕获响应码给指标用。
