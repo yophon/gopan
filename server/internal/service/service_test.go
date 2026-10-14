@@ -217,7 +217,11 @@ func TestAuthRefreshRotationAndReuseDetection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 重放旧 token:重用检测,且吊销整族
+	// 重放旧 token:旋转后 10 秒宽限期内按并发标签页处理(见 TestRefreshReuseGrace);
+	// 这里把 used_at 拨到宽限期外,验证真正的重用检测仍吊销整族
+	if _, err := pool.Exec(ctx, `UPDATE refresh_tokens SET used_at = now() - interval '20 seconds' WHERE user_id = $1 AND used_at IS NOT NULL`, res.User.ID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := auth.Refresh(ctx, res.RefreshToken); err != service.ErrUnauthenticated {
 		t.Fatalf("重用旧 refresh 应被拒,got %v", err)
 	}
