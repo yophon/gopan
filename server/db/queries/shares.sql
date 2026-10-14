@@ -18,6 +18,7 @@ WHERE s.id = $1;
 -- name: ListMyShares :many
 -- 顺带带出访问统计。用 LATERAL 一次扫完,别让列表变成 N+1。
 -- verify = 访客进入(验密成功);download 把单文件下载与打包下载合并计数。
+-- last_kind 没有访问记录时为空串(sqlc 对 LATERAL 列推不出可空,COALESCE 掉避免扫 NULL 报错)。
 SELECT s.id, s.token, s.password_hash, s.expires_at, s.created_at,
        n.id AS node_id, n.parent_id AS node_parent_id, n.name AS node_name,
        n.kind AS node_kind, n.created_at AS node_created_at, n.updated_at AS node_updated_at,
@@ -33,7 +34,7 @@ LEFT JOIN LATERAL (
     SELECT count(*) FILTER (WHERE sv.kind = 'verify')  AS verify_count,
            count(*) FILTER (WHERE sv.kind <> 'verify') AS download_count,
            max(sv.created_at)::timestamptz             AS last_at,
-           (array_agg(sv.kind ORDER BY sv.created_at DESC, sv.id DESC))[1]::text AS last_kind
+           COALESCE((array_agg(sv.kind ORDER BY sv.created_at DESC, sv.id DESC))[1], '')::text AS last_kind
     FROM share_visits sv
     WHERE sv.share_id = s.id
 ) v ON true
