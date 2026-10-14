@@ -104,3 +104,22 @@ jobs:
       - name: build
         working-directory: web
         run: pnpm build
+
+  android:
+    name: android (lint + unit tests + debug build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Apollo 直接用 server/graph/schema.graphqls 生成:schema 改了而 App 的 operations 不兼容时这里编译失败。
+      # 没有 keystore.properties,release 签名用不上,只跑 debug。
+      - name: lint + unit tests + assembleDebug
+        working-directory: android
+        run: ./gradlew --no-daemon :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
