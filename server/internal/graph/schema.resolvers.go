@@ -78,7 +78,11 @@ func (r *mutationResolver) Login(ctx context.Context, username string, password 
 func (r *mutationResolver) Refresh(ctx context.Context) (*AuthPayload, error) {
 	res, err := r.Auth.Refresh(ctx, httpx.RefreshTokenFrom(ctx))
 	if err != nil {
-		httpx.ClearRefreshCookie(ctx, !r.Cfg.DevMode)
+		// 只有凭证本身无效才清 cookie;数据库或账号中心暂时不可用时保留,客户端稍后重试即可续上,
+		// 否则一次短暂的故障会把所有网页和 App 用户都登出
+		if service.IsUnauthenticated(err) {
+			httpx.ClearRefreshCookie(ctx, !r.Cfg.DevMode)
+		}
 		return nil, err
 	}
 	httpx.SetRefreshCookie(ctx, res.RefreshToken, int(r.Cfg.RefreshTTL.Seconds()), !r.Cfg.DevMode)

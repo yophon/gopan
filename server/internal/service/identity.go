@@ -20,6 +20,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -206,8 +207,12 @@ func (p *IDProvider) Check(ctx context.Context, user, family uuid.UUID) error {
 	var encrypted []byte
 	var expires time.Time
 	err = tx.QueryRow(ctx, `SELECT i.tokens,i.expires_at FROM id_sessions i JOIN sessions s USING(family_id) JOIN users u ON u.id=s.user_id WHERE i.family_id=$1 AND s.user_id=$2 AND s.revoked_at IS NULL AND u.disabled_at IS NULL AND EXISTS(SELECT 1 FROM refresh_tokens r WHERE r.family_id=s.family_id AND r.revoked_at IS NULL AND r.expires_at>now()) FOR UPDATE OF i`, family, user).Scan(&encrypted, &expires)
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrUnauthenticated
+	}
+	if err != nil {
+		// 查询本身失败(库暂时不可用)不是"会话无效",不能借此把人登出
+		return ErrIDUnavailable
 	}
 	t, err := p.decrypt(encrypted)
 	if err != nil {
