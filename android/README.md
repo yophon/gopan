@@ -1,9 +1,13 @@
 # gopan 安卓原生客户端
 
 Kotlin + Jetpack Compose(Material 3)重写的 gopan 客户端,替代 v2.6 的 Capacitor 壳(`app/`)。
-总计划见 `doc/19-安卓原生App计划.md`。P1 已完成:工程骨架、认证/网络核心、登录(Yophon ID + 密码登录/注册)、
-文件(列表/网格、排序、分页、多选批量、新建/重命名/移动/复制/删除、回收站、搜索)与「我的」(用量、改密码、外观、退出);
-传输助手(P2)、分享(P3)、设备/应用密码/Agent/管理端(P3/P4)还是占位页。
+总计划见 `doc/19-安卓原生App计划.md`。已完成:
+- P1:工程骨架、认证/网络核心、登录(Yophon ID + 密码登录/注册)、文件(列表/网格、排序、分页、多选批量、
+  新建/重命名/移动/复制/删除、回收站、搜索)与「我的」(用量、改密码、外观、退出);
+- P2:上传 / 下载引擎(后台前台服务、断网与杀进程后续传、秒传、打包下载)、传输列表与传输设置、
+  传输助手(网页端全部功能)、系统分享直达传输助手。
+
+分享(P3)、设备/应用密码/Agent/管理端(P3/P4)还是占位页。
 
 ## 构建
 
@@ -62,12 +66,15 @@ app/src/main/graphql/            GraphQL operations(按域一个文件,字段选
 app/src/main/kotlin/xyz/yophon/gopan/
   GopanApp.kt                    @HiltAndroidApp;启动时跑 SessionManager.startBootstrap();
                                  实现 Coil 的 SingletonImageLoader.Factory,缩略图加载复用全局 OkHttpClient
-  MainActivity.kt                唯一 Activity:GopanTheme → RootNavHost
+  MainActivity.kt                唯一 Activity:GopanTheme → RootNavHost;接住系统分享(SEND / SEND_MULTIPLE)与通知点按,
+                                 转成 core.share 的待处理内容与跳转请求
   MainViewModel.kt               登录态 + 主题偏好
   RootNavHost.kt                 按 AuthState 切换:启动页 / 登录图 / MainScaffold
   MainScaffold.kt                底部导航(文件 / 传输助手 / 分享 / 我的)+ 主 NavHost —— 底部栏与 NavHost 只在这里;
                                  innerPadding 已含系统栏并 consumeWindowInsets,tab 内页面的 TopAppBar/Scaffold
-                                 用默认 insets 或零 insets(feature.drive.NestedScreenInsets)都不会双倍留白
+                                 用默认 insets 或零 insets(feature.drive.NestedScreenInsets)都不会双倍留白;键盘弹起时收起底部栏。
+                                 传输列表(Routes.Transfers)是这里的顶层路由,不属于哪个 tab
+  MainScaffoldViewModel.kt       跳转请求(分享 → 传输助手、通知 → 传输列表);「打开」的下载完成后弹应用选择器
   di/AppModule.kt                Hilt 根模块:AppConfig、OkHttp、Apollo、SecureStore、DataStore;
                                  功能线自己的 @Module(core.data.DataModule、feature.login.LoginModule)由 Hilt 自动聚合
   core/AppConfig.kt              服务端/账号中心地址(BuildConfig → 对象,测试可替换)
@@ -75,16 +82,26 @@ app/src/main/kotlin/xyz/yophon/gopan/
   core/auth/                     AuthState/UserSummary、SessionStore、SessionManager、Pkce、TicketExchange、YophonIdLogin
   core/data/                     Node / NodeListing 模型、NodesRepository(接口)+ NodesRepositoryImpl(Apollo;文件夹 LRU 解析面包屑)、
                                  ListingCache;db/:GopanDatabase、cached_listing 表 + RoomListingCache(按 (用户, 目录) 存首页,断网回退);DataModule
-  core/prefs/                    UserPreferencesRepository(DataStore:主题、列表视图、排序)
+  core/data/chat/                ChatMessage 模型、ChatRepository(接口)+ ApolloChatRepository(列表 / 翻历史 / 搜索 / 发送 / 删除 / 文件夹)
+  core/prefs/                    UserPreferencesRepository(DataStore:主题、列表视图、排序、传输设置、传输助手草稿)
+  core/transfer/                 传输引擎,见下文「传输引擎」:TransferEngine、TransferWorker + TransferScheduler、TransferNotifications、
+                                 SourceStore(来源读取、哈希、私有副本)、NetworkMonitor、FileOpener、TransferActions(界面入口);
+                                 upload/(UploadApi、PartUploader、UploadRun)、download/(DownloadApi、RangeFetcher、DownloadRun、DownloadPublisher)、
+                                 db/(upload_task、download_task 两张队列表)
+  core/share/                    IncomingShareStore(系统分享的接收与暂存)、AppNavRequests(外部入口的跳转请求)
+  core/ui/transfer/              上传选择器(文件 / 照片和视频 / 拍照)与通知、存储权限的申请
   core/ui/theme|components|format|nav   主题、通用组件(Loading/Error/Empty/Confirm/TextInput/Placeholder)、格式化、Routes
   feature/login/                 LoginScreen(Yophon ID 主入口 + 登录/注册 tab)、LoginViewModel、LoginRules(校验、错误码→文案)、LoginGateway + LoginModule
   feature/drive/                 DriveScreen / DriveViewModel(列表/网格、排序、下拉刷新、自动翻页、多选批量)、NodeActionsViewModel(新建/重命名/移动/复制/删除)、
                                  FolderPickerDialog(全屏目标选择器)、BreadcrumbBar、NodeSheets(详情/操作)、DriveGraph(文件 tab 嵌套图,含回收站与搜索路由)
   feature/trash/                 TrashScreen / TrashViewModel(还原、彻删、清空两次确认)、TrashExpiry(剩余天数)
   feature/search/                SearchScreen / SearchViewModel(300ms 防抖、分页)
-  feature/account/               AccountScreen / AccountViewModel(用量条、回收站入口、改密码对话框、主题与列表视图偏好、退出登录;
+  feature/account/               AccountScreen / AccountViewModel(用量条、回收站与传输列表入口、传输设置、改密码对话框、主题与列表视图偏好、退出登录;
                                  登录设备 / 应用密码 / Agent / 管理端是占位路由)、AccountUsage、ChangePasswordForm
-  feature/{chat,shares}/         传输助手(P2)、分享(P3):目前只有占位页
+  feature/chat/                  传输助手:ChatScreen / ChatItems(消息、九宫格、上传卡片)/ ChatViewModel(轮询、搜索定位、乐观发送、分享落地)/
+                                 ChatLogic(按 id 合并、按天分组、网格、链接识别,纯函数)
+  feature/transfers/             传输列表(TransfersScreen / TransfersViewModel)与传输设置对话框
+  feature/shares/                分享(P3):目前只有占位页
 app/src/test/kotlin/             JVM 单测;testutil/ 里有假 gopan 服务端(FakeGopanServer:Login/Refresh/Me/Logout/ChangePassword 与票据入口)
                                  与装配好的 TestHarness
 ```
@@ -92,8 +109,8 @@ app/src/test/kotlin/             JVM 单测;testutil/ 里有假 gopan 服务端(
 功能线的规则:只改自己 `feature.<x>` 包下的文件、自己的 `res/values/strings_<x>.xml` 与测试;
 共享文件(`Routes`、`AppModule`、`MainScaffold`、`AndroidManifest`、主题)需要改动时写进返回结果,由 Integrate 阶段统一做。
 GraphQL operations 按域各自一个文件(`nodes.graphql` 归文件线,`chat.graphql` 归传输助手线……),改了 schema 重新 `assembleDebug` 即重新生成。
-本地数据库只有一个 `core.data.db.GopanDatabase`:P2 的上传/下载队列表往里追加 entity 并把 `version` +1
-(当前 `exportSchema = false`、`fallbackToDestructiveMigration`,缓存可丢;正式发布前再补 schema 导出与迁移)。
+本地数据库只有一个 `core.data.db.GopanDatabase`(版本 2):目录首页缓存 + 上传 / 下载队列。只允许从版本 1(只有可丢的缓存)
+破坏性升级;队列表里有用户的进行中任务,以后改表结构必须写 Migration。
 回收站页注册在文件 tab 的嵌套图里(`Routes.Trash`),同一 NavHost 内从任何 tab `navigate(Routes.Trash)` 都能进(「我的」页的入口就是这样)。
 
 ## 协议要点
@@ -121,6 +138,37 @@ GraphQL operations 按域各自一个文件(`nodes.graphql` 归文件线,`chat.g
   5. `refresh` 拿 access token → `SignedIn`,之后与密码登录完全一样。账号中心撤销设备 → refresh 失败 → 自动登出。
 - 预签名 URL(`thumbUrl` / `downloadUrl` / 上传 `partUrls`)15 分钟有效且走对象存储域名:不要长期缓存 URL 本身,
   图片缓存按 `node.id + updatedAt` 作 key;OkHttp 对这些域名不会带 cookie / Bearer。
+
+## 传输引擎(P2)
+
+- **执行**:`TransferWorker`(WorkManager 唯一任务,网络约束 CONNECTED,「仅 Wi-Fi」时 UNMETERED)提升为 dataSync 前台服务,
+  调 `TransferEngine.drain()` 跑到队列空;通知栏常驻进度,结束时 App 在后台才发结果通知。进程被杀、手机重启后由 WorkManager
+  与 `TransferEngine.onAppStart()` 重新排;后台启动前台服务被拒(Android 12+)时退化成普通 Worker 继续跑。
+- **队列**:Room 两张表,状态 QUEUED / RUNNING / PAUSED / FAILED / DONE / CANCELED;状态迁移全部是带前置状态的 UPDATE,
+  运行结果落地时用户刚暂停 / 取消就以用户为准。实时进度只在内存(约 3 次/秒),库里只在迁移时写。
+  并发:同时 2 个上传文件(每个文件按网络 2–3 片并发,可在传输设置里改)、3 个下载。
+- **重试**:瞬时错误指数退避(2s 起,封顶 60s),5 次后进 FAILED;网络类错误(NETWORK / HTTP)不计上限,5 次后每 5 分钟一次,
+  新一轮 Worker 或系统网络恢复时立即重试。
+- **上传**(`UploadRun`,协议见 doc/03):流式 SHA-256(哈希按 size + 修改时间缓存在任务里)→ `initUpload`(命中秒传直接完成)
+  或 `uploadSession` 对账(只传服务端说缺的片)→ 预签名分片并发 PUT(取到 50 分钟主动换签名,403 被动换,同一片连续两次 403 判定签名配置有问题)
+  → `completeUpload` 轮询(前 10 次 1 秒,之后 ×1.5 封顶 5 秒,10 分钟后 30 秒)。定稿撞名、会话过期、传输助手文件夹被删、
+  内容在上传途中被改时自动重建会话(最多 3 次);确定性失败时 abort 会话。不可 seek 的来源(管道)边哈希边拷进私有目录。
+- **下载**(`DownloadRun`):`node(id){downloadUrl sha256}` 现取现用(URL 不落库,取到 10 分钟后在下一次建连前重取,403 重取一次)
+  → GET + `Range: bytes=<.part 长度>-`(`Accept-Encoding: identity`,不带任何凭证)→ 校验 SHA-256 → 发布:
+  Android 10+ 写 MediaStore `Download/gopan/<相对目录>`,8–9 写公共「下载/gopan」(需存储权限),或传输设置里选的 SAF 目录;
+  「打开」下到 `cacheDir/open/<sha256>/`(同内容第二次直接命中)后弹选择器。内容被覆盖写(sha / size 变了)时 .part 作废。
+  文件夹在客户端广度遍历展开成子任务(能续传、没有 2 GiB 上限);打包走 `GET /pack`(Bearer),≤ 2 GiB,不能续传,
+  下完用 `ZipFile` 读中央目录校验(服务端中途出错时 HTTP 层也是正常结束)。
+- **来源与授权**:SAF / 相册选择器的 URI 持久化读授权(任务结束释放);系统分享的文件收到就拷进 `filesDir/share-incoming`
+  (分享授权只在接收页任务存活期间有效),拍照与长文本放 `filesDir/transfers/`;登出时清空队列与 transfers 目录。
+
+## 传输助手(P2)
+
+行为与网页端一致(doc/05、doc/17),并修掉了网页端的几处问题:排序、去重、"最新页覆盖范围"一律按消息 id(uuid v7);
+同一 id 用服务端的新副本覆盖本地(文件被删后立刻显示「文件已不存在」,缩略图地址自动续签);可以连发;发送前清搜索、离开定位模式;
+长文本(> 4000 字节)入队成功后才清草稿;删除时 NOT_FOUND 当成功;上传卡片按 nodeId 等对应消息出现再撤。
+只在页面可见(STARTED)时每 2 秒刷新,进后台即停;回到前台、系统网络恢复时立即刷新。
+系统分享:文本接到草稿后面(不自动发),文件直接发;未登录时暂存,登录后处理。
 
 ## 代码规则
 

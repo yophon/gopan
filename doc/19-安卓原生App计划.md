@@ -23,8 +23,8 @@
 | 登录 | Yophon ID(OIDC 回调)、密码登录、注册、改密码、登出 | Yophon ID 走 AppAuth(Custom Tabs + PKCE + 自定义 scheme)→ 账号中心移动票据 → gopan 会话;密码登录 / 注册直接调 GraphQL;token 存 EncryptedSharedPreferences;改密码、登出 | P1 |
 | 文件列表 | 目录树、面包屑、表格/卡片、排序、多选、长按菜单、文件夹体积 | Compose 列表(卡片/列表两种密度)、面包屑、排序、多选操作条、长按 BottomSheet、下拉刷新、分页(keyset cursor)、Room 缓存上次列表 | P1 |
 | 文件操作 | 新建文件夹、重命名、移动(目录选择器)、复制、删除、批量 | 全部,移动/复制用全屏目录选择器 | P1 |
-| 上传 | 分片直传(预签名 PUT 并发)、秒传(sha256)、断点续传、队列(暂停/继续/取消/重试)、拖拽/粘贴 | WorkManager 前台服务:选文件(SAF 多选)/ 相机 / 系统分享;本地 sha256 流式计算;`initUpload` 秒传;分片并发 PUT(Range 续传按 `uploadSession` 缺片);`completeUpload` 轮询 `UPLOAD_PROCESSING`;队列持久化 Room,杀进程重启接着传;通知栏进度与完成 | P2 |
-| 下载 | 单文件直连、文件夹/多选 zip 打包(`/pack`) | 单文件:OkHttp + Range 断点,进通知栏,存到 Downloads(MediaStore)或用户选的目录(SAF);打包:请求 pack 票据后流式下载 zip;"用其他应用打开"直接给临时文件 | P2 |
+| 上传 | 分片直传(预签名 PUT 并发)、秒传(sha256)、断点续传、队列(暂停/继续/取消/重试)、拖拽/粘贴 | WorkManager 前台服务:选文件(SAF 多选)/ 相册 / 相机 / 系统分享;本地 sha256 流式计算;`initUpload` 秒传;分片并发 PUT,续传按 `uploadSession` 列出的缺片整片重传;`completeUpload` 轮询 `UPLOAD_PROCESSING`;队列持久化 Room,杀进程重启接着传;通知栏进度与完成 | P2 |
+| 下载 | 单文件直连、文件夹/多选 zip 打包(`/pack`) | 单文件:OkHttp + Range 断点,进通知栏,存到 Downloads(MediaStore)或用户选的目录(SAF);文件夹:客户端展开逐个下载;打包:带 Bearer 直接 `GET /pack` 流式下载 zip(≤ 2 GiB,不能续传);"用其他应用打开"下到缓存后交给选择器 | P2 |
 | 预览 | 图片(缩略图 + 大图缩放 + 左右翻页)、视频/音频流式、PDF、文本/代码、Office 转 PDF、派生物状态轮询 | 图片:Coil + 手势缩放 + 翻页器;视频/音频:Media3 ExoPlayer(流式,后台音频);PDF:`NATIVE_PDF` / `PDF` 派生用 PdfRenderer;文本:Monospace 滚动视图(大文件分段读);Office:`requestPreview` 后轮询派生 PDF;状态 UNAVAILABLE 给"系统打开" | P3 |
 | 搜索 | 按名搜索、分页 | 顶栏搜索,结果即列表,同一套操作 | P1 |
 | 回收站 | 列表、剩余天数、还原、彻删、清空 | 全部 | P1 |
@@ -140,7 +140,7 @@ GraphQL operations 按 feature 放 `feature/*/src/main/graphql/`,共用 schema �
 ## 八、风险与对策
 
 - **Yophon ID 原生客户端注册**要改生产账号中心配置,一次性动作,先在 dev-fixture 验证流程再上线。
-- **预签名 URL 走对象存储域名**:上传 PUT 与下载 GET 都是直连 MinIO 反代,App 的 OkHttp 不带 Cookie/Bearer 去碰它,证书用系统信任链即可。
+- **预签名 URL 与 API 同域名**:生产里预签名地址是站点域名下的 `/gopan/…`(反代到 MinIO),上传 PUT 与下载 GET 都不经过 Go;App 用不带 CookieJar、不加 Bearer 的独立 OkHttp 客户端去碰它(`gopan_rt` 的 Path 是 `/query`,本来也带不过去),证书用系统信任链即可。
 - **大文件 sha256**在手机上是 CPU 热点:流式读 + 协程 Default 调度器,1 GB 约 10 秒级,进度条显示"计算校验值";秒传命中时省掉整段上传,值得。
 - **后台限制**(国产 ROM 杀后台):上传走前台服务 + 通知,且在设置页提示"允许后台运行";杀掉后 WorkManager 重启续传,靠服务端 `uploadSession` 的缺片对账,不靠本地状态。
 - **Apollo 生成与 schema 漂移**:CI 里 App 用仓库内 schema 生成,schema 一改 App 编译即失败,比运行时发现强。

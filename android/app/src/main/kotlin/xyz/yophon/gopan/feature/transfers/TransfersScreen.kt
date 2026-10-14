@@ -88,12 +88,14 @@ fun TransfersScreen(
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     val currentOpenFolder by rememberUpdatedState(onOpenFolder)
-    // 第一次有数据时:只有下载在跑就默认停在下载栏
+    // 第一次有数据时选栏:正在跑的只有下载(或根本没有上传)就停在下载栏
     var tabChosen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.loaded) {
         if (state.loaded && !tabChosen) {
             tabChosen = true
-            if (state.uploads.isEmpty() && state.downloads.isNotEmpty()) tab = 1
+            val preferDownloads = (state.activeDownloads > 0 && state.activeUploads == 0) ||
+                (state.uploads.isEmpty() && state.downloads.isNotEmpty())
+            if (preferDownloads) tab = 1
         }
     }
     LaunchedEffect(viewModel) {

@@ -188,6 +188,8 @@ class UploadRun(
                 else -> throw e
             }
         }
+        // 只记片数,不记 URL(预签名地址是凭据)
+        Timber.i("续传:会话 %s 状态 %s,服务端已有 %d 片,缺 %d 片", s.id, s.status, s.uploadedParts.size, s.partUrls.size)
         return when (s.status) {
             STATUS_UPLOADING, STATUS_COMPLETING, STATUS_DONE, STATUS_FAILED -> Opened.Ready(s)
             else -> Opened.Restart(GopanException(GopanErrors.BAD_SESSION_STATE, "上传会话已失效(${s.status})"))

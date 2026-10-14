@@ -76,6 +76,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -459,6 +460,12 @@ private fun NodeList(state: DriveUiState, viewModel: DriveViewModel) {
     val listState = rememberLazyListState()
     // 换排序后新列表到达:回到顶部。否则 LazyColumn 按旧首项的 key 锚定,升降序一换直接跳到底
     LaunchedEffect(state.scrollToTopToken) { if (state.scrollToTopToken > 0) listState.scrollToItem(0) }
+    StickToTop(
+        firstKey = state.items.firstOrNull()?.id,
+        isScrolling = { listState.isScrollInProgress },
+        atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
+        scrollToTop = { listState.scrollToItem(0) },
+    )
     LoadMoreTrigger(
         itemCount = state.items.size,
         isNearEnd = { listState.isNearEnd() },
@@ -493,6 +500,12 @@ private fun NodeList(state: DriveUiState, viewModel: DriveViewModel) {
 private fun NodeGrid(state: DriveUiState, viewModel: DriveViewModel) {
     val gridState = rememberLazyGridState()
     LaunchedEffect(state.scrollToTopToken) { if (state.scrollToTopToken > 0) gridState.scrollToItem(0) }
+    StickToTop(
+        firstKey = state.items.firstOrNull()?.id,
+        isScrolling = { gridState.isScrollInProgress },
+        atTop = { gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0 },
+        scrollToTop = { gridState.scrollToItem(0) },
+    )
     LoadMoreTrigger(
         itemCount = state.items.size,
         isNearEnd = { gridState.isNearEnd() },
@@ -526,6 +539,21 @@ private fun NodeGrid(state: DriveUiState, viewModel: DriveViewModel) {
     }
 }
 
+/**
+ * 停在顶部时,列表顶上新增的条目(下拉刷新、上传完成后静默刷新)要露出来:LazyColumn / LazyGrid 按 key 锚定原来的首项,
+ * 插在它前面的新条目会落在视口上方。"停在顶部"只在一次滚动结束时按当时的位置更新,数据变了之后再看位置就晚了。
+ */
+@Composable
+private fun StickToTop(firstKey: String?, isScrolling: () -> Boolean, atTop: () -> Boolean, scrollToTop: suspend () -> Unit) {
+    var stick by remember { mutableStateOf(true) }
+    val currentIsScrolling by rememberUpdatedState(isScrolling)
+    val currentAtTop by rememberUpdatedState(atTop)
+    LaunchedEffect(Unit) {
+        snapshotFlow { currentIsScrolling() }.collect { scrolling -> if (!scrolling) stick = currentAtTop() }
+    }
+    LaunchedEffect(firstKey) { if (stick && firstKey != null) scrollToTop() }
+}
+
 // ---- FAB 菜单 ----
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -537,7 +565,7 @@ private fun FabMenuSheet(
     onCamera: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     fun pick(action: () -> Unit) {
         scope.launch { sheetState.hide() }.invokeOnCompletion { action() }

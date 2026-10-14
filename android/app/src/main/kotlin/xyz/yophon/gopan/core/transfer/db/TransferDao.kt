@@ -33,6 +33,9 @@ interface UploadDao {
     @Query("UPDATE upload_task SET state = 'QUEUED' WHERE state = 'RUNNING'")
     suspend fun resetRunning()
 
+    @Query("UPDATE upload_task SET nextAttemptAt = 0 WHERE state = 'QUEUED' AND errorCode IN (:codes)")
+    suspend fun clearNetworkBackoff(codes: List<String>)
+
     @Query("UPDATE upload_task SET state = 'RUNNING', updatedAt = :now WHERE id = :id AND state = 'QUEUED'")
     suspend fun markRunning(id: Long, now: Long): Int
 
@@ -127,6 +130,9 @@ interface DownloadDao {
     /** 展开过的文件夹行不是可执行任务(状态由子任务汇总),重启时不动它 */
     @Query("UPDATE download_task SET state = 'QUEUED' WHERE state = 'RUNNING' AND NOT (kind = 'FOLDER' AND expanded = 1)")
     suspend fun resetRunning()
+
+    @Query("UPDATE download_task SET nextAttemptAt = 0 WHERE state = 'QUEUED' AND errorCode IN (:codes)")
+    suspend fun clearNetworkBackoff(codes: List<String>)
 
     @Query("UPDATE download_task SET state = 'RUNNING', updatedAt = :now WHERE id = :id AND state = 'QUEUED'")
     suspend fun markRunning(id: Long, now: Long): Int

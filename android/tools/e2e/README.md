@@ -25,9 +25,14 @@ cd android/tools/e2e
 node stack.mjs start            # 构建 gopan-e2e.exe(必要时)、起账号中心与 gopan、建 demo / owner / other 账号、adb reverse
 cd ../.. && ./gradlew :app:assembleDebug -Pgopan.baseUrl=http://localhost:8090 -Pgopan.idIssuer=http://localhost:3040
 adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
-cd tools/e2e && node p1.mjs     # 12 个场景,失败截图在 .run/fail-*.png
+cd tools/e2e && node p1.mjs     # P1:12 个场景,失败截图在 .run/fail-*.png
+node p2.mjs                     # P2:上传 / 下载 / 传输助手 / 系统分享,失败截图在 .run/p2-fail-*.png
 node stack.mjs stop
 ```
+
+本地栈的 gopan 用 5 MiB 分片(`GOPAN_PART_SIZE`,S3 允许的最小值;`E2E_PART_SIZE` 可改),几十 MB 的文件就有十几片,
+续传场景才测得出来。对象存储在服务器上、经 SSH 隧道,上行约 0.5 MiB/s:大文件场景默认 48 MiB(`E2E_P2_BIG_MB` 可改)。
+`E2E_ONLY=S1,S6` 只跑指定场景。
 
 跑完记得用默认参数重新 `assembleDebug`,别让指向本地栈的产物留在 build 目录里。
 
@@ -44,6 +49,30 @@ node stack.mjs stop
 | G | 断网冷启动显示缓存首页与离线提示条(撤掉 adb reverse 模拟断网:模拟器飞行模式挡不住 adb 隧道) |
 | H | 深色主题 |
 | J | 退出登录,冷启动仍是登录页 |
+
+## 场景(p2.mjs)
+
+用密码账号 other 登录;服务端状态用主机侧 GraphQL 核对。单个分享用 `am start SEND` 模拟:`am` 不会把 EXTRA_STREAM 迁移进 ClipData
+(真实应用会),只给 data URI 授权,所以同一个 `content://media/...` 同时放进 data 与 EXTRA_STREAM;多文件分享(`am` 给不了
+URI 列表)走模拟器自带的「文件」应用与系统分享面板(S13,界面文案按英文系统写)。文件页的场景放在根目录下一个 `0p2-<随机>` 工作目录里
+(根目录有 P1 造的 200 多个文件夹)。
+
+| 场景 | 验证点 |
+|---|---|
+| S0 | 清数据、密码登录、进传输助手 |
+| S1 | 系统分享一张图片 → 服务端出现同 sha256 的文件消息,App 里显示 |
+| S2 | 分享文本 → 进草稿,不自动发送 |
+| S3 | 发文本(乐观上屏)→ 服务端收到;主机发的消息经轮询出现在 App |
+| S4 | 草稿超过 4000 字节 → 转成「文本 …txt」上传 |
+| S5 | 主机连传 5 张图到传输助手 → App 合成网格 |
+| S6 | 大文件分享上传:传到 40% 杀进程 → 重开后按服务端已有分片续传(看 logcat「续传」)→ 70% 断网 20 秒 → 恢复后传完,sha256 一致 |
+| S7 | 同一文件再分享 → 秒传 |
+| S8 | 下载文件:传输列表里看到进度 → 断网 15 秒 → 续传完成,`Download/gopan` 里 sha256 一致 |
+| S9 | 下载文件夹(客户端展开,子目录结构)与打包下载(zip 有 EOCD、含子目录条目) |
+| S10 | 「打开」图片 → 前台切到系统选择器 / 查看器 |
+| S11 | 长按删除消息;主机彻删图片后消息保留、显示「文件已不存在」 |
+| S12 | 搜索 → 定位(进入定位模式)→ 回到最新 |
+| S13 | 「文件」应用里多选 20 张图 → 系统分享面板选「发到传输助手」(真实的 SEND_MULTIPLE)→ 20 张都到服务端,App 里合成 9 + 9 + 2 的网格 |
 
 ## 文件
 

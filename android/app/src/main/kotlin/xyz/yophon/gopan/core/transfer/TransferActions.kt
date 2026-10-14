@@ -66,6 +66,12 @@ interface TransferActions {
     /** 超过 4000 字节的文本:存成「文本 yyyy-MM-dd HH-mm.txt」上传 */
     suspend fun uploadText(text: String, parentId: String?, toChat: Boolean): EnqueueResult
 
+    /**
+     * 粘贴 / 键盘插入的图片:授权只在这一刻有效,先拷进私有目录再传。
+     * 没有名字或是通用名(image、clipboard……)的,命名为「截图 yyyy-MM-dd HH-mm.<ext>」(与网页端一致)。
+     */
+    suspend fun uploadCopies(uris: List<Uri>, parentId: String?, toChat: Boolean): EnqueueResult
+
     suspend fun uploadUris(uris: List<Uri>, parentId: String?, toChat: Boolean = false): EnqueueResult
 
     suspend fun uploadOwnedFiles(files: List<File>, parentId: String?, toChat: Boolean = false): EnqueueResult
@@ -104,6 +110,24 @@ class DefaultTransferActions @Inject constructor(
     override suspend fun cancelUpload(id: Long) = engine.cancel(TaskKey.Upload(id))
 
     override suspend fun removeUpload(id: Long) = engine.remove(TaskKey.Upload(id))
+
+    override suspend fun uploadCopies(uris: List<Uri>, parentId: String?, toChat: Boolean): EnqueueResult {
+        val files = mutableListOf<File>()
+        var unreadable = 0
+        for (uri in uris.distinct()) {
+            try {
+                val display = sources.displayName(uri)
+                val generic = display == null || display.substringBeforeLast('.').lowercase() in GENERIC_NAMES
+                val name = if (generic) SourceStore.timestampName("截图", "").trimEnd('.') else display!!
+                files += sources.copyIn(uri, sources.incomingDir, name, preferFallback = generic)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                unreadable++
+            }
+        }
+        val r = uploadOwnedFiles(files, parentId, toChat)
+        return r.copy(unreadable = r.unreadable + unreadable)
+    }
 
     override suspend fun uploadText(text: String, parentId: String?, toChat: Boolean): EnqueueResult {
         val file = withContext(Dispatchers.IO) {
@@ -195,5 +219,8 @@ class DefaultTransferActions @Inject constructor(
     companion object {
         /** 服务端 PackMaxBytes = 2 << 30,恰好 2 GiB 可以 */
         const val PACK_MAX_BYTES = 2L shl 30
+
+        /** 剪贴板 / 输入法给的通用文件名(网页端同一张表) */
+        private val GENERIC_NAMES = setOf("image", "blob", "unnamed", "untitled", "clipboard")
     }
 }

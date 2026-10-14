@@ -32,6 +32,7 @@ import xyz.yophon.gopan.core.auth.AuthState
 import xyz.yophon.gopan.core.auth.SessionStore
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.db.GopanDatabase
+import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.prefs.UserPreferencesRepository
 import xyz.yophon.gopan.core.share.IncomingShareStore
@@ -425,8 +426,23 @@ class TransferEngine @Inject constructor(
             failedDownloads.set(0)
             uploads.resetRunning()
             downloads.resetRunning()
+            // 新的一轮多半是网络条件变了(断网后恢复、换了网络):因网络失败在等退避的任务立刻再试
+            uploads.clearNetworkBackoff(NETWORK_CODES)
+            downloads.clearNetworkBackoff(NETWORK_CODES)
             retryCanceledAborts(uid)
             coroutineScope {
+                // 系统网络从无到有:因网络失败在等退避的任务立刻再试
+                val netWatcher = launch {
+                    var wasOnline = network.online.value
+                    network.online.collect { online ->
+                        if (online && !wasOnline) {
+                            uploads.clearNetworkBackoff(NETWORK_CODES)
+                            downloads.clearNetworkBackoff(NETWORK_CODES)
+                            wake.trySend(Unit)
+                        }
+                        wasOnline = online
+                    }
+                }
                 val ticker = launch {
                     var n = 0
                     while (isActive) {
@@ -456,6 +472,7 @@ class TransferEngine @Inject constructor(
                     }
                 } finally {
                     ticker.cancel()
+                    netWatcher.cancel()
                     synchronized(lock) { draining = false }
                 }
             }
@@ -560,10 +577,10 @@ class TransferEngine @Inject constructor(
                 val t = uploads.get(id) ?: return
                 val attempts = t.attempts + 1
                 val message = outcome.error.message
-                if (attempts > MAX_ATTEMPTS) {
+                if (attempts > MAX_ATTEMPTS && !isNetworkish(outcome.error.code)) {
                     if (uploads.markFailed(id, attempts, outcome.error.code, message, now) == 1) onUploadFailed(id, outcome.error)
                 } else {
-                    val delayMs = maxOf(outcome.minDelayMs, backoff(attempts))
+                    val delayMs = maxOf(outcome.minDelayMs, retryDelay(attempts, outcome.error.code))
                     uploads.markRetry(id, attempts, now + delayMs, outcome.error.code, message, now)
                 }
             }
@@ -600,10 +617,11 @@ class TransferEngine @Inject constructor(
             is DownloadOutcome.Retry -> {
                 val current = downloads.get(t.id) ?: return
                 val attempts = current.attempts + 1
-                if (attempts > MAX_ATTEMPTS) {
+                if (attempts > MAX_ATTEMPTS && !isNetworkish(outcome.error.code)) {
                     if (downloads.markFailed(t.id, attempts, outcome.error.code, outcome.error.message, now) == 1) onDownloadFailed(t.id, outcome.error)
                 } else {
-                    downloads.markRetry(t.id, attempts, now + maxOf(outcome.minDelayMs, backoff(attempts)), outcome.error.code, outcome.error.message, now)
+                    val delayMs = maxOf(outcome.minDelayMs, retryDelay(attempts, outcome.error.code))
+                    downloads.markRetry(t.id, attempts, now + delayMs, outcome.error.code, outcome.error.message, now)
                 }
             }
             is DownloadOutcome.Failed -> {
@@ -718,6 +736,16 @@ class TransferEngine @Inject constructor(
 
         /** 任务级退避:2s、4s、8s、16s、32s,封顶 60s */
         fun backoff(attempt: Int): Long = minOf(60_000L, 2_000L shl (attempt - 1).coerceIn(0, 5))
+
+        /** 网络类错误不计入失败上限(断网是常态,恢复后要能自己续上),重试 5 次以后改成每 5 分钟一次 */
+        val NETWORK_CODES = listOf(GopanErrors.NETWORK, GopanErrors.HTTP)
+
+        fun isNetworkish(code: String): Boolean = code in NETWORK_CODES
+
+        fun retryDelay(attempt: Int, code: String): Long =
+            if (isNetworkish(code) && attempt > MAX_ATTEMPTS) NETWORK_SLOW_RETRY_MS else backoff(attempt)
+
+        private const val NETWORK_SLOW_RETRY_MS = 5 * 60_000L
     }
 }
 

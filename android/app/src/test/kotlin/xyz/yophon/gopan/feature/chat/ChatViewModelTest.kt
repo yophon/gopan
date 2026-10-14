@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -197,6 +198,32 @@ class ChatViewModelTest {
         assertThat(transfers.uploadedFiles.single().first).containsExactly(f)
         assertThat(transfers.uploadedFiles.single().second).isEqualTo(repo.folder)
         f.delete()
+    }
+
+    @Test
+    fun `pasted images are copied and sent to the chat folder`() = chatTest { vm ->
+        runCurrent()
+        // JVM 单测里 Uri.parse 是桩(返回 null);ViewModel 只是把列表交给 TransferActions,不解引用
+        val uris = listOf(android.net.Uri.parse("content://keyboard/1"))
+        vm.sendPasted(uris)
+        runCurrent()
+        assertThat(transfers.pasted).hasSize(1)
+        assertThat(transfers.pasted.single().second).isEqualTo(repo.folder)
+        assertThat(transfers.pasted.single().third).isTrue()
+    }
+
+    @Test
+    fun `programmatic draft changes are announced so the input field can replace its text`() = chatTest { vm ->
+        val replaced = mutableListOf<String>()
+        backgroundScope.launch { vm.draftReplace.collect { replaced += it } }
+        runCurrent()
+        vm.setDraft("typed") // 用户打字:不发替换事件
+        inbox.post(SharePayload("shared", emptyList(), failed = 0))
+        runCurrent()
+        assertThat(replaced).containsExactly("typed" + "\n" + "shared")
+        vm.send()
+        runCurrent()
+        assertThat(replaced.last()).isEmpty()
     }
 
     @Test

@@ -80,7 +80,7 @@ class IncomingShareStore @Inject constructor(
                 for ((i, uri) in uris.withIndex()) {
                     try {
                         val base = copied
-                        val f = sources.copyIn(uri, sources.incomingDir, "分享文件 ${i + 1}") { n ->
+                        val f = sources.copyIn(uri, sources.incomingDir, "分享文件 ${i + 1}") { n: Long ->
                             _receiving.value = ShareReceiving(uris.size, base + n)
                         }
                         copied += f.length()

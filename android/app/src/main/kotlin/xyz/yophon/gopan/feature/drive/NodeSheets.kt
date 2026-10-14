@@ -108,7 +108,8 @@ fun NodeActionSheet(
     onAction: (NodeAction) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    // 一次展开到底:操作多(文件页 9 项),半展开时下面几项(删除、详情)要拖上来才看得到
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     fun pick(action: NodeAction) {
         scope.launch { sheetState.hide() }.invokeOnCompletion {

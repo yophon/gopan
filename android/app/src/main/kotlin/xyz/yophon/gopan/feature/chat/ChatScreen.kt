@@ -4,7 +4,16 @@ import android.content.ClipData
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.content.MediaType
+import androidx.compose.foundation.content.consume
+import androidx.compose.foundation.content.contentReceiver
+import androidx.compose.foundation.content.hasMediaType
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -83,6 +92,8 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -112,7 +123,6 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val draft by viewModel.draft.collectAsStateWithLifecycle()
     val query by viewModel.searchQuery.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -136,8 +146,17 @@ fun ChatScreen(
     }
     BackHandler(enabled = state.searchOpen) { viewModel.closeSearch() }
 
-    val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < 120 } }
-    LaunchedEffect(atBottom) { if (atBottom) viewModel.clearUnread() }
+    // 是否"跟随底部":只在一次滚动(手势或动画)结束时按当时的位置更新。不能在新数据到了之后再看位置:
+    // reverseLayout 里新条目插在下标 0,LazyColumn 按 key 锚住原来的底部条目,新条目落在视口下面,那时位置已经"不在底部"
+    var followBottom by remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
+            if (!scrolling) {
+                followBottom = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < BOTTOM_SLOP_PX
+                if (followBottom) viewModel.clearUnread()
+            }
+        }
+    }
 
     val zone = remember { ZoneId.systemDefault() }
     val showingResults = state.searchOpen && state.searchResults != null
@@ -149,10 +168,19 @@ fun ChatScreen(
         }.asReversed()
     }
 
+    // 最新一项变了(新消息、发送中的文本、上传卡片出现或换成消息):跟随底部时贴到最新
+    val newestKey = items.firstOrNull()?.key
+    LaunchedEffect(newestKey) {
+        if (followBottom && newestKey != null && !showingResults && !state.anchored) listState.scrollToItem(0)
+    }
+
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                ChatEffect.ScrollToBottom -> launch { if (listState.layoutInfo.totalItemsCount > 0) listState.animateScrollToItem(0) }
+                ChatEffect.ScrollToBottom -> launch {
+                    followBottom = true
+                    if (listState.layoutInfo.totalItemsCount > 0) listState.animateScrollToItem(0)
+                }
                 is ChatEffect.ScrollToMessage -> launch {
                     val current = ChatLogic.buildItems(viewModel.state.value.messages, viewModel.state.value.pending, viewModel.state.value.uploads, zone, LocalDate.now(zone)).asReversed()
                     val index = current.indexOfFirst {
@@ -161,7 +189,7 @@ fun ChatScreen(
                     if (index >= 0) listState.scrollToItem(index)
                 }
                 is ChatEffect.NewMessages -> launch {
-                    if (atBottom) listState.animateScrollToItem(0) else viewModel.addUnread(effect.count)
+                    if (followBottom) listState.animateScrollToItem(0) else viewModel.addUnread(effect.count)
                 }
                 is ChatEffect.Message -> launch { snackbar.showSnackbar(effect.text) }
                 is ChatEffect.Copy -> launch {
@@ -266,28 +294,33 @@ fun ChatScreen(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    // ExtendedFloatingActionButton 的文字没有进无障碍树(读屏只会念"按钮"):显式给标签
                     if (state.anchored && !state.searchOpen) {
+                        val label = stringResource(R.string.chat_back_to_latest)
                         ExtendedFloatingActionButton(
                             onClick = viewModel::backToLatest,
                             icon = { Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = null) },
-                            text = { Text(stringResource(R.string.chat_back_to_latest)) },
+                            text = { Text(label) },
+                            modifier = Modifier.semantics { contentDescription = label }.testTag("chat_back_latest"),
                         )
                     } else if (state.unread > 0 && !state.searchOpen) {
+                        val label = stringResource(R.string.chat_new_messages, state.unread)
                         ExtendedFloatingActionButton(
                             onClick = {
                                 viewModel.clearUnread()
+                                followBottom = true
                                 scope.launch { listState.animateScrollToItem(0) }
                             },
                             icon = { Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = null) },
-                            text = { Text(stringResource(R.string.chat_new_messages, state.unread)) },
+                            text = { Text(label) },
+                            modifier = Modifier.semantics { contentDescription = label }.testTag("chat_unread"),
                         )
                     }
                 }
             }
             if (!state.searchOpen) {
                 InputBar(
-                    draft = draft,
-                    onDraft = viewModel::setDraft,
+                    viewModel = viewModel,
                     onSend = viewModel::send,
                     onPickFiles = pickers::pickFiles,
                     onPickMedia = pickers::pickMedia,
@@ -474,16 +507,24 @@ private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> U
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun InputBar(
-    draft: String,
-    onDraft: (String) -> Unit,
+    viewModel: ChatViewModel,
     onSend: () -> Unit,
     onPickFiles: () -> Unit,
     onPickMedia: () -> Unit,
     onCamera: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
+    // 输入框自己持有文本(打字不经过 ViewModel 回写);ViewModel 改草稿时发 draftReplace 事件
+    val savedDraft by viewModel.draft.collectAsStateWithLifecycle()
+    val field = rememberTextFieldState(initialText = savedDraft)
+    LaunchedEffect(viewModel, field) {
+        launch { viewModel.draftReplace.collect { field.setTextAndPlaceCursorAtEnd(it) } }
+        snapshotFlow { field.text.toString() }.collect(viewModel::setDraft)
+    }
+    val draft = field.text
     HorizontalDivider()
     Row(
         verticalAlignment = Alignment.Bottom,
@@ -521,12 +562,20 @@ private fun InputBar(
             }
         }
         OutlinedTextField(
-            value = draft,
-            onValueChange = onDraft,
+            state = field,
             placeholder = { Text(stringResource(R.string.chat_input_hint)) },
-            minLines = 1,
-            maxLines = 6,
-            modifier = Modifier.weight(1f).testTag("chat_input"),
+            lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = 1, maxHeightInLines = 6),
+            modifier = Modifier
+                .weight(1f)
+                .testTag("chat_input")
+                // 粘贴 / 输入法插入的图片:直接作为文件发出去(文本照常进输入框)
+                .contentReceiver { content ->
+                    if (!content.hasMediaType(MediaType.Image)) return@contentReceiver content
+                    val uris = mutableListOf<android.net.Uri>()
+                    val rest = content.consume { item -> item.uri?.let { uris += it; true } ?: false }
+                    viewModel.sendPasted(uris)
+                    rest
+                },
         )
         Spacer(Modifier.size(4.dp))
         FilledIconButton(
@@ -550,7 +599,8 @@ private fun MessageActionSheet(
     onLocateInDrive: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    // 一次展开到底:操作多(文件页 9 项),半展开时下面几项(删除、详情)要拖上来才看得到
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     fun pick(action: () -> Unit) {
         scope.launch { sheetState.hide() }.invokeOnCompletion {
@@ -595,3 +645,6 @@ private fun SheetItem(icon: androidx.compose.ui.graphics.vector.ImageVector, lab
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
 }
+
+/** 离底部这么近(像素)也算"在底部" */
+private const val BOTTOM_SLOP_PX = 120

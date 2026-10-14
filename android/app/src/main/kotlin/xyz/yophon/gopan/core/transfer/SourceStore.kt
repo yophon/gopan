@@ -208,10 +208,17 @@ class SourceStore @Inject constructor(
      * 把 content URI 拷进 [dir](分享接收):文件名取显示名,缺扩展名时按 MIME 补上,重名加 (n)。
      * 读失败抛 IOException / SecurityException。
      */
-    suspend fun copyIn(uri: Uri, dir: File, fallbackName: String, onProgress: (Long) -> Unit = {}): File =
+    suspend fun copyIn(
+        uri: Uri,
+        dir: File,
+        fallbackName: String,
+        preferFallback: Boolean = false,
+        onProgress: (Long) -> Unit = {},
+    ): File =
         withContext(Dispatchers.IO) {
             val mime = mimeOf(uri)
-            val name = withExtension(sanitizeFileName(displayName(uri) ?: fallbackName), mime)
+            val base = if (preferFallback) fallbackName else displayName(uri) ?: fallbackName
+            val name = withExtension(sanitizeFileName(base), mime)
             val target = newPrivateFile(dir, name)
             val input = resolver.openInputStream(uri) ?: throw FileNotFoundException("无法读取分享的文件")
             try {

@@ -13,7 +13,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
@@ -109,6 +112,18 @@ class ChatViewModel @Inject constructor(
     private val _draft = MutableStateFlow("")
     val draft: StateFlow<String> = _draft.asStateFlow()
 
+    /**
+     * 草稿被 ViewModel 改写(恢复保存的草稿、分享的文本接进来、发送后清空):输入框据此替换内容。
+     * 用户打字只走 [setDraft],不发这个事件,免得回写覆盖还没同步过来的按键。
+     */
+    private val _draftReplace = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val draftReplace: SharedFlow<String> = _draftReplace.asSharedFlow()
+
+    private fun replaceDraft(text: String) {
+        _draft.value = text
+        _draftReplace.tryEmit(text)
+    }
+
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -126,7 +141,7 @@ class ChatViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             val saved = runCatching { prefs.chatDraft.first() }.getOrDefault("")
-            if (_draft.value.isEmpty()) _draft.value = saved
+            if (_draft.value.isEmpty() && saved.isNotEmpty()) replaceDraft(saved)
             _draft.drop(1).debounce(DRAFT_SAVE_DEBOUNCE_MS).collect { runCatching { prefs.setChatDraft(it) } }
         }
         viewModelScope.launch {
@@ -356,7 +371,7 @@ class ChatViewModel @Inject constructor(
                 val folder = ensureFolder() ?: return@launch
                 gopanResult { transfers.uploadText(body, folder, toChat = true) }
                     .onSuccess {
-                        _draft.value = ""
+                        replaceDraft("")
                         _effects.trySend(ChatEffect.Message("文本超过 4000 字节,已转成 txt 文件发送"))
                         _effects.trySend(ChatEffect.ScrollToBottom)
                         _effects.trySend(ChatEffect.TransferQueued)
@@ -366,7 +381,7 @@ class ChatViewModel @Inject constructor(
             return
         }
         val pending = PendingText("pending-${UUID.randomUUID()}", body, System.currentTimeMillis())
-        _draft.value = ""
+        replaceDraft("")
         _state.update { it.copy(pending = it.pending + pending) }
         _effects.trySend(ChatEffect.ScrollToBottom)
         sendPending(pending)
@@ -409,6 +424,16 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** 粘贴 / 键盘插入的图片 */
+    fun sendPasted(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        leaveSpecialModes()
+        viewModelScope.launch {
+            val folder = ensureFolder() ?: return@launch
+            report(transfers.uploadCopies(uris, folder, toChat = true))
+        }
+    }
+
     fun sendFiles(files: List<File>) {
         if (files.isEmpty()) return
         leaveSpecialModes()
@@ -445,7 +470,7 @@ class ChatViewModel @Inject constructor(
         val payload = shareInbox.take() ?: return
         payload.text?.let { text ->
             val current = _draft.value
-            _draft.value = if (current.isBlank()) text else current.trimEnd() + "\n" + text
+            replaceDraft(if (current.isBlank()) text else current.trimEnd() + "\n" + text)
         }
         if (payload.files.isNotEmpty()) sendFiles(payload.files)
         if (payload.failed > 0) _effects.trySend(ChatEffect.Message("${payload.failed} 个分享的文件读取失败"))

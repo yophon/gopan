@@ -40,6 +40,13 @@ class FakeTransferActions : TransferActions {
         return EnqueueResult(files.size, 0, 0)
     }
 
+    val pasted = mutableListOf<Triple<List<Uri>, String?, Boolean>>()
+
+    override suspend fun uploadCopies(uris: List<Uri>, parentId: String?, toChat: Boolean): EnqueueResult {
+        pasted += Triple(uris, parentId, toChat)
+        return EnqueueResult(uris.size, 0, 0)
+    }
+
     override suspend fun uploadText(text: String, parentId: String?, toChat: Boolean): EnqueueResult {
         uploadedTexts += Triple(text, parentId, toChat)
         return EnqueueResult(1, 0, 0)

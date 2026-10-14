@@ -267,6 +267,8 @@ function gopanEnv(state, withId) {
     GOPAN_JWT_SECRET: state.jwtSecret,
     GOPAN_DEV_MODE: 'true',
     GOPAN_GOTENBERG_URL: 'http://127.0.0.1:1',
+    // 分片取 S3 允许的最小值:几十 MB 的测试文件就有十几片,续传 / 断点场景才测得出来
+    GOPAN_PART_SIZE: process.env.E2E_PART_SIZE || String(5 * 1024 * 1024),
   };
   if (withId) {
     Object.assign(env, {
