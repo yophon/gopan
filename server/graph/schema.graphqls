@@ -245,8 +245,9 @@ type Query {
   oauthAuthorizationRequest(input: OAuthAuthorizationInput!): OAuthAuthorizationRequest!
 
   # 传输助手:最近 limit 条消息,升序(旧→新)。单用户单会话。
-  # before:消息 id 游标,只取比它更旧的;query:正文或附件名包含关键词(此时忽略 before,取最新 limit 条命中后升序返回)。
-  chatMessages(limit: Int = 200, before: ID, query: String): [ChatMessage!]!
+  # before:消息 id 游标,只取比它更旧的(从锚点往前数 limit 条);after:只取比它更新的(从锚点往后数 limit 条);
+  # 两者互斥(同时给 INVALID_INPUT)。query:正文或附件名包含关键词(此时忽略游标,取最新 limit 条命中后升序返回)。
+  chatMessages(limit: Int = 200, before: ID, after: ID, query: String): [ChatMessage!]!
   # 当前"我的设备"文件夹;从未创建过返回 null,不触发创建。
   chatFolder: Node
 

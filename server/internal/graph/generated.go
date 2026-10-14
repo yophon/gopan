@@ -208,7 +208,7 @@ type ComplexityRoot struct {
 		AdminUsers                func(childComplexity int) int
 		AppPasswords              func(childComplexity int) int
 		ChatFolder                func(childComplexity int) int
-		ChatMessages              func(childComplexity int, limit *int, before *string, query *string) int
+		ChatMessages              func(childComplexity int, limit *int, before *string, after *string, query *string) int
 		Children                  func(childComplexity int, parentID *string, cursor *string, order *NodeOrder, desc *bool) int
 		McpAPIKeys                func(childComplexity int) int
 		McpAccessRoots            func(childComplexity int) int
@@ -370,7 +370,7 @@ type QueryResolver interface {
 	McpAPIKeys(ctx context.Context) ([]*MCPAPIKey, error)
 	OauthGrants(ctx context.Context) ([]*OAuthGrant, error)
 	OauthAuthorizationRequest(ctx context.Context, input OAuthAuthorizationInput) (*OAuthAuthorizationRequest, error)
-	ChatMessages(ctx context.Context, limit *int, before *string, query *string) ([]*ChatMessage, error)
+	ChatMessages(ctx context.Context, limit *int, before *string, after *string, query *string) ([]*ChatMessage, error)
 	ChatFolder(ctx context.Context) (*Node, error)
 	AdminUsers(ctx context.Context) ([]*AdminUser, error)
 	AdminOverview(ctx context.Context) (*AdminOverview, error)
@@ -1284,7 +1284,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.ChatMessages(childComplexity, args["limit"].(*int), args["before"].(*string), args["query"].(*string)), true
+		return e.ComplexityRoot.Query.ChatMessages(childComplexity, args["limit"].(*int), args["before"].(*string), args["after"].(*string), args["query"].(*string)), true
 	case "Query.children":
 		if e.ComplexityRoot.Query.Children == nil {
 			break
@@ -2040,8 +2040,9 @@ type Query {
   oauthAuthorizationRequest(input: OAuthAuthorizationInput!): OAuthAuthorizationRequest!
 
   # 传输助手:最近 limit 条消息,升序(旧→新)。单用户单会话。
-  # before:消息 id 游标,只取比它更旧的;query:正文或附件名包含关键词(此时忽略 before,取最新 limit 条命中后升序返回)。
-  chatMessages(limit: Int = 200, before: ID, query: String): [ChatMessage!]!
+  # before:消息 id 游标,只取比它更旧的(从锚点往前数 limit 条);after:只取比它更新的(从锚点往后数 limit 条);
+  # 两者互斥(同时给 INVALID_INPUT)。query:正文或附件名包含关键词(此时忽略游标,取最新 limit 条命中后升序返回)。
+  chatMessages(limit: Int = 200, before: ID, after: ID, query: String): [ChatMessage!]!
   # 当前"我的设备"文件夹;从未创建过返回 null,不触发创建。
   chatFolder: Node
 
@@ -3299,14 +3300,22 @@ func (ec *executionContext) field_Query_chatMessages_args(ctx context.Context, r
 		return nil, err
 	}
 	args["before"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "query",
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "query",
 		func(ctx context.Context, v any) (*string, error) {
 			return ec.unmarshalOString2ᚖstring(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["query"] = arg2
+	args["query"] = arg3
 	return args, nil
 }
 
@@ -7551,7 +7560,7 @@ func (ec *executionContext) _Query_chatMessages(ctx context.Context, field graph
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().ChatMessages(ctx, fc.Args["limit"].(*int), fc.Args["before"].(*string), fc.Args["query"].(*string))
+			return ec.Resolvers.Query().ChatMessages(ctx, fc.Args["limit"].(*int), fc.Args["before"].(*string), fc.Args["after"].(*string), fc.Args["query"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v []*ChatMessage) graphql.Marshaler {

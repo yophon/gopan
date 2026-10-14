@@ -17,7 +17,8 @@ type ChatSendInput struct {
 
 type ChatListInput struct {
 	Limit    *int    `json:"limit,omitempty" jsonschema:"maximum messages to return, default 50, cap 200, ordered newest last"`
-	BeforeID *string `json:"before_id,omitempty" jsonschema:"exclusive cursor; returns messages strictly older than this message ID"`
+	BeforeID *string `json:"before_id,omitempty" jsonschema:"exclusive cursor; returns messages strictly older than this message ID (the limit closest to it)"`
+	AfterID  *string `json:"after_id,omitempty" jsonschema:"exclusive cursor; returns messages strictly newer than this message ID (the limit closest to it); mutually exclusive with before_id"`
 }
 
 type ChatMessageOutput struct {
@@ -88,7 +89,19 @@ func (s *Server) chatList(ctx context.Context, _ *mcp.CallToolRequest, in ChatLi
 	if err != nil {
 		return nil, ChatListOutput{}, err
 	}
-	msgs, err := s.chats.ListRecent(ctx, p.UserID, before, limit)
+	after, err := parseOptionalID(in.AfterID)
+	if err != nil {
+		return nil, ChatListOutput{}, err
+	}
+	var msgs []service.ChatMessage
+	switch {
+	case before != nil && after != nil:
+		return nil, ChatListOutput{}, &service.Error{Code: "INVALID_INPUT", Message: "before_id 与 after_id 只能提供一个"}
+	case after != nil:
+		msgs, err = s.chats.ListAfter(ctx, p.UserID, *after, limit)
+	default:
+		msgs, err = s.chats.ListRecent(ctx, p.UserID, before, limit)
+	}
 	if err != nil {
 		return nil, ChatListOutput{}, err
 	}

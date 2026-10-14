@@ -134,10 +134,11 @@ OAuth 与 API Key 共用以下权限：
 {"node_id":"6b8a…","idempotency_key":"send-contract-retry"}
 ```
 
-`node_id` 必须是当前账号已保存的文件/文件夹节点；传他人或已删除的节点返回 `NOT_FOUND`（防探测）。同一节点已在会话里时直接返回那条消息，不重复插入。附件本身走既定上传路径（`prepare_upload` 等），会话消息只引用节点、不承载字节。**把文件直接上传到「我的设备」文件夹本身就会自动成为一条消息**（浏览器、WebDAV、Agent 任一渠道），不需要再 `chat_send`；上传到别处再 `chat_send({"node_id":…})` 才需要显式发。`chat_list` 返回升序（旧→新），`limit` 上限 200，`before_id` 是消息 ID 游标，用于读取更早的历史：
+`node_id` 必须是当前账号已保存的文件/文件夹节点；传他人或已删除的节点返回 `NOT_FOUND`（防探测）。同一节点已在会话里时直接返回那条消息，不重复插入。附件本身走既定上传路径（`prepare_upload` 等），会话消息只引用节点、不承载字节。**把文件直接上传到「我的设备」文件夹本身就会自动成为一条消息**（浏览器、WebDAV、Agent 任一渠道），不需要再 `chat_send`；上传到别处再 `chat_send({"node_id":…})` 才需要显式发。`chat_list` 返回升序（旧→新），`limit` 上限 200。`before_id` 是消息 ID 游标，取比它更早的（贴着游标往前数 `limit` 条）；`after_id` 取比它更新的（贴着游标往后数 `limit` 条），两者只能给一个：
 
 ```json
 {"limit":50,"before_id":"018f…"}
+{"limit":50,"after_id":"018f…"}
 ```
 
 ```json

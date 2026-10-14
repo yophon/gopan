@@ -17,6 +17,14 @@ WHERE owner_id = $1 AND id < $2
 ORDER BY id DESC
 LIMIT $3;
 
+-- name: ListChatMessagesAfter :many
+-- after_id 游标:id > after_id 取"更新"的消息,从锚点往后数 limit 条,直接升序。
+SELECT id, owner_id, body, node_id, created_at, source
+FROM chat_messages
+WHERE owner_id = $1 AND id > $2
+ORDER BY id ASC
+LIMIT $3;
+
 -- name: ReadUserChatFolderID :one
 SELECT chat_folder_id FROM users WHERE id = $1;
 

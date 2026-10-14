@@ -173,6 +173,48 @@ func (q *Queries) ListChatMessages(ctx context.Context, arg ListChatMessagesPara
 	return items, nil
 }
 
+const listChatMessagesAfter = `-- name: ListChatMessagesAfter :many
+SELECT id, owner_id, body, node_id, created_at, source
+FROM chat_messages
+WHERE owner_id = $1 AND id > $2
+ORDER BY id ASC
+LIMIT $3
+`
+
+type ListChatMessagesAfterParams struct {
+	OwnerID uuid.UUID
+	ID      uuid.UUID
+	Limit   int32
+}
+
+// after_id 游标:id > after_id 取"更新"的消息,从锚点往后数 limit 条,直接升序。
+func (q *Queries) ListChatMessagesAfter(ctx context.Context, arg ListChatMessagesAfterParams) ([]ChatMessage, error) {
+	rows, err := q.db.Query(ctx, listChatMessagesAfter, arg.OwnerID, arg.ID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ChatMessage
+	for rows.Next() {
+		var i ChatMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.Body,
+			&i.NodeID,
+			&i.CreatedAt,
+			&i.Source,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listChatMessagesBefore = `-- name: ListChatMessagesBefore :many
 SELECT id, owner_id, body, node_id, created_at, source
 FROM chat_messages

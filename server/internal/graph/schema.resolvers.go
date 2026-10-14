@@ -1010,7 +1010,7 @@ func (r *queryResolver) OauthAuthorizationRequest(ctx context.Context, input OAu
 }
 
 // ChatMessages is the resolver for the chatMessages field.
-func (r *queryResolver) ChatMessages(ctx context.Context, limit *int, before *string, query *string) ([]*ChatMessage, error) {
+func (r *queryResolver) ChatMessages(ctx context.Context, limit *int, before *string, after *string, query *string) ([]*ChatMessage, error) {
 	ident, err := httpx.UserFrom(ctx)
 	if err != nil {
 		return nil, err
@@ -1027,7 +1027,18 @@ func (r *queryResolver) ChatMessages(ctx context.Context, limit *int, before *st
 		if perr != nil {
 			return nil, perr
 		}
-		msgs, err = r.Chats.ListRecent(ctx, ident.UserID, last, limitN)
+		next, perr := parseIDPtr(after)
+		if perr != nil {
+			return nil, perr
+		}
+		switch {
+		case last != nil && next != nil:
+			return nil, &service.Error{Code: "INVALID_INPUT", Message: "before 与 after 只能提供一个"}
+		case next != nil:
+			msgs, err = r.Chats.ListAfter(ctx, ident.UserID, *next, limitN)
+		default:
+			msgs, err = r.Chats.ListRecent(ctx, ident.UserID, last, limitN)
+		}
 	}
 	if err != nil {
 		return nil, err

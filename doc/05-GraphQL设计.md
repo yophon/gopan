@@ -228,9 +228,9 @@ type ChatMessage {
 }
 
 extend type Query {
-  # 最近 limit 条,升序(旧→新)。before:消息 id 游标,只取更旧的;
-  # query:正文或附件名 ILIKE 关键词(忽略 before,取最新 limit 条命中后升序返回)
-  chatMessages(limit: Int = 200, before: ID, query: String): [ChatMessage!]!
+  # 最近 limit 条,升序(旧→新)。before:只取更旧的(从锚点往前数 limit 条);after:只取更新的(从锚点往后数 limit 条);
+  # 两者互斥。query:正文或附件名 ILIKE 关键词(忽略游标,取最新 limit 条命中后升序返回)
+  chatMessages(limit: Int = 200, before: ID, after: ID, query: String): [ChatMessage!]!
   chatFolder: Node                                # 当前指针;从未创建返回 null,不触发创建
 }
 extend type Mutation {
@@ -240,7 +240,7 @@ extend type Mutation {
 }
 ```
 
-- **分页**:`before` 是 uuid v7 消息 id,服务层 `ListRecent(last)` 取 `id < last` 的 `limit` 条;前端滚到顶部按 100 条一页往上翻。`query` 非空时走 `Chats.Search`,`%` `_` `\\` 先转义,按字面匹配。
+- **分页**:`before` 是 uuid v7 消息 id,服务层 `ListRecent(last)` 取 `id < last` 的 `limit` 条;前端滚到顶部按 100 条一页往上翻。`after` 走 `ListAfter`,取 `id > after` 升序的前 `limit` 条,给搜索命中后"跳到上下文"用(前端拼 before 50 + 命中 + after 50 的窗口,再往下按 after 翻直到追上最新)。两个游标同时给 `INVALID_INPUT`。`query` 非空时走 `Chats.Search`,`%` `_` `\\` 先转义,按字面匹配。
 - **文件进会话由服务端负责**:任何渠道(浏览器分片、秒传、WebDAV PUT、Agent 传输)在 `CreateNode` 之后调用 `attachChatMessage`,parent 等于 `users.chat_folder_id` 时在同一事务里插一条文件消息;指针为空、parent 不匹配、该节点已有消息都是 no-op。前端上传完成只 `invalidateQueries`,不再补发 `sendChatMessage(nodeId)`。覆盖写(WebDAV 同名 PUT)走 `ReplaceNodeBlob`,不新建节点也就不重复落消息。
 - `sendChatMessage` 走 `UserFrom`(拒绝 guest);`nodeId` 必须是当前用户的活跃节点,否则 `NOT_FOUND`(防探测,服务层 `GetActiveNodeOwned` 单事务校验)。同一节点已在会话里(自动落的或之前发过的)直接返回那条,不重复插。
 - `deleteChatMessage` 只删 `chat_messages` 行;不存在/非本人 `NOT_FOUND`。MCP 不暴露删除。

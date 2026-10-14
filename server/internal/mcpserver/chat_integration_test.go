@@ -57,6 +57,20 @@ func TestChatSendAndList(t *testing.T) {
 		t.Fatalf("before_id=sent.id 应返回空,got %+v", before.Items)
 	}
 
+	// 4b. after_id 游标:最早一条之后 → 只有文件消息;最新一条之后 → 空;两个游标同时给 → INVALID_INPUT
+	var after ChatListOutput
+	callTool(t, sess, "chat_list", map[string]any{"limit": 10, "after_id": sent.ID}, &after)
+	if len(after.Items) != 1 || after.Items[0].ID != file.ID {
+		t.Fatalf("after_id=sent.id 应只返回文件消息,got %+v", after.Items)
+	}
+	callTool(t, sess, "chat_list", map[string]any{"limit": 10, "after_id": file.ID}, &after)
+	if len(after.Items) != 0 {
+		t.Fatalf("after_id=最新一条 应返回空,got %+v", after.Items)
+	}
+	if msg := callToolErr(t, sess, "chat_list", map[string]any{"before_id": file.ID, "after_id": sent.ID}); !strings.Contains(msg, "INVALID_INPUT") {
+		t.Fatalf("before_id 与 after_id 同时给应 INVALID_INPUT,got %q", msg)
+	}
+
 	// 5. 他人 node → NOT_FOUND(防探测)
 	otherToken, _, _ := e.tokens.Create(ctx, e.bob, "bob-chat", []string{"chat:read", "chat:write"})
 	otherSess := e.connect(t, otherToken)

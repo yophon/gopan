@@ -123,6 +123,23 @@ func (s *Chats) ListRecent(ctx context.Context, owner uuid.UUID, last *uuid.UUID
 	return out, nil
 }
 
+// ListAfter 返回比 after 更新的消息,从锚点往后数 limit 条,升序。搜索命中后"跳到上下文"用:
+// 前端拿 before(更旧)+ 锚点 + after(更新)拼成一个窗口。
+func (s *Chats) ListAfter(ctx context.Context, owner, after uuid.UUID, limit int) ([]ChatMessage, error) {
+	if limit <= 0 || limit > maxChatListLimit {
+		limit = maxChatListLimit
+	}
+	rows, err := s.q.ListChatMessagesAfter(ctx, store.ListChatMessagesAfterParams{OwnerID: owner, ID: after, Limit: int32(limit)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ChatMessage, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toChatMessage(r))
+	}
+	return out, nil
+}
+
 // SendText 发纯文本消息。空 body(trim 后)或超长返回 INVALID_INPUT。
 func (s *Chats) SendText(ctx context.Context, ownerID uuid.UUID, body string) (ChatMessage, error) {
 	body = strings.TrimSpace(body)

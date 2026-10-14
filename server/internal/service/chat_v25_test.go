@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/yophon/gopan/server/internal/service"
 )
 
@@ -147,6 +149,55 @@ func TestChatSearch(t *testing.T) {
 	hits, err = chats.Search(ctx, owner, "   ", 10)
 	if err != nil || len(hits) != 0 {
 		t.Fatalf("空关键词应返回空:%+v err=%v", hits, err)
+	}
+}
+
+// after 游标:取比锚点更新的消息,从锚点往后数 limit 条,升序。
+func TestChatListAfter(t *testing.T) {
+	pool := setup(t)
+	ctx := context.Background()
+	owner := registerChatUser(t, pool, "chat_after")
+	chats, _ := newChats(pool)
+
+	var ids []uuid.UUID
+	for _, body := range []string{"a", "b", "c", "d", "e"} {
+		m, err := chats.SendText(ctx, owner, body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, m.ID)
+	}
+	// 第 2 条之后 → c d e,升序
+	got, err := chats.ListAfter(ctx, owner, ids[1], 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 || got[0].ID != ids[2] || got[2].ID != ids[4] {
+		t.Fatalf("after 第 2 条应得 c d e,got %+v", got)
+	}
+	// limit 从锚点往后数:第 2 条之后取 2 → c d
+	got, err = chats.ListAfter(ctx, owner, ids[1], 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Body != "c" || got[1].Body != "d" {
+		t.Fatalf("limit=2 应得 c d,got %+v", got)
+	}
+	// 最后一条之后 → 空
+	got, err = chats.ListAfter(ctx, owner, ids[4], 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("最后一条之后应为空,got %+v", got)
+	}
+	// 与 before 对称:第 4 条之前取 2 → b c
+	got, err = chats.ListRecent(ctx, owner, &ids[3], 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Body != "b" || got[1].Body != "c" {
+		t.Fatalf("before 第 4 条 limit=2 应得 b c,got %+v", got)
 	}
 }
 
