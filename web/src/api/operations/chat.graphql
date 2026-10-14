@@ -1,5 +1,5 @@
-query ChatMessages($limit: Int, $before: ID, $query: String) {
-  chatMessages(limit: $limit, before: $before, query: $query) {
+query ChatMessages($limit: Int, $before: ID, $after: ID, $query: String) {
+  chatMessages(limit: $limit, before: $before, after: $after, query: $query) {
     id
     body
     createdAt

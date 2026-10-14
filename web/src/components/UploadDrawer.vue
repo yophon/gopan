@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useQueryClient } from '@tanstack/vue-query'
+import { useRoute } from 'vue-router'
 import { useEventListener } from '@vueuse/core'
 import {
   ArrowDown,
@@ -34,6 +35,7 @@ import { formatBytes } from '@/utils/format'
 
 const uploads = useUploadsStore()
 const queryClient = useQueryClient()
+const route = useRoute()
 
 // 任务 done → 刷新对应目录列表(manager 无组件上下文,由这里注入)
 setUploadInvalidator((parentId) => {
@@ -51,7 +53,10 @@ useEventListener(window, 'beforeunload', (e) => {
   }
 })
 
-const visible = computed(() => uploads.tasks.length > 0 || uploads.orphanRecords.length > 0)
+// 传输助手页自己渲染上传进度,抽屉(含收起后的浮动按钮)在那页会压住输入栏,整个隐藏
+const visible = computed(
+  () => route.name !== 'chat' && (uploads.tasks.length > 0 || uploads.orphanRecords.length > 0),
+)
 const finishedCount = computed(
   () => uploads.tasks.filter((t) => TERMINAL_STATUSES.includes(t.status)).length,
 )

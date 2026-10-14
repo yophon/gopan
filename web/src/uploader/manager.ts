@@ -11,6 +11,7 @@ import {
 import type { UploadSessionQuery } from '@/api/gen/graphql'
 import { TERMINAL_STATUSES, useUploadsStore } from '@/stores/uploads'
 import type { UploadTask } from '@/stores/uploads'
+import { randomId } from '@/utils/id'
 
 import { HashAbortedError, hashFile } from './hash'
 
@@ -106,7 +107,7 @@ export function enqueueFiles(files: File[], parentId: string | null) {
     // 断点续传匹配:同 (name, size, lastModified) 的记录 → 挂上 sessionId 走恢复
     const record = store.matchRecord(file)
     const task: UploadTask = {
-      id: crypto.randomUUID(),
+      id: randomId(),
       fileName: file.name,
       size: file.size,
       parentId: record ? record.parentId : parentId,

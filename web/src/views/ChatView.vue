@@ -17,6 +17,7 @@ import {
   Memo,
   Paperclip,
   Picture,
+  Position,
   Promotion,
   Reading,
   RefreshRight,
@@ -38,8 +39,10 @@ import {
 } from '@/api/gen/graphql'
 import { openPreview } from '@/composables/preview'
 import { useBreakpoints } from '@/composables/breakpoints'
+import { useIncomingShareStore } from '@/stores/incomingShare'
 import { useUploadsStore } from '@/stores/uploads'
 import type { UploadTask } from '@/stores/uploads'
+import { recordToShare, shareIdFrom, takeShareRecord } from '@/utils/shareTarget'
 import {
   cancelTask,
   enqueueFiles,
@@ -70,6 +73,7 @@ import {
   type PendingMsg,
 } from '@/utils/chat'
 import { formatBytes } from '@/utils/format'
+import { randomId } from '@/utils/id'
 
 // ---------- 会话指针(模块级,upload 完成回调与组件共享) ----------
 
@@ -143,8 +147,18 @@ const unread = ref(0)
 /** 删除后短暂抑制:轮询可能先于删除落地返回旧数据,这些 id 不再合并回来 */
 const tombstones = new Set<string>()
 
-watch(latestQuery.data, (incoming) => {
-  if (!incoming) return
+// ---------- 定位模式(搜索命中 → 跳到上下文) ----------
+// 窗口 = before 50 + 命中 + after 50。只要"更新的一侧"还没追到最新(hasMoreNewer),
+// 最新 200 条的轮询就不往列表里合并,否则会把窗口冲掉;追上后自动回到正常模式。
+
+const PAGE_AROUND = 50
+const anchored = ref(false)
+const hasMoreNewer = ref(false)
+const loadingNewer = ref(false)
+/** 刚定位到的消息 id,闪一下高亮 */
+const highlightId = ref<string | null>(null)
+
+function applyLatest(incoming: ChatMsg[]) {
   const fresh = incoming.filter((m) => !tombstones.has(m.id))
   const known = new Set(messages.value.map((m) => m.id))
   const added = fresh.filter((m) => !known.has(m.id)).length
@@ -164,6 +178,13 @@ watch(latestQuery.data, (incoming) => {
     if (nearBottom()) void scrollToBottom(true)
     else unread.value += added
   }
+}
+
+watch(latestQuery.data, (incoming) => {
+  if (!incoming) return
+  // 定位窗口还没追到最新:轮询只用来维持连接状态,不动列表
+  if (anchored.value) return
+  applyLatest(incoming)
 })
 
 // ---------- 搜索 ----------
@@ -244,6 +265,69 @@ function onListScroll() {
   if (!el) return
   if (nearBottom()) unread.value = 0
   if (el.scrollTop < 40 && !searchActive.value) void loadOlder()
+  if (anchored.value && el.scrollHeight - el.scrollTop - el.clientHeight < 120) void loadNewer()
+}
+
+/** 定位模式下往下翻:取比当前最新一条更新的 50 条;不足 50 条即追上最新,回到正常轮询 */
+async function loadNewer() {
+  if (loadingNewer.value || !hasMoreNewer.value) return
+  const newest = messages.value[messages.value.length - 1]
+  if (!newest) return
+  loadingNewer.value = true
+  try {
+    const res = await request(ChatMessagesDocument, { limit: PAGE_AROUND, after: newest.id })
+    const page = res.chatMessages.filter((m) => !tombstones.has(m.id))
+    messages.value = mergeChatMessages(messages.value, page)
+    if (res.chatMessages.length < PAGE_AROUND) {
+      hasMoreNewer.value = false
+      anchored.value = false
+      // 追上了:把轮询手里的最新页合并进来,之后照常
+      if (latestQuery.data.value) applyLatest(latestQuery.data.value)
+    }
+  } catch (err) {
+    ElMessage.error(errorText(err, '加载更新的消息失败'))
+  } finally {
+    loadingNewer.value = false
+  }
+}
+
+/** 搜索命中 → 跳到它在历史里的位置:before 50 + 命中 + after 50 组成窗口,滚到命中并高亮 */
+async function jumpTo(hit: ChatMsg) {
+  try {
+    const [older, newer] = await Promise.all([
+      request(ChatMessagesDocument, { limit: PAGE_AROUND, before: hit.id }).then((r) => r.chatMessages),
+      request(ChatMessagesDocument, { limit: PAGE_AROUND, after: hit.id }).then((r) => r.chatMessages),
+    ])
+    search.value = ''
+    messages.value = mergeChatMessages([], [...older, hit, ...newer]).filter((m) => !tombstones.has(m.id))
+    initialLoaded.value = true
+    hasMore.value = older.length >= PAGE_AROUND
+    hasMoreNewer.value = newer.length >= PAGE_AROUND
+    anchored.value = hasMoreNewer.value
+    unread.value = 0
+    if (!anchored.value && latestQuery.data.value) applyLatest(latestQuery.data.value)
+    await nextTick()
+    const el = listEl.value?.querySelector<HTMLElement>(`[data-mid="${hit.id}"]`)
+    el?.scrollIntoView({ block: 'center' })
+    highlightId.value = hit.id
+    window.setTimeout(() => {
+      if (highlightId.value === hit.id) highlightId.value = null
+    }, 1500)
+  } catch (err) {
+    ElMessage.error(errorText(err, '定位失败'))
+  }
+}
+
+/** 离开定位模式:清窗口,重新拉最新 200 条并滚到底 */
+async function backToLatest() {
+  anchored.value = false
+  hasMoreNewer.value = false
+  messages.value = []
+  initialLoaded.value = false
+  hasMore.value = true
+  const res = await latestQuery.refetch()
+  // 数据与上次结构相同时 vue-query 会复用同一引用,watch 不触发,这里直接应用
+  if (res.data) applyLatest(res.data)
 }
 
 async function loadOlder() {
@@ -272,10 +356,19 @@ async function loadOlder() {
 // ---------- 手机键盘 ----------
 // iOS 上键盘弹起时布局视口不会变小,固定 100% 高度的聊天页会把输入框盖在键盘下面。
 // 用 visualViewport 的真实高度顶替页面高度,键盘一弹一收都跟着变。
+// 页面上方还有 AppShell 的顶栏,可用高度 = 可视区底边 - 页面顶边,
+// 直接取 visualViewport.height 会把输入框整段推到屏幕外(安卓壳里首次暴露)。
+const pageEl = ref<HTMLElement | null>(null)
 const viewportHeight = ref<number | null>(null)
 
 function syncViewport() {
-  viewportHeight.value = window.visualViewport?.height ?? null
+  const vv = window.visualViewport
+  if (!vv) {
+    viewportHeight.value = null
+    return
+  }
+  const top = pageEl.value?.getBoundingClientRect().top ?? 0
+  viewportHeight.value = Math.max(200, Math.round(vv.offsetTop + vv.height - top))
 }
 
 onMounted(() => {
@@ -283,11 +376,13 @@ onMounted(() => {
   syncViewport()
   window.visualViewport.addEventListener('resize', syncViewport)
   window.visualViewport.addEventListener('scroll', syncViewport)
+  window.addEventListener('resize', syncViewport)
 })
 
 onBeforeUnmount(() => {
   window.visualViewport?.removeEventListener('resize', syncViewport)
   window.visualViewport?.removeEventListener('scroll', syncViewport)
+  window.removeEventListener('resize', syncViewport)
 })
 
 const pageHeightStyle = computed(() =>
@@ -303,7 +398,7 @@ const sendMutation = useMutation({
 })
 
 function sendText(body: string, pendingId?: string) {
-  const id = pendingId ?? `${PENDING_PREFIX}${crypto.randomUUID()}`
+  const id = pendingId ?? `${PENDING_PREFIX}${randomId()}`
   const item: PendingMsg = { id, body, createdAt: new Date().toISOString(), status: 'sending' }
   pending.value = [...pending.value.filter((p) => p.id !== id), item]
   void scrollToBottom(true)
@@ -351,14 +446,41 @@ function onComposerKeydown(evt: Event | KeyboardEvent) {
   void send()
 }
 
-// ---------- 系统分享(Web Share Target,GET)带进来的文本 ----------
+// ---------- 外部分享进来的内容 ----------
+// 三条来源都汇到 stores/incomingShare:GET share_target 的 query(旧式,只有文本)、
+// POST share_target(sw.js 落 IndexedDB 后 303 到 /chat?share=<id>)、安卓原生壳。
+// 这里只负责消费:文本进草稿,文件直接发。
 
-onMounted(() => {
-  const prefill = sharePrefill(route.query as Record<string, unknown>)
-  if (!prefill) return
-  draft.value = prefill
-  void router.replace({ path: route.path })
+const incoming = useIncomingShareStore()
+
+function consumeIncoming() {
+  const share = incoming.take()
+  if (!share) return
+  if (share.text) draft.value = draft.value.trim() ? `${draft.value.trimEnd()}\n${share.text}` : share.text
+  if (share.files?.length) void sendFiles(share.files)
+}
+
+onMounted(async () => {
+  const query = route.query as Record<string, unknown>
+  const shareId = shareIdFrom(query)
+  const prefill = sharePrefill(query)
+  if (shareId) {
+    const rec = await takeShareRecord(shareId)
+    if (rec) incoming.push(recordToShare(rec))
+    else ElMessage.warning('分享的内容已失效,请重新分享')
+  } else if (prefill) {
+    incoming.push({ text: prefill })
+  }
+  if (shareId || prefill) void router.replace({ path: route.path })
+  consumeIncoming()
 })
+
+watch(
+  () => incoming.pending,
+  (p) => {
+    if (p) consumeIncoming()
+  },
+)
 
 // ---------- 附件:上传到传输助手文件夹 → 服务端自动落消息 ----------
 
@@ -616,6 +738,7 @@ function timeOf(iso: string): string {
 
 <template>
   <div
+    ref="pageEl"
     class="chat-page"
     :style="pageHeightStyle"
     @dragenter="onDragEnter"
@@ -648,7 +771,7 @@ function timeOf(iso: string): string {
       </div>
     </header>
 
-    <main ref="listEl" class="message-list" @scroll.passive="onListScroll">
+    <main ref="listEl" class="message-list" :class="{ searching: searchActive }" @scroll.passive="onListScroll">
       <div v-if="loadingOlder" class="hint">加载更早的消息…</div>
       <div v-else-if="!searchActive && initialLoaded && !hasMore && messages.length > 0" class="hint">
         没有更早的消息了
@@ -680,9 +803,12 @@ function timeOf(iso: string): string {
             >
               <img :src="message.node!.preview.thumbUrl!" :alt="message.node!.name" loading="lazy" />
               <el-icon v-if="message.node!.preview.kind === 'VIDEO'" class="tile-badge"><VideoCamera /></el-icon>
-              <span v-if="!isMobile" class="tile-actions">
-                <el-icon title="下载" @click.stop="onDownload(message)"><Download /></el-icon>
-                <el-icon title="删除" @click.stop="confirmDelete(message)"><Delete /></el-icon>
+              <span v-if="!isMobile || searchActive" class="tile-actions">
+                <el-icon v-if="searchActive" title="定位" @click.stop="jumpTo(message)"><Position /></el-icon>
+                <template v-if="!isMobile">
+                  <el-icon title="下载" @click.stop="onDownload(message)"><Download /></el-icon>
+                  <el-icon title="删除" @click.stop="confirmDelete(message)"><Delete /></el-icon>
+                </template>
               </span>
             </div>
           </div>
@@ -695,7 +821,12 @@ function timeOf(iso: string): string {
         <div
           v-else
           class="message-row"
-          :class="{ pending: isPendingId(item.message.id), failed: pendingById.get(item.message.id)?.status === 'failed' }"
+          :data-mid="item.message.id"
+          :class="{
+            pending: isPendingId(item.message.id),
+            failed: pendingById.get(item.message.id)?.status === 'failed',
+            highlight: highlightId === item.message.id,
+          }"
           @contextmenu.prevent="openActions(item.message)"
           @touchstart.passive="onTouchStart(item.message)"
           @touchend="clearPress"
@@ -755,6 +886,7 @@ function timeOf(iso: string): string {
             <template v-else>
               <time>{{ timeOf(message.createdAt) }}</time>
               <span v-if="sourceLabel(message.source)" class="source-tag">{{ sourceLabel(message.source) }}</span>
+              <el-button v-if="searchActive" text size="small" :icon="Position" class="locate" @click="jumpTo(message)">定位</el-button>
               <span v-if="!isMobile" class="hover-actions">
                 <el-icon title="复制" @click="copyText(message.node ? message.node.name : message.body)"><DocumentCopy /></el-icon>
                 <el-icon title="删除" @click="confirmDelete(message)"><Delete /></el-icon>
@@ -765,6 +897,12 @@ function timeOf(iso: string): string {
         </div>
         </template>
       </template>
+
+      <div v-if="loadingNewer" class="hint">加载更新的消息…</div>
+      <div v-else-if="anchored" class="hint">
+        往下滚动继续加载,或
+        <el-button text size="small" class="inline-btn" @click="backToLatest">回到最新</el-button>
+      </div>
 
       <!-- 正在上传的文件:占位卡片,完成后由服务端消息接替 -->
       <div v-for="task in uploadingTasks" :key="task.id" class="message-row">
@@ -886,7 +1024,14 @@ h2 { margin: 0 0 4px; font-size: 20px; }
 .tile-badge { position: absolute; left: 6px; bottom: 6px; color: #fff; font-size: 16px; filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8)); }
 .tile-actions { position: absolute; right: 4px; top: 4px; display: inline-flex; gap: 4px; padding: 2px 4px; border-radius: 6px; background: rgba(0, 0, 0, 0.55); opacity: 0; transition: opacity 0.15s; }
 .tile-actions .el-icon { color: #fff; font-size: 14px; cursor: pointer; }
-.media-tile:hover .tile-actions { opacity: 1; }
+.media-tile:hover .tile-actions, .message-list.searching .tile-actions { opacity: 1; }
+.message-row.highlight .bubble, .message-row.highlight .file-card, .message-row.highlight .media-card { animation: locate-flash 1.5s ease-out; }
+@keyframes locate-flash {
+  0% { box-shadow: 0 0 0 3px var(--el-color-primary); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.locate { padding: 0 4px; height: 18px; font-size: 11px; }
+.inline-btn { padding: 0 4px; height: auto; font-size: 12px; vertical-align: baseline; }
 .count-text, .source-tag { font-size: 11px; color: var(--el-text-color-secondary); }
 .source-tag { padding: 0 5px; border-radius: 4px; background: var(--el-fill-color); }
 .row-foot { display: flex; align-items: center; gap: 6px; margin-top: 4px; min-height: 18px; }

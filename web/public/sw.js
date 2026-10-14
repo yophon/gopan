@@ -9,6 +9,51 @@
 
 const CACHE = 'gopan-assets-v1'
 
+// Web Share Target(POST):系统分享菜单把文件/文本 POST 到 /chat/share,这里不能把表单
+// 交给服务端(服务端没有这个路由,也不该为分享多一条上传路径),而是落进 IndexedDB,
+// 303 跳到 /chat?share=<id>,页面读出后走正常的传输助手上传。库名/表名与 src/utils/shareTarget.ts 一致。
+const SHARE_DB = 'gopan-share'
+const SHARE_STORE = 'pending'
+const SHARE_PATH = '/chat/share'
+
+function openShareDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(SHARE_DB, 1)
+    req.onupgradeneeded = () => {
+      const db = req.result
+      if (!db.objectStoreNames.contains(SHARE_STORE)) db.createObjectStore(SHARE_STORE, { keyPath: 'id' })
+    }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+async function stashShare(formData) {
+  const id = (self.crypto && self.crypto.randomUUID) ? self.crypto.randomUUID() : String(Date.now())
+  const files = []
+  for (const f of formData.getAll('files')) {
+    if (f && typeof f === 'object' && 'size' in f) files.push({ name: f.name || '', type: f.type || '', blob: f })
+  }
+  const pick = (k) => {
+    const v = formData.get(k)
+    return typeof v === 'string' ? v : ''
+  }
+  const record = { id, title: pick('title'), text: pick('text'), url: pick('url'), files }
+  const db = await openShareDb()
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(SHARE_STORE, 'readwrite')
+      tx.objectStore(SHARE_STORE).put(record)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error)
+    })
+  } finally {
+    db.close()
+  }
+  return id
+}
+
 self.addEventListener('install', (event) => {
   // 不预缓存任何东西;新 SW 立即接管
   self.skipWaiting()
@@ -28,6 +73,24 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request
+  // 0. 唯一处理的非 GET:同源 POST /chat/share(Web Share Target)。
+  //    没有 IndexedDB 的环境直接放行,服务端 404,等于分享失败,但不影响别的请求。
+  if (req.method === 'POST') {
+    const url = new URL(req.url)
+    if (url.origin === self.location.origin && url.pathname === SHARE_PATH && typeof indexedDB !== 'undefined') {
+      event.respondWith(
+        (async () => {
+          try {
+            const id = await stashShare(await req.formData())
+            return Response.redirect(`/chat?share=${encodeURIComponent(id)}`, 303)
+          } catch {
+            return Response.redirect('/chat', 303)
+          }
+        })(),
+      )
+    }
+    return
+  }
   // 1. 只管 GET:POST /query 等一律放行
   if (req.method !== 'GET') return
   // 2. 只管同源:MinIO 独立域名部署时预签名 URL 天然不经过这里

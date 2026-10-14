@@ -6,6 +6,7 @@ import 'element-plus/dist/index.css'
 import './styles/responsive.css'
 
 import App from './App.vue'
+import { initNativeShare } from './native/shareReceiver'
 import router from './router'
 
 const app = createApp(App)
@@ -26,6 +27,9 @@ app.use(VueQueryPlugin, {
 })
 
 app.mount('#app')
+
+// 安卓壳:接收系统分享(浏览器里是空操作)
+initNativeShare(router)
 
 // PWA:只在生产环境注册 service worker(见 src/pwa/register.ts)
 void import('./pwa/register').then((m) => m.registerPwa())
