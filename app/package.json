@@ -1,7 +1,7 @@
 {
   "name": "gopan-app",
   "private": true,
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "gopan 安卓壳:Capacitor 远程加载线上站点,补系统分享接收",
   "scripts": {
     "sync": "cap sync android",

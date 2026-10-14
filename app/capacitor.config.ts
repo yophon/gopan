@@ -11,6 +11,9 @@ import type { CapacitorConfig } from '@capacitor/cli'
  * 构建时用 GOPAN_APP_URL 指向别的实例(自部署用户改这里或传环境变量)。
  */
 const url = process.env.GOPAN_APP_URL ?? 'https://drive.979687.xyz'
+// Yophon ID 登录会把 WebView 带到身份服务的域名,不在白名单里 Capacitor 会丢给系统浏览器,
+// 回调落在浏览器里、App 拿不到登录态。自部署改 GOPAN_APP_ALLOW_NAV(逗号分隔 host)。
+const allowNavigation = (process.env.GOPAN_APP_ALLOW_NAV ?? 'id.979687.xyz').split(',').map((s) => s.trim()).filter(Boolean)
 
 const config: CapacitorConfig = {
   appId: 'xyz.yophon.gopan',
@@ -19,10 +22,11 @@ const config: CapacitorConfig = {
   server: {
     url,
     cleartext: url.startsWith('http://'),
+    allowNavigation,
   },
   android: {
     // 服务端据此识别 App WebView,放行 Capacitor 注入的 bridge 脚本(见 httpx.WithSecurityHeaders)
-    appendUserAgent: 'GopanApp/2.6.0',
+    appendUserAgent: 'GopanApp/2.6.1',
     allowMixedContent: false,
   },
   plugins: {

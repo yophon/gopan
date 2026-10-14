@@ -44,9 +44,11 @@ cd android && ./gradlew assembleDebug     # app/build/outputs/apk/debug/app-debu
 ./gradlew assembleRelease                 # 需要 android/keystore.properties,否则用 debug 签名
 ```
 
-版本号在 `app/build.gradle`(`versionCode` / `versionName`)与 `capacitor.config.ts` 的 `appendUserAgent` 两处,一起改。
+版本号在 `app/android/app/build.gradle`(`versionCode` / `versionName`)与 `capacitor.config.ts` 的 `appendUserAgent` 两处,一起改。
 
 **发布签名**在仓库外:`D:/user/yophon/releases/gopan/gopan-release.jks` + `keystore.properties`,复制到 `app/android/keystore.properties` 即可出 release 包。密钥丢了已装用户就没法升级,务必备份。
+
+**身份服务域名要进白名单。** Yophon ID 登录会把 WebView 带到 `id.979687.xyz`,不在 `server.allowNavigation` 里 Capacitor 会丢给系统浏览器,回调落在浏览器、App 拿不到登录态(2.6.0 的问题,2.6.1 修)。自部署改 `GOPAN_APP_ALLOW_NAV`(逗号分隔 host)。
 
 **指向别的实例**(自部署 / 模拟器打本机):`GOPAN_APP_URL=http://10.0.2.2:8090 npx cap sync android` 再打包。http 实例要求服务端 `GOPAN_DEV_MODE=true`(cookie 不带 Secure)。
 
