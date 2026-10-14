@@ -1,0 +1,18 @@
+# 仓库内一律 LF;Windows 检出也不转 CRLF(core.autocrlf 带来的整屏 warning 与混合换行由此终结)
+* text=auto eol=lf
+
+# 二进制
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.apk binary
+*.aab binary
+*.jar binary
+*.keystore binary
+*.zip binary
+*.gz binary

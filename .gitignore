@@ -10,3 +10,4 @@ __pycache__/
 /.env
 /secrets/
 /gopan-linux
+/app/node_modules/
