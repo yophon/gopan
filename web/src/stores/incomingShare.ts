@@ -2,10 +2,10 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
 /**
- * 外部分享进来的内容(系统分享菜单 → PWA share_target / 安卓原生壳 → 传输助手)。
+ * 外部分享进来的内容(系统分享菜单 → PWA share_target → 传输助手)。
  *
  * 生产方(sw.js 的 POST share_target 落到 IndexedDB 后由 utils/shareTarget 读出、
- * 安卓原生插件、GET share_target 的 query)只管 push,然后把路由切到 /chat;
+ * GET share_target 的 query)只管 push,然后把路由切到 /chat;
  * ChatView 挂载时与 pending 变化时 take() 走:文本进草稿,文件直接发。
  */
 export interface IncomingShare {

@@ -447,8 +447,8 @@ function onComposerKeydown(evt: Event | KeyboardEvent) {
 }
 
 // ---------- 外部分享进来的内容 ----------
-// 三条来源都汇到 stores/incomingShare:GET share_target 的 query(旧式,只有文本)、
-// POST share_target(sw.js 落 IndexedDB 后 303 到 /chat?share=<id>)、安卓原生壳。
+// 两条来源都汇到 stores/incomingShare:GET share_target 的 query(旧式,只有文本)、
+// POST share_target(sw.js 落 IndexedDB 后 303 到 /chat?share=<id>)。安卓原生 App 自己接系统分享,不经网页。
 // 这里只负责消费:文本进草稿,文件直接发。
 
 const incoming = useIncomingShareStore()

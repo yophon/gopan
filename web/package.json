@@ -11,7 +11,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@capacitor/core": "8.5.3",
     "@element-plus/icons-vue": "^2.3.1",
     "@tanstack/vue-query": "^5.62.0",
     "@vueuse/core": "^13.0.0",
