@@ -43,6 +43,24 @@ const (
 	maxChatListLimit = 200
 )
 
+// attachChatMessage 在同一事务里把刚创建的文件节点自动落成一条会话消息。
+// 只有 parent 正是用户的传输助手文件夹(users.chat_folder_id)时才插入;
+// 指针为空、parent 不匹配、该节点已有消息 → 什么都不做。所有上传入口
+// (浏览器分片、秒传、WebDAV、Agent 传输)在 CreateNode 之后都调用它,
+// 这样任何渠道放进该文件夹的文件都会出现在会话里,前端不再需要补发。
+func attachChatMessage(ctx context.Context, q *store.Queries, owner uuid.UUID, parent *uuid.UUID, nodeID uuid.UUID) error {
+	if parent == nil {
+		return nil
+	}
+	_, err := q.InsertChatMessageForChatFolder(ctx, store.InsertChatMessageForChatFolderParams{
+		ID: uuid.Must(uuid.NewV7()), OwnerID: owner, NodeID: &nodeID, ParentID: parent,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	return err
+}
+
 func toChatMessage(row store.ChatMessage) ChatMessage {
 	return ChatMessage{
 		ID:        row.ID,
@@ -100,6 +118,7 @@ func (s *Chats) SendText(ctx context.Context, ownerID uuid.UUID, body string) (C
 
 // SendNode 发文件消息。单事务:先校验 node 属于当前用户且未被删除(active),
 // 再插消息。node 缺失/非属主/已删除一律 ErrNotFound——与 Nodes.Get 的防探测语义一致。
+// 同一节点已在会话里(服务端自动落的或之前发过的)→ 直接返回那条,幂等。
 func (s *Chats) SendNode(ctx context.Context, ownerID, nodeID uuid.UUID) (ChatMessage, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -115,6 +134,12 @@ func (s *Chats) SendNode(ctx context.Context, ownerID, nodeID uuid.UUID) (ChatMe
 		return ChatMessage{}, err
 	}
 
+	if existing, err := qtx.GetChatMessageByNode(ctx, store.GetChatMessageByNodeParams{OwnerID: ownerID, NodeID: &nodeID}); err == nil {
+		return toChatMessage(existing), tx.Commit(ctx)
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return ChatMessage{}, err
+	}
+
 	row, err := qtx.InsertChatMessage(ctx, store.InsertChatMessageParams{
 		ID:      uuid.Must(uuid.NewV7()),
 		OwnerID: ownerID,
@@ -127,6 +152,49 @@ func (s *Chats) SendNode(ctx context.Context, ownerID, nodeID uuid.UUID) (ChatMe
 		return ChatMessage{}, err
 	}
 	return toChatMessage(row), nil
+}
+
+// Delete 删除一条消息。只删消息行,附件文件原样留在网盘里。
+// 不存在/非本人 → ErrNotFound(不泄露存在性)。
+func (s *Chats) Delete(ctx context.Context, ownerID, id uuid.UUID) error {
+	n, err := s.q.DeleteChatMessage(ctx, store.DeleteChatMessageParams{ID: id, OwnerID: ownerID})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Search 按关键词检索会话:正文或附件文件名包含 query(不区分大小写)。
+// 取最新的 limit 条命中,升序返回(与 ListRecent 同向,UI 直接渲染)。
+// 空关键词返回空切片而不是全量。
+func (s *Chats) Search(ctx context.Context, owner uuid.UUID, query string, limit int) ([]ChatMessage, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return []ChatMessage{}, nil
+	}
+	if limit <= 0 || limit > maxChatListLimit {
+		limit = maxChatListLimit
+	}
+	rows, err := s.q.SearchChatMessages(ctx, store.SearchChatMessagesParams{
+		OwnerID: owner, Column2: "%" + escapeLike(query) + "%", Limit: int32(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ChatMessage, 0, len(rows))
+	for i := len(rows) - 1; i >= 0; i-- {
+		out = append(out, toChatMessage(rows[i]))
+	}
+	return out, nil
+}
+
+// escapeLike 转义 LIKE 通配符,让用户输入的 % _  按字面匹配(默认 ESCAPE 为反斜杠)。
+func escapeLike(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
 }
 
 // ChatFolder 返回读取到的"我的设备"文件夹;未创建(指针 NULL)返回 (nil,nil),不触发创建。

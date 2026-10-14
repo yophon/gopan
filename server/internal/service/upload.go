@@ -217,6 +217,9 @@ func (s *Uploads) linkBlob(ctx context.Context, owner uuid.UUID, parentID *uuid.
 	if err := qtx.MarkAncestorsStale(ctx, node.ID); err != nil {
 		return store.Node{}, err
 	}
+	if err := attachChatMessage(ctx, qtx, owner, parentID, node.ID); err != nil {
+		return store.Node{}, err
+	}
 	return node, tx.Commit(ctx)
 }
 
@@ -337,6 +340,9 @@ func (s *Uploads) CommitStreamed(ctx context.Context, owner uuid.UUID, parentID 
 			return nil, err
 		}
 		if err := qtx.AddUsedBytes(ctx, store.AddUsedBytesParams{ID: owner, UsedBytes: size}); err != nil {
+			return nil, err
+		}
+		if err := attachChatMessage(ctx, qtx, owner, parentID, node.ID); err != nil {
 			return nil, err
 		}
 	}

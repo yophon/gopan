@@ -231,6 +231,9 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 	if err := q.MarkAncestorsStale(ctx, n.ID); err != nil {
 		return nil, err
 	}
+	if err := attachChatMessage(ctx, q, sess.OwnerID, sess.TargetParent, n.ID); err != nil {
+		return nil, err
+	}
 	if err := q.FinishUploadSession(ctx, store.FinishUploadSessionParams{ID: sess.ID, NodeID: &n.ID}); err != nil {
 		return nil, err
 	}

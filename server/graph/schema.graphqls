@@ -242,8 +242,9 @@ type Query {
   oauthGrants: [OAuthGrant!]!
   oauthAuthorizationRequest(input: OAuthAuthorizationInput!): OAuthAuthorizationRequest!
 
-  # 文件传输助手(我的设备):最近 limit 条消息,升序(旧→新)。单用户单会话,append-only。
-  chatMessages(limit: Int = 200): [ChatMessage!]!
+  # 传输助手:最近 limit 条消息,升序(旧→新)。单用户单会话。
+  # before:消息 id 游标,只取比它更旧的;query:正文或附件名包含关键词(此时忽略 before,取最新 limit 条命中后升序返回)。
+  chatMessages(limit: Int = 200, before: ID, query: String): [ChatMessage!]!
   # 当前"我的设备"文件夹;从未创建过返回 null,不触发创建。
   chatFolder: Node
 
@@ -307,8 +308,10 @@ type Mutation {
   decideOAuthAuthorization(input: OAuthAuthorizationInput!, approved: Boolean!): OAuthAuthorizationResult!
   revokeOAuthGrant(id: ID!): Boolean!
 
-  # 文件传输助手(我的设备):body / nodeId 至少其一;nodeId 必须是当前用户的活跃文件节点。
+  # 传输助手:body / nodeId 至少其一;nodeId 必须是当前用户的活跃节点。同一节点已在会话中则返回已有消息(幂等)。
   sendChatMessage(body: String, nodeId: ID): ChatMessage!
+  # 删除一条消息(只删消息,不动附件文件)。不存在/非本人 → NOT_FOUND。
+  deleteChatMessage(id: ID!): Boolean!
   # 幂等返回"我的设备"文件夹(首次调用才创建)。
   ensureChatFolder: Node!
 

@@ -11,6 +11,50 @@ import (
 	"github.com/google/uuid"
 )
 
+const deleteChatMessage = `-- name: DeleteChatMessage :execrows
+DELETE FROM chat_messages WHERE id = $1 AND owner_id = $2
+`
+
+type DeleteChatMessageParams struct {
+	ID      uuid.UUID
+	OwnerID uuid.UUID
+}
+
+func (q *Queries) DeleteChatMessage(ctx context.Context, arg DeleteChatMessageParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteChatMessage, arg.ID, arg.OwnerID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getChatMessageByNode = `-- name: GetChatMessageByNode :one
+SELECT id, owner_id, body, node_id, created_at
+FROM chat_messages
+WHERE owner_id = $1 AND node_id = $2
+ORDER BY id
+LIMIT 1
+`
+
+type GetChatMessageByNodeParams struct {
+	OwnerID uuid.UUID
+	NodeID  *uuid.UUID
+}
+
+// 同一节点在会话里只保留一条:SendNode 与自动落消息都先查这一条做幂等。
+func (q *Queries) GetChatMessageByNode(ctx context.Context, arg GetChatMessageByNodeParams) (ChatMessage, error) {
+	row := q.db.QueryRow(ctx, getChatMessageByNode, arg.OwnerID, arg.NodeID)
+	var i ChatMessage
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Body,
+		&i.NodeID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const insertChatMessage = `-- name: InsertChatMessage :one
 INSERT INTO chat_messages (id, owner_id, body, node_id)
 VALUES ($1, $2, $3, $4) RETURNING id, owner_id, body, node_id, created_at
@@ -29,6 +73,47 @@ func (q *Queries) InsertChatMessage(ctx context.Context, arg InsertChatMessagePa
 		arg.OwnerID,
 		arg.Body,
 		arg.NodeID,
+	)
+	var i ChatMessage
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Body,
+		&i.NodeID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const insertChatMessageForChatFolder = `-- name: InsertChatMessageForChatFolder :one
+INSERT INTO chat_messages (id, owner_id, node_id)
+SELECT $1, $2, $3
+FROM users u
+WHERE u.id = $2
+  AND u.chat_folder_id IS NOT NULL
+  AND u.chat_folder_id = $4
+  AND NOT EXISTS (
+    SELECT 1 FROM chat_messages c
+    WHERE c.owner_id = $2 AND c.node_id = $3
+  )
+RETURNING id, owner_id, body, node_id, created_at
+`
+
+type InsertChatMessageForChatFolderParams struct {
+	ID       uuid.UUID
+	OwnerID  uuid.UUID
+	NodeID   *uuid.UUID
+	ParentID *uuid.UUID
+}
+
+// 文件落进「传输助手」文件夹即自动成为一条消息。
+// 指针为空 / parent 不是该文件夹 / 该节点已有消息 → 不插入(调用方按 ErrNoRows 忽略)。
+func (q *Queries) InsertChatMessageForChatFolder(ctx context.Context, arg InsertChatMessageForChatFolderParams) (ChatMessage, error) {
+	row := q.db.QueryRow(ctx, insertChatMessageForChatFolder,
+		arg.ID,
+		arg.OwnerID,
+		arg.NodeID,
+		arg.ParentID,
 	)
 	var i ChatMessage
 	err := row.Scan(
@@ -130,6 +215,49 @@ func (q *Queries) ReadUserChatFolderID(ctx context.Context, id uuid.UUID) (*uuid
 	var chat_folder_id *uuid.UUID
 	err := row.Scan(&chat_folder_id)
 	return chat_folder_id, err
+}
+
+const searchChatMessages = `-- name: SearchChatMessages :many
+SELECT c.id, c.owner_id, c.body, c.node_id, c.created_at
+FROM chat_messages c
+LEFT JOIN nodes n ON n.id = c.node_id
+WHERE c.owner_id = $1
+  AND (c.body ILIKE $2::text OR n.name ILIKE $2::text)
+ORDER BY c.id DESC
+LIMIT $3
+`
+
+type SearchChatMessagesParams struct {
+	OwnerID uuid.UUID
+	Column2 string
+	Limit   int32
+}
+
+// 正文或附件文件名匹配 pattern(调用方拼好 %...%,并转义 % _),新→旧。单用户会话规模小,不建索引。
+func (q *Queries) SearchChatMessages(ctx context.Context, arg SearchChatMessagesParams) ([]ChatMessage, error) {
+	rows, err := q.db.Query(ctx, searchChatMessages, arg.OwnerID, arg.Column2, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ChatMessage
+	for rows.Next() {
+		var i ChatMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.Body,
+			&i.NodeID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setUserChatFolderID = `-- name: SetUserChatFolderID :exec

@@ -1,6 +1,8 @@
-"""M10 smoke:「我的设备」文件传输助手(v2.2)。
+"""M10 smoke:传输助手(v2.2 建立,v2.5 整改)。
 
-覆盖前端实际走的那层 GraphQL:chatFolder / ensureChatFolder / sendChatMessage / chatMessages。
+覆盖前端实际走的那层 GraphQL:chatFolder / ensureChatFolder / sendChatMessage / chatMessages
+(before 游标、query 搜索)/ deleteChatMessage。
+文件上传到传输助手文件夹要由服务端自动落消息,再 sendChatMessage 同一节点要幂等;
 文件删掉后消息要留存、node 字段要退化成 null(前端据此显示「文件已不存在」)。
 """
 import os
@@ -35,23 +37,39 @@ sent = gql(
 assert sent["body"] == "你好,世界" and sent["node"] is None, sent
 print("== 文本消息 trim OK ==")
 
-# 4. 上传文件到「我的设备」,再发成带真实文件卡片的消息
+# 4. 上传文件到传输助手文件夹:服务端自动落一条文件消息,不需要客户端补发
 data = b"chat attachment\n" * 100
 fid = upload("chat-note.txt", data, f1["id"], TOKEN)
+auto = gql("query{chatMessages{%s}}" % MSG_FIELDS, token=TOKEN)["chatMessages"]
+assert len(auto) == 2 and auto[1]["node"] and auto[1]["node"]["id"] == fid, f"上传应自动成消息:{auto}"
+print("== 上传到传输助手文件夹自动成消息 OK ==")
+
+# 4b. 客户端再补发同一节点 → 幂等,返回同一条
 file_msg = gql(
     "mutation($n:ID){sendChatMessage(nodeId:$n){%s}}" % MSG_FIELDS,
     {"n": fid}, TOKEN,
 )["sendChatMessage"]
+assert file_msg["id"] == auto[1]["id"], f"同一节点应幂等:{file_msg} vs {auto[1]}"
 assert file_msg["body"] == "", file_msg
-assert file_msg["node"] and file_msg["node"]["id"] == fid, file_msg
 assert file_msg["node"]["name"] == "chat-note.txt" and file_msg["node"]["size"] == len(data), file_msg
-print("== 文件消息带出真实文件卡片 OK ==")
+print("== 同一节点 sendChatMessage 幂等 OK ==")
 
 # 5. chatMessages:两条都在、按时间升序
 items = gql("query($l:Int){chatMessages(limit:$l){%s}}" % MSG_FIELDS, {"l": 10}, TOKEN)["chatMessages"]
 assert len(items) == 2, f"应 2 条,got {len(items)}"
 assert items[0]["id"] == sent["id"] and items[1]["id"] == file_msg["id"], "应按时间升序"
 print("== chatMessages 升序 OK ==")
+
+# 5b. before 游标:最早一条之前没有更旧的;最新一条之前只有最早那条
+assert gql("query($b:ID){chatMessages(before:$b){id}}", {"b": sent["id"]}, TOKEN)["chatMessages"] == []
+older = gql("query($b:ID){chatMessages(before:$b){id}}", {"b": file_msg["id"]}, TOKEN)["chatMessages"]
+assert [m["id"] for m in older] == [sent["id"]], older
+# 5c. query 搜索:正文命中、附件名命中、通配符按字面、无命中为空
+assert [m["id"] for m in gql('query{chatMessages(query:"世界"){id}}', token=TOKEN)["chatMessages"]] == [sent["id"]]
+assert [m["id"] for m in gql('query{chatMessages(query:"chat-note"){id}}', token=TOKEN)["chatMessages"]] == [file_msg["id"]]
+assert gql('query{chatMessages(query:"%"){id}}', token=TOKEN)["chatMessages"] == []
+assert gql('query{chatMessages(query:"没有这个"){id}}', token=TOKEN)["chatMessages"] == []
+print("== before 游标 / query 搜索 OK ==")
 
 # 6. 越权:发别人的 node、空 body、两者都不给
 _, OTHER = register("m10other")
@@ -72,5 +90,13 @@ assert items2[1]["id"] == file_msg["id"] and items2[1]["node"] is None, items2[1
 # 回收站里的节点也不能再从 id 取到(下载/预览都走这条)
 gql("query($i:ID!){node(id:$i){id}}", {"i": fid}, TOKEN, expect_code="NOT_FOUND")
 print("== 删除文件后消息留存、node 置空 OK ==")
+
+# 8. deleteChatMessage:别人删不到(NOT_FOUND)、本人删成功、再删 NOT_FOUND、列表少一条
+gql("mutation($i:ID!){deleteChatMessage(id:$i)}", {"i": sent["id"]}, OTHER, expect_code="NOT_FOUND")
+assert gql("mutation($i:ID!){deleteChatMessage(id:$i)}", {"i": sent["id"]}, TOKEN)["deleteChatMessage"] is True
+gql("mutation($i:ID!){deleteChatMessage(id:$i)}", {"i": sent["id"]}, TOKEN, expect_code="NOT_FOUND")
+items3 = gql("query{chatMessages{id}}", token=TOKEN)["chatMessages"]
+assert [m["id"] for m in items3] == [file_msg["id"]], items3
+print("== deleteChatMessage OK ==")
 
 print("ALL M10 SMOKE PASSED")

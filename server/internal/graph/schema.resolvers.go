@@ -8,6 +8,7 @@ package graph
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/yophon/gopan/server/internal/httpx"
@@ -516,6 +517,22 @@ func (r *mutationResolver) SendChatMessage(ctx context.Context, body *string, no
 	}
 }
 
+// DeleteChatMessage 删除一条会话消息;附件文件不受影响。
+func (r *mutationResolver) DeleteChatMessage(ctx context.Context, id string) (bool, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	mid, err := parseID(id)
+	if err != nil {
+		return false, err
+	}
+	if err := r.Chats.Delete(ctx, ident.UserID, mid); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // EnsureChatFolder is the resolver for the ensureChatFolder field.
 func (r *mutationResolver) EnsureChatFolder(ctx context.Context) (*Node, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -993,7 +1010,7 @@ func (r *queryResolver) OauthAuthorizationRequest(ctx context.Context, input OAu
 }
 
 // ChatMessages is the resolver for the chatMessages field.
-func (r *queryResolver) ChatMessages(ctx context.Context, limit *int) ([]*ChatMessage, error) {
+func (r *queryResolver) ChatMessages(ctx context.Context, limit *int, before *string, query *string) ([]*ChatMessage, error) {
 	ident, err := httpx.UserFrom(ctx)
 	if err != nil {
 		return nil, err
@@ -1002,7 +1019,16 @@ func (r *queryResolver) ChatMessages(ctx context.Context, limit *int) ([]*ChatMe
 	if limit != nil {
 		limitN = *limit
 	}
-	msgs, err := r.Chats.ListRecent(ctx, ident.UserID, nil, limitN)
+	var msgs []service.ChatMessage
+	if query != nil && strings.TrimSpace(*query) != "" {
+		msgs, err = r.Chats.Search(ctx, ident.UserID, *query, limitN)
+	} else {
+		last, perr := parseIDPtr(before)
+		if perr != nil {
+			return nil, perr
+		}
+		msgs, err = r.Chats.ListRecent(ctx, ident.UserID, last, limitN)
+	}
 	if err != nil {
 		return nil, err
 	}
