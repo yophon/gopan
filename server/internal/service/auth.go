@@ -232,6 +232,10 @@ func (a *Auth) issuePair(ctx context.Context, u store.User, ip string) (*AuthRes
 
 // ---- refresh:旋转 + 重用检测 ----
 
+// refreshReuseGrace:旧 refresh token 旋转后这么久以内再次出现,按并发标签页处理而不是泄露。
+// 真正的重放攻击几乎不可能恰好落在这几秒里,而多标签页的碰撞几乎总在这几秒里。
+const refreshReuseGrace = 10 * time.Second
+
 func (a *Auth) newRefresh(ctx context.Context, userID, familyID uuid.UUID) (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
@@ -263,10 +267,13 @@ func (a *Auth) Refresh(ctx context.Context, plain string) (*AuthResult, error) {
 	switch {
 	case rt.RevokedAt.Valid, rt.ExpiresAt.Time.Before(time.Now()):
 		return nil, ErrUnauthenticated
-	case rt.UsedAt.Valid:
+	case rt.UsedAt.Valid && time.Since(rt.UsedAt.Time) > refreshReuseGrace:
 		// 已旋转过的 token 再次出现 = 泄露,吊销整族
 		_ = a.q.RevokeRefreshFamily(ctx, rt.FamilyID)
 		return nil, ErrUnauthenticated
+	case rt.UsedAt.Valid:
+		// 宽限期内的重用:同一浏览器两个标签页同时拿旧 cookie 来刷新(第二个请求
+		// 发出时第一个的 Set-Cookie 还没落地),不是泄露。再旋转一枚给它,family 不动。
 	}
 	if err := a.checkIdentity(ctx, rt.UserID, rt.FamilyID); err != nil {
 		return nil, err
