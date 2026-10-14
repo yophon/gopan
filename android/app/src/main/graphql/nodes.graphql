@@ -1,19 +1,33 @@
+# 文件节点 operations(文件线)。字段选择以 web/src/api/operations/nodes.graphql 为底,
+# 列表类查询共用 NodeItem 片段:Children / SearchNodes / Trash / Node / CreateFolder / RenameNode
+# 都映射到同一个生成类型,core.data 里只写一处 toNode()。
+# 比网页端多选了 mime(列表图标按 kind/mime 分类)与 createdAt(详情页),都是 schema 已有字段。
+# deletedAt / purgeAt 只有 trash 查询会填,其它查询返回 null。
+
+fragment NodeItem on Node {
+  id
+  parentId
+  name
+  kind
+  size
+  mime
+  createdAt
+  updatedAt
+  deletedAt
+  purgeAt
+  subtreeBytes
+  subtreeCount
+  statsStale
+  preview {
+    kind
+    thumbUrl
+  }
+}
+
 query Children($parentId: ID, $cursor: String, $order: NodeOrder, $desc: Boolean) {
   children(parentId: $parentId, cursor: $cursor, order: $order, desc: $desc) {
     items {
-      id
-      parentId
-      name
-      kind
-      size
-      subtreeBytes
-      subtreeCount
-      statsStale
-      updatedAt
-      preview {
-        kind
-        thumbUrl
-      }
+      ...NodeItem
     }
     nextCursor
     total
@@ -49,34 +63,19 @@ mutation RequestPreview($nodeId: ID!) {
 
 query Node($id: ID!) {
   node(id: $id) {
-    id
-    parentId
-    name
-    kind
-    size
-    updatedAt
+    ...NodeItem
   }
 }
 
 mutation CreateFolder($parentId: ID, $name: String!) {
   createFolder(parentId: $parentId, name: $name) {
-    id
-    parentId
-    name
-    kind
-    size
-    updatedAt
+    ...NodeItem
   }
 }
 
 mutation RenameNode($id: ID!, $name: String!) {
   renameNode(id: $id, name: $name) {
-    id
-    parentId
-    name
-    kind
-    size
-    updatedAt
+    ...NodeItem
   }
 }
 
@@ -103,16 +102,7 @@ mutation CopyNodes($ids: [ID!]!, $targetParentId: ID) {
 query SearchNodes($q: String!, $cursor: String) {
   searchNodes(q: $q, cursor: $cursor) {
     items {
-      id
-      parentId
-      name
-      kind
-      size
-      updatedAt
-      preview {
-        kind
-        thumbUrl
-      }
+      ...NodeItem
     }
     nextCursor
     total
