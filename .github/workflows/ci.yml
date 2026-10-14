@@ -34,12 +34,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # service 容器不能改启动命令,MinIO 需要 `server /data`,所以作为一个 step 起
+      # service 容器不能改启动命令,所以作为一个 step 起。2025 年起 docker.io/minio/minio 与
+      # quay.io/minio/minio 都已不可匿名拉取,用 bitnamilegacy/minio(自带 server 启动命令,
+      # 同样的 MINIO_ROOT_USER / MINIO_ROOT_PASSWORD,9000 端口)。
       - name: Start MinIO
         run: |
           docker run -d --name minio -p 9000:9000 \
             -e MINIO_ROOT_USER=gopan -e MINIO_ROOT_PASSWORD=gopan-minio-dev \
-            quay.io/minio/minio:latest server /data
+            bitnamilegacy/minio:latest
           for i in $(seq 1 30); do
             curl -fsS http://127.0.0.1:9000/minio/health/live && break
             sleep 1
