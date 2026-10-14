@@ -41,8 +41,10 @@ type Config struct {
 	PresignGetTTL    time.Duration
 
 	GotenbergURL string // 置空 = 本次部署不提供 Office 预览(小内存机器不部署 Gotenberg)
-	FFmpegPath   string
-	FFprobePath  string
+	// 安卓 App 的发版目录(latest.json + apk),App 内「检查更新」从这里读;置空 = 本站不提供
+	AppReleaseDir string
+	FFmpegPath    string
+	FFprobePath   string
 }
 
 func Load() (*Config, error) {
@@ -70,9 +72,10 @@ func Load() (*Config, error) {
 		PresignPutTTL:    time.Hour,
 		PresignGetTTL:    15 * time.Minute,
 
-		GotenbergURL: env("GOTENBERG_URL", "http://127.0.0.1:3100"),
-		FFmpegPath:   env("FFMPEG_PATH", "ffmpeg"),
-		FFprobePath:  env("FFPROBE_PATH", "ffprobe"),
+		GotenbergURL:  env("GOTENBERG_URL", "http://127.0.0.1:3100"),
+		AppReleaseDir: env("APP_RELEASE_DIR", ""),
+		FFmpegPath:    env("FFMPEG_PATH", "ffmpeg"),
+		FFprobePath:   env("FFPROBE_PATH", "ffprobe"),
 	}
 	tp, err := parseCIDRs(env("TRUSTED_PROXIES", ""))
 	if err != nil {

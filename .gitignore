@@ -10,5 +10,6 @@ __pycache__/
 /.env
 /secrets/
 /gopan-linux
-/app/node_modules/
+# 服务器上的安卓安装包发版目录(doc/09「安卓安装包发布」)
+/android-release/
 /.claude/

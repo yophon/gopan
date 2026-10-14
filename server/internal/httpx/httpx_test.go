@@ -22,11 +22,12 @@ func TestNormalizePath(t *testing.T) {
 		"/mcp-download/eyJhbGciOi...": "/mcp-download/:ticket",
 		"/oauth/token":                "/oauth/:endpoint",
 		"/.well-known/oauth-authorization-server": "/.well-known/oauth-*",
-		"/dav":         "/dav",
-		"/dav/docs/a":  "/dav",
-		"/":            "/spa",
-		"/drive/xxx":   "/spa",
-		"/assets/x.js": "/spa",
+		"/dav":                    "/dav",
+		"/dav/docs/a":             "/dav",
+		"/api/app/android/latest": "/api/app/android/:file",
+		"/":                       "/spa",
+		"/drive/xxx":              "/spa",
+		"/assets/x.js":            "/spa",
 	}
 	for in, want := range cases {
 		if got := normalizePath(in); got != want {

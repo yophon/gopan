@@ -175,10 +175,11 @@ func WithAuth(next http.Handler, auth *service.Auth, trustedProxies []*net.IPNet
 // style unsafe-inline 是 Element Plus 动态样式的现实;dev 跳过 CSP(vite 注入脚本会撞)。
 // hash-wasm 在上传 Worker 内编译 WebAssembly;仅放行 wasm,不放行 JS eval。
 //
-// 安卓壳(app/,Capacitor 远程模式)把线上页面装进 WebView 时会往 HTML 里注入一段内联的
-// bridge 脚本,被 script-src 'self' 挡住插件就全哑了。壳的 UA 带 "GopanApp/" 标记
-// (capacitor.config appendUserAgent),只对它的请求给 script-src 加 'unsafe-inline';
-// 普通浏览器的 CSP 不变。UA 可伪造,但伪造者只能放宽自己那次响应的 CSP,拿不到别人的。
+// v2.x 的安卓壳(Capacitor 远程模式)把线上页面装进 WebView 时会往 HTML 里注入一段内联的
+// bridge 脚本,被 script-src 'self' 挡住插件就全哑了。壳的 UA 带 "GopanApp/" 标记,
+// 只对它的请求给 script-src 加 'unsafe-inline';普通浏览器的 CSP 不变。UA 可伪造,但伪造者
+// 只能放宽自己那次响应的 CSP,拿不到别人的。v3 起由原生 App 取代,壳的源码已从仓库删除;
+// 这条放行留给还没升级的旧壳,确认没人再用后连同 AppUserAgentMark 一起删。
 func WithSecurityHeaders(next http.Handler, devMode bool) http.Handler {
 	const cspBase = "default-src 'self'; img-src 'self' data: blob: http: https:; " +
 		"media-src 'self' blob: http: https:; connect-src 'self' http: https:; " +
@@ -201,7 +202,7 @@ func WithSecurityHeaders(next http.Handler, devMode bool) http.Handler {
 	})
 }
 
-// AppUserAgentMark 是安卓壳 WebView 的 UA 标记(app/capacitor.config.ts appendUserAgent)。
+// AppUserAgentMark 是 v2.x 安卓壳 WebView 的 UA 标记(capacitor.config 的 appendUserAgent)。
 const AppUserAgentMark = "GopanApp/"
 
 // IsAppWebView 判断请求是否来自安卓壳。
@@ -235,6 +236,8 @@ func normalizePath(p string) string {
 		return "/mcp-download/:ticket"
 	case p == "/dav" || strings.HasPrefix(p, "/dav/"):
 		return "/dav"
+	case strings.HasPrefix(p, AndroidReleasePath):
+		return AndroidReleasePath + ":file"
 	default:
 		return "/spa"
 	}

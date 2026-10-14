@@ -173,6 +173,8 @@ func run() error {
 	davHandler := dav.Handler(appPass, dav.NewBackend(q, obj, nodes, uploads), cfg.TrustedProxies)
 	mux.Handle("/dav", davHandler)
 	mux.Handle("/dav/", davHandler)
+	// 安卓 App 的检查更新与安装包(未配置时也挂上,回 404 JSON,别让 SPA 拿 index.html 顶替)
+	mux.Handle(httpx.AndroidReleasePath, httpx.AndroidRelease(cfg.AppReleaseDir))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := pool.Ping(r.Context()); err != nil {
 			http.Error(w, "db: "+err.Error(), http.StatusServiceUnavailable)
