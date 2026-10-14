@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 搜索页文案;feature.search 专用 -->
+<resources>
+    <string name="search_hint">搜索文件名</string>
+    <string name="search_clear">清除</string>
+    <string name="search_idle">输入关键词搜索文件和文件夹</string>
+    <string name="search_empty">没有找到与「%1$s」相关的内容</string>
+    <string name="search_result_count">共 %1$d 个结果</string>
+</resources>

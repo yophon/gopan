@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 回收站文案;feature.trash 专用 -->
+<resources>
+    <string name="trash_title">回收站</string>
+    <string name="trash_empty">回收站是空的</string>
+    <string name="trash_empty_desc">删除的文件会在这里保留 30 天</string>
+
+    <string name="trash_action_restore">还原</string>
+    <string name="trash_action_purge">彻底删除</string>
+    <string name="trash_action_purge_all">清空回收站</string>
+
+    <string name="trash_deleted_at">删除于 %1$s</string>
+    <string name="trash_days_left">还剩 %1$d 天</string>
+    <string name="trash_today">今天清理</string>
+    <string name="trash_original_size">原大小 %1$s</string>
+
+    <string name="trash_purge_title">彻底删除</string>
+    <string name="trash_purge_confirm_one">彻底删除「%1$s」后无法恢复,确定继续?</string>
+    <string name="trash_purge_confirm_many">彻底删除所选 %1$d 项后无法恢复,确定继续?</string>
+    <string name="trash_purge_all_title">清空回收站</string>
+    <string name="trash_purge_all_confirm_1">清空回收站后所有内容无法恢复,确定继续?</string>
+    <string name="trash_purge_all_confirm_2">再次确认:回收站里的全部内容将被永久删除,无法找回。</string>
+    <string name="trash_purge_all_button">永久删除</string>
+
+    <string name="trash_msg_restored">已还原 %1$d 项</string>
+    <string name="trash_msg_purged">已彻底删除 %1$d 项</string>
+    <string name="trash_msg_purged_all">回收站已清空</string>
+</resources>

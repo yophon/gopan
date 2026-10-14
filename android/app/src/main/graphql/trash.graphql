@@ -1,18 +1,8 @@
+# 回收站 operations(文件线)。列表项用 nodes.graphql 里的 NodeItem 片段,deletedAt / purgeAt 在这里才有值。
 query Trash($cursor: String) {
   trash(cursor: $cursor) {
     items {
-      id
-      parentId
-      name
-      kind
-      size
-      updatedAt
-      deletedAt
-      purgeAt
-      preview {
-        kind
-        thumbUrl
-      }
+      ...NodeItem
     }
     nextCursor
     total

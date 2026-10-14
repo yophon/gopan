@@ -1,0 +1,71 @@
+package xyz.yophon.gopan.core.data
+
+import androidx.compose.runtime.Immutable
+import kotlinx.coroutines.flow.StateFlow
+import xyz.yophon.gopan.core.network.GopanException
+import xyz.yophon.gopan.core.prefs.DriveSortOrder
+
+/**
+ * 文件节点仓库:列表 / 搜索 / 回收站 / 变更。所有方法在失败时抛 [GopanException],
+ * 调用方用 core.network 的 gopanResult { } 包一层即可。
+ * 生产实现 [NodesRepositoryImpl](Apollo + Room 缓存),ViewModel 测试用假实现。
+ */
+interface NodesRepository {
+
+    /**
+     * 变更计数:每次成功的 createFolder / rename / move / copy / delete / restore / purge 之后 +1。
+     * 列表页回到前台时与自己上次加载时的值比较,不同就静默刷新(在别的页面改过东西)。
+     */
+    val version: StateFlow<Long>
+
+    /**
+     * 目录首页(无游标)。联网成功 → 写缓存、返回 fresh;
+     * 请求失败而本地有这个目录的缓存 → 返回缓存并标记 [Listing.fromCache];
+     * 失败且无缓存 → 抛出原错误。UNAUTHENTICATED / NOT_FOUND 这类"内容确实不可用"的错误不回退缓存。
+     */
+    suspend fun firstPage(parentId: String?, order: DriveSortOrder, desc: Boolean): Listing
+
+    /** 目录分页(任意游标),不碰缓存 */
+    suspend fun children(parentId: String?, cursor: String?, order: DriveSortOrder, desc: Boolean): NodePage
+
+    suspend fun search(q: String, cursor: String?): NodePage
+
+    suspend fun trash(cursor: String?): NodePage
+
+    suspend fun node(id: String): Node
+
+    /**
+     * 面包屑:从顶层文件夹到 [folderId] 自身(根不在内,根是 UI 的固定文案)。
+     * 优先用最近列表里见过的节点,其次查本地缓存,最后才逐级 node(id)。
+     */
+    suspend fun ancestors(folderId: String): List<Node>
+
+    suspend fun createFolder(parentId: String?, name: String): Node
+
+    suspend fun rename(id: String, name: String): Node
+
+    suspend fun move(ids: List<String>, targetParentId: String?)
+
+    suspend fun copy(ids: List<String>, targetParentId: String?)
+
+    /** 进回收站(30 天) */
+    suspend fun delete(ids: List<String>)
+
+    suspend fun restore(ids: List<String>)
+
+    suspend fun purge(ids: List<String>)
+
+    suspend fun purgeTrash()
+}
+
+/** [NodesRepository.firstPage] 的结果:数据 + 来源 */
+@Immutable
+data class Listing(
+    val page: NodePage,
+    /** true:来自本地缓存(请求失败回退),内容可能过时 */
+    val fromCache: Boolean,
+    /** 数据的拉取时刻(epoch 毫秒);缓存时是当初写缓存的时刻 */
+    val fetchedAt: Long,
+    /** fromCache 时:导致回退的那个错误 */
+    val error: GopanException? = null,
+)

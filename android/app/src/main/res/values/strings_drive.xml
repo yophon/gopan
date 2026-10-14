@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 文件页(目录浏览、节点操作、移动/复制选择器)的文案;feature.drive 专用 -->
+<resources>
+    <string name="drive_title_root">文件</string>
+    <string name="drive_crumb_loading">…</string>
+    <string name="drive_nav_back">返回</string>
+
+    <string name="drive_action_search">搜索</string>
+    <string name="drive_action_sort">排序</string>
+    <string name="drive_action_view_list">切换为列表视图</string>
+    <string name="drive_action_view_grid">切换为网格视图</string>
+    <string name="drive_action_more">更多</string>
+    <string name="drive_action_trash">回收站</string>
+    <string name="drive_action_refresh">刷新</string>
+
+    <string name="drive_sort_title">排序方式</string>
+    <string name="drive_sort_name">名称</string>
+    <string name="drive_sort_size">大小</string>
+    <string name="drive_sort_updated">修改时间</string>
+
+    <string name="drive_fab_add">新建</string>
+    <string name="drive_fab_new_folder">新建文件夹</string>
+    <string name="drive_fab_upload">上传文件</string>
+    <string name="drive_fab_upload_hint">下个版本提供</string>
+    <string name="drive_coming_soon">这个功能将在后续版本提供</string>
+
+    <string name="drive_empty_title">这个文件夹是空的</string>
+    <string name="drive_empty_desc">点右下角的「新建」创建文件夹</string>
+    <string name="drive_total_count">共 %1$d 项</string>
+    <string name="drive_offline_banner">网络不可用,显示的是 %1$s 的缓存内容</string>
+    <string name="drive_load_more_failed">加载更多失败</string>
+
+    <string name="drive_selected_count">已选 %1$d 项</string>
+    <string name="drive_select_all">全选</string>
+    <string name="drive_exit_selection">退出多选</string>
+
+    <string name="drive_action_rename">重命名</string>
+    <string name="drive_action_move">移动到…</string>
+    <string name="drive_action_copy">复制到…</string>
+    <string name="drive_action_delete">删除</string>
+    <string name="drive_action_details">详情</string>
+    <string name="drive_action_open">打开</string>
+    <string name="drive_action_download">下载</string>
+
+    <string name="drive_dialog_new_folder">新建文件夹</string>
+    <string name="drive_dialog_new_folder_hint">文件夹名称</string>
+    <string name="drive_dialog_create">创建</string>
+    <string name="drive_dialog_rename">重命名</string>
+    <string name="drive_dialog_rename_hint">新名称</string>
+
+    <string name="drive_name_error_empty">名称不能为空</string>
+    <string name="drive_name_error_illegal">名称不能包含 / 或 \\</string>
+    <string name="drive_name_error_reserved">名称不能是 . 或 ..</string>
+    <string name="drive_name_error_too_long">名称太长(最多 255 字节)</string>
+    <string name="drive_name_conflict">同名已存在</string>
+
+    <string name="drive_delete_title">删除</string>
+    <string name="drive_delete_confirm_one">将「%1$s」移到回收站?30 天内可以还原。</string>
+    <string name="drive_delete_confirm_many">将所选 %1$d 项移到回收站?30 天内可以还原。</string>
+
+    <string name="drive_msg_created">已创建「%1$s」</string>
+    <string name="drive_msg_renamed">已重命名</string>
+    <string name="drive_msg_deleted">已将 %1$d 项移到回收站</string>
+    <string name="drive_msg_moved">已移动到「%1$s」</string>
+    <string name="drive_msg_copied">已复制到「%1$s」</string>
+
+    <string name="drive_details_name">名称</string>
+    <string name="drive_details_type">类型</string>
+    <string name="drive_details_size">大小</string>
+    <string name="drive_details_items">包含</string>
+    <string name="drive_details_items_value">%1$d 项</string>
+    <string name="drive_details_created">创建时间</string>
+    <string name="drive_details_updated">修改时间</string>
+    <string name="drive_details_deleted">删除时间</string>
+    <string name="drive_size_approx">约 %1$s</string>
+
+    <string name="drive_type_folder">文件夹</string>
+    <string name="drive_type_image">图片</string>
+    <string name="drive_type_video">视频</string>
+    <string name="drive_type_audio">音频</string>
+    <string name="drive_type_pdf">PDF 文档</string>
+    <string name="drive_type_document">文档</string>
+    <string name="drive_type_spreadsheet">表格</string>
+    <string name="drive_type_presentation">演示文稿</string>
+    <string name="drive_type_archive">压缩包</string>
+    <string name="drive_type_text">文本</string>
+    <string name="drive_type_other">文件</string>
+
+    <string name="drive_picker_move_title">移动到</string>
+    <string name="drive_picker_copy_title">复制到</string>
+    <string name="drive_picker_choose">选择此文件夹</string>
+    <string name="drive_picker_empty">没有子文件夹</string>
+    <string name="drive_picker_up">上一级</string>
+    <string name="drive_picker_close">关闭</string>
+</resources>
