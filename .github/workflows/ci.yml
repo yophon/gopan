@@ -106,7 +106,7 @@ jobs:
         run: pnpm build
 
   android:
-    name: android (lint + unit tests + debug build)
+    name: android (lint + unit tests + debug / R8 build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -119,7 +119,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       # Apollo 直接用 server/graph/schema.graphqls 生成:schema 改了而 App 的 operations 不兼容时这里编译失败。
-      # 没有 keystore.properties,release 签名用不上,只跑 debug。
-      - name: lint + unit tests + assembleDebug
+      # assembleReleaseE2e 与正式包同一套 R8 规则(debug 签名,CI 里没有 keystore):R8 报缺类等构建期问题时在这里失败;
+      # 运行时才暴露的规则遗漏靠本地对 releaseE2e 包跑 E2E(android/tools/e2e/README.md)。
+      - name: lint + unit tests + assembleDebug + R8
         working-directory: android
-        run: ./gradlew --no-daemon :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
+        run: ./gradlew --no-daemon :app:lintDebug :app:testDebugUnitTest :app:assembleDebug :app:assembleReleaseE2e

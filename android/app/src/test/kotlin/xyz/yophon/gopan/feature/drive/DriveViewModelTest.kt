@@ -20,6 +20,8 @@ import xyz.yophon.gopan.feature.drive.FakeNodesRepository.Companion.file
 import xyz.yophon.gopan.feature.drive.FakeNodesRepository.Companion.folder
 import xyz.yophon.gopan.feature.drive.FakeNodesRepository.Companion.page
 import xyz.yophon.gopan.feature.preview.PreviewSessionStore
+import xyz.yophon.gopan.core.transfer.Connectivity
+import kotlinx.coroutines.flow.MutableStateFlow
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DriveViewModelTest {
@@ -31,6 +33,10 @@ class DriveViewModelTest {
     private val prefs = UserPreferencesRepository(InMemoryPreferencesDataStore())
     private val transfers = FakeTransferActions()
     private val previews = PreviewSessionStore()
+    private val online = MutableStateFlow(true)
+    private val net = object : Connectivity {
+        override val online = this@DriveViewModelTest.online
+    }
 
     private fun viewModel(folderId: String? = null) = DriveViewModel(
         savedStateHandle = if (folderId == null) SavedStateHandle() else SavedStateHandle(mapOf(DriveViewModel.FOLDER_ID_ARG to folderId)),
@@ -38,6 +44,7 @@ class DriveViewModelTest {
         prefs = prefs,
         transfers = transfers,
         previews = previews,
+        connectivity = net,
     )
 
     @Test
@@ -76,6 +83,26 @@ class DriveViewModelTest {
         vm.loadMore()
         advanceUntilIdle()
         assertThat(repo.calls.size).isEqualTo(callsBefore)
+    }
+
+    @Test
+    fun `when the network comes back a cached listing refreshes by itself`() = runTest {
+        repo.cache[null] = page(file("cached"))
+        repo.listings[null] = listOf(page(file("fresh")))
+        repo.networkDown = true
+        online.value = false
+        val vm = viewModel()
+        advanceUntilIdle()
+        assertThat(vm.state.value.fromCache).isTrue()
+
+        repo.networkDown = false
+        online.value = true
+        advanceUntilIdle()
+        with(vm.state.value) {
+            assertThat(fromCache).isFalse()
+            assertThat(offlineMessage).isNull()
+            assertThat(items.map { it.id }).containsExactly("fresh")
+        }
     }
 
     @Test

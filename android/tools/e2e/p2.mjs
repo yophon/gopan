@@ -574,6 +574,18 @@ await scenario('S14', '锁屏并强制进入 Doze:前台服务里的上传照常
   }
 });
 
+// ---------------- 收尾 ----------------
+
+// 本轮工作目录删掉并清空回收站(根目录前面堆满 0p2-* 会挤掉 P1 依赖的首屏)
+if (workFolder) {
+  try {
+    await host.deleteNodes([workFolder.id]);
+    await host.purgeTrash();
+  } catch (e) {
+    log(`清理工作目录失败(不影响结果):${e.message}`);
+  }
+}
+
 // ---------------- 汇总 ----------------
 
 const failed = results.filter((r) => !r.ok);

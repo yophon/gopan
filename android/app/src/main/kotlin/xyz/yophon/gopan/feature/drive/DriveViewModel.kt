@@ -34,6 +34,8 @@ import xyz.yophon.gopan.core.transfer.TransferEvent
 import android.net.Uri
 import java.io.File
 import javax.inject.Inject
+import xyz.yophon.gopan.core.transfer.Connectivity
+import kotlinx.coroutines.flow.drop
 
 /** 文件页(根目录或某个文件夹)弹层:在共享的 [NodeDialog] 之外多两个 */
 sealed interface DriveDialog : NodeDialog {
@@ -82,6 +84,7 @@ class DriveViewModel @Inject constructor(
     private val prefs: UserPreferencesRepository,
     transfers: TransferActions,
     previews: PreviewSessionStore,
+    private val connectivity: Connectivity,
 ) : NodeActionsViewModel(repo, transfers, previews) {
 
     val parentId: String? = savedStateHandle[FOLDER_ID_ARG]
@@ -125,6 +128,7 @@ class DriveViewModel @Inject constructor(
                 .debounce(UPLOAD_REFRESH_DEBOUNCE_MS)
                 .collect { if (_state.value.status == ListStatus.Content) load(LoadMode.SILENT) }
         }
+        watchNetwork()
     }
 
     // ---- 加载 ----
@@ -136,6 +140,16 @@ class DriveViewModel @Inject constructor(
     fun refresh() = load(LoadMode.REFRESH)
 
     /** 页面回到前台:别处(子目录、回收站、搜索)改过东西,或列表放久了(缩略图地址快过期)就静默刷新 */
+    /** 系统网络恢复(从无到有):正显示着离线缓存就静默刷新,提示条自己消失 */
+    private fun watchNetwork() {
+        viewModelScope.launch {
+            connectivity.online.drop(1).distinctUntilChanged().filter { it }.collect {
+                val s = _state.value
+                if (s.fromCache || s.status is ListStatus.Error) load(if (s.items.isEmpty()) LoadMode.INITIAL else LoadMode.SILENT)
+            }
+        }
+    }
+
     fun onResumed() {
         val s = _state.value
         if (s.status != ListStatus.Content) return

@@ -1,15 +1,14 @@
 # gopan 安卓原生客户端
 
-Kotlin + Jetpack Compose(Material 3)重写的 gopan 客户端,替代 v2.6 的 Capacitor 壳(`app/`)。
-总计划见 `doc/19-安卓原生App计划.md`。已完成:
+Kotlin + Jetpack Compose(Material 3)重写的 gopan 客户端,v3.0.0 起替代 v2.6 的 Capacitor 壳(壳已从仓库删除)。
+用法、权限、发布流程见 `doc/18-安卓App.md`,总计划与验收记录见 `doc/19-安卓原生App计划.md`。四个阶段全部完成:
 - P1:工程骨架、认证/网络核心、登录(Yophon ID + 密码登录/注册)、文件(列表/网格、排序、分页、多选批量、
   新建/重命名/移动/复制/删除、回收站、搜索)与「我的」(用量、改密码、外观、退出);
 - P2:上传 / 下载引擎(后台前台服务、断网与杀进程后续传、秒传、打包下载)、传输列表与传输设置、
   传输助手(网页端全部功能)、系统分享直达传输助手;
 - P3:预览(图片缩放翻页、视频、音频后台播放、PDF、文本、Office 派生 PDF)、分享(新建 / 列表 / 访问记录 / 取消)、
-  登录设备、WebDAV 应用密码、Agent 接入(API Key / OAuth 授权 / 目录范围 / 操作记录)、动态取色开关、平板侧边导航与双栏预览。
-
-管理端(P4)还是占位页。
+  登录设备、WebDAV 应用密码、Agent 接入(API Key / OAuth 授权 / 目录范围 / 操作记录)、动态取色开关、平板侧边导航与双栏预览;
+- P4:管理端、系统「文件」App 里的 gopan(DocumentsProvider)、站内检查更新、崩溃日志、开源许可、断网恢复自动刷新、release 开 R8。
 
 ## 构建
 
@@ -22,13 +21,16 @@ cd android
 ./gradlew --no-daemon -q :app:assembleDebug          # app/build/outputs/apk/debug/app-debug.apk
 ./gradlew --no-daemon -q :app:testDebugUnitTest      # JVM 单测(MockWebServer)
 ./gradlew --no-daemon -q :app:installDebug           # 有设备/模拟器时直接装
+./gradlew --no-daemon -q :app:lintDebug              # CI 同款 lint(0 error 才算过)
+./gradlew --no-daemon -q :app:assembleRelease        # R8 压缩 + 混淆,约 5 MB;签名见下
+./gradlew --no-daemon -q :app:assembleReleaseE2e     # 同一套 R8,debug 签名 + 测试钩子,给 E2E 用(见「R8」)
 ```
 
 Android Studio 打开 `android/` 即可(Gradle JDK 选 21)。
 
 ## 签名
 
-`android/keystore.properties`(gitignore,格式与 `app/android` 相同):
+`android/keystore.properties`(gitignore):
 
 ```
 storeFile=D:/user/yophon/releases/gopan/gopan-release.jks
@@ -38,7 +40,8 @@ keyPassword=…
 ```
 
 存在时 `assembleRelease` 用它签名;不存在时 release 退回 debug 签名(只能本地验证,不能发布)。
-applicationId 仍是 `xyz.yophon.gopan`、签名同一把 key,可原地覆盖安装 v2.6 的壳;versionCode 从 30001 起。
+applicationId 仍是 `xyz.yophon.gopan`、签名同一把 key,可原地覆盖安装 v2.6 的壳;versionCode 只增不减
+(内测包 3.0.0-p1…p3 是 30001…30003,正式版 3.0.0 是 30100)。
 
 ## BuildConfig 覆盖
 
@@ -52,7 +55,10 @@ applicationId 仍是 `xyz.yophon.gopan`、签名同一把 key,可原地覆盖安
 | `gopan.idRedirect` | `YOPHON_ID_REDIRECT` | `xyz.yophon.gopan:/oauthredirect` |
 
 例:`./gradlew -Pgopan.baseUrl=http://10.0.2.2:8090 :app:installDebug`(模拟器打本机实例)。
-debug 包的 `network_security_config` 只放行 `10.0.2.2` / `127.0.0.1` / `localhost` 的明文 HTTP,release 一律 HTTPS。
+debug 与 releaseE2e 包的 `network_security_config` 只放行 `10.0.2.2` / `127.0.0.1` / `localhost` 的明文 HTTP,release 一律 HTTPS。
+
+`BuildConfig.TEST_HOOKS`(debug、releaseE2e 为 true,release 为 false)管三件只给测试用的事:Compose testTag 暴露成
+resource-id(uiautomator 据此定位)、Timber 打日志、Yophon ID 允许本机明文 HTTP 的账号中心。不要用 `BuildConfig.DEBUG` 判断这些。
 
 手机上装着 release 签名的 `xyz.yophon.gopan`(v2.6 壳或正式版)时,debug 签名的包装不进去(`INSTALL_FAILED_UPDATE_INCOMPATIBLE`),
 不必卸载:`-Pgopan.debugAppIdSuffix=.dev` 让 debug 包以 `xyz.yophon.gopan.dev` 并存安装(`gopan.debugAppIdSuffix` 留空即无后缀)。
@@ -60,7 +66,7 @@ debug 包的 `network_security_config` 只放行 `10.0.2.2` / `127.0.0.1` / `loc
 
 ## 目录结构
 
-单模块 `:app`,按包分层(模块化留到 P3):
+单模块 `:app`,按包分层:
 
 ```
 app/src/main/graphql/            GraphQL operations(按域一个文件,字段选择与 web/src/api/operations 一致;
@@ -89,6 +95,10 @@ app/src/main/kotlin/xyz/yophon/gopan/
                                  PDF 下到缓存(cacheDir/preview-pdf,内容寻址,300 MB 封顶)
   core/data/shares/              SharesRepository:我的分享、新建、取消、访问明细
   core/data/security/            SecurityRepository:登录设备、WebDAV 应用密码、MCP API Key / OAuth 授权 / 目录范围 / 操作记录
+  core/data/admin/               AdminRepository:用户列表、概览、建号、配额、禁用、重置密码、失败任务重排
+  core/documents/                系统「文件」App 里的 gopan,见下文「DocumentsProvider」:GopanDocumentsProvider、DocumentCache(按需下载的读缓存)、
+                                 PendingDocuments(别的应用写进来的新文件 → 上传队列)、DocumentsModule(登出时清理、登录态变化时刷新根目录)
+  core/app/                      UpdateRepository(站点发布的安装包:检查、下载、校验)、CrashLog(未捕获异常写本地日志)
   core/prefs/                    UserPreferencesRepository(DataStore:主题、列表视图、排序、传输设置、传输助手草稿)
   core/transfer/                 传输引擎,见下文「传输引擎」:TransferEngine、TransferWorker + TransferScheduler、TransferNotifications、
                                  SourceStore(来源读取、哈希、私有副本)、NetworkMonitor、FileOpener、TransferActions(界面入口);
@@ -107,12 +117,15 @@ app/src/main/kotlin/xyz/yophon/gopan/
   feature/trash/                 TrashScreen / TrashViewModel(还原、彻删、清空两次确认)、TrashExpiry(剩余天数)
   feature/search/                SearchScreen / SearchViewModel(300ms 防抖、分页)
   feature/account/               AccountScreen / AccountViewModel(用量条、回收站与传输列表入口、传输设置、改密码对话框、主题 / 动态取色 / 列表视图偏好、
-                                 退出登录;管理端是占位路由)、AccountUsage、ChangePasswordForm
+                                 管理端入口(仅管理员)、检查更新(打开页面时静默查一次,有新版本标出)、崩溃日志与开源许可入口、退出登录)、
+                                 AccountUsage、ChangePasswordForm
   feature/account/security/      登录设备、WebDAV 应用密码、Agent 接入三页(SecurityScreens / SecurityViewModels)与 MCP 权限中文名(McpScopes)
   feature/chat/                  传输助手:ChatScreen / ChatItems(消息、九宫格、上传卡片)/ ChatViewModel(轮询、搜索定位、乐观发送、分享落地)/
                                  ChatLogic(按 id 合并、按天分组、网格、链接识别,纯函数)
   feature/transfers/             传输列表(TransfersScreen / TransfersViewModel)与传输设置对话框
   feature/shares/                「分享」tab(SharesScreen:我的分享与操作、访问记录)与新建分享对话框(ShareCreate,文件页 / 搜索页 / 预览共用)
+  feature/admin/                 管理端:AdminScreen(概览卡片、失败任务重排、用户列表与操作对话框)/ AdminViewModel
+  feature/about/                 UpdateDialog(检查 / 下载 / 交给系统安装器)、CrashLogScreen(查看、导出、删除)、LicensesScreen(依赖与许可证全文)
   feature/preview/               全屏预览(PreviewScreen:翻页器、顶栏、沉浸)与平板侧栏(PreviewPane);PreviewViewModel(会话列表、最近 6 页)、
                                  PreviewPage(单页加载与 Office 轮询)、PreviewPages(各类型的页面)、PdfDocument(PdfRenderer 串行封装)、
                                  PlaybackService(音频后台播放的 Media3 会话服务)
@@ -213,6 +226,49 @@ GraphQL operations 按域各自一个文件(`nodes.graphql` 归文件线,`chat.g
 
 - 「我的 → 外观」:深浅主题、动态取色(Android 12+,默认开,关掉用 App 自己的配色)、列表视图。
 - 宽 ≥ 600dp(横屏、平板、折叠屏展开)底部导航换成侧边导航栏;宽 ≥ 840dp 文件页是列表 + 预览双栏,返回键先收起侧栏。
+
+## 管理端(P4)
+
+「我的 → 管理端」只对管理员显示(`me.isAdmin`),与网页端同一组 GraphQL:概览(用户数、逻辑 / 物理用量、任务队列,失败任务数大于 0 时可一键重排)、
+用户列表(管理员排前)、新建用户(用户名 2–32 个字符、密码至少 8 位、配额按 GB 填)、调配额、禁用 / 启用(不能禁用自己)、重置密码
+(新密码只在对话框里显示一次,可复制)。服务端的禁用、重置都会立刻踢下线对方全部设备。
+
+## DocumentsProvider(P4)
+
+`core.documents.GopanDocumentsProvider`(authority `${applicationId}.documents`)把 gopan 挂进 Storage Access Framework:
+系统「文件」App 的侧栏、别的应用的「打开文件 / 另存为」面板里都有 gopan。
+
+- 根:只在登录后出现(副标题是用户名),`DocumentsRootNotifier` 在登录态变化时通知系统刷新;登出时清掉读缓存与没写完的新文件。
+- 文档 id:根是 `root`,节点是服务端节点 id,还没传完的新文件是 `pending:<uuid>`。方法都在 binder 线程上,网络请求直接阻塞。
+- 列目录走 `NodesRepository`(一个目录最多 2000 项),搜索走 `searchNodes`;有缩略图的文件提供缩略图(另存一份小缓存)。
+- 读:`DocumentCache` 整份下到 `cacheDir/documents`,按 SHA-256 校验,同内容只下一次,总量超过 1 GB 按最久未用淘汰;取消信号会中断下载。
+- 写:已有文件只读(服务端没有版本与覆盖写,`w` 模式直接拒绝);`createDocument` 建文件夹立即调服务端,建文件则先在
+  `filesDir/transfers/documents` 落一个空文件,对方写完关闭描述符时进上传队列,传完通知目录刷新;列目录时把还在传的新文件一并列出。
+- 重命名、删除(进回收站)直接调服务端。
+
+## 检查更新、崩溃日志与开源许可(P4)
+
+- 检查更新:`GET {base}/api/app/android/latest`(服务端 `httpx.AndroidRelease`,发版目录见 doc/09);`versionCode` 比自己大才算新版本。
+  下载到 `cacheDir/update`,必须带 SHA-256 且校验通过才交给系统安装器(FileProvider + `ACTION_VIEW`);没有「安装未知应用」授权时先引导去系统设置。
+  仓库是私有的,App 不读 GitHub Releases。
+- 崩溃日志:`CrashLog` 在 `GopanApp.onCreate` 最先装上,未捕获异常写 `filesDir/crash`(只留最近 20 份,带版本号、设备、线程与堆栈),
+  写入前抹掉 URL 查询串(预签名签名)与 Bearer token,然后交还系统默认处理。「我的 → 崩溃日志」查看、导出(系统分享)、删除。
+  release 包是混淆过的:用同版本的 `mapping.txt` 跑 `retrace` 还原。
+- 开源许可:`feature.about.OSS_LIBRARIES` 列出打包进 App 的第三方库(含 Guava、Tink 这类传递依赖),许可证全文在 `res/raw`:
+  `license_apache_2_0.txt` 是 Apache License 2.0 的条款全文(到 END OF TERMS AND CONDITIONS 为止,取自 `web/node_modules/typescript/LICENSE.txt`,段落不折行),
+  `license_mit.txt` 是 MIT 许可的正文(取自 graphql-js 的 LICENSE,去掉版权行,各库的版权人列在表里)。
+  加依赖或升级后用 `./gradlew :app:dependencies --configuration releaseRuntimeClasspath` 核对这张表。
+
+## R8(P4)
+
+release 开 `isMinifyEnabled` + `isShrinkResources`,规则在 `app/proguard-rules.pro`:依赖库自带 consumer 规则,这里只补
+kotlinx.serialization 的生成类(类型安全路由、Cookie 持久化)、AppAuth 的 JSON 模型,以及崩溃日志要的行号。
+
+混淆规则漏一条往往只在运行时炸,所以有 `releaseE2e` 构建类型:与 release 同一套 R8 和规则,但 debug 签名、`TEST_HOOKS=true`、
+放行本机明文 HTTP,能装进模拟器连本地栈把 `tools/e2e` 的 p1–p4 全跑一遍。改了规则或加了依赖都要这样跑一次。
+CI 也会出一个 releaseE2e 包,保证 R8 至少能过编译期检查。
+
+每次正式发版把 `app/build/outputs/mapping/release/mapping.txt` 与安装包一起存档(`releases/gopan/`)。
 
 ## 代码规则
 

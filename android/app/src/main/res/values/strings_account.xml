@@ -25,9 +25,9 @@
     <string name="account_item_admin">管理端</string>
     <string name="account_item_version">版本</string>
     <string name="account_item_check_update">检查更新</string>
-    <string name="account_item_open_source">开源页面</string>
+    <string name="account_item_open_source">开源许可</string>
+    <string name="account_item_crash_logs">崩溃日志</string>
     <string name="account_item_logout">退出登录</string>
-    <string name="account_coming_soon">即将推出</string>
 
     <string name="account_theme_system">跟随系统</string>
     <string name="account_theme_light">浅色</string>

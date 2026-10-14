@@ -204,7 +204,6 @@ class AccountViewModel @Inject constructor(
     // ---- 提示 ----
 
     /** 占位功能点击时的提示 */
-    fun notifyComingSoon() = postMessage(MESSAGE_COMING_SOON)
 
     fun consumeMessage(id: Long) {
         _state.update { if (it.message?.id == id) it.copy(message = null) else it }
@@ -217,6 +216,5 @@ class AccountViewModel @Inject constructor(
 
     companion object {
         const val MESSAGE_PASSWORD_CHANGED = "密码已修改,其它设备已下线"
-        const val MESSAGE_COMING_SOON = "该功能即将推出"
     }
 }

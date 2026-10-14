@@ -84,4 +84,10 @@ object Routes {
 
     @Serializable
     data object Admin
+
+    @Serializable
+    data object CrashLogs
+
+    @Serializable
+    data object Licenses
 }

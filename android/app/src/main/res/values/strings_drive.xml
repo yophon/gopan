@@ -23,7 +23,6 @@
     <string name="drive_fab_upload">上传文件</string>
     <string name="drive_fab_upload_media">上传照片和视频</string>
     <string name="drive_fab_camera">拍照上传</string>
-    <string name="drive_coming_soon">这个功能将在后续版本提供</string>
 
     <string name="drive_empty_title">这个文件夹是空的</string>
     <string name="drive_empty_desc">点右下角的「新建」创建文件夹</string>

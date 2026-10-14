@@ -92,6 +92,10 @@ import androidx.compose.material.icons.outlined.ColorLens
 import androidx.compose.material3.Switch
 import androidx.compose.ui.platform.testTag
 import xyz.yophon.gopan.core.ui.theme.supportsDynamicColor
+import androidx.compose.material.icons.outlined.BugReport
+import xyz.yophon.gopan.feature.about.CrashLogViewModel
+import xyz.yophon.gopan.feature.about.UpdateDialog
+import xyz.yophon.gopan.feature.about.UpdateViewModel
 
 /** 「我的」页入口:导航回调由 AccountGraph 提供,页面本身不认识 NavController */
 @Composable
@@ -102,10 +106,20 @@ fun AccountScreen(
     onOpenAppPasswords: () -> Unit,
     onOpenAgent: () -> Unit,
     onOpenAdmin: () -> Unit,
+    onOpenCrashLogs: () -> Unit,
+    onOpenLicenses: () -> Unit,
     viewModel: AccountViewModel = hiltViewModel(),
+    updates: UpdateViewModel = hiltViewModel(),
+    crashes: CrashLogViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
+    val update by updates.state.collectAsStateWithLifecycle()
+    val crashState by crashes.state.collectAsStateWithLifecycle()
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.onResumed()
+        updates.checkSilently()
+        crashes.refresh()
+    }
     AccountContent(
         state = state,
         versionName = BuildConfig.VERSION_NAME,
@@ -123,10 +137,15 @@ fun AccountScreen(
         onSetTheme = viewModel::setTheme,
         onSetDynamicColor = viewModel::setDynamicColor,
         onSetDriveViewMode = viewModel::setDriveViewMode,
-        onComingSoon = viewModel::notifyComingSoon,
+        updateBadge = update.availableVersion,
+        crashCount = crashState.reports.size,
+        onCheckUpdate = updates::check,
+        onOpenCrashLogs = onOpenCrashLogs,
+        onOpenLicenses = onOpenLicenses,
         onLogout = viewModel::logout,
         onMessageShown = viewModel::consumeMessage,
     )
+    update.phase?.let { UpdateDialog(it, updates) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -147,10 +166,14 @@ internal fun AccountContent(
     onSetTheme: (ThemeMode) -> Unit,
     onSetDynamicColor: (Boolean) -> Unit,
     onSetDriveViewMode: (DriveViewMode) -> Unit,
-    onComingSoon: () -> Unit,
     onLogout: () -> Unit,
     onMessageShown: (Long) -> Unit,
     onOpenTransfers: () -> Unit = {},
+    updateBadge: String? = null,
+    crashCount: Int = 0,
+    onCheckUpdate: () -> Unit = {},
+    onOpenCrashLogs: () -> Unit = {},
+    onOpenLicenses: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showThemeDialog by rememberSaveable { mutableStateOf(false) }
@@ -209,7 +232,11 @@ internal fun AccountContent(
                     onOpenPasswordDialog = onOpenPasswordDialog,
                     onOpenThemeDialog = { showThemeDialog = true },
                     onOpenViewModeDialog = { showViewModeDialog = true },
-                    onComingSoon = onComingSoon,
+                    updateBadge = updateBadge,
+                    crashCount = crashCount,
+                    onCheckUpdate = onCheckUpdate,
+                    onOpenCrashLogs = onOpenCrashLogs,
+                    onOpenLicenses = onOpenLicenses,
                     onLogoutClick = { showLogoutConfirm = true },
                 )
             }
@@ -283,10 +310,13 @@ private fun AccountList(
     onOpenPasswordDialog: () -> Unit,
     onOpenThemeDialog: () -> Unit,
     onOpenViewModeDialog: () -> Unit,
-    onComingSoon: () -> Unit,
+    updateBadge: String?,
+    crashCount: Int,
+    onCheckUpdate: () -> Unit,
+    onOpenCrashLogs: () -> Unit,
+    onOpenLicenses: () -> Unit,
     onLogoutClick: () -> Unit,
 ) {
-    val comingSoon = stringResource(R.string.account_coming_soon)
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item("header") { AccountHeader(user = user, usage = usage) }
 
@@ -365,7 +395,7 @@ private fun AccountList(
         if (user.isAdmin) {
             item("admin") { SectionTitle(stringResource(R.string.account_section_admin)) }
             item("admin-entry") {
-                SettingItem(icon = Icons.Outlined.AdminPanelSettings, title = stringResource(R.string.account_item_admin), value = comingSoon, onClick = onOpenAdmin)
+                SettingItem(icon = Icons.Outlined.AdminPanelSettings, title = stringResource(R.string.account_item_admin), onClick = onOpenAdmin)
             }
         }
 
@@ -374,10 +404,23 @@ private fun AccountList(
             SettingItem(icon = Icons.Outlined.Info, title = stringResource(R.string.account_item_version), value = versionName, onClick = null)
         }
         item("update") {
-            SettingItem(icon = Icons.Outlined.SystemUpdate, title = stringResource(R.string.account_item_check_update), onClick = onComingSoon)
+            SettingItem(
+                icon = Icons.Outlined.SystemUpdate,
+                title = stringResource(R.string.account_item_check_update),
+                value = updateBadge?.let { stringResource(R.string.update_badge, it) },
+                onClick = onCheckUpdate,
+            )
+        }
+        item("crash") {
+            SettingItem(
+                icon = Icons.Outlined.BugReport,
+                title = stringResource(R.string.account_item_crash_logs),
+                value = if (crashCount > 0) stringResource(R.string.crash_count, crashCount) else null,
+                onClick = onOpenCrashLogs,
+            )
         }
         item("oss") {
-            SettingItem(icon = Icons.Outlined.Code, title = stringResource(R.string.account_item_open_source), onClick = onComingSoon)
+            SettingItem(icon = Icons.Outlined.Code, title = stringResource(R.string.account_item_open_source), onClick = onOpenLicenses)
         }
 
         item("logout-divider") { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }

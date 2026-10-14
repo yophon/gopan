@@ -222,20 +222,4 @@ class AccountViewModelTest {
         assertThat(vm.awaitState { it.driveViewMode == DriveViewMode.GRID }.driveViewMode).isEqualTo(DriveViewMode.GRID)
         assertThat(prefs.preferences.first().driveViewMode).isEqualTo(DriveViewMode.GRID)
     }
-
-    @Test
-    fun `coming soon posts a message with a fresh id each time`() = runBlocking {
-        signIn()
-        val vm = newViewModel()
-        vm.awaitIdle()
-        vm.notifyComingSoon()
-        val first = vm.state.value.message!!
-        assertThat(first.text).isEqualTo(AccountViewModel.MESSAGE_COMING_SOON)
-        vm.notifyComingSoon()
-        val second = vm.state.value.message!!
-        assertThat(second.id).isNotEqualTo(first.id)
-        // 消费旧 id 不会吞掉新消息
-        vm.consumeMessage(first.id)
-        assertThat(vm.state.value.message).isEqualTo(second)
-    }
 }

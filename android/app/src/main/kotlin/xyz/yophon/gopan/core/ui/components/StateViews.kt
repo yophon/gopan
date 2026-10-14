@@ -104,17 +104,4 @@ fun EmptyState(
     }
 }
 
-/** 未实现的页面占位(Scaffold 阶段各功能线的 Graph 都用它) */
-@Composable
-fun PlaceholderScreen(title: String, modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge)
-            Text(
-                stringResource(R.string.state_wip),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
+

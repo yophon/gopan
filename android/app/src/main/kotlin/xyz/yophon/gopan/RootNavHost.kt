@@ -46,8 +46,8 @@ fun RootNavHost(authState: AuthState) {
     Surface(
         modifier = Modifier
             .fillMaxSize()
-            // debug 包把 Compose testTag 暴露成 resource-id,E2E(uiautomator)据此定位控件
-            .semantics { testTagsAsResourceId = BuildConfig.DEBUG },
+            // debug / releaseE2e 包把 Compose testTag 暴露成 resource-id,E2E(uiautomator)据此定位控件
+            .semantics { testTagsAsResourceId = BuildConfig.TEST_HOOKS },
         color = MaterialTheme.colorScheme.background,
     ) {
         NavHost(navController = navController, startDestination = Routes.Startup) {

@@ -40,8 +40,8 @@ android {
         applicationId = "xyz.yophon.gopan"
         minSdk = 26
         targetSdk = 36
-        versionCode = 30003
-        versionName = "3.0.0-p3"
+        versionCode = 30100
+        versionName = "3.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // AppAuth 的 RedirectUriReceiverActivity 由库 manifest 合并,这里只给 scheme;
@@ -68,12 +68,23 @@ android {
     buildTypes {
         debug {
             if (debugAppIdSuffix.isNotEmpty()) applicationIdSuffix = debugAppIdSuffix
+            // 测试钩子:testTag 暴露成 resource-id、放行本机明文 HTTP 的账号中心、打日志
+            buildConfigField("boolean", "TEST_HOOKS", "true")
         }
         release {
-            // P1 先不混淆,发布阶段(P4)再开 R8 并补规则
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = if (hasReleaseKeystore) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            buildConfigField("boolean", "TEST_HOOKS", "false")
+        }
+        // 与 release 同样开 R8、同一套规则,但 debug 签名、带测试钩子、允许连本机栈:
+        // 用来对压缩后的包跑全部 E2E(./gradlew :app:assembleReleaseE2e -Pgopan.baseUrl=http://localhost:8090 ...)
+        create("releaseE2e") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            signingConfig = signingConfigs.getByName("debug")
+            buildConfigField("boolean", "TEST_HOOKS", "true")
         }
     }
 

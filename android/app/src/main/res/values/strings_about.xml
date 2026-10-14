@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_title">检查更新</string>
+    <string name="update_title_available">发现新版本</string>
+    <string name="update_up_to_date">已是最新版本(%1$s)</string>
+    <string name="update_not_configured">这个站点没有提供安卓安装包,请到发布页下载新版本。</string>
+    <string name="update_version_line">%1$s(当前 %2$s)· %3$s</string>
+    <string name="update_ready">安装包已下载并校验,点「安装」交给系统安装器。第一次安装需要允许 gopan「安装未知应用」。</string>
+    <string name="update_download">下载并安装</string>
+    <string name="update_install">安装</string>
+    <string name="update_later">以后再说</string>
+    <string name="update_close">关闭</string>
+    <string name="update_badge">有新版本 %1$s</string>
+
+    <string name="crash_title">崩溃日志</string>
+    <string name="crash_empty">没有崩溃记录</string>
+    <string name="crash_empty_hint">App 异常退出时会在这里留一份日志(只在本机,不上传),可以导出发给开发者。</string>
+    <string name="crash_share">导出</string>
+    <string name="crash_share_all">全部导出</string>
+    <string name="crash_share_subject">gopan 崩溃日志</string>
+    <string name="crash_share_chooser">导出崩溃日志</string>
+    <string name="crash_delete">删除</string>
+    <string name="crash_clear">清空</string>
+    <string name="crash_clear_text">删除全部 %1$d 份崩溃日志?</string>
+    <string name="crash_count">%1$d 份</string>
+
+    <string name="licenses_title">开源许可</string>
+    <string name="licenses_hint">gopan 安卓 App 使用了下面这些开源项目。点一行查看许可证全文,点「主页」打开项目页面。</string>
+    <string name="licenses_homepage">主页</string>
+</resources>

@@ -11,6 +11,8 @@ import timber.log.Timber
 import xyz.yophon.gopan.core.auth.SessionManager
 import xyz.yophon.gopan.core.transfer.TransferEngine
 import javax.inject.Inject
+import xyz.yophon.gopan.core.app.CrashLog
+import xyz.yophon.gopan.core.documents.DocumentsRootNotifier
 
 @HiltAndroidApp
 class GopanApp : Application(), SingletonImageLoader.Factory {
@@ -24,13 +26,23 @@ class GopanApp : Application(), SingletonImageLoader.Factory {
     @Inject
     lateinit var transferEngine: TransferEngine
 
+    @Inject
+    lateinit var crashLog: CrashLog
+
+    @Inject
+    lateinit var documentsRoots: DocumentsRootNotifier
+
     override fun onCreate() {
         super.onCreate()
+        // 最先装:后面任何一步崩了都能留下日志(只写本地,「我的 → 崩溃日志」里导出)
+        crashLog.install()
         // 只在 debug 打日志;任何地方都不许打印 token、cookie、预签名 URL
-        if (BuildConfig.DEBUG) Timber.plant(Timber.DebugTree())
+        if (BuildConfig.TEST_HOOKS) Timber.plant(Timber.DebugTree())
         sessionManager.startBootstrap()
         // 上次没传完的(进程被杀、手机重启):登录态就绪后重新排 Worker
         transferEngine.onAppStart()
+        // 登录 / 登出时让「文件」App 里的 gopan 根目录跟着出现 / 消失
+        documentsRoots.start()
     }
 
     /**

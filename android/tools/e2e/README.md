@@ -22,20 +22,36 @@
 
 ```sh
 cd android/tools/e2e
-node stack.mjs start            # 构建 gopan-e2e.exe(必要时)、起账号中心与 gopan、建 demo / owner / other 账号、adb reverse
+node stack.mjs start            # 构建 gopan-e2e.exe(必要时;--rebuild 强制)、起账号中心与 gopan、建 demo / owner / other 账号、adb reverse
 cd ../.. && ./gradlew :app:assembleDebug -Pgopan.baseUrl=http://localhost:8090 -Pgopan.idIssuer=http://localhost:3040
 adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
 cd tools/e2e && node p1.mjs     # P1:12 个场景,失败截图在 .run/fail-*.png
 node p2.mjs                     # P2:上传 / 下载 / 传输助手 / 系统分享,失败截图在 .run/p2-fail-*.png
 node p3.mjs                     # P3:预览 / 分享 / 账户安全 / 主题 / 平板,失败截图在 .run/p3-fail-*.png
+node p4.mjs                     # P4:管理端 / 检查更新 / 崩溃日志 / 开源许可 / 「文件」App / 联网自动刷新,失败截图在 .run/p4-fail-*.png
+node cleanup.mjs                # 只在中途打断后需要:删掉留下的 0p2-* / 0p3-* / 0p4-* 工作目录并清空回收站
 node stack.mjs stop
 ```
+
+**R8 包也要跑。** 正式包开了 R8,混淆规则漏东西只在运行时炸。`releaseE2e` 构建类型与 release 同一套 R8,但 debug 签名、
+带测试钩子,装上后四套照样跑(debug 包与它签名相同,`install -r` 直接覆盖):
+
+```sh
+cd android && ./gradlew :app:assembleReleaseE2e -Pgopan.baseUrl=http://localhost:8090 -Pgopan.idIssuer=http://localhost:3040
+adb -s emulator-5554 install -r app/build/outputs/apk/releaseE2e/app-releaseE2e.apk
+cd tools/e2e && for s in p4 p3 p1 p2; do node $s.mjs > .run/$s-r8.log 2>&1; done
+```
+
+**正式签名的包**用 `node release-smoke.mjs <app-release.apk>`:连生产账号中心但不登录,只核对授权请求;会先卸载模拟器上的 App,结束时再卸载 release 包。
 
 本地栈的 gopan 用 5 MiB 分片(`GOPAN_PART_SIZE`,S3 允许的最小值;`E2E_PART_SIZE` 可改),几十 MB 的文件就有十几片,
 续传场景才测得出来。对象存储在服务器上、经 SSH 隧道,上行约 0.5 MiB/s:大文件场景默认 48 MiB(`E2E_P2_BIG_MB` 可改)。
 `E2E_ONLY=S1,S6` 只跑指定场景。
 
 跑完记得用默认参数重新 `assembleDebug`,别让指向本地栈的产物留在 build 目录里。
+
+各套件开始时清 App 数据、重新登录,结束时删掉自己的工作目录并清空回收站;p1 的 E0 还会顺手清掉之前留下的 `e2e-*` / `0p[234]-*` 目录。
+p1 → p2 → p3 → p4 任意顺序都能跑,但 p4 的 K2(失败任务重排)要库里有失败任务:本地栈的 Office 转换服务不通,跑过 p3 才会有,否则跳过。
 
 ## 场景(p1.mjs)
 
@@ -104,9 +120,38 @@ WebDAV 用 PROPFIND、MCP 用 initialize 请求核对应用密码 / API Key 的�
 | T1 | 动态取色关掉后冷启动仍是关(再打开恢复) |
 | W1 | `wm size 1280x800`:侧边导航栏;文件页点文件在右侧栏预览、列表仍在,点另一个文件侧栏跟着换,关闭侧栏;结束恢复原尺寸 |
 
+## 场景(p4.mjs)
+
+用密码账号 other 登录。K0 在临时库里用 `gopan-e2e.exe admin promote` 把它提成管理员(只连本地栈的库;没有降级命令,之后它一直是管理员,
+其它套件对此不敏感:管理员的「Agent 接入」页多一段管理员 MCP,p3 的 A3 会滚动找自己的那一行)。
+本地栈的 gopan 以 `GOPAN_APP_RELEASE_DIR=.run/app-release` 启动,K3 往里放一个假安装包与 `latest.json`。
+
+| 场景 | 验证点 |
+|---|---|
+| K0 | 把 other 提升为管理员(主机侧核对 `me.isAdmin`)、清数据、密码登录 |
+| K1 | 管理端:建号(3 GB)→ 服务端配额一致;调成 5 GB;禁用后该账号登录被拒(ACCOUNT_DISABLED)、启用后恢复;重置密码只显示一次,新密码能登录 |
+| K2 | 有失败任务时下拉刷新出现「重排」按钮,点了提示「已重排 n 个失败任务」(库里没有失败任务时跳过) |
+| K3 | 检查更新:没发版时提示「没有提供安卓安装包」;发版后显示版本与更新说明,`latest.apk` 固定链接 302 到当前包;下载、校验 SHA-256 → 系统安装器(或「安装未知应用」授权页);「我的」页标出「有新版本」 |
+| K4 | `am crash` 让 App 崩溃 → 重开后「崩溃日志」里有一份(版本、线程、堆栈),「导出」拉起系统分享面板(抹掉签名与 token 由单测覆盖) |
+| K5 | 开源许可:依赖列表,点开 OkHttp 看到 Apache License 2.0 全文 |
+| K7 | 系统「文件」App:抽屉里有 gopan(摘要是用户名);浏览到工作目录,把 gopan 的文件复制到「下载」(sha256 一致);把「下载」里的文件复制进 gopan → 进上传队列,服务端 sha256 一致 |
+| K6 | 撤掉 adb reverse 并开飞行模式 → 冷启动显示离线提示条;恢复网络后不用下拉,提示条自己消失(列表已重新拉到) |
+
+「文件」App 的界面文案按英文系统写(模拟器默认英文),K7 依赖 `com.google.android.documentsui`。
+
 ## 文件
 
 - `stack.mjs` 本地栈启停(`start` 幂等;`--rebuild` 强制重建服务端)与 `idAdmin`(账号中心管理脚本,stdin 传 JSON)
+- `cleanup.mjs` 清掉中途打断留下的工作目录;`release-smoke.mjs` 正式签名包的冒烟
 - `device.mjs` adb / uiautomator 封装;`chrome.mjs` 模拟器 Chrome 的 CDP;`app.mjs` App 页面操作
 - `gql.mjs` 主机侧 GraphQL 客户端(含上传协议,可指定 User-Agent);`data.mjs` 造数据;`media.mjs` 预览用的 WAV / PDF / GBK 文本
-- `.run/` 运行数据(账号、数据库、日志、截图),已 gitignore
+- `.run/` 运行数据(账号、数据库、日志、截图、K3 的发版目录 `app-release/`),已 gitignore
+
+## 踩过的坑
+
+- 对话框、下拉菜单在单独的窗口里,testTag 要在那一层再挂一次 `exposeTestTags()` 才会变成 resource-id。
+- 双击:`input tap` 两次之间隔 0.12 秒;连发两条 `input tap` 命令系统认不成双击。
+- `screenrecord` 录静止画面只会得到不到 1 秒的视频,录的时候要来回滑屏幕。
+- 脚本跑起来后再改,跑着的那一份还是旧的;Windows 上的 Node 在 fetch 之后 `process.exit()` 偶尔断言失败(退出码 127),
+  所以脚本都用 `process.exitCode` 收尾,结果看日志里的「n/n 通过」。
+- 模拟器的飞行模式挡不住 adb 隧道,断网要撤掉 `adb reverse`。

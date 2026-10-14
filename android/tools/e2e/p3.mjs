@@ -732,8 +732,20 @@ await scenario('A3', 'Agent 接入:建 API Key(明文只显示一次)能连 MCP;
 
   // 目录范围:限定到本轮工作目录
   const findRow = (t) => t.find({ id: 'agent_key_row' }).find((r) => t.has({ text: name, within: r }));
-  let row = await device.waitFor(findRow, { label: 'Key 那一行' });
-  const edit = device.dump().find({ id: 'agent_root_edit' }).find((b) => b.cy >= row.bounds.y1 && b.cy <= row.bounds.y2);
+  // 新 Key 在列表底部;管理员账号(跑过 p4 之后的 other)页面上多出「管理员 MCP」一段,这一行常在屏幕外:往上滚着找到它的范围按钮
+  const rootEditIn = (t, r) => t.find({ id: 'agent_root_edit' }).find((b) => b.cy >= r.bounds.y1 && b.cy <= r.bounds.y2);
+  let row = null;
+  for (let i = 0; i < 8 && !row; i++) {
+    const t = device.dump();
+    const r = findRow(t);
+    if (r && rootEditIn(t, r)) row = r;
+    else {
+      app.scrollUp(300);
+      await sleep(700);
+    }
+  }
+  expect(row, 'Key 那一行');
+  const edit = rootEditIn(device.dump(), row);
   device.tapXY(edit.cx, edit.cy);
   await sleep(600);
   device.type(`/${work.name}`);
@@ -836,6 +848,18 @@ await scenario('W1', '平板宽度:侧边导航栏;文件页点文件在右侧�
   }
   await app.waitMain(15000);
 });
+
+// ---------------- 收尾 ----------------
+
+// 本轮工作目录删掉并清空回收站:不然一次次跑下来根目录前面全是 0p3-*,P1 的「首屏有 a」就看不到了
+if (work) {
+  try {
+    await host.deleteNodes([work.id]);
+    await host.purgeTrash();
+  } catch (e) {
+    log(`清理工作目录失败(不影响结果):${e.message}`);
+  }
+}
 
 // ---------------- 汇总 ----------------
 

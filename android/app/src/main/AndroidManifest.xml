@@ -10,6 +10,8 @@
     <!-- 音频预览的后台播放(Media3 会话服务,播放时前台服务 + 带控制按钮的通知) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- App 内更新:把站点发布的安装包交给系统安装器(不经应用商店分发) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Android 8–9 没有 MediaStore.Downloads,保存到公共「下载」目录需要它;10+ 不需要 -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -83,6 +85,18 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+
+        <!-- 系统「文件」App 与其它应用的「打开文件 / 另存为」面板里的 gopan(Storage Access Framework) -->
+        <provider
+            android:name=".core.documents.GopanDocumentsProvider"
+            android:authorities="${applicationId}.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
 
         <!-- AppAuth 的 RedirectUriReceiverActivity 由库 manifest 合并,scheme 由 build.gradle.kts 的
              manifestPlaceholders["appAuthRedirectScheme"] 提供(xyz.yophon.gopan:/oauthredirect) -->

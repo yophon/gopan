@@ -60,4 +60,10 @@ abstract class DataBindsModule {
 
     @Binds
     abstract fun bindSecurityRepository(impl: xyz.yophon.gopan.core.data.security.ApolloSecurityRepository): xyz.yophon.gopan.core.data.security.SecurityRepository
+
+    @Binds
+    abstract fun bindAdminRepository(impl: xyz.yophon.gopan.core.data.admin.ApolloAdminRepository): xyz.yophon.gopan.core.data.admin.AdminRepository
+
+    @Binds
+    abstract fun bindUpdateRepository(impl: xyz.yophon.gopan.core.app.DefaultUpdateRepository): xyz.yophon.gopan.core.app.UpdateRepository
 }

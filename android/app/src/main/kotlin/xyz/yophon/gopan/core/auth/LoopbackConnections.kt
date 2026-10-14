@@ -19,7 +19,7 @@ internal object LoopbackConnections {
     private val LOOPBACK_HOSTS = setOf("localhost", "127.0.0.1", "10.0.2.2")
 
     /** issuer 是否是 debug 包可以明文访问的本机地址 */
-    fun allowsCleartext(issuer: String, debug: Boolean = BuildConfig.DEBUG): Boolean {
+    fun allowsCleartext(issuer: String, debug: Boolean = BuildConfig.TEST_HOOKS): Boolean {
         if (!debug) return false
         val uri = runCatching { URI(issuer) }.getOrNull() ?: return false
         return uri.scheme == "http" && uri.host in LOOPBACK_HOSTS

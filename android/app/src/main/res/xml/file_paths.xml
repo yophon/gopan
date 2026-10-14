@@ -4,5 +4,8 @@
 <paths>
     <files-path name="camera" path="transfers/camera/" />
     <cache-path name="open" path="open/" />
+    <!-- App 内更新下载的安装包(交给系统安装器)、导出的崩溃日志 -->
+    <cache-path name="update" path="update/" />
+    <files-path name="crash" path="crash/" />
     <external-path name="downloads" path="Download/gopan/" />
 </paths>

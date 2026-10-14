@@ -127,8 +127,13 @@ await scenario('C 账号中心撤销设备即时生效', async () => {
   await app.gotoTab('文件');
   idAdmin('revoke-all', { userId: stack.demo.sub });
   await sleep(500);
-  app.pullToRefresh();
-  await app.waitLogin(30000);
+  // 下拉刷新若正好赶上一次还没回来的静默刷新会并进那一次(那次在撤销之前已经通过了校验):隔几秒再拉一次
+  let out = false;
+  for (let i = 0; i < 6 && !out; i++) {
+    app.pullToRefresh();
+    out = !!(await app.waitLogin(5000).catch(() => null));
+  }
+  if (!out) await app.waitLogin(10000);
   app.coldStart();
   await app.waitLogin(20000);
 });
@@ -147,6 +152,12 @@ await scenario('D 密码登录:错误密码 / 绑定账号必须用 ID / 正确�
 let seeded = null;
 await scenario('E0 主机侧造数据(205 个文件夹、a/b/c、两张 PNG 含秒传)', async () => {
   await host.login(stack.other.username, stack.other.password);
+  // 往次 E2 留下的 e2e-* 与别的套件的 0p*- 工作目录:清掉,不然新建的目录会排到首屏底部被浮动按钮挡住
+  const leftover = (await host.allChildren(null)).items.filter((n) => n.kind === 'FOLDER' && /^(e2e-|0p[234]-)/.test(n.name)).map((n) => n.id);
+  if (leftover.length) {
+    await host.deleteNodes(leftover);
+    await host.purgeTrash();
+  }
   const existing = await host.childByName(null, 'a');
   if (existing) {
     seeded = { a: existing, pic: await host.childByName(null, PNG_NAME) };
@@ -160,7 +171,16 @@ await scenario('E1 列表、分页、缩略图', async () => {
   await ensurePasswordSession(stack.other.username, stack.other.password);
   await app.gotoTab('文件');
   app.pullToRefresh();
-  await device.waitFor({ text: 'a' }, { label: '首屏有 a' });
+  // a 应在列表前部(别的套件留下的 0p*- 目录排在它前面时往下滚一点)
+  let seenA = false;
+  for (let i = 0; i < 6 && !seenA; i++) {
+    seenA = !!(await device.waitFor({ text: 'a' }, { timeout: 3000, label: '列表前部有 a' }).catch(() => null));
+    if (!seenA) {
+      app.scrollUp(300);
+      await sleep(500);
+    }
+  }
+  expect(seenA, '列表前部应有文件夹 a');
   // 文件夹在前(a, f-001..f-205),图片在最后,要翻到第二页才出现
   let found = false;
   for (let i = 0; i < 70 && !found; i++) {
@@ -259,9 +279,14 @@ await scenario('G 离线冷启动显示缓存与提示条', async () => {
     device.reverse(8090);
     device.reverse(9009);
   }
-  await sleep(1000);
-  app.pullToRefresh();
-  await device.waitGone({ textMatches: /网络不可用/ }, { timeout: 30000, label: '联网后提示条消失' });
+  // adb reverse 恢复后隧道要一会儿才通:下拉一次没连上会再显示缓存,隔几秒再拉
+  let back = false;
+  for (let i = 0; i < 6 && !back; i++) {
+    await sleep(1000);
+    app.pullToRefresh();
+    back = !!(await device.waitGone({ textMatches: /网络不可用/ }, { timeout: 5000, label: '联网后提示条消失' }).catch(() => null));
+  }
+  if (!back) await device.waitGone({ textMatches: /网络不可用/ }, { timeout: 10000, label: '联网后提示条消失' });
 });
 
 /** 「我的」页往下翻到某一项(页面比一屏长) */

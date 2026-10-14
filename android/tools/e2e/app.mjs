@@ -153,7 +153,13 @@ export class App {
   async openRowMenu(name) {
     // waitFor(选择器) 返回的是命中的节点;找同一行的「更多」按钮需要整棵树
     await this.d.waitFor({ text: name }, { label: `行 ${name}` });
-    const more = this.moreButton(this.dump(), name);
+    let more = this.moreButton(this.dump(), name);
+    // 行在首屏底部时「更多」可能被浮动按钮挡住、不在树里:往上滚一点再找
+    for (let i = 0; i < 3 && !more; i++) {
+      this.scrollUp(200);
+      await sleep(600);
+      more = this.moreButton(this.dump(), name);
+    }
     if (!more) throw new DeviceError(`行 ${name} 没有「更多」按钮`);
     this.d.tapXY(more.clickableAncestor().cx, more.clickableAncestor().cy);
     return this.d.waitFor({ text: '详情' }, { label: '操作菜单' });

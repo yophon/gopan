@@ -237,15 +237,6 @@ abstract class NodeActionsViewModel(
         }
     }
 
-    /** 尚未实现的功能:先关掉弹层(否则提示被 BottomSheet 盖住),再给一句提示 */
-    fun notYet() {
-        if (!_busy.value) {
-            _dialog.value = null
-            _inputError.value = null
-        }
-        send(NodeEffect.Message(UiText.Res(R.string.drive_coming_soon)))
-    }
-
     fun message(text: UiText) = send(NodeEffect.Message(text))
 
     /** 变更成功后由子类刷新列表(静默) */
