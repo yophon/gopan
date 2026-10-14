@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.suspendCancellableCoroutine
+import net.openid.appauth.AppAuthConfiguration
 import net.openid.appauth.AuthorizationException
 import net.openid.appauth.AuthorizationRequest
 import net.openid.appauth.AuthorizationResponse
@@ -45,7 +46,20 @@ class YophonIdLogin @Inject constructor(
     private val config: AppConfig,
     private val ticketExchange: TicketExchange,
 ) {
-    private val authService: AuthorizationService by lazy { AuthorizationService(context) }
+    /** debug 包对接本机 http 账号中心(E2E / 本地联调):见 [LoopbackConnections] */
+    private val cleartextIssuer: Boolean by lazy { LoopbackConnections.allowsCleartext(config.idIssuer) }
+
+    private val authService: AuthorizationService by lazy {
+        if (cleartextIssuer) {
+            val appAuthConfig = AppAuthConfiguration.Builder()
+                .setConnectionBuilder(LoopbackConnections.builder)
+                .setSkipIssuerHttpsCheck(true)
+                .build()
+            AuthorizationService(context, appAuthConfig)
+        } else {
+            AuthorizationService(context)
+        }
+    }
 
     /** 第 2 步:取发现文档、构造授权请求(PKCE S256 由 AppAuth 自动生成),返回可用 StartActivityForResult 启动的 Intent。 */
     suspend fun buildAuthorizationIntent(): Intent {
@@ -84,7 +98,7 @@ class YophonIdLogin @Inject constructor(
 
     private suspend fun fetchConfiguration(): AuthorizationServiceConfiguration =
         suspendCancellableCoroutine { cont ->
-            AuthorizationServiceConfiguration.fetchFromIssuer(Uri.parse(config.idIssuer)) { serviceConfig, ex ->
+            val callback = AuthorizationServiceConfiguration.RetrieveConfigurationCallback { serviceConfig, ex ->
                 if (serviceConfig != null) {
                     cont.resume(serviceConfig)
                 } else {
@@ -92,6 +106,12 @@ class YophonIdLogin @Inject constructor(
                         GopanException(GopanErrors.ID_DISCOVERY_FAILED, "无法连接账号中心,请检查网络", cause = ex),
                     )
                 }
+            }
+            val issuer = Uri.parse(config.idIssuer)
+            if (cleartextIssuer) {
+                AuthorizationServiceConfiguration.fetchFromIssuer(issuer, callback, LoopbackConnections.builder)
+            } else {
+                AuthorizationServiceConfiguration.fetchFromIssuer(issuer, callback)
             }
         }
 
