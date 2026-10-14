@@ -52,6 +52,8 @@ export class App {
 
   /** 冷启动:force-stop 后启动 MainActivity */
   coldStart() {
+    // 通知栏被拉下来时(在桌面上往下滑就会)它会一直盖在 App 上面,uiautomator 只看得到通知栏
+    this.d.shell('cmd statusbar collapse', { check: false });
     this.d.forceStop();
     return this.d.launch();
   }

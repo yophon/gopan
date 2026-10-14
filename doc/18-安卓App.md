@@ -81,7 +81,7 @@ cd android
 
    release 开 R8(混淆 + 资源压缩),包约 5 MB。密钥丢了已装用户就没法升级,务必备份。
 3. 冒烟:`node android/tools/e2e/release-smoke.mjs <apk>`(模拟器,连生产账号中心但不登录,结束卸载)。
-4. 存档并发 GitHub Release:安装包复制成 `releases/gopan/gopan-<版本>.apk`,R8 的 `app/build/outputs/mapping/release/mapping.txt` 复制成 `gopan-<版本>-mapping.txt`(还原崩溃日志的堆栈要用),`git tag v<版本>`,`gh release create` 附上安装包与 mapping。
+4. 存档并发 GitHub Release:安装包复制成 `releases/gopan/gopan-<版本>.apk`,R8 的 `app/build/outputs/mapping/release/mapping.txt` 压成 `gopan-<版本>-mapping.txt.gz`(原文件 80 多 MB,还原崩溃日志的堆栈要用),`git tag v<版本>`,`gh release create` 附上安装包与 mapping。
 5. 发到站点:安装包与 `latest.json` 放进服务器的发版目录(doc/09),`curl https://<域名>/api/app/android/latest` 核对版本号与 SHA-256。装着旧版的手机在「我的」页就会看到「有新版本」。
 
 ## 测试

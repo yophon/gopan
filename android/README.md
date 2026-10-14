@@ -268,7 +268,7 @@ kotlinx.serialization 的生成类(类型安全路由、Cookie 持久化)、AppA
 放行本机明文 HTTP,能装进模拟器连本地栈把 `tools/e2e` 的 p1–p4 全跑一遍。改了规则或加了依赖都要这样跑一次。
 CI 也会出一个 releaseE2e 包,保证 R8 至少能过编译期检查。
 
-每次正式发版把 `app/build/outputs/mapping/release/mapping.txt` 与安装包一起存档(`releases/gopan/`)。
+每次正式发版把 `app/build/outputs/mapping/release/mapping.txt` 压成 `gopan-<版本>-mapping.txt.gz`,与安装包一起存档(`releases/gopan/`、GitHub Release)。
 
 ## 代码规则
 

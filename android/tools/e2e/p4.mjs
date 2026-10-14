@@ -154,12 +154,25 @@ await scenario('K1', '管理端:建号、调配额、禁用 / 启用、重置密
   const probe = new GopanClient();
   await probe.login(newUser, 'pass-1234');
 
-  // 调配额
-  const userRow = (extra) =>
-    device.waitFor((t) => t.find({ id: 'admin_user_row' }).find((r) => t.has({ text: newUser, within: r }) && (!extra || t.has({ ...extra, within: r }))), {
-      timeout: 15000,
-      label: `新用户那一行${extra ? JSON.stringify(extra) : ''}`,
-    });
+  // 调配额。测试库里每跑一次 p4 就多一个用户(没有删号接口),新用户那一行常在屏幕外:往上滚着找,
+  // 停在屏幕下部时再滚一点(别点到底部导航);找到后再等它的状态(extra)
+  const { h: screenH } = device.displaySize();
+  const matchRow = (t) => t.find({ id: 'admin_user_row' }).find((r) => t.has({ text: newUser, within: r }));
+  const userRow = async (extra) => {
+    for (let i = 0; i < 12; i++) {
+      const r = matchRow(device.dump());
+      if (r && r.bounds.y2 < screenH * 0.75) break;
+      app.scrollUp(r ? 250 : 450);
+      await sleep(600);
+    }
+    return device.waitFor(
+      (t) => {
+        const r = matchRow(t);
+        return r && (!extra || t.has({ ...extra, within: r })) ? r : null;
+      },
+      { timeout: 15000, label: `新用户那一行${extra ? JSON.stringify(extra) : ''}` },
+    );
+  };
   const row = await userRow();
   device.tapXY(row.cx, row.cy);
   await device.tap({ text: '调整配额' });
@@ -313,6 +326,14 @@ await scenario('K4', '崩溃日志:进程崩溃后留下日志(版本、线程�
 await scenario('K5', '开源许可:列出依赖,看许可证全文', async () => {
   await openAccountItem('开源许可');
   await device.waitFor({ id: 'licenses_list' }, { label: '开源许可' });
+  // 列表比一屏长:往上滚到 OkHttp 那一行停在屏幕上部(别点到底部导航)
+  const { h } = device.displaySize();
+  for (let i = 0; i < 8; i++) {
+    const n = device.dump().first({ textContains: 'OkHttp' });
+    if (n && n.cy < h * 0.7) break;
+    app.scrollUp(300);
+    await sleep(500);
+  }
   await device.tap({ textContains: 'OkHttp' });
   // 正文很长、在 SelectionContainer 里,uiautomator 不导出它的文字:认对话框标题与正文控件
   await device.waitFor({ id: 'license_text' }, { label: '许可证全文' });
@@ -320,6 +341,12 @@ await scenario('K5', '开源许可:列出依赖,看许可证全文', async () =>
   device.screenshot(join(RUN_DIR, 'p4-license.png'));
   device.back();
   await sleep(500);
+  // 传递依赖也在表里(在列表末尾)
+  for (let i = 0; i < 8 && !device.dump().has({ textContains: 'Tink' }); i++) {
+    app.scrollUp(400);
+    await sleep(500);
+  }
+  expect(device.dump().has({ textContains: 'Tink' }), '传递依赖(Tink)也列出来了');
   device.back();
   await sleep(500);
 });
@@ -425,7 +452,11 @@ await scenario('K6', '离线时显示缓存,系统网络恢复后自己刷新(�
     device.reverse(PORTS.minio);
     device.shell('cmd connectivity airplane-mode disable');
   }
-  await device.waitGone({ textMatches: /网络不可用/ }, { timeout: 45000, label: '网络恢复后提示条自己消失' });
+  // 认主界面在、提示条没了(只等提示条消失的话,被别的窗口盖住时也会「通过」)
+  await device.waitFor((t) => app.isMain(t) && !t.has({ textMatches: /网络不可用/ }) && t, {
+    timeout: 45000,
+    label: '网络恢复后提示条自己消失',
+  });
 });
 
 // ---------------- 收尾 ----------------

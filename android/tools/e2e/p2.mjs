@@ -263,11 +263,14 @@ await scenario('S3', '发文本(乐观上屏)与主机发来的消息', async ()
 
 await scenario('S4', '长文本(> 4000 字节)转成 txt 文件发送', async () => {
   const long = `L${RUN}`.padEnd(4100, 'x');
+  // 之前跑过的 p2 在会话里留着同样 4100 字节的 txt:只认这一轮新出现的消息,否则 S4 提前「通过」,
+  // 这条消息晚于 S5 的图片落地,把网格拆开
+  const before = new Set((await chatMessages()).map((m) => m.id));
   shareText(long); // 分享进草稿,再点发送
   await device.waitFor({ id: 'chat_send', enabled: true }, { timeout: 15000, label: '草稿可发送' });
   await device.tap({ id: 'chat_send' });
   const msg = await waitServer(
-    async () => (await chatMessages()).find((m) => m.node && /^文本 .*\.txt$/.test(m.node.name) && m.node.size === 4100),
+    async () => (await chatMessages()).find((m) => !before.has(m.id) && m.node && /^文本 .*\.txt$/.test(m.node.name) && m.node.size === 4100),
     { timeout: 90000, label: '服务端出现 4100 字节的 txt' },
   );
   log(`长文本 → ${msg.node.name}`);
