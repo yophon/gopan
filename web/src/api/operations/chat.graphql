@@ -1,5 +1,5 @@
-query ChatMessages($limit: Int) {
-  chatMessages(limit: $limit) {
+query ChatMessages($limit: Int, $before: ID, $query: String) {
+  chatMessages(limit: $limit, before: $before, query: $query) {
     id
     body
     createdAt
@@ -34,6 +34,10 @@ mutation SendChatMessage($body: String, $nodeId: ID) {
       }
     }
   }
+}
+
+mutation DeleteChatMessage($id: ID!) {
+  deleteChatMessage(id: $id)
 }
 
 mutation EnsureChatFolder {

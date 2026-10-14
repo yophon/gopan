@@ -9,6 +9,15 @@
   "orientation": "portrait-primary",
   "background_color": "#ffffff",
   "theme_color": "#409eff",
+  "share_target": {
+    "action": "/chat",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
   "icons": [
     {
       "src": "/icons/icon-192.png",
