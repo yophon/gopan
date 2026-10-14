@@ -19,7 +19,10 @@ const app = new App(device);
 const chrome = new Chrome(device);
 
 const results = [];
+// E2E_ONLY=D,H 只跑名字以这些编号开头的场景(场景之间有前后依赖,自己挑能独立跑的组合)
+const ONLY = process.env.E2E_ONLY ? new Set(process.env.E2E_ONLY.split(',')) : null;
 async function scenario(name, fn) {
+  if (ONLY && !ONLY.has(name.split(' ')[0])) return;
   const t0 = Date.now();
   try {
     device.clearCrashes();
@@ -261,8 +264,17 @@ await scenario('G 离线冷启动显示缓存与提示条', async () => {
   await device.waitGone({ textMatches: /网络不可用/ }, { timeout: 30000, label: '联网后提示条消失' });
 });
 
+/** 「我的」页往下翻到某一项(页面比一屏长) */
+async function scrollAccountTo(sel) {
+  for (let i = 0; i < 6 && !device.dump().has(sel); i++) {
+    app.scrollUp(400);
+    await sleep(500);
+  }
+}
+
 await scenario('H 深色主题', async () => {
   await app.gotoTab('我的');
+  await scrollAccountTo({ textMatches: /^主题/ });
   await device.tap({ textMatches: /^主题/ });
   await device.tap({ text: '深色' });
   await sleep(1200);

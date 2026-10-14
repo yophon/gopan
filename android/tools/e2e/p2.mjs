@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { App } from './app.mjs';
 import { Device } from './device.mjs';
 import { GopanClient, makePng } from './gql.mjs';
-import { PORTS, RUN_DIR, ensureRunDir, log, randHex, readStack, sleep } from './util.mjs';
+import { APP_ID, PORTS, RUN_DIR, ensureRunDir, log, randHex, readStack, sleep } from './util.mjs';
 
 ensureRunDir();
 const stack = readStack();
@@ -152,13 +152,18 @@ async function ensureLoggedIn() {
   await app.waitMain(30000);
 }
 
-/** 关掉系统弹出的通知权限对话框(第一次有传输时会问) */
-async function dismissPermissionDialog() {
-  const t = device.dump();
-  const allow = t.first({ text: 'Allow' }) || t.first({ text: '允许' });
-  if (allow) {
-    device.tapXY(allow.clickableAncestor().cx, allow.clickableAncestor().cy);
-    await sleep(800);
+/** 关掉系统弹出的通知权限对话框(本次安装第一次有传输时会问;它出现得比任务入队晚一点,最多等几秒) */
+async function dismissPermissionDialog(waitMs = 6000) {
+  const deadline = Date.now() + waitMs;
+  while (Date.now() < deadline) {
+    const t = device.dump();
+    const allow = t.first({ text: 'Allow' }) || t.first({ text: '允许' });
+    if (allow) {
+      device.tapXY(allow.clickableAncestor().cx, allow.clickableAncestor().cy);
+      await sleep(800);
+      return;
+    }
+    await sleep(700);
   }
 }
 
@@ -347,7 +352,7 @@ await scenario('S7', '同一文件再次分享 → 秒传', async () => {
 });
 
 let dlFile = null;
-await scenario('S8', '下载文件:断网后续传完成,sha 一致', async () => {
+await scenario('S8', '下载文件:传输中断网 15 秒后续传完成,sha 一致', async () => {
   const name = `dl-${RUN}.bin`;
   const bytes = randomBytes(Math.max(8, Math.floor(BIG_MB / 2)) * 1024 * 1024);
   log(`主机侧准备 ${name}(${bytes.length >> 20} MiB)`);
@@ -359,20 +364,35 @@ await scenario('S8', '下载文件:断网后续传完成,sha 一致', async () =
   await sleep(2000);
   await app.openRowMenu(name);
   await device.tap({ text: '下载' });
-  await sleep(1500);
-  await dismissPermissionDialog();
-  // 进传输列表看进度
+  // 盯着 App 私有目录里的 .part(debug 包可以 run-as):下了一部分就断网
+  const path = `/sdcard/Download/gopan/${name}`;
+  let cut = false;
+  const t0 = Date.now();
+  while (Date.now() - t0 < 120000) {
+    const r = device.adb(['shell', 'run-as', APP_ID, 'sh', '-c', `'stat -c %s files/transfers/parts/*.part 2>/dev/null'`], { check: false });
+    const sizes = (r.stdout || '').trim().split(/\s+/).map(Number).filter((n) => n > 0);
+    if (sizes.some((n) => n < bytes.length)) {
+      log(`传输中断网 15 秒(.part ${(sizes[0] / 1048576).toFixed(1)} MiB / ${bytes.length >> 20} MiB)`);
+      cutNetwork();
+      cut = true;
+      break;
+    }
+    if (deviceSha(path)) break;
+    await sleep(300);
+  }
+  if (cut) {
+    await sleep(15000);
+    restoreNetwork();
+  } else {
+    log('下载太快,没赶上在传输中断网');
+  }
+  await dismissPermissionDialog(2000);
+  // 传输列表里看到完成
   await device.tap({ desc: '更多', filter: (n) => n.cy < 84 });
   await device.tap({ text: '传输列表' });
-  await device.waitFor({ text: '传输列表' }, { label: '传输列表' });
   await device.tap({ id: 'transfers_tab_downloads' });
-  await device.waitFor((t) => t.first({ textMatches: /\d+% · / }) && t, { timeout: 120000, interval: 1500, label: '下载在进行' });
-  log('断网 15 秒');
-  cutNetwork();
-  await sleep(15000);
-  restoreNetwork();
-  const path = `/sdcard/Download/gopan/${name}`;
   await waitServer(async () => deviceSha(path) === sha256(bytes), { timeout: 900000, interval: 3000, label: '下载完成且 sha 一致' });
+  await device.waitFor({ textMatches: /已保存到「下载\/gopan」/ }, { timeout: 20000, label: '传输列表显示已保存' });
   device.back();
 });
 
@@ -519,6 +539,39 @@ await scenario('S13', '「文件」应用多选 20 张图分享 → 一次进传
     timeout: 30000,
     label: 'App 里显示成网格',
   });
+});
+
+await scenario('S14', '锁屏并强制进入 Doze:前台服务里的上传照常传完', async () => {
+  await app.gotoTab('传输助手');
+  const name = `doze-${RUN}.bin`;
+  const bytes = randomBytes(32 * 1024 * 1024);
+  const local = join(RUN_DIR, name);
+  writeFileSync(local, bytes);
+  const uri = await pushToMediaStore(local, name);
+  shareUri(uri, 'application/octet-stream');
+  await sleep(1500);
+  await dismissPermissionDialog();
+  await device.waitFor((t) => (chatUploadPercent(t, name) ?? -1) >= 0 && t, { timeout: 120000, interval: 1000, label: '开始上传' });
+  log('锁屏 + 强制 Doze');
+  device.shell('dumpsys battery unplug');
+  device.shell('input keyevent KEYCODE_SLEEP');
+  await sleep(1500);
+  device.shell('dumpsys deviceidle force-idle');
+  try {
+    const msg = await waitServer(async () => (await chatMessages()).find((m) => m.node?.name === name), {
+      timeout: 600000,
+      interval: 5000,
+      label: 'Doze 中传完',
+    });
+    expect(device.shell('dumpsys deviceidle get deep') === 'IDLE', '传输期间设备没有保持在 Doze');
+    expect(msg.node.sha256 === sha256(bytes), 'sha256 不一致');
+  } finally {
+    device.shell('dumpsys deviceidle unforce');
+    device.shell('dumpsys battery reset');
+    device.shell('input keyevent KEYCODE_WAKEUP');
+    device.shell('wm dismiss-keyguard');
+    await sleep(1000);
+  }
 });
 
 // ---------------- 汇总 ----------------
