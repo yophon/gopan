@@ -180,3 +180,92 @@ describe('singleFlightRefresh', () => {
     expect(gqlRequestMock).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('多标签页刷新竞争', () => {
+  const user = refreshData.refresh.user
+
+  function installLocks(request: (name: string, fn: () => Promise<unknown>) => Promise<unknown>) {
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { locks: { request } },
+      writable: true,
+      configurable: true,
+    })
+  }
+
+  function uninstallLocks() {
+    Object.defineProperty(globalThis, 'navigator', {
+      value: {},
+      writable: true,
+      configurable: true,
+    })
+  }
+
+  it('store 里的 token 已被别的标签换新 → 不发 refresh 直接复用', async () => {
+    uninstallLocks()
+    const auth = useAuthStore()
+    auth.setAuth({ accessToken: 'fresh-from-other-tab', user })
+    await expect(singleFlightRefresh('stale')).resolves.toBe(true)
+    expect(gqlRequestMock).not.toHaveBeenCalled()
+    expect(auth.accessToken).toBe('fresh-from-other-tab')
+  })
+
+  it('token 没变(就是拿到 401 的那个)→ 正常刷新', async () => {
+    uninstallLocks()
+    const auth = useAuthStore()
+    auth.setAuth({ accessToken: 'stale', user })
+    gqlRequestMock.mockResolvedValue(refreshData)
+    await expect(singleFlightRefresh('stale')).resolves.toBe(true)
+    expect(gqlRequestMock).toHaveBeenCalledTimes(1)
+    expect(auth.accessToken).toBe('new-token')
+  })
+
+  it('不传 staleToken(路由守卫)→ 无条件刷新', async () => {
+    uninstallLocks()
+    const auth = useAuthStore()
+    auth.setAuth({ accessToken: 'whatever', user })
+    gqlRequestMock.mockResolvedValue(refreshData)
+    await singleFlightRefresh()
+    expect(gqlRequestMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('支持 Web Locks 时在锁内刷新;锁期间别的标签写入新 token 则跳过请求', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    const lockRequest = vi.fn(async (_name: string, fn: () => Promise<unknown>) => {
+      await gate // 模拟另一个标签正持有锁
+      return fn()
+    })
+    installLocks(lockRequest)
+    const auth = useAuthStore()
+    auth.setAuth({ accessToken: 'stale', user })
+
+    const p = singleFlightRefresh('stale')
+    // 持锁的标签刷新成功并广播了新 token
+    auth.setAuth({ accessToken: 'from-lock-holder', user })
+    release()
+    await expect(p).resolves.toBe(true)
+    expect(lockRequest).toHaveBeenCalledWith('gopan-auth-refresh', expect.any(Function))
+    expect(gqlRequestMock).not.toHaveBeenCalled()
+    uninstallLocks()
+  })
+
+  it('request 把触发 401 的 token 传给刷新,被别的标签换新后直接重放', async () => {
+    uninstallLocks()
+    const auth = useAuthStore()
+    auth.setAuth({ accessToken: 'stale', user })
+    gqlRequestMock.mockImplementation(({ requestHeaders }: { requestHeaders: Record<string, string> }) => {
+      if (requestHeaders.Authorization === 'Bearer stale') {
+        // 401 的同时,另一个标签已经刷新并广播
+        auth.setAuth({ accessToken: 'new-from-other', user })
+        return Promise.reject(clientError('UNAUTHENTICATED'))
+      }
+      return Promise.resolve({ logout: true })
+    })
+    await expect(request(LogoutDocument)).resolves.toEqual({ logout: true })
+    // 原请求 + 重放,没有 refresh 请求
+    expect(gqlRequestMock).toHaveBeenCalledTimes(2)
+    expect(gqlRequestMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ requestHeaders: { Authorization: 'Bearer new-from-other' } }),
+    )
+  })
+})

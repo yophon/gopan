@@ -12,6 +12,11 @@ import router from '@/router'
  *   auth 流程(login / register / refresh / logout)必须走它,避免刷新逻辑自我递归。
  * - request:业务请求。遇到 UNAUTHENTICATED → 单飞刷新 → 成功后重放一次;
  *   刷新也失败 → 清 auth store,跳 /login?redirect=当前路由。
+ *
+ * 多标签页:refresh token 是 httpOnly cookie、浏览器内所有标签共用且每次刷新都旋转。
+ * 两个标签同时 401、同时拿同一个旧 cookie 去刷新,后到的一方会命中服务端重用检测。
+ * 所以刷新前先拿跨标签锁(Web Locks),拿到锁后若 store 里的 token 已经被别的标签
+ * (经 BroadcastChannel,见 stores/auth.ts)换成新的,就直接复用,不再发请求。
  */
 
 // graphql-request v7 内部用 new URL() 解析 endpoint,相对路径会抛 Invalid URL,
@@ -76,16 +81,34 @@ export async function guestRequest<TResult, TVariables extends Variables>(
 
 // ---------- 单飞刷新 ----------
 
+export const AUTH_LOCK_NAME = 'gopan-auth-refresh'
+
+/** 跨标签互斥:支持 Web Locks 就排队,不支持(旧 Safari / 测试环境)就直接跑 */
+function withTabLock<T>(fn: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined
+  if (!locks) return fn()
+  return locks.request(AUTH_LOCK_NAME, fn)
+}
+
 // 模块级 Promise 去重:并发多个 401 只触发一次 refresh,共享同一个结果。
 let refreshing: Promise<boolean> | null = null
 
-export function singleFlightRefresh(): Promise<boolean> {
+/**
+ * @param staleToken 触发这次刷新的那个 access token(拿到 401 的那个)。拿到跨标签锁后
+ *   若 store 里的 token 已不是它,说明别的标签刚刷新过并广播了新 token,直接复用。
+ *   不传则无条件刷新(路由守卫的静默续登录)。
+ */
+export function singleFlightRefresh(staleToken?: string | null): Promise<boolean> {
   if (!refreshing) {
-    refreshing = useAuthStore()
-      .tryRefresh()
-      .finally(() => {
-        refreshing = null
-      })
+    refreshing = withTabLock(async () => {
+      const auth = useAuthStore()
+      if (staleToken !== undefined && auth.accessToken && auth.accessToken !== staleToken) {
+        return true
+      }
+      return auth.tryRefresh()
+    }).finally(() => {
+      refreshing = null
+    })
   }
   return refreshing
 }
@@ -96,12 +119,13 @@ export async function request<TResult, TVariables extends Variables>(
   document: TypedDocumentNode<TResult, TVariables>,
   variables?: TVariables,
 ): Promise<TResult> {
+  const tokenUsed = useAuthStore().accessToken
   try {
     return await plainRequest(document, variables)
   } catch (err) {
     if (!hasErrorCode(err, 'UNAUTHENTICATED')) throw err
 
-    const refreshed = await singleFlightRefresh()
+    const refreshed = await singleFlightRefresh(tokenUsed)
     if (refreshed) {
       // 带新 token 重放原请求,只重放一次
       return plainRequest(document, variables)
