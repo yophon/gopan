@@ -1,0 +1,153 @@
+import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.apollo)
+}
+
+// ---- 服务端地址:gradle.properties / -P 可覆盖,留空用默认(生产) ----
+fun gopanProp(name: String, default: String): String =
+    providers.gradleProperty(name).orNull?.trim()?.takeIf { it.isNotEmpty() } ?: default
+
+val gopanBaseUrl = gopanProp("gopan.baseUrl", "https://drive.979687.xyz")
+val yophonIdIssuer = gopanProp("gopan.idIssuer", "https://id.979687.xyz")
+val yophonIdClientId = gopanProp("gopan.idClientId", "gopan-android")
+val yophonIdRedirect = gopanProp("gopan.idRedirect", "xyz.yophon.gopan:/oauthredirect")
+
+// ---- 发布签名:android/keystore.properties(gitignore)给 storeFile/storePassword/keyAlias/keyPassword;
+//      没有这个文件时 release 退回 debug 签名,只能用于本地验证 ----
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val hasReleaseKeystore = !keystoreProps.getProperty("storeFile").isNullOrBlank()
+
+android {
+    namespace = "xyz.yophon.gopan"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "xyz.yophon.gopan"
+        minSdk = 26
+        targetSdk = 36
+        versionCode = 30001
+        versionName = "3.0.0-p1"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // AppAuth 的 RedirectUriReceiverActivity 由库 manifest 合并,这里只给 scheme
+        manifestPlaceholders["appAuthRedirectScheme"] = "xyz.yophon.gopan"
+
+        buildConfigField("String", "GOPAN_BASE_URL", "\"$gopanBaseUrl\"")
+        buildConfigField("String", "YOPHON_ID_ISSUER", "\"$yophonIdIssuer\"")
+        buildConfigField("String", "YOPHON_ID_CLIENT_ID", "\"$yophonIdClientId\"")
+        buildConfigField("String", "YOPHON_ID_REDIRECT", "\"$yophonIdRedirect\"")
+    }
+
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // P1 先不混淆,发布阶段(P4)再开 R8 并补规则
+            isMinifyEnabled = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = if (hasReleaseKeystore) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    packaging {
+        resources {
+            excludes += setOf("/META-INF/{AL2.0,LGPL2.1}", "META-INF/versions/9/OSGI-INF/MANIFEST.MF")
+        }
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
+// ---- Apollo:直接用后端仓库里的 schema 生成,operations 放 src/main/graphql ----
+apollo {
+    service("gopan") {
+        packageName.set("xyz.yophon.gopan.graphql")
+        schemaFiles.from(rootProject.file("../server/graph/schema.graphqls"))
+        srcDir("src/main/graphql")
+        mapScalar("Time", "kotlin.String")
+        mapScalar("Int64", "kotlin.Long", "com.apollographql.apollo.api.LongAdapter")
+        generateKotlinModels.set(true)
+    }
+}
+
+dependencies {
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.navigation.compose)
+
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.android.compiler)
+    implementation(libs.androidx.hilt.navigation.compose)
+
+    implementation(libs.apollo.runtime)
+    implementation(libs.okhttp)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
+
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.security.crypto)
+    implementation(libs.appauth)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+    implementation(libs.androidx.work.runtime.ktx)
+
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.timber)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.turbine)
+    testImplementation(libs.truth)
+}

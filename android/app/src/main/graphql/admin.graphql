@@ -1,0 +1,56 @@
+query AdminUsers {
+  adminUsers {
+    id
+    username
+    isAdmin
+    disabled
+    quotaBytes
+    usedBytes
+    createdAt
+  }
+}
+
+query AdminOverview {
+  adminOverview {
+    userCount
+    totalUsedBytes
+    blobCount
+    blobBytes
+    taskCounts {
+      status
+      count
+    }
+  }
+}
+
+mutation AdminCreateUser($username: String!, $password: String!, $quotaBytes: Int64) {
+  adminCreateUser(username: $username, password: $password, quotaBytes: $quotaBytes) {
+    id
+    username
+    disabled
+    quotaBytes
+    usedBytes
+  }
+}
+
+mutation AdminSetQuota($userId: ID!, $quotaBytes: Int64!) {
+  adminSetQuota(userId: $userId, quotaBytes: $quotaBytes) {
+    id
+    quotaBytes
+  }
+}
+
+mutation AdminSetDisabled($userId: ID!, $disabled: Boolean!) {
+  adminSetDisabled(userId: $userId, disabled: $disabled) {
+    id
+    disabled
+  }
+}
+
+mutation AdminResetPassword($userId: ID!) {
+  adminResetPassword(userId: $userId)
+}
+
+mutation AdminRetryFailedTasks {
+  adminRetryFailedTasks
+}

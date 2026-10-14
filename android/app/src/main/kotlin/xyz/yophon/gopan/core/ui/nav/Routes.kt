@@ -1,0 +1,85 @@
+package xyz.yophon.gopan.core.ui.nav
+
+import kotlinx.serialization.Serializable
+
+/**
+ * 全部导航路由(Navigation Compose 类型安全路由)。
+ * 根 NavHost 按 AuthState 切换:SignedOut 用 [Login]/[Register];SignedIn 进 MainScaffold,
+ * 四个底部 tab 各是一个嵌套图([DriveTab] 等),起点是各自的首页。
+ * 新路由加在这里(共享文件,由 Integrate 阶段统一改)。
+ */
+object Routes {
+    // ---- 未登录 ----
+    @Serializable
+    data object Login
+
+    @Serializable
+    data object Register
+
+    // ---- 底部 tab(嵌套图的根) ----
+    @Serializable
+    data object DriveTab
+
+    @Serializable
+    data object ChatTab
+
+    @Serializable
+    data object SharesTab
+
+    @Serializable
+    data object AccountTab
+
+    // ---- 文件 ----
+    /** 根目录 */
+    @Serializable
+    data object Drive
+
+    @Serializable
+    data class Folder(val folderId: String)
+
+    @Serializable
+    data object Trash
+
+    @Serializable
+    data object Search
+
+    @Serializable
+    data class Preview(val nodeId: String)
+
+    // ---- 传输助手 ----
+    @Serializable
+    data object Chat
+
+    /** 上传 / 下载队列 */
+    @Serializable
+    data object Transfers
+
+    // ---- 分享 ----
+    @Serializable
+    data object Shares
+
+    @Serializable
+    data class ShareVisits(val shareId: String)
+
+    // ---- 我的 ----
+    @Serializable
+    data object Account
+
+    @Serializable
+    data object ChangePassword
+
+    @Serializable
+    data object Sessions
+
+    @Serializable
+    data object AppPasswords
+
+    @Serializable
+    data object AgentCredentials
+
+    @Serializable
+    data object Settings
+
+    @Serializable
+    data object Admin
+}

@@ -1,0 +1,56 @@
+# 认证相关 operations。字段选择与 web/src/api/operations/auth.graphql 一致,
+# 用 UserFields 片段让 login/register/refresh/me/changePassword 共享同一个生成类型(UserFields)。
+
+fragment UserFields on User {
+  id
+  username
+  quotaBytes
+  usedBytes
+  isAdmin
+}
+
+mutation Login($username: String!, $password: String!) {
+  login(username: $username, password: $password) {
+    accessToken
+    user {
+      ...UserFields
+    }
+  }
+}
+
+mutation Register($username: String!, $password: String!) {
+  register(username: $username, password: $password) {
+    accessToken
+    user {
+      ...UserFields
+    }
+  }
+}
+
+mutation Refresh {
+  refresh {
+    accessToken
+    user {
+      ...UserFields
+    }
+  }
+}
+
+mutation Logout {
+  logout
+}
+
+query Me {
+  me {
+    ...UserFields
+  }
+}
+
+mutation ChangePassword($oldPassword: String!, $newPassword: String!) {
+  changePassword(oldPassword: $oldPassword, newPassword: $newPassword) {
+    accessToken
+    user {
+      ...UserFields
+    }
+  }
+}

@@ -1,0 +1,59 @@
+query ChatMessages($limit: Int, $before: ID, $after: ID, $query: String) {
+  chatMessages(limit: $limit, before: $before, after: $after, query: $query) {
+    id
+    body
+    createdAt
+    source
+    node {
+      id
+      parentId
+      name
+      kind
+      size
+      preview {
+        kind
+        thumbUrl
+      }
+    }
+  }
+}
+
+mutation SendChatMessage($body: String, $nodeId: ID) {
+  sendChatMessage(body: $body, nodeId: $nodeId) {
+    id
+    body
+    createdAt
+    source
+    node {
+      id
+      parentId
+      name
+      kind
+      size
+      preview {
+        kind
+        thumbUrl
+      }
+    }
+  }
+}
+
+mutation DeleteChatMessage($id: ID!) {
+  deleteChatMessage(id: $id)
+}
+
+mutation EnsureChatFolder {
+  ensureChatFolder {
+    id
+    parentId
+    name
+  }
+}
+
+query ChatFolderInfo {
+  chatFolder {
+    id
+    parentId
+    name
+  }
+}

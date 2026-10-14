@@ -1,0 +1,36 @@
+query Trash($cursor: String) {
+  trash(cursor: $cursor) {
+    items {
+      id
+      parentId
+      name
+      kind
+      size
+      updatedAt
+      deletedAt
+      purgeAt
+      preview {
+        kind
+        thumbUrl
+      }
+    }
+    nextCursor
+    total
+  }
+}
+
+mutation RestoreNodes($ids: [ID!]!) {
+  restoreNodes(ids: $ids) {
+    id
+    parentId
+    name
+  }
+}
+
+mutation PurgeNodes($ids: [ID!]!) {
+  purgeNodes(ids: $ids)
+}
+
+mutation PurgeTrash {
+  purgeTrash
+}

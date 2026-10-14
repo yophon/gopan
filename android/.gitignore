@@ -1,0 +1,19 @@
+# Gradle / 构建产物
+.gradle/
+build/
+.kotlin/
+*.apk
+*.aab
+*.hprof
+captures/
+.cxx/
+
+# 本机配置与签名(签名密码见 D:/user/yophon/releases/gopan/README.md)
+local.properties
+keystore.properties
+*.jks
+*.keystore
+
+# IDE
+.idea/
+*.iml

@@ -1,0 +1,120 @@
+query Children($parentId: ID, $cursor: String, $order: NodeOrder, $desc: Boolean) {
+  children(parentId: $parentId, cursor: $cursor, order: $order, desc: $desc) {
+    items {
+      id
+      parentId
+      name
+      kind
+      size
+      subtreeBytes
+      subtreeCount
+      statsStale
+      updatedAt
+      preview {
+        kind
+        thumbUrl
+      }
+    }
+    nextCursor
+    total
+  }
+}
+
+# 预览专用单节点查询:列表里的 preview 只有 kind/thumbUrl 可靠,
+# 完整预签名 URL(15 分钟有效)必须打开预览时即查即用。
+query NodePreview($id: ID!) {
+  node(id: $id) {
+    id
+    name
+    kind
+    size
+    preview {
+      kind
+      thumbUrl
+      largeUrl
+      contentUrl
+      status
+      durationSec
+    }
+  }
+}
+
+mutation RequestPreview($nodeId: ID!) {
+  requestPreview(nodeId: $nodeId) {
+    kind
+    status
+    contentUrl
+  }
+}
+
+query Node($id: ID!) {
+  node(id: $id) {
+    id
+    parentId
+    name
+    kind
+    size
+    updatedAt
+  }
+}
+
+mutation CreateFolder($parentId: ID, $name: String!) {
+  createFolder(parentId: $parentId, name: $name) {
+    id
+    parentId
+    name
+    kind
+    size
+    updatedAt
+  }
+}
+
+mutation RenameNode($id: ID!, $name: String!) {
+  renameNode(id: $id, name: $name) {
+    id
+    parentId
+    name
+    kind
+    size
+    updatedAt
+  }
+}
+
+mutation MoveNodes($ids: [ID!]!, $targetParentId: ID) {
+  moveNodes(ids: $ids, targetParentId: $targetParentId) {
+    id
+    parentId
+    name
+  }
+}
+
+mutation DeleteNodes($ids: [ID!]!) {
+  deleteNodes(ids: $ids)
+}
+
+mutation CopyNodes($ids: [ID!]!, $targetParentId: ID) {
+  copyNodes(ids: $ids, targetParentId: $targetParentId) {
+    id
+    parentId
+    name
+  }
+}
+
+query SearchNodes($q: String!, $cursor: String) {
+  searchNodes(q: $q, cursor: $cursor) {
+    items {
+      id
+      parentId
+      name
+      kind
+      size
+      updatedAt
+      preview {
+        kind
+        thumbUrl
+      }
+    }
+    nextCursor
+    total
+  }
+}
