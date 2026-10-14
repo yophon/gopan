@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 「我的」tab(feature.account)的文案 -->
+<resources>
+    <string name="account_title">我的</string>
+    <string name="account_admin_badge">管理员</string>
+
+    <string name="account_section_storage">存储</string>
+    <string name="account_section_account">账户</string>
+    <string name="account_section_appearance">外观</string>
+    <string name="account_section_admin">管理</string>
+    <string name="account_section_about">关于</string>
+
+    <string name="account_item_trash">回收站</string>
+    <string name="account_item_trash_hint">已删除的文件保留 30 天</string>
+    <string name="account_item_change_password">修改密码</string>
+    <string name="account_item_sessions">登录设备</string>
+    <string name="account_item_app_passwords">应用密码(WebDAV)</string>
+    <string name="account_item_agent">Agent 接入</string>
+    <string name="account_item_theme">主题</string>
+    <string name="account_item_drive_view">文件列表默认视图</string>
+    <string name="account_item_admin">管理端</string>
+    <string name="account_item_version">版本</string>
+    <string name="account_item_check_update">检查更新</string>
+    <string name="account_item_open_source">开源页面</string>
+    <string name="account_item_logout">退出登录</string>
+    <string name="account_coming_soon">即将推出</string>
+
+    <string name="account_theme_system">跟随系统</string>
+    <string name="account_theme_light">浅色</string>
+    <string name="account_theme_dark">深色</string>
+    <string name="account_view_list">列表</string>
+    <string name="account_view_grid">网格</string>
+
+    <string name="account_logout_confirm_title">退出登录?</string>
+    <string name="account_logout_confirm_text">退出后需要重新登录才能访问文件。</string>
+    <string name="account_logout_confirm_action">退出</string>
+
+    <string name="account_pwd_title">修改密码</string>
+    <string name="account_pwd_old">旧密码</string>
+    <string name="account_pwd_new">新密码</string>
+    <string name="account_pwd_new_hint">8~72 位</string>
+    <string name="account_pwd_confirm">确认新密码</string>
+    <string name="account_pwd_submit">确认修改</string>
+    <string name="account_pwd_show">显示密码</string>
+    <string name="account_pwd_hide">隐藏密码</string>
+    <string name="account_pwd_err_old_empty">请输入旧密码</string>
+    <string name="account_pwd_err_new_empty">请输入新密码</string>
+    <string name="account_pwd_err_new_too_short">新密码至少 8 位</string>
+    <string name="account_pwd_err_new_too_long">新密码过长(最多 72 字节)</string>
+    <string name="account_pwd_err_same_as_old">新密码不能与旧密码相同</string>
+    <string name="account_pwd_err_mismatch">两次输入的新密码不一致</string>
+</resources>
