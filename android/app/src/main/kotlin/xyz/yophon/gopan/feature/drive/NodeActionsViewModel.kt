@@ -17,6 +17,8 @@ import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.network.gopanResult
 import xyz.yophon.gopan.core.network.toGopanException
+import xyz.yophon.gopan.core.transfer.PackResult
+import xyz.yophon.gopan.core.transfer.TransferActions
 
 /** 面包屑 / 目录选择器里的一级;id 为 null 表示根目录 */
 @Immutable
@@ -54,6 +56,12 @@ sealed interface NodeEffect {
     data class Message(val text: UiText) : NodeEffect
 
     data class OpenFolder(val folderId: String) : NodeEffect
+
+    /** Android 9 及以下保存到公共「下载」目录前要申请存储权限;结果回 [NodeActionsViewModel.onStoragePermission] */
+    data object RequestStoragePermission : NodeEffect
+
+    /** 新任务入队:Android 13+ 第一次时申请通知权限(通知栏显示进度) */
+    data object TransferQueued : NodeEffect
 }
 
 /** 输入对话框里要贴着输入框显示的服务端错误:只对当初提交的那个名字有效 */
@@ -64,7 +72,10 @@ data class InputError(val name: String, val message: UiText)
  * 节点操作(重命名 / 移动 / 复制 / 删除 / 详情)的公共部分:弹层状态、忙碌标记、一次性消息。
  * 子类只需实现 [afterMutation](成功后刷新自己的列表)。
  */
-abstract class NodeActionsViewModel(protected val repo: NodesRepository) : ViewModel() {
+abstract class NodeActionsViewModel(
+    protected val repo: NodesRepository,
+    protected val transfers: TransferActions,
+) : ViewModel() {
 
     private val _dialog = MutableStateFlow<NodeDialog?>(null)
     val dialog: StateFlow<NodeDialog?> = _dialog.asStateFlow()
@@ -126,7 +137,85 @@ abstract class NodeActionsViewModel(protected val repo: NodesRepository) : ViewM
     fun copyTo(ids: List<String>, target: Crumb, rootName: String) =
         runMutation(UiText.Res(R.string.drive_msg_copied, target.name.ifEmpty { rootName })) { repo.copy(ids, target.id) }
 
-    /** P2/P3 才有的功能(打开、下载、上传):先关掉弹层(否则提示被 BottomSheet 盖住),再给一句提示 */
+    // ---- 传输 ----
+
+    /** 等存储权限结果的下载(Android 9 及以下) */
+    private var pendingDownload: Pair<List<Node>, Boolean>? = null
+
+    fun download(nodes: List<Node>) = startDownload(nodes, pack = false)
+
+    fun pack(nodes: List<Node>) = startDownload(nodes, pack = true)
+
+    private fun startDownload(nodes: List<Node>, pack: Boolean) {
+        if (nodes.isEmpty()) return
+        closeDialog()
+        viewModelScope.launch {
+            if (transfers.needsStoragePermission()) {
+                pendingDownload = nodes to pack
+                send(NodeEffect.RequestStoragePermission)
+                return@launch
+            }
+            enqueueDownload(nodes, pack)
+        }
+    }
+
+    fun onStoragePermission(granted: Boolean) {
+        val (nodes, pack) = pendingDownload ?: return
+        pendingDownload = null
+        if (!granted) {
+            send(NodeEffect.Message(UiText.Res(R.string.transfer_msg_need_storage)))
+            return
+        }
+        viewModelScope.launch { enqueueDownload(nodes, pack) }
+    }
+
+    private suspend fun enqueueDownload(nodes: List<Node>, pack: Boolean) {
+        if (pack) {
+            when (transfers.pack(nodes)) {
+                PackResult.TooLarge -> send(NodeEffect.Message(UiText.Res(R.string.transfer_msg_pack_too_large)))
+                PackResult.Queued -> {
+                    send(NodeEffect.Message(UiText.Res(R.string.drive_msg_pack_queued)))
+                    send(NodeEffect.TransferQueued)
+                }
+            }
+        } else {
+            val n = transfers.download(nodes)
+            if (n > 0) {
+                send(NodeEffect.Message(UiText.Res(R.string.drive_msg_download_queued, n)))
+                send(NodeEffect.TransferQueued)
+            }
+        }
+    }
+
+    /** 下到缓存后弹"用其他应用打开" */
+    fun open(node: Node) {
+        if (node.isFolder) return
+        closeDialog()
+        viewModelScope.launch {
+            if (transfers.open(node)) {
+                send(NodeEffect.Message(UiText.Res(R.string.transfer_msg_opening, node.name)))
+                send(NodeEffect.TransferQueued)
+            }
+        }
+    }
+
+    fun sendToChat(node: Node) {
+        closeDialog()
+        viewModelScope.launch {
+            gopanResult { transfers.sendToChat(node) }
+                .onSuccess { send(NodeEffect.Message(UiText.Res(R.string.drive_msg_sent_to_chat))) }
+                .onFailure { send(NodeEffect.Message(UiText.Plain(it.message ?: "发送失败"))) }
+        }
+    }
+
+    private fun closeDialog() {
+        if (!_busy.value) {
+            _dialog.value = null
+            _inputError.value = null
+        }
+    }
+
+    /** 尚未实现的功能:先关掉弹层(否则提示被 BottomSheet 盖住),再给一句提示 */
     fun notYet() {
         if (!_busy.value) {
             _dialog.value = null

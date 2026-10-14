@@ -1,7 +1,10 @@
 package xyz.yophon.gopan
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -18,6 +21,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -26,10 +30,16 @@ import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import xyz.yophon.gopan.core.share.NavRequest
 import xyz.yophon.gopan.core.ui.nav.Routes
+import xyz.yophon.gopan.feature.drive.ifResumed
+import xyz.yophon.gopan.feature.transfers.TransfersScreen
 import xyz.yophon.gopan.feature.account.accountGraph
 import xyz.yophon.gopan.feature.chat.chatGraph
 import xyz.yophon.gopan.feature.drive.driveGraph
@@ -55,15 +65,38 @@ private val mainTabs = listOf(
  * 登录后的主界面:底部导航 + 四个嵌套图。底部栏与 NavHost 只在这个文件;
  * 各 tab 的页面由 feature.* 包里的 xxxGraph 扩展函数提供。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun MainScaffold() {
+fun MainScaffold(viewModel: MainScaffoldViewModel = hiltViewModel()) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+    // 键盘弹起时收起底部导航:否则输入框(传输助手、搜索)和键盘之间隔着一条导航栏
+    val imeVisible = WindowInsets.isImeVisible
+
+    // 外部入口:系统分享 → 传输助手;通知点按 → 传输列表
+    val request by viewModel.navRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(request) {
+        when (val r = request) {
+            NavRequest.OPEN_CHAT -> {
+                navController.navigate(Routes.ChatTab) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+                viewModel.consume(r)
+            }
+            NavRequest.OPEN_TRANSFERS -> {
+                navController.navigate(Routes.Transfers) { launchSingleTop = true }
+                viewModel.consume(r)
+            }
+            null -> Unit
+        }
+    }
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
+            if (!imeVisible) NavigationBar {
                 mainTabs.forEach { tab ->
                     val selected = currentDestination?.hierarchy?.any { tab.matches(it) } == true
                     NavigationBarItem(
@@ -99,6 +132,15 @@ fun MainScaffold() {
             chatGraph(navController)
             sharesGraph(navController)
             accountGraph(navController)
+            // 传输列表:全局页,不属于哪个 tab(文件页菜单、传输助手、「我的」、通知都能进)
+            composable<Routes.Transfers> { entry ->
+                TransfersScreen(
+                    onBack = { entry.ifResumed { navController.popBackStack() } },
+                    onOpenFolder = { id ->
+                        entry.ifResumed { navController.navigate(if (id == null) Routes.Drive else Routes.Folder(id)) }
+                    },
+                )
+            }
         }
     }
 }

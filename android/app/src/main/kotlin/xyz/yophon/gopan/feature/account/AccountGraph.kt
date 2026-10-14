@@ -16,6 +16,7 @@ fun NavGraphBuilder.accountGraph(navController: NavController) {
         composable<Routes.Account> {
             AccountScreen(
                 onOpenTrash = { navController.navigate(Routes.Trash) },
+                onOpenTransfers = { navController.navigate(Routes.Transfers) },
                 onOpenSessions = { navController.navigate(Routes.Sessions) },
                 onOpenAppPasswords = { navController.navigate(Routes.AppPasswords) },
                 onOpenAgent = { navController.navigate(Routes.AgentCredentials) },

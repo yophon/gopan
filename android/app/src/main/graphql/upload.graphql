@@ -1,36 +1,21 @@
+# 上传协议(doc/03 · 浏览器直传):initUpload → 预签名分片 PUT → completeUpload 轮询;uploadSession 对账续传。
+# 返回的节点用 NodeItem 片段,与列表同一个领域模型(秒传返回的节点 size/mime 可能为空,定稿返回的完整)。
+
 mutation InitUpload($parentId: ID, $name: String!, $sha256: String!, $size: Int64!) {
   initUpload(parentId: $parentId, name: $name, sha256: $sha256, size: $size) {
     instant
     node {
-      id
-      parentId
-      name
-      kind
-      size
-      updatedAt
+      ...NodeItem
     }
     session {
-      id
-      partSize
-      partUrls {
-        partNumber
-        url
-      }
-      uploadedParts
-      expiresAt
-      status
+      ...UploadSessionFields
     }
   }
 }
 
 mutation CompleteUpload($sessionId: ID!, $etags: [PartEtag!]!) {
   completeUpload(sessionId: $sessionId, etags: $etags) {
-    id
-    parentId
-    name
-    kind
-    size
-    updatedAt
+    ...NodeItem
   }
 }
 
@@ -40,21 +25,18 @@ mutation AbortUpload($sessionId: ID!) {
 
 query UploadSession($id: ID!) {
   uploadSession(id: $id) {
-    id
-    partSize
-    partUrls {
-      partNumber
-      url
-    }
-    uploadedParts
-    expiresAt
-    status
+    ...UploadSessionFields
   }
 }
 
-query NodeDownloadUrl($id: ID!) {
-  node(id: $id) {
-    id
-    downloadUrl
+fragment UploadSessionFields on UploadSession {
+  id
+  partSize
+  partUrls {
+    partNumber
+    url
   }
+  uploadedParts
+  expiresAt
+  status
 }

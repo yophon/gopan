@@ -26,6 +26,7 @@ fun NavGraphBuilder.driveGraph(navController: NavController) {
                 onCrumbClick = { crumb -> entry.ifResumed { navController.navigateToCrumb(crumb) } },
                 onOpenSearch = { entry.ifResumed { navController.navigate(Routes.Search) } },
                 onOpenTrash = { entry.ifResumed { navController.navigate(Routes.Trash) } },
+                onOpenTransfers = { entry.ifResumed { navController.navigate(Routes.Transfers) } },
                 onBack = null,
             )
         }
@@ -35,6 +36,7 @@ fun NavGraphBuilder.driveGraph(navController: NavController) {
                 onCrumbClick = { crumb -> entry.ifResumed { navController.navigateToCrumb(crumb) } },
                 onOpenSearch = { entry.ifResumed { navController.navigate(Routes.Search) } },
                 onOpenTrash = { entry.ifResumed { navController.navigate(Routes.Trash) } },
+                onOpenTransfers = { entry.ifResumed { navController.navigate(Routes.Transfers) } },
                 onBack = { entry.ifResumed { navController.popBackStack() } },
             )
         }

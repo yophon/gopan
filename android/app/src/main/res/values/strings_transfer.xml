@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 上传 / 下载:通知、传输列表、传输设置 -->
+<resources>
+    <string name="transfer_channel_progress">传输进度</string>
+    <string name="transfer_channel_progress_desc">上传、下载进行中时显示的常驻通知</string>
+    <string name="transfer_channel_result">传输结果</string>
+    <string name="transfer_channel_result_desc">上传、下载完成或失败的提醒</string>
+
+    <string name="transfer_notif_starting">正在准备传输…</string>
+    <string name="transfer_notif_title_many">正在传输 %1$d 个文件</string>
+    <string name="transfer_notif_uploads">上传 %1$d</string>
+    <string name="transfer_notif_downloads">下载 %1$d</string>
+    <string name="transfer_notif_waiting_network">等待网络…</string>
+    <string name="transfer_notif_uploaded">已上传 %1$d 个文件</string>
+    <string name="transfer_notif_upload_failed">%1$d 个文件上传失败</string>
+    <string name="transfer_notif_downloaded_one">已下载「%1$s」</string>
+    <string name="transfer_notif_downloaded_many">已下载 %1$d 项</string>
+    <string name="transfer_notif_download_failed">%1$d 项下载失败</string>
+    <string name="transfer_notif_tap_open">点按打开</string>
+    <string name="transfer_notif_tap_list">点按查看传输列表</string>
+
+    <string name="transfers_title">传输列表</string>
+    <string name="transfers_tab_uploads">上传</string>
+    <string name="transfers_tab_downloads">下载</string>
+    <string name="transfers_empty_uploads">没有上传任务</string>
+    <string name="transfers_empty_downloads">没有下载任务</string>
+    <string name="transfers_clear_done">清除已完成</string>
+    <string name="transfers_settings">传输设置</string>
+
+    <string name="transfer_state_queued">排队中</string>
+    <string name="transfer_state_waiting_retry">等待重试</string>
+    <string name="transfer_state_paused">已暂停</string>
+    <string name="transfer_state_done">已完成</string>
+    <string name="transfer_state_instant">秒传完成</string>
+    <string name="transfer_state_failed">失败</string>
+    <string name="transfer_phase_hashing">计算校验值 %1$d%%</string>
+    <string name="transfer_phase_preparing">准备上传</string>
+    <string name="transfer_phase_uploading">%1$d%% · %2$s/s</string>
+    <string name="transfer_phase_verifying">校验并保存中</string>
+    <string name="transfer_phase_resolving">准备下载</string>
+    <string name="transfer_phase_expanding">读取文件夹(%1$d 个文件)</string>
+    <string name="transfer_phase_downloading">%1$d%% · %2$s/s</string>
+    <string name="transfer_phase_dl_verifying">校验中</string>
+    <string name="transfer_phase_saving">保存中</string>
+    <string name="transfer_folder_progress">%1$d / %2$d 个文件</string>
+    <string name="transfer_pack_label">压缩包</string>
+    <string name="transfer_to_chat">发往传输助手</string>
+    <string name="transfer_saved_to_downloads">已保存到「下载/gopan」</string>
+    <string name="transfer_saved_to_folder">已保存到所选文件夹</string>
+
+    <string name="transfer_action_pause">暂停</string>
+    <string name="transfer_action_resume">继续</string>
+    <string name="transfer_action_cancel">取消</string>
+    <string name="transfer_action_retry">重试</string>
+    <string name="transfer_action_remove">移除</string>
+    <string name="transfer_action_open">打开</string>
+    <string name="transfer_action_locate">所在目录</string>
+
+    <string name="transfer_settings_title">传输设置</string>
+    <string name="transfer_settings_wifi_only">仅在 Wi-Fi 下传输</string>
+    <string name="transfer_settings_wifi_only_desc">使用移动网络时暂停上传和下载</string>
+    <string name="transfer_settings_parts_wifi">Wi-Fi 下每个文件同时上传的分片数</string>
+    <string name="transfer_settings_parts_mobile">移动网络下每个文件同时上传的分片数</string>
+    <string name="transfer_settings_download_dir">下载位置</string>
+    <string name="transfer_settings_download_dir_default">系统「下载/gopan」</string>
+    <string name="transfer_settings_download_dir_pick">选择文件夹…</string>
+    <string name="transfer_settings_download_dir_reset">恢复默认</string>
+    <string name="transfer_settings_background_tip">部分手机会限制后台运行。如果锁屏后传输经常中断,请在系统设置里允许 gopan 后台运行、关闭电池优化。</string>
+
+    <string name="transfer_msg_queued_upload">已加入上传队列(%1$d 个)</string>
+    <string name="transfer_msg_opening">正在准备「%1$s」…</string>
+    <string name="transfer_msg_no_app">没有可以打开这个文件的应用</string>
+    <string name="transfer_msg_pick_failed">读取所选文件失败</string>
+    <string name="transfer_msg_empty_skipped">已跳过 %1$d 个空文件</string>
+    <string name="transfer_msg_pack_too_large">所选内容超过 2GB,不能打包下载,请改用「下载」</string>
+    <string name="transfer_msg_need_storage">需要存储权限才能保存到「下载」目录</string>
+</resources>

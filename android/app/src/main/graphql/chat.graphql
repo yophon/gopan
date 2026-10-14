@@ -1,40 +1,25 @@
+# 传输助手。消息的附件节点用 NodeItem 片段(与文件列表同一个领域模型、同一套缩略图缓存 key)。
+# 附件进回收站或被彻删时 node 为 null(文件消息正文为空 → 客户端显示「文件已不存在」)。
+
+fragment ChatMessageFields on ChatMessage {
+  id
+  body
+  createdAt
+  source
+  node {
+    ...NodeItem
+  }
+}
+
 query ChatMessages($limit: Int, $before: ID, $after: ID, $query: String) {
   chatMessages(limit: $limit, before: $before, after: $after, query: $query) {
-    id
-    body
-    createdAt
-    source
-    node {
-      id
-      parentId
-      name
-      kind
-      size
-      preview {
-        kind
-        thumbUrl
-      }
-    }
+    ...ChatMessageFields
   }
 }
 
 mutation SendChatMessage($body: String, $nodeId: ID) {
   sendChatMessage(body: $body, nodeId: $nodeId) {
-    id
-    body
-    createdAt
-    source
-    node {
-      id
-      parentId
-      name
-      kind
-      size
-      preview {
-        kind
-        thumbUrl
-      }
-    }
+    ...ChatMessageFields
   }
 }
 

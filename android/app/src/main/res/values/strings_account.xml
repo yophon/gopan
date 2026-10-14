@@ -12,6 +12,10 @@
 
     <string name="account_item_trash">回收站</string>
     <string name="account_item_trash_hint">已删除的文件在这里保留一段时间,可还原</string>
+    <string name="account_item_transfers">传输列表</string>
+    <string name="account_item_transfers_hint">上传、下载的进度与记录</string>
+    <string name="account_item_transfer_settings">传输设置</string>
+    <string name="account_item_transfer_settings_hint">仅 Wi-Fi 传输、分片并发、下载位置</string>
     <string name="account_item_change_password">修改密码</string>
     <string name="account_item_sessions">登录设备</string>
     <string name="account_item_app_passwords">应用密码(WebDAV)</string>

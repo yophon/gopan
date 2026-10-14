@@ -110,7 +110,7 @@ val FileCategory.labelRes: Int
     }
 
 @Composable
-private fun FileCategory.tint(): Color = when (this) {
+fun FileCategory.tint(): Color = when (this) {
     FileCategory.FOLDER -> MaterialTheme.colorScheme.primary
     FileCategory.IMAGE, FileCategory.VIDEO, FileCategory.AUDIO -> MaterialTheme.colorScheme.tertiary
     FileCategory.PDF -> MaterialTheme.colorScheme.error

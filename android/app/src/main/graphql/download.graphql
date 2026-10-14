@@ -1,0 +1,28 @@
+# 下载引擎:预签名 GET 15 分钟有效,只在建连前现取现用,URL 不落库。
+# sha256 / size 每次随 URL 一起取,与任务开始时记下的比对:变了说明内容被覆盖写,.part 作废从头下。
+
+query DownloadTarget($id: ID!) {
+  node(id: $id) {
+    id
+    name
+    kind
+    size
+    sha256
+    mime
+    updatedAt
+    downloadUrl
+  }
+}
+
+# 下载文件夹:客户端展开目录树,只取遍历要用的字段,不取任何 URL
+query DownloadTreePage($parentId: ID!, $cursor: String) {
+  children(parentId: $parentId, cursor: $cursor) {
+    items {
+      id
+      name
+      kind
+      size
+    }
+    nextCursor
+  }
+}

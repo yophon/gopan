@@ -21,7 +21,8 @@
     <string name="drive_fab_add">新建</string>
     <string name="drive_fab_new_folder">新建文件夹</string>
     <string name="drive_fab_upload">上传文件</string>
-    <string name="drive_fab_upload_hint">下个版本提供</string>
+    <string name="drive_fab_upload_media">上传照片和视频</string>
+    <string name="drive_fab_camera">拍照上传</string>
     <string name="drive_coming_soon">这个功能将在后续版本提供</string>
 
     <string name="drive_empty_title">这个文件夹是空的</string>
@@ -41,6 +42,9 @@
     <string name="drive_action_details">详情</string>
     <string name="drive_action_open">打开</string>
     <string name="drive_action_download">下载</string>
+    <string name="drive_action_pack">打包下载(zip)</string>
+    <string name="drive_action_send_to_chat">发到传输助手</string>
+    <string name="drive_action_transfers">传输列表</string>
 
     <string name="drive_dialog_new_folder">新建文件夹</string>
     <string name="drive_dialog_new_folder_hint">文件夹名称</string>
@@ -63,6 +67,9 @@
     <string name="drive_msg_deleted">已将 %1$d 项移到回收站</string>
     <string name="drive_msg_moved">已移动到「%1$s」</string>
     <string name="drive_msg_copied">已复制到「%1$s」</string>
+    <string name="drive_msg_sent_to_chat">已发到传输助手</string>
+    <string name="drive_msg_download_queued">已加入下载队列(%1$d 项)</string>
+    <string name="drive_msg_pack_queued">已加入下载队列(压缩包)</string>
 
     <string name="drive_details_name">名称</string>
     <string name="drive_details_type">类型</string>

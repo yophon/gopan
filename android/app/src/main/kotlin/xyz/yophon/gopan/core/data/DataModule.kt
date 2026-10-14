@@ -24,8 +24,8 @@ object DataModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GopanDatabase =
         Room.databaseBuilder(context, GopanDatabase::class.java, GopanDatabase.NAME)
-            // 只有可丢的缓存,schema 变了直接重建
-            .fallbackToDestructiveMigration(dropAllTables = true)
+            // 只从版本 1(只有可丢的目录缓存)破坏性升级;以后的版本必须写 Migration,保住队列里的任务
+            .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1)
             .build()
 
     @Provides
@@ -48,4 +48,7 @@ abstract class DataBindsModule {
 
     @Binds
     abstract fun bindNodesRepository(impl: NodesRepositoryImpl): NodesRepository
+
+    @Binds
+    abstract fun bindChatRepository(impl: xyz.yophon.gopan.core.data.chat.ApolloChatRepository): xyz.yophon.gopan.core.data.chat.ChatRepository
 }

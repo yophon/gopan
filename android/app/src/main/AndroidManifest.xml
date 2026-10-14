@@ -3,6 +3,15 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 上传 / 下载在前台服务里跑(WorkManager 长任务,dataSync 类型),通知栏显示进度 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Android 8–9 没有 MediaStore.Downloads,保存到公共「下载」目录需要它;10+ 不需要 -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <!-- 登录态存在 EncryptedSharedPreferences,密钥绑定本机 Keystore,备份到别的设备也解不开,索性不备份;
          targetSdk 31+ 时 allowBackup=false 挡不住设备间迁移(D2D),由 dataExtractionRules 全部排除 -->
@@ -33,7 +42,35 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 系统分享直达传输助手:文本进草稿,文件直接发 -->
+            <intent-filter android:label="@string/share_target_label">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter android:label="@string/share_target_label">
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
         </activity>
+
+        <!-- 拍照落点与「用其他应用打开」交给其它应用时用的 content:// -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- WorkManager 的前台服务:Android 14 起必须声明类型 -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
 
         <!-- AppAuth 的 RedirectUriReceiverActivity 由库 manifest 合并,scheme 由 build.gradle.kts 的
              manifestPlaceholders["appAuthRedirectScheme"] 提供(xyz.yophon.gopan:/oauthredirect) -->

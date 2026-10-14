@@ -50,6 +50,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.ui.transfer.rememberTransferPermissions
 import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.components.ErrorState
 import xyz.yophon.gopan.core.ui.components.LoadingState
@@ -82,6 +83,7 @@ fun SearchScreen(
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val inputError by viewModel.inputError.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val permissions = rememberTransferPermissions(onStorageResult = viewModel::onStoragePermission)
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
@@ -102,6 +104,8 @@ fun SearchScreen(
             when (effect) {
                 is NodeEffect.Message -> launch { snackbarHostState.showSnackbar(effect.text.resolve(context)) }
                 is NodeEffect.OpenFolder -> currentOnOpenFolder(effect.folderId)
+                NodeEffect.RequestStoragePermission -> permissions.requestStoragePermission()
+                NodeEffect.TransferQueued -> permissions.onTransferQueued()
             }
         }
     }

@@ -41,6 +41,19 @@ object GopanErrors {
     const val ACCOUNT_DISABLED = "ACCOUNT_DISABLED"
     const val ID_REQUIRED = "ID_REQUIRED"
     const val INTERNAL = "INTERNAL"
+    const val FORBIDDEN = "FORBIDDEN"
+    const val NOT_A_FOLDER = "NOT_A_FOLDER"
+    const val QUERY_TOO_DEEP = "QUERY_TOO_DEEP"
+
+    // ---- 上传协议(server/internal/service/upload.go、browser_upload.go) ----
+    const val UPLOAD_PROCESSING = "UPLOAD_PROCESSING"
+    const val MISSING_PART = "MISSING_PART"
+    const val COMPLETE_FAILED = "COMPLETE_FAILED"
+    const val HASH_MISMATCH = "HASH_MISMATCH"
+    const val SIZE_MISMATCH = "SIZE_MISMATCH"
+    const val UPLOAD_EXPIRED = "UPLOAD_EXPIRED"
+    const val BAD_SESSION_STATE = "BAD_SESSION_STATE"
+    const val TOO_MANY_SESSIONS = "TOO_MANY_SESSIONS"
 
     // ---- 本地错误码 ----
     const val NETWORK = "NETWORK"
@@ -74,6 +87,17 @@ object GopanErrors {
         ACCOUNT_DISABLED to "账号已被停用",
         ID_REQUIRED to "该账号需要使用 Yophon ID 登录",
         INTERNAL to "服务器开小差了,请稍后再试",
+        FORBIDDEN to "没有权限执行该操作",
+        NOT_A_FOLDER to "目标不是可用的文件夹",
+        QUERY_TOO_DEEP to "请求异常,请刷新重试",
+        UPLOAD_PROCESSING to "服务器正在校验文件",
+        MISSING_PART to "有分片未上传完成,请重试",
+        COMPLETE_FAILED to "合并分片失败,请重试",
+        HASH_MISMATCH to "文件内容校验失败,请重新上传",
+        SIZE_MISMATCH to "上传文件大小不一致,请重新上传",
+        UPLOAD_EXPIRED to "上传会话已过期,请重新上传",
+        BAD_SESSION_STATE to "上传会话状态异常,请重新上传",
+        TOO_MANY_SESSIONS to "进行中的上传会话过多,请稍后再试",
         NETWORK to "网络连接失败,请检查网络后重试",
         EMPTY_RESPONSE to "服务器返回了空数据",
     )

@@ -28,11 +28,13 @@ class DriveViewModelTest {
 
     private val repo = FakeNodesRepository()
     private val prefs = UserPreferencesRepository(InMemoryPreferencesDataStore())
+    private val transfers = FakeTransferActions()
 
     private fun viewModel(folderId: String? = null) = DriveViewModel(
         savedStateHandle = if (folderId == null) SavedStateHandle() else SavedStateHandle(mapOf(DriveViewModel.FOLDER_ID_ARG to folderId)),
         repo = repo,
         prefs = prefs,
+        transfers = transfers,
     )
 
     @Test

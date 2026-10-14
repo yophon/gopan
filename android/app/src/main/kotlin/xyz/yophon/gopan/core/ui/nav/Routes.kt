@@ -58,7 +58,7 @@ object Routes {
     @Serializable
     data object Chat
 
-    /** 上传 / 下载队列 */
+    /** 上传 / 下载队列(全局页,不属于哪个 tab) */
     @Serializable
     data object Transfers
 

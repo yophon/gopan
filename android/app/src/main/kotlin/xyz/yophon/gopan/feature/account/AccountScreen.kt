@@ -85,11 +85,15 @@ import xyz.yophon.gopan.core.prefs.ThemeMode
 import xyz.yophon.gopan.core.ui.components.ConfirmDialog
 import xyz.yophon.gopan.core.ui.components.ErrorState
 import xyz.yophon.gopan.core.ui.components.LoadingState
+import xyz.yophon.gopan.feature.transfers.TransferSettingsDialog
+import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.material.icons.outlined.Tune
 
 /** 「我的」页入口:导航回调由 AccountGraph 提供,页面本身不认识 NavController */
 @Composable
 fun AccountScreen(
     onOpenTrash: () -> Unit,
+    onOpenTransfers: () -> Unit,
     onOpenSessions: () -> Unit,
     onOpenAppPasswords: () -> Unit,
     onOpenAgent: () -> Unit,
@@ -103,6 +107,7 @@ fun AccountScreen(
         versionName = BuildConfig.VERSION_NAME,
         onRefresh = viewModel::refresh,
         onOpenTrash = onOpenTrash,
+        onOpenTransfers = onOpenTransfers,
         onOpenSessions = onOpenSessions,
         onOpenAppPasswords = onOpenAppPasswords,
         onOpenAgent = onOpenAgent,
@@ -139,9 +144,11 @@ internal fun AccountContent(
     onComingSoon: () -> Unit,
     onLogout: () -> Unit,
     onMessageShown: (Long) -> Unit,
+    onOpenTransfers: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showThemeDialog by rememberSaveable { mutableStateOf(false) }
+    var showTransferSettings by rememberSaveable { mutableStateOf(false) }
     var showViewModeDialog by rememberSaveable { mutableStateOf(false) }
     var showLogoutConfirm by rememberSaveable { mutableStateOf(false) }
 
@@ -185,6 +192,8 @@ internal fun AccountContent(
                     versionName = versionName,
                     loggingOut = state.loggingOut,
                     onOpenTrash = onOpenTrash,
+                    onOpenTransfers = onOpenTransfers,
+                    onOpenTransferSettings = { showTransferSettings = true },
                     onOpenSessions = onOpenSessions,
                     onOpenAppPasswords = onOpenAppPasswords,
                     onOpenAgent = onOpenAgent,
@@ -208,6 +217,9 @@ internal fun AccountContent(
         )
     }
 
+    if (showTransferSettings) {
+        TransferSettingsDialog(onDismiss = { showTransferSettings = false })
+    }
     if (showThemeDialog) {
         SingleChoiceDialog(
             title = stringResource(R.string.account_item_theme),
@@ -252,6 +264,8 @@ private fun AccountList(
     versionName: String,
     loggingOut: Boolean,
     onOpenTrash: () -> Unit,
+    onOpenTransfers: () -> Unit,
+    onOpenTransferSettings: () -> Unit,
     onOpenSessions: () -> Unit,
     onOpenAppPasswords: () -> Unit,
     onOpenAgent: () -> Unit,
@@ -273,6 +287,22 @@ private fun AccountList(
                 title = stringResource(R.string.account_item_trash),
                 supporting = stringResource(R.string.account_item_trash_hint),
                 onClick = onOpenTrash,
+            )
+        }
+        item("transfers") {
+            SettingItem(
+                icon = Icons.Outlined.SwapVert,
+                title = stringResource(R.string.account_item_transfers),
+                supporting = stringResource(R.string.account_item_transfers_hint),
+                onClick = onOpenTransfers,
+            )
+        }
+        item("transfer-settings") {
+            SettingItem(
+                icon = Icons.Outlined.Tune,
+                title = stringResource(R.string.account_item_transfer_settings),
+                supporting = stringResource(R.string.account_item_transfer_settings_hint),
+                onClick = onOpenTransferSettings,
             )
         }
 

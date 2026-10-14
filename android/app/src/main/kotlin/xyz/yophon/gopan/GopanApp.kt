@@ -9,6 +9,7 @@ import dagger.hilt.android.HiltAndroidApp
 import okhttp3.OkHttpClient
 import timber.log.Timber
 import xyz.yophon.gopan.core.auth.SessionManager
+import xyz.yophon.gopan.core.transfer.TransferEngine
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -20,11 +21,16 @@ class GopanApp : Application(), SingletonImageLoader.Factory {
     @Inject
     lateinit var okHttpClient: OkHttpClient
 
+    @Inject
+    lateinit var transferEngine: TransferEngine
+
     override fun onCreate() {
         super.onCreate()
         // 只在 debug 打日志;任何地方都不许打印 token、cookie、预签名 URL
         if (BuildConfig.DEBUG) Timber.plant(Timber.DebugTree())
         sessionManager.startBootstrap()
+        // 上次没传完的(进程被杀、手机重启):登录态就绪后重新排 Worker
+        transferEngine.onAppStart()
     }
 
     /**

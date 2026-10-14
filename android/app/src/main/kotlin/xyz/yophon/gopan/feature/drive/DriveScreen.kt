@@ -43,6 +43,11 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.UploadFile
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FolderZip
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -90,6 +95,8 @@ import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.components.ErrorState
 import xyz.yophon.gopan.core.ui.components.LoadingState
 import xyz.yophon.gopan.core.ui.format.formatRelativeTime
+import xyz.yophon.gopan.core.ui.transfer.rememberTransferPermissions
+import xyz.yophon.gopan.core.ui.transfer.rememberUploadPickers
 import java.time.Instant
 
 /**
@@ -103,6 +110,7 @@ fun DriveScreen(
     onCrumbClick: (Crumb) -> Unit,
     onOpenSearch: () -> Unit,
     onOpenTrash: () -> Unit,
+    onOpenTransfers: () -> Unit,
     onBack: (() -> Unit)?,
     viewModel: DriveViewModel = hiltViewModel(),
 ) {
@@ -113,12 +121,21 @@ fun DriveScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val currentOnOpenFolder by rememberUpdatedState(onOpenFolder)
+    val scope = rememberCoroutineScope()
+    val pickers = rememberUploadPickers(
+        onUris = viewModel::uploadUris,
+        onPhoto = viewModel::uploadCameraFile,
+        onNoApp = { scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.transfer_msg_no_app)) } },
+    )
+    val permissions = rememberTransferPermissions(onStorageResult = viewModel::onStoragePermission)
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
                 is NodeEffect.Message -> launch { snackbarHostState.showSnackbar(effect.text.resolve(context)) }
                 is NodeEffect.OpenFolder -> currentOnOpenFolder(effect.folderId)
+                NodeEffect.RequestStoragePermission -> permissions.requestStoragePermission()
+                NodeEffect.TransferQueued -> permissions.onTransferQueued()
             }
         }
     }
@@ -131,7 +148,7 @@ fun DriveScreen(
             if (state.selectionMode) {
                 SelectionTopBar(state, viewModel)
             } else {
-                DriveTopBar(state, viewModel, onBack, onCrumbClick, onOpenSearch, onOpenTrash)
+                DriveTopBar(state, viewModel, onBack, onCrumbClick, onOpenSearch, onOpenTrash, onOpenTransfers)
             }
         },
         floatingActionButton = {
@@ -155,9 +172,17 @@ fun DriveScreen(
     when (val d = dialog) {
         DriveDialog.FabMenu -> FabMenuSheet(
             onCreateFolder = viewModel::requestCreateFolder,
-            onUpload = {
+            onUploadFiles = {
                 viewModel.dismissDialog()
-                viewModel.notYet()
+                pickers.pickFiles()
+            },
+            onUploadMedia = {
+                viewModel.dismissDialog()
+                pickers.pickMedia()
+            },
+            onCamera = {
+                viewModel.dismissDialog()
+                pickers.takePhoto()
             },
             onDismiss = viewModel::dismissDialog,
         )
@@ -186,6 +211,7 @@ private fun DriveTopBar(
     onCrumbClick: (Crumb) -> Unit,
     onOpenSearch: () -> Unit,
     onOpenTrash: () -> Unit,
+    onOpenTransfers: () -> Unit,
 ) {
     val rootCrumb = Crumb(null, "")
     val title = when {
@@ -215,7 +241,7 @@ private fun DriveTopBar(
                     }
                 }
                 SortMenu(sort = state.sort, onSelect = viewModel::selectSort)
-                OverflowMenu(onOpenTrash = onOpenTrash, onRefresh = viewModel::refresh)
+                OverflowMenu(onOpenTrash = onOpenTrash, onOpenTransfers = onOpenTransfers, onRefresh = viewModel::refresh)
             },
         )
         if (!state.isRoot) {
@@ -244,21 +270,57 @@ private fun SelectionTopBar(state: DriveUiState, viewModel: DriveViewModel) {
             IconButton(onClick = viewModel::selectAll, enabled = !state.allSelected) {
                 Icon(Icons.Outlined.SelectAll, contentDescription = stringResource(R.string.drive_select_all))
             }
-            IconButton(onClick = viewModel::renameSelected, enabled = state.selection.size == 1) {
-                Icon(Icons.Outlined.DriveFileRenameOutline, contentDescription = stringResource(R.string.drive_action_rename))
+            IconButton(onClick = viewModel::downloadSelected, enabled = hasSelection) {
+                Icon(Icons.Outlined.Download, contentDescription = stringResource(R.string.drive_action_download))
             }
             IconButton(onClick = viewModel::moveSelected, enabled = hasSelection) {
                 Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = stringResource(R.string.drive_action_move))
             }
-            IconButton(onClick = viewModel::copySelected, enabled = hasSelection) {
-                Icon(Icons.Outlined.ContentCopy, contentDescription = stringResource(R.string.drive_action_copy))
-            }
             IconButton(onClick = viewModel::deleteSelected, enabled = hasSelection) {
                 Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.drive_action_delete))
             }
+            SelectionMoreMenu(state, viewModel)
         },
         colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     )
+}
+
+@Composable
+private fun SelectionMoreMenu(state: DriveUiState, viewModel: DriveViewModel) {
+    var expanded by remember { mutableStateOf(false) }
+    val hasSelection = state.selection.isNotEmpty()
+    Box {
+        IconButton(onClick = { expanded = true }, enabled = hasSelection) {
+            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.drive_action_more))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.drive_action_rename)) },
+                enabled = state.selection.size == 1,
+                onClick = {
+                    expanded = false
+                    viewModel.renameSelected()
+                },
+                leadingIcon = { Icon(Icons.Outlined.DriveFileRenameOutline, contentDescription = null) },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.drive_action_copy)) },
+                onClick = {
+                    expanded = false
+                    viewModel.copySelected()
+                },
+                leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.drive_action_pack)) },
+                onClick = {
+                    expanded = false
+                    viewModel.packSelected()
+                },
+                leadingIcon = { Icon(Icons.Outlined.FolderZip, contentDescription = null) },
+            )
+        }
+    }
 }
 
 @Composable
@@ -307,7 +369,7 @@ private val SORT_OPTIONS = listOf(
 )
 
 @Composable
-private fun OverflowMenu(onOpenTrash: () -> Unit, onRefresh: () -> Unit) {
+private fun OverflowMenu(onOpenTrash: () -> Unit, onOpenTransfers: () -> Unit, onRefresh: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
@@ -320,6 +382,14 @@ private fun OverflowMenu(onOpenTrash: () -> Unit, onRefresh: () -> Unit) {
                     expanded = false
                     onRefresh()
                 },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.drive_action_transfers)) },
+                onClick = {
+                    expanded = false
+                    onOpenTransfers()
+                },
+                leadingIcon = { Icon(Icons.Outlined.SwapVert, contentDescription = null) },
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.drive_action_trash)) },
@@ -460,7 +530,13 @@ private fun NodeGrid(state: DriveUiState, viewModel: DriveViewModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FabMenuSheet(onCreateFolder: () -> Unit, onUpload: () -> Unit, onDismiss: () -> Unit) {
+private fun FabMenuSheet(
+    onCreateFolder: () -> Unit,
+    onUploadFiles: () -> Unit,
+    onUploadMedia: () -> Unit,
+    onCamera: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
     fun pick(action: () -> Unit) {
@@ -473,10 +549,19 @@ private fun FabMenuSheet(onCreateFolder: () -> Unit, onUpload: () -> Unit, onDis
             headlineContent = { Text(stringResource(R.string.drive_fab_new_folder)) },
         )
         ListItem(
-            modifier = Modifier.clickable { pick(onUpload) },
+            modifier = Modifier.clickable { pick(onUploadFiles) },
             leadingContent = { Icon(Icons.Outlined.UploadFile, contentDescription = null) },
             headlineContent = { Text(stringResource(R.string.drive_fab_upload)) },
-            supportingContent = { Text(stringResource(R.string.drive_fab_upload_hint)) },
+        )
+        ListItem(
+            modifier = Modifier.clickable { pick(onUploadMedia) },
+            leadingContent = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = null) },
+            headlineContent = { Text(stringResource(R.string.drive_fab_upload_media)) },
+        )
+        ListItem(
+            modifier = Modifier.clickable { pick(onCamera) },
+            leadingContent = { Icon(Icons.Outlined.PhotoCamera, contentDescription = null) },
+            headlineContent = { Text(stringResource(R.string.drive_fab_camera)) },
         )
         Spacer(Modifier.height(16.dp).navigationBarsPadding())
     }

@@ -9,7 +9,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -25,6 +27,11 @@ import xyz.yophon.gopan.core.prefs.DriveSort
 import xyz.yophon.gopan.core.prefs.DriveSortOrder
 import xyz.yophon.gopan.core.prefs.DriveViewMode
 import xyz.yophon.gopan.core.prefs.UserPreferencesRepository
+import xyz.yophon.gopan.core.transfer.EnqueueResult
+import xyz.yophon.gopan.core.transfer.TransferActions
+import xyz.yophon.gopan.core.transfer.TransferEvent
+import android.net.Uri
+import java.io.File
 import javax.inject.Inject
 
 /** 文件页(根目录或某个文件夹)弹层:在共享的 [NodeDialog] 之外多两个 */
@@ -72,7 +79,8 @@ class DriveViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     repo: NodesRepository,
     private val prefs: UserPreferencesRepository,
-) : NodeActionsViewModel(repo) {
+    transfers: TransferActions,
+) : NodeActionsViewModel(repo, transfers) {
 
     val parentId: String? = savedStateHandle[FOLDER_ID_ARG]
 
@@ -108,6 +116,13 @@ class DriveViewModel @Inject constructor(
                 }
         }
         if (parentId != null) loadBreadcrumb(refreshSelf = false)
+        // 上传落进本目录:静默刷新(一批文件陆续完成时合并成一次)
+        viewModelScope.launch {
+            transfers.events
+                .filter { it is TransferEvent.UploadDone && it.task.parentId == parentId }
+                .debounce(UPLOAD_REFRESH_DEBOUNCE_MS)
+                .collect { if (_state.value.status == ListStatus.Content) load(LoadMode.SILENT) }
+        }
     }
 
     // ---- 加载 ----
@@ -315,6 +330,43 @@ class DriveViewModel @Inject constructor(
 
     fun deleteSelected() = requestDelete(_state.value.selectedNodes)
 
+    fun downloadSelected() {
+        val nodes = _state.value.selectedNodes
+        clearSelection()
+        download(nodes)
+    }
+
+    fun packSelected() {
+        val nodes = _state.value.selectedNodes
+        clearSelection()
+        pack(nodes)
+    }
+
+    // ---- 上传 ----
+
+    /** SAF 多选 / 相册选择器选中的文件 */
+    fun uploadUris(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        viewModelScope.launch {
+            val r = transfers.uploadUris(uris, parentId)
+            reportEnqueue(r)
+        }
+    }
+
+    /** App 内拍的照片(私有文件,传完删) */
+    fun uploadCameraFile(file: File) {
+        viewModelScope.launch { reportEnqueue(transfers.uploadOwnedFiles(listOf(file), parentId)) }
+    }
+
+    private fun reportEnqueue(r: EnqueueResult) {
+        if (r.queued > 0) {
+            message(UiText.Res(R.string.transfer_msg_queued_upload, r.queued))
+            send(NodeEffect.TransferQueued)
+        }
+        if (r.emptySkipped > 0) message(UiText.Res(R.string.transfer_msg_empty_skipped, r.emptySkipped))
+        if (r.unreadable > 0) message(UiText.Res(R.string.transfer_msg_pick_failed))
+    }
+
     fun moveSelected() = requestMove(_state.value.selection)
 
     fun copySelected() = requestCopy(_state.value.selection)
@@ -335,5 +387,7 @@ class DriveViewModel @Inject constructor(
         private const val FIRST_PAGE_HINT = 60
 
         private const val OFFLINE_FALLBACK_MESSAGE = "网络不可用,列表未刷新"
+
+        private const val UPLOAD_REFRESH_DEBOUNCE_MS = 600L
     }
 }

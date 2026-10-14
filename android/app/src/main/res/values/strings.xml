@@ -16,4 +16,7 @@
     <string name="state_empty_title">这里空空如也</string>
     <string name="state_error">出错了</string>
     <string name="state_wip">开发中</string>
+
+    <!-- 系统分享面板里的名字 -->
+    <string name="share_target_label">发到传输助手</string>
 </resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider 能交给其它应用的目录:拍照落点(相机写入)、「用其他应用打开」的缓存、
+     Android 8–9 写到公共「下载/gopan」的文件(这两个版本没有 MediaStore.Downloads,只能靠 FileProvider 交出去) -->
+<paths>
+    <files-path name="camera" path="transfers/camera/" />
+    <cache-path name="open" path="open/" />
+    <external-path name="downloads" path="Download/gopan/" />
+</paths>

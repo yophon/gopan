@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodesRepository
+import xyz.yophon.gopan.core.transfer.TransferActions
 import xyz.yophon.gopan.core.data.mergePages
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.network.gopanResult
@@ -46,7 +47,8 @@ data class SearchUiState(
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     repo: NodesRepository,
-) : NodeActionsViewModel(repo) {
+    transfers: TransferActions,
+) : NodeActionsViewModel(repo, transfers) {
 
     private val _state = MutableStateFlow(SearchUiState())
     val state: StateFlow<SearchUiState> = _state.asStateFlow()

@@ -11,14 +11,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.RestoreFromTrash
@@ -53,6 +57,10 @@ import xyz.yophon.gopan.core.ui.format.formatTime
 
 /** 长按 / ⋮ 弹出的操作;文件页、搜索页、回收站各挑自己的子集 */
 enum class NodeAction(@StringRes val label: Int, val icon: ImageVector, val destructive: Boolean = false) {
+    OPEN(R.string.drive_action_open, Icons.AutoMirrored.Outlined.OpenInNew),
+    DOWNLOAD(R.string.drive_action_download, Icons.Outlined.Download),
+    PACK(R.string.drive_action_pack, Icons.Outlined.FolderZip),
+    SEND_TO_CHAT(R.string.drive_action_send_to_chat, Icons.AutoMirrored.Outlined.Send),
     RENAME(R.string.drive_action_rename, Icons.Outlined.DriveFileRenameOutline),
     MOVE(R.string.drive_action_move, Icons.AutoMirrored.Outlined.DriveFileMove),
     COPY(R.string.drive_action_copy, Icons.Outlined.ContentCopy),
@@ -63,7 +71,24 @@ enum class NodeAction(@StringRes val label: Int, val icon: ImageVector, val dest
     LOCATE(R.string.search_action_locate, Icons.Outlined.FolderOpen),
 }
 
-val DRIVE_ACTIONS = listOf(NodeAction.RENAME, NodeAction.MOVE, NodeAction.COPY, NodeAction.DELETE, NodeAction.DETAILS)
+val DRIVE_ACTIONS = listOf(
+    NodeAction.OPEN,
+    NodeAction.DOWNLOAD,
+    NodeAction.PACK,
+    NodeAction.SEND_TO_CHAT,
+    NodeAction.RENAME,
+    NodeAction.MOVE,
+    NodeAction.COPY,
+    NodeAction.DELETE,
+    NodeAction.DETAILS,
+)
+
+/** 这个操作对这个节点有没有意义:打开只对文件,打包只对文件夹 */
+fun NodeAction.appliesTo(node: Node): Boolean = when (this) {
+    NodeAction.OPEN -> !node.isFolder
+    NodeAction.PACK -> node.isFolder
+    else -> true
+}
 
 /** 搜索结果多一项「所在目录」(与网页端一致) */
 val SEARCH_ACTIONS = listOf(NodeAction.LOCATE) + DRIVE_ACTIONS
@@ -99,21 +124,24 @@ fun NodeActionSheet(
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         )
         HorizontalDivider()
-        actions.forEach { action ->
-            val tint = if (action.destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-            ListItem(
-                modifier = Modifier.clickable { pick(action) },
-                leadingContent = { Icon(action.icon, contentDescription = null, tint = tint) },
-                headlineContent = { Text(stringResource(action.label), color = tint) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            )
+        // 操作多(文件页 9 项),小屏放不下:操作区单独滚动,头部固定
+        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+            actions.filter { it.appliesTo(node) }.forEach { action ->
+                val tint = if (action.destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                ListItem(
+                    modifier = Modifier.clickable { pick(action) },
+                    leadingContent = { Icon(action.icon, contentDescription = null, tint = tint) },
+                    headlineContent = { Text(stringResource(action.label), color = tint) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                )
+            }
+            Spacer(Modifier.height(16.dp).navigationBarsPadding())
         }
-        Spacer(Modifier.height(16.dp).navigationBarsPadding())
     }
 }
 
 /**
- * 详情 BottomSheet:名称、类型、大小、时间。文件有「打开」「下载」两个按钮,P1 只提示"即将推出"。
+ * 详情 BottomSheet:名称、类型、大小、时间;文件有「打开」「下载」两个按钮。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -247,6 +275,10 @@ fun NodeDialogHost(
             onAction = { action ->
                 val node = dialog.node
                 when (action) {
+                    NodeAction.OPEN -> viewModel.open(node)
+                    NodeAction.DOWNLOAD -> viewModel.download(listOf(node))
+                    NodeAction.PACK -> viewModel.pack(listOf(node))
+                    NodeAction.SEND_TO_CHAT -> viewModel.sendToChat(node)
                     NodeAction.RENAME -> viewModel.requestRename(node)
                     NodeAction.MOVE -> viewModel.requestMove(listOf(node.id))
                     NodeAction.COPY -> viewModel.requestCopy(listOf(node.id))
@@ -261,8 +293,8 @@ fun NodeDialogHost(
         is NodeDialog.Details -> NodeDetailsSheet(
             node = dialog.node,
             onDismiss = viewModel::dismissDialog,
-            onOpen = viewModel::notYet,
-            onDownload = viewModel::notYet,
+            onOpen = { viewModel.open(dialog.node) },
+            onDownload = { viewModel.download(listOf(dialog.node)) },
         )
         is NodeDialog.Rename -> NodeNameDialog(
             title = stringResource(R.string.drive_dialog_rename),

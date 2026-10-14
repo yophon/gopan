@@ -1,5 +1,6 @@
 package xyz.yophon.gopan
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -13,11 +14,25 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import xyz.yophon.gopan.core.prefs.ThemeMode
+import xyz.yophon.gopan.core.share.AppNavRequests
+import xyz.yophon.gopan.core.share.IncomingShareStore
+import xyz.yophon.gopan.core.share.NavRequest
+import xyz.yophon.gopan.core.transfer.AppVisibility
 import xyz.yophon.gopan.core.ui.theme.GopanTheme
+import javax.inject.Inject
 
-/** 唯一的 Activity:主题 + 按登录态切换的根导航 */
+/**
+ * 唯一的 Activity:主题 + 按登录态切换的根导航。
+ * 还负责接住外部入口:系统分享(SEND / SEND_MULTIPLE → 传输助手)与通知点按(→ 传输列表)。
+ */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var incomingShare: IncomingShareStore
+
+    @Inject
+    lateinit var navRequests: AppNavRequests
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -46,11 +61,42 @@ class MainActivity : ComponentActivity() {
                 RootNavHost(authState = authState)
             }
         }
+        // 进程被回收后重建时 savedInstanceState 非空:那次分享已经处理过,不要再拷一遍
+        if (savedInstanceState == null) handleIntent(intent)
     }
 
-    private companion object {
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        AppVisibility.foreground = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        AppVisibility.foreground = false
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        intent ?: return
+        if (incomingShare.accept(intent)) {
+            navRequests.post(NavRequest.OPEN_CHAT)
+            return
+        }
+        if (intent.getStringExtra(EXTRA_OPEN) == OPEN_TRANSFERS) navRequests.post(NavRequest.OPEN_TRANSFERS)
+    }
+
+    companion object {
+        /** 通知点按带的跳转目标 */
+        const val EXTRA_OPEN = "xyz.yophon.gopan.OPEN"
+        const val OPEN_TRANSFERS = "transfers"
+
         // 与 androidx.activity 默认值一致
-        val LIGHT_SCRIM = Color.argb(0xe6, 0xFF, 0xFF, 0xFF)
-        val DARK_SCRIM = Color.argb(0x80, 0x1b, 0x1b, 0x1b)
+        private val LIGHT_SCRIM = Color.argb(0xe6, 0xFF, 0xFF, 0xFF)
+        private val DARK_SCRIM = Color.argb(0x80, 0x1b, 0x1b, 0x1b)
     }
 }
