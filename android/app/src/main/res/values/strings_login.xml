@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 登录功能线(feature.login)的界面文案;错误文案在 LoginRules.kt(ViewModel 产出,不经资源) -->
+<resources>
+    <string name="login_title">gopan 云盘</string>
+    <string name="login_subtitle">使用 Yophon ID 打开你的文件。</string>
+    <string name="login_with_yophon_id">使用 Yophon ID 登录</string>
+    <string name="login_connecting_id">正在连接账号中心…</string>
+    <string name="login_other_account">其他账号使用密码登录</string>
+    <string name="login_back_to_id">返回使用 Yophon ID 登录</string>
+
+    <string name="login_tab_login">登录</string>
+    <string name="login_tab_register">注册</string>
+    <string name="login_username">用户名</string>
+    <string name="login_password">密码</string>
+    <string name="login_confirm_password">确认密码</string>
+    <string name="login_submit">登录</string>
+    <string name="login_register_submit">注册</string>
+    <string name="login_working">请稍候…</string>
+    <string name="login_show_password">显示密码</string>
+    <string name="login_hide_password">隐藏密码</string>
+</resources>
