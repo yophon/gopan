@@ -27,6 +27,8 @@ type ChatMessageOutput struct {
 	NodeID    *string `json:"node_id,omitempty"`
 	CreatedAt string  `json:"created_at"`
 	Source    string  `json:"source" jsonschema:"who wrote it: web (browser), mcp (an agent), webdav"`
+	// 文件消息的附件已被彻底删除:body 为空、node_id 也为空
+	FileDeleted bool `json:"file_deleted,omitempty" jsonschema:"true when this was a file message whose file has since been permanently deleted"`
 }
 
 type ChatListOutput struct {
@@ -35,11 +37,12 @@ type ChatListOutput struct {
 
 func toChatMessageOutput(m service.ChatMessage) ChatMessageOutput {
 	return ChatMessageOutput{
-		ID:        m.ID.String(),
-		Body:      m.Body,
-		NodeID:    idString(m.NodeID),
-		CreatedAt: m.CreatedAt.Format(time.RFC3339),
-		Source:    m.Source,
+		ID:          m.ID.String(),
+		Body:        m.Body,
+		NodeID:      idString(m.NodeID),
+		CreatedAt:   m.CreatedAt.Format(time.RFC3339),
+		Source:      m.Source,
+		FileDeleted: m.Body == "" && m.NodeID == nil,
 	}
 }
 

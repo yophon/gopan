@@ -693,6 +693,11 @@ async function confirmDelete(m: ChatMsg) {
 const actionTarget = ref<ChatMsg | null>(null)
 let pressTimer: number | null = null
 
+/** 文件消息的附件已不可用(回收站或已彻删):服务端 node 解析为 null,文件消息本身没有正文 */
+function isGoneFile(m: ChatMsg): boolean {
+  return !m.node && !m.body && !isPendingId(m.id)
+}
+
 function openActions(m: ChatMsg) {
   if (isPendingId(m.id)) return
   actionTarget.value = m
@@ -859,6 +864,15 @@ function timeOf(iso: string): string {
             </div>
           </template>
 
+          <!-- 文件已不存在:附件进了回收站或已彻删(node 为空、正文也为空) -->
+          <div v-else-if="isGoneFile(message)" class="file-card gone">
+            <el-icon class="file-icon"><Document /></el-icon>
+            <div class="file-meta">
+              <div class="file-name">文件已不存在</div>
+              <div class="file-size">已删除或在回收站里</div>
+            </div>
+          </div>
+
           <!-- 文本消息(含乐观上屏的 pending) -->
           <template v-else>
             <div class="bubble">
@@ -969,8 +983,10 @@ function timeOf(iso: string): string {
       class="action-sheet"
       @close="actionTarget = null"
     >
-      <div class="sheet-title">{{ actionTarget?.node ? actionTarget.node.name : '消息' }}</div>
-      <el-button class="sheet-btn" :icon="DocumentCopy" @click="actionCopy">
+      <div class="sheet-title">
+        {{ actionTarget?.node ? actionTarget.node.name : actionTarget && isGoneFile(actionTarget) ? '文件已不存在' : '消息' }}
+      </div>
+      <el-button v-if="actionTarget && !isGoneFile(actionTarget)" class="sheet-btn" :icon="DocumentCopy" @click="actionCopy">
         {{ actionTarget?.node ? '复制文件名' : '复制文本' }}
       </el-button>
       <el-button v-if="actionTarget?.node" class="sheet-btn" :icon="Download" @click="actionDownload">下载</el-button>
@@ -1004,6 +1020,8 @@ h2 { margin: 0 0 4px; font-size: 20px; }
 .file-card.uploading { cursor: default; }
 .file-card.uploading:hover { background: var(--el-fill-color-light); }
 .file-card.failed { border: 1px solid var(--el-color-danger-light-5); }
+.file-card.gone { cursor: default; color: var(--el-text-color-secondary); }
+.file-card.gone:hover { background: var(--el-fill-color-light); }
 .file-icon { width: 40px; height: 40px; font-size: 28px; color: var(--el-text-color-secondary); flex-shrink: 0; }
 .file-meta { min-width: 0; flex: 1; }
 .file-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
