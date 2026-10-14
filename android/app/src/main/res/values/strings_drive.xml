@@ -27,7 +27,7 @@
     <string name="drive_empty_title">这个文件夹是空的</string>
     <string name="drive_empty_desc">点右下角的「新建」创建文件夹</string>
     <string name="drive_total_count">共 %1$d 项</string>
-    <string name="drive_offline_banner">网络不可用,显示的是 %1$s 缓存的第一页</string>
+    <string name="drive_offline_banner">网络不可用,以下是%1$s的缓存(仅第一页)</string>
     <string name="drive_load_more_failed">加载更多失败</string>
 
     <string name="drive_selected_count">已选 %1$d 项</string>
