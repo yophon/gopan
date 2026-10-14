@@ -141,10 +141,10 @@ OAuth 与 API Key 共用以下权限：
 ```
 
 ```json
-{"items":[{"id":"018f…","body":"今晚把这份交我","created_at":"2026-09-15T10:00:00Z"}]}
+{"items":[{"id":"018f…","body":"今晚把这份交我","created_at":"2026-09-15T10:00:00Z","source":"web"}]}
 ```
 
-消息携带 `node_id` 时表示文件附件，Agent 可以接着用 `get_file_info` / `prepare_download` 取回引用文件。浏览器端轮询拉取最近 200 条即与 Agent 写入保持同步。
+`source` 是写入渠道：`web`（浏览器）、`mcp`（经 MCP 的 Agent，含 `chat_send` 与 Agent 上传到该文件夹的文件）、`webdav`。消息携带 `node_id` 时表示文件附件，Agent 可以接着用 `get_file_info` / `prepare_download` 取回引用文件。浏览器端轮询拉取最近 200 条即与 Agent 写入保持同步。
 
 ### 配额与分享
 

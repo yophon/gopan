@@ -223,6 +223,7 @@ type ChatMessage {
   id: ID!
   body: String!
   createdAt: Time!
+  source: String!   # 写入渠道:web / mcp / webdav,只做展示
   node: Node        # 附件;无附件为 null;文件被删/彻删后仍为消息,此字段返回 null
 }
 
@@ -243,6 +244,7 @@ extend type Mutation {
 - **文件进会话由服务端负责**:任何渠道(浏览器分片、秒传、WebDAV PUT、Agent 传输)在 `CreateNode` 之后调用 `attachChatMessage`,parent 等于 `users.chat_folder_id` 时在同一事务里插一条文件消息;指针为空、parent 不匹配、该节点已有消息都是 no-op。前端上传完成只 `invalidateQueries`,不再补发 `sendChatMessage(nodeId)`。覆盖写(WebDAV 同名 PUT)走 `ReplaceNodeBlob`,不新建节点也就不重复落消息。
 - `sendChatMessage` 走 `UserFrom`(拒绝 guest);`nodeId` 必须是当前用户的活跃节点,否则 `NOT_FOUND`(防探测,服务层 `GetActiveNodeOwned` 单事务校验)。同一节点已在会话里(自动落的或之前发过的)直接返回那条,不重复插。
 - `deleteChatMessage` 只删 `chat_messages` 行;不存在/非本人 `NOT_FOUND`。MCP 不暴露删除。
+- **来源**:`service.WithChatSource(ctx, …)` 由 WebDAV 与 MCP 的入口中间件注入,GraphQL 路径不注入即默认 `web`;SendText / SendNode / attachChatMessage 都从 context 取,落到 `chat_messages.source`(迁移 00019,默认 `'web'`,存量行即 web)。
 - `ChatMessage.node` resolver 捕获 `service.ErrNotFound` 返回 `(nil,nil)`——文件删除不传染消息读取,前端展示「文件已不存在」态。
 - 附件落点:网盘根目录固定文件夹(数据库里仍叫「我的设备」,界面统称传输助手),`ensureChatFolder` 用 advisory lock 保证并发只建一个;指针在 `users.chat_folder_id`,改名/移动不失效。
 

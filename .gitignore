@@ -9,3 +9,4 @@ __pycache__/
 # 生产配置与密钥:只提交 .env.example
 /.env
 /secrets/
+/gopan-linux
