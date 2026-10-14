@@ -1,70 +1,104 @@
 # 18 · 安卓 App
 
-> `app/` 是 gopan 的安卓壳:Capacitor 8,远程模式加载线上站点,原生只补一件网页做不到的事——接收系统分享菜单里的文字和文件,直接进传输助手。v2.6.0 首发。
+> `android/` 是 gopan 的安卓原生客户端:Kotlin + Jetpack Compose(Material 3),v3.0.0 起替代 v2.6 的 Capacitor 壳。网页端的用户功能全部有原生实现,另外多出四件网页做不到的事:上传下载在后台跑、断网与杀进程后续传;系统分享菜单直达传输助手;系统「文件」App 和别的应用的「打开文件」面板里出现 gopan;站内检查更新。
+>
+> 本文讲用法、发布与运维。包结构、协议要点、传输引擎的实现在 `android/README.md`,计划与各阶段验收记录在 doc/19。
 
-## 设计
+## 功能
 
-**远程模式,不把前端打进 APK。** `capacitor.config.ts` 的 `server.url` 指向线上站点(默认 `https://drive.979687.xyz`,自部署改 `GOPAN_APP_URL` 环境变量后重新 `cap sync`)。WebView 直接加载网页端,登录态(httpOnly refresh cookie)、预签名直传、CSP、PWA 的全部逻辑原样复用,不需要跨域 cookie,前端更新也不用发新版 App。代价是首屏依赖网络,云盘离线本来也没内容。
+| 域 | App 里 |
+|---|---|
+| 登录 | Yophon ID(Custom Tab + PKCE,账号中心移动票据换 gopan 会话)、密码登录 / 注册、改密码、退出;登录态加密存在本机,断网也能打开看上次的列表 |
+| 文件 | 列表 / 网格、排序、自动翻页、多选批量、新建 / 重命名 / 移动 / 复制 / 删除、回收站、搜索;断网显示缓存的列表,网络恢复后自动刷新 |
+| 传输 | 上传(文件、照片和视频、拍照、系统分享)、秒传;下载(单文件断点续传、文件夹、打包 zip、用其他应用打开);前台服务在后台跑,断网、杀进程、重启后续传,通知栏显示进度 |
+| 传输助手 | 网页端全部功能(乐观上屏、长文本转 txt、多图网格、翻历史、搜索定位、删除、粘贴图片) |
+| 预览 | 图片(缩放、翻页、原图)、视频、音频(后台播放 + 媒体通知)、PDF、文本(大文件分段读、GBK 识别)、Office(派生 PDF) |
+| 分享 | 新建(有效期、密码)、我的分享、访问记录、取消;创建后直接拉起系统分享面板 |
+| 账户 | 用量、登录设备、WebDAV 应用密码、Agent 接入(API Key / OAuth 授权 / 目录范围 / 操作记录)、外观(深浅、动态取色、列表视图) |
+| 管理端 | 管理员才有:概览、失败任务重排、建号、调配额、禁用 / 启用、重置密码(新密码只显示一次) |
+| 系统集成 | 分享菜单里的「gopan」→ 传输助手;「文件」App 里的 gopan(浏览、搜索、打开、保存新文件、新建文件夹、重命名、删除) |
+| 其他 | 检查更新、崩溃日志(只在本机,可导出)、开源许可;横屏 / 平板侧边导航,宽屏文件页列表 + 预览双栏 |
 
-**壳只做三件事:**
+最低 Android 8.0(API 26),目标 API 36。界面只有中文。
 
-1. **系统分享接收。** `AndroidManifest.xml` 声明 `SEND` / `SEND_MULTIPLE`(`text/plain` 与 `*/*`),`MainActivity` 把 intent 交给原生插件 `ShareReceiverPlugin`:文本直接缓存;文件先从 content URI 拷进 `cacheDir`。网页端 `src/native/shareReceiver.ts` 在启动时与 `shareReceived` 事件时调 `getPending()`,文件按 4MB 一片 `readChunk()`(base64)拼成 `File`,`release()` 删临时文件,然后 `push` 进 `stores/incomingShare` 并切到 `/chat`——和 PWA 的 POST share_target 走同一个入口,ChatView 不区分来源。不整段 base64 过桥是为了一段视频不会变成几百 MB 的字符串。
-2. **桌面图标与启动画面。** `app/gen_icons.py` 从 `web/public/icons/icon-512.png` 派生 legacy 与 adaptive 前景图,PWA 图标是唯一的设计源。
-3. **返回键。** `BridgeActivity` 默认行为:WebView 能后退就后退。
+## 安装与升级
 
-**服务端配合一处:** Capacitor 远程模式会往 HTML 注入一段内联 bridge 脚本,被 `script-src 'self'` 挡住插件就全哑。壳的 UA 带 `GopanApp/<版本>`(`appendUserAgent`),`httpx.WithSecurityHeaders` 只对这种 UA 的响应把 `script-src` 加上 `'unsafe-inline'`;普通浏览器的 CSP 不变。UA 可伪造,但伪造者只能放宽自己那次响应的策略。
+**首次安装**:手机浏览器打开 `https://<域名>/api/app/android/latest.apk`,它总是跳到站点当前发布的安装包;下载后允许浏览器「安装未知应用」。维护者也可以从 GitHub Releases 下载(仓库是私有的,别人看不到)。
 
-**与 PWA 的分工:** PWA 也能装到桌面,也能接收系统分享(POST share_target + Service Worker)。App 多出来的是:分享菜单里更稳定地出现、后续可以加后台上传与通知。日常用 PWA 够,想要"像个 App"就装 APK。
+**升级**:「我的 → 关于 → 检查更新」。有新版本时这一项后面标「有新版本 x」(打开「我的」页时静默查一次);点开看更新说明 →「下载并安装」→ 校验 SHA-256 → 交给系统安装器。第一次会被引导去系统设置允许 gopan「安装未知应用」。站点没配发版目录时提示「这个站点没有提供安卓安装包」。
 
-## 目录
+**从 v2.6 的壳升级**:包名(`xyz.yophon.gopan`)和签名都没变,直接覆盖安装即可,不用卸载。壳的登录态存在 WebView 里,原生 App 读不到,装完重新登录一次。
 
-```
-app/
-  package.json            Capacitor 8.5.3(core / cli / android)+ typescript
-  capacitor.config.ts     appId xyz.yophon.gopan,server.url,appendUserAgent
-  www/index.html          占位(远程模式不用本地资源)
-  gen_icons.py            图标派生
-  android/                cap add android 生成,已定制:
-    app/src/main/AndroidManifest.xml          分享 intent-filter
-    app/src/main/java/xyz/yophon/gopan/MainActivity.java
-    app/src/main/java/xyz/yophon/gopan/ShareReceiverPlugin.java
-    app/build.gradle                          versionCode/Name、签名配置
-    keystore.properties                       gitignore,发布签名密码
-```
+## 权限
 
-## 构建
+| 权限 | 什么时候要 | 不给会怎样 |
+|---|---|---|
+| 通知(Android 13+) | 第一次上传 / 下载时申请 | 传输照常,只是看不到通知栏进度与结果 |
+| 安装未知应用 | 检查更新里点「安装」时引导去系统设置 | 只能手动下载安装包 |
+| 存储(只有 Android 8–9) | 第一次下载到公共「下载」目录时 | 提示需要权限,存不进「下载」;可在传输设置里改存到自选目录。10 及以上不需要 |
+| 后台运行 / 电池优化 | 不申请,传输设置里有提示 | 部分国产系统锁屏后会掐断传输;回到前台或网络恢复时自动续传 |
 
-依赖:Android SDK(platform 36、build-tools 36)、JDK 21(Capacitor 8 要求 Java 21;Gradle 8.14 不支持 JDK 25,Android Studio 自带的 JBR 不能用)、pnpm。本机:SDK 在 `~/.tools/android-sdk`,JDK 21 在 `~/.tools/jdk21`。
+拍照上传调用系统相机,不申请相机权限。没有任何统计或第三方崩溃上报。
+
+## 系统集成
+
+**分享菜单 → 传输助手。** 相册、文件管理器、浏览器里「分享」选 gopan:文字接到传输助手的草稿后面(不自动发),文件直接发出去,多张图片合成网格。没登录时先暂存,登录后再处理。
+
+**「文件」App 里的 gopan。** 登录后,系统「文件」App 的侧栏和别的应用的「打开文件 / 另存为」面板里多一个 gopan(副标题是用户名),退出登录即消失。
+
+- 浏览与搜索:与网页端同一棵树;一个目录最多列 2000 项。
+- 打开:第一次打开时整份下到 App 缓存再交给对方(大文件要等一会儿,系统界面自己转圈),下完按 SHA-256 校验,同内容不重复下;缓存总量超过 1 GB 删最久没用的。
+- 保存:「另存为」进 gopan 时文件先写到 App 私有目录,对方写完即进上传队列,传输列表里能看到;已有文件只读,不能原地改写(服务端没有版本与覆盖写)。
+- 新建文件夹、重命名立即生效;删除进回收站。
+
+**后台传输。** 上传、下载跑在前台服务里(通知栏常驻进度),锁屏、切到别的应用都不影响;进程被杀、手机重启后自动接着传,按服务端已有分片续传,不从头来。「仅 Wi-Fi」在传输设置里开。
+
+## 自部署
+
+App 默认连 `https://drive.979687.xyz` 与 `https://id.979687.xyz`,地址写在构建参数里,换实例要自己打包:
 
 ```bash
-cd app && pnpm install
-export JAVA_HOME=~/.tools/jdk21/jdk-21.0.12.1+1 ANDROID_HOME=~/.tools/android-sdk
-npx cap sync android                      # 写 android/app/src/main/assets/capacitor.config.json
-cd android && ./gradlew assembleDebug     # app/build/outputs/apk/debug/app-debug.apk
-./gradlew assembleRelease                 # 需要 android/keystore.properties,否则用 debug 签名
+cd android
+./gradlew :app:assembleRelease \
+  -Pgopan.baseUrl=https://pan.example.com \
+  -Pgopan.idIssuer=https://id.example.com      # 不接 Yophon ID 的实例用密码登录即可
 ```
 
-版本号在 `app/android/app/build.gradle`(`versionCode` / `versionName`)与 `capacitor.config.ts` 的 `appendUserAgent` 两处,一起改。
+全部参数见 `android/README.md`(还有 `gopan.idClientId`、`gopan.idRedirect`)。签名用自己的 keystore:`android/keystore.properties` 不存在时 release 退回 debug 签名,只能自己装着用。
 
-**发布签名**在仓库外:`D:/user/yophon/releases/gopan/gopan-release.jks` + `keystore.properties`,复制到 `app/android/keystore.properties` 即可出 release 包。密钥丢了已装用户就没法升级,务必备份。
+想让 App 内检查更新生效,服务端配 `GOPAN_APP_RELEASE_DIR` 并把安装包放进去,见 doc/09「安卓安装包发布」。
 
-**身份服务域名要进白名单。** Yophon ID 登录会把 WebView 带到 `id.979687.xyz`,不在 `server.allowNavigation` 里 Capacitor 会丢给系统浏览器,回调落在浏览器、App 拿不到登录态(2.6.0 的问题,2.6.1 修)。自部署改 `GOPAN_APP_ALLOW_NAV`(逗号分隔 host)。
+## 发布流程(维护者)
 
-**指向别的实例**(自部署 / 模拟器打本机):`GOPAN_APP_URL=http://10.0.2.2:8090 npx cap sync android` 再打包。http 实例要求服务端 `GOPAN_DEV_MODE=true`(cookie 不带 Secure)。
+1. 改版本:`android/app/build.gradle.kts` 的 `versionCode`(只增不减,3.0.0 是 30100)与 `versionName`。
+2. 出包:`android/keystore.properties` 指向仓库外的发布密钥(`D:/user/yophon/releases/gopan/gopan-release.jks`),然后不带任何 `-P` 覆盖:
 
-## 验证
+   ```bash
+   cd android && ./gradlew --no-daemon :app:assembleRelease     # app/build/outputs/apk/release/app-release.apk
+   apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
+   # 证书 SHA-256 必须是 d7517cdaf5370cf31fd2ee9376608929461234a67021c3ce78b45280f0b29214
+   ```
 
-`scripts/` 里没有放 App 探针,因为它依赖本机模拟器;流程记在这里,2026-10-14 在 API 36 x86_64 模拟器(AVD BeyondPlusSmall,`wm size 390x844`)上跑通:
+   release 开 R8(混淆 + 资源压缩),包约 5 MB。密钥丢了已装用户就没法升级,务必备份。
+3. 冒烟:`node android/tools/e2e/release-smoke.mjs <apk>`(模拟器,连生产账号中心但不登录,结束卸载)。
+4. 存档并发 GitHub Release:安装包复制成 `releases/gopan/gopan-<版本>.apk`,R8 的 `app/build/outputs/mapping/release/mapping.txt` 复制成 `gopan-<版本>-mapping.txt`(还原崩溃日志的堆栈要用),`git tag v<版本>`,`gh release create` 附上安装包与 mapping。
+5. 发到站点:安装包与 `latest.json` 放进服务器的发版目录(doc/09),`curl https://<域名>/api/app/android/latest` 核对版本号与 SHA-256。装着旧版的手机在「我的」页就会看到「有新版本」。
 
-1. 本机起一个 gopan 实例(`GOPAN_LISTEN=127.0.0.1:8090`,DB/MinIO 走 SSH 隧道到服务器上的临时容器,`GOPAN_S3_PUBLIC_ENDPOINT=10.0.2.2:9009`),打一个 `GOPAN_APP_URL=http://10.0.2.2:8090` 的 debug 包装进模拟器。
-2. `adb forward tcp:9333 localabstract:webview_devtools_remote_<pid>` 拿到 WebView 的 CDP,用脚本登录。
-3. `adb shell am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT "..." -n xyz.yophon.gopan/.MainActivity` → App 切到 `/chat`,草稿里出现文字。
-4. `run-as xyz.yophon.gopan` 把一张 png 放进 App 的 `files/`,`am start -a SEND -t image/png --eu android.intent.extra.STREAM file:///data/data/xyz.yophon.gopan/files/x.png` → 聊天里出现上传卡,完成后变成图片消息,服务端 `chatMessages` 能查到。
-5. 顺手暴露并修掉两个网页端的问题:`crypto.randomUUID` 在 http 非安全上下文不存在,上传入口直接抛错(`utils/id.ts` 兜底);手机上传输助手页高度直接取 `visualViewport.height`,没减掉顶栏,输入栏整段在屏幕外(改为"可视区底边 - 页面顶边")。
+## 测试
+
+| 层 | 内容 |
+|---|---|
+| 单测 | `./gradlew :app:testDebugUnitTest`:认证(假服务端 + MockWebServer)、上传 / 下载状态机(内存版服务端与对象存储)、各页 ViewModel、更新与崩溃日志 |
+| 端到端 | `android/tools/e2e/`:模拟器里的 App 连本机起的 gopan 与账号中心(临时数据),p1–p4 四套共 50 多个场景,见那里的 README |
+| R8 | `releaseE2e` 构建类型:与 release 同一套 R8 规则,但 debug 签名、带测试钩子、能连本机栈;四套 E2E 在它上面也跑一遍,防混淆规则漏东西 |
+| 发布冒烟 | `release-smoke.mjs`:正式签名的包冷启动、拉起生产账号中心的授权页,核对 client_id / redirect_uri / PKCE |
+| CI | GitHub Actions 的 android job:lint、单测、debug 包与 R8 包都要过 |
 
 ## 已知限制
 
-- 只有安卓。iOS 没有系统分享到 PWA 的路,原生壳需要 Mac 与开发者账号,暂不做。
-- 远程模式下首屏取决于网络;没有离线壳页。
-- 文件分享先整个拷进 `cacheDir` 再分片过桥,超大文件(几 GB)会占一份临时空间,传完即删。
-- 没有后台上传:分享一个大文件后把 App 切到后台太久,WebView 可能被回收,上传中断(与 PWA 相同,断点续传记录仍在)。
+- 只有安卓。iPhone 用 Safari 的 PWA,系统「文件」App 里访问 gopan 走 WebDAV(doc/11)。
+- 不是同步盘:离线只有目录列表、缩略图和「文件」App 打开过的文件的缓存。
+- 打包下载(zip)最大 2 GiB,不能续传;大文件夹用「下载文件夹」,逐个文件续传。
+- 「文件」App 里打开大文件要先整份下完;已有文件不能原地改写。
+- 不经应用商店分发,安装与升级都要允许「安装未知应用」。
+- 部分国产系统会限制后台,锁屏后传输可能被掐断,需要在系统设置里允许后台运行;任务不会丢,回到前台或网络恢复时续传。

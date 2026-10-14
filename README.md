@@ -1,6 +1,6 @@
 # gopan
 
-自部署云盘。Go + GraphQL + Postgres + MinIO 后端,Vue 3 前端,单二进制交付。
+自部署云盘。Go + GraphQL + Postgres + MinIO 后端,Vue 3 前端,单二进制交付;另有 Kotlin + Jetpack Compose 的安卓原生客户端。
 
 ![CI](https://github.com/yophon/gopan/actions/workflows/ci.yml/badge.svg)
 
@@ -19,7 +19,8 @@
 | ![预览](doc/assets/preview.png) | ![分享访客页](doc/assets/share.png) |
 -->
 
-当前阶段:**v2.6.0——安卓 App(Capacitor 壳,系统分享菜单直达传输助手)、PWA 也能接收文件分享、搜索结果可定位到上下文、GitHub Actions CI、GraphQL 校验错误原文透传**。
+当前阶段:**v3.0.0——安卓原生 App:网页端全部功能,外加后台传输与断点续传、系统分享直达传输助手、系统「文件」App 里的 gopan、站内检查更新**。
+
 ## 架构
 
 ```mermaid
@@ -27,6 +28,8 @@ flowchart LR
     Browser["浏览器 · Vue 3 SPA"]
     Browser -- "GraphQL /query<br/>(元数据与编排)" --> GQL
     Browser <-. "字节流:预签名 URL<br/>分片直传 / 直取" .-> MinIO
+    Android["安卓 App · Compose"] -- "GraphQL /query" --> GQL
+    Android <-. "预签名直传 / 直取<br/>(后台续传)" .-> MinIO
     Agent["Agent · MCP Host"] -- "Streamable HTTP /mcp<br/>OAuth 2.1 / API Key" --> MCP
     Agent <-. "预签名 PUT / GET<br/>Agent 自主传输" .-> MinIO
     DAV["Finder · rclone · 文件 App"] -- "WebDAV /dav<br/>应用密码" --> REST
@@ -34,7 +37,7 @@ flowchart LR
     subgraph Gopan["gopan · Go 单二进制"]
         GQL["gqlgen"] --> Service["service 业务层"]
         MCP["Remote MCP · OAuth server"] --> Service
-        REST["HTTP:/dav · /pack · /s/:token · /healthz"] --> Service
+        REST["HTTP:/dav · /pack · /s/:token · /api/app · /healthz"] --> Service
         Worker["worker pool<br/>缩略图 · 转 PDF · hash 校验 · GC"]
         Embed["embed 前端静态资源"]
     end
@@ -46,7 +49,7 @@ flowchart LR
     Worker --> FF["ffmpeg(exec)"]
 ```
 
-要点:**主传输路径字节流不过 Go**——浏览器和 Agent 都拿预签名 URL 直传/直取 MinIO。显式例外只有流式 zip(`/pack`、`/mcp-download`)和协议决定必须中转的 WebDAV PUT/GET。文件按 SHA-256 内容寻址,全站同内容物理只存一份(秒传),配额按逻辑大小各记各的。类型从数据库到组件不断链:sqlc(SQL→Go)、gqlgen(schema→resolver)、GraphQL Code Generator(schema→TS),改一处两端编译报错。
+要点:**主传输路径字节流不过 Go**——浏览器、安卓 App 和 Agent 都拿预签名 URL 直传/直取 MinIO。显式例外只有流式 zip(`/pack`、`/mcp-download`)、协议决定必须中转的 WebDAV PUT/GET,以及几 MB 的安卓安装包(`/api/app/android/`)。文件按 SHA-256 内容寻址,全站同内容物理只存一份(秒传),配额按逻辑大小各记各的。类型从数据库到组件不断链:sqlc(SQL→Go)、gqlgen(schema→resolver)、GraphQL Code Generator(schema→TS),改一处两端编译报错。
 
 ## 快速开始
 
@@ -86,6 +89,11 @@ Agent 接入与远程 MCP 工具见 [docs/MCP.md](./docs/MCP.md)。
 | [12 · 产品说明](./doc/12-产品说明.md) | 定位、功能总览、能力边界、数据与安全、同类对比 |
 | [13 · v2 规划](./doc/13-v2规划.md) | M7 管理端 → M8 规模(keyset/子树统计)→ M9 WebDAV,原则与取舍 |
 | [14 · 测试补强与已知问题](./doc/14-测试补强与已知问题.md) | 测试惯例与覆盖率现状、已发现未修的潜在问题清单 |
+| [15 · 浏览器上传一致性修复](./doc/15-浏览器上传一致性修复.md) | staging 隔离、配额复核、失败恢复、升级兼容 |
+| [16 · 备份恢复演练](./doc/16-备份恢复演练.md) | 异地副本恢复的实战记录与字节级判据 |
+| [17 · 传输助手改进计划](./doc/17-传输助手改进计划.md) | v2.5 传输助手整改的问题清单与方案 |
+| [18 · 安卓 App](./doc/18-安卓App.md) | 原生客户端的功能、安装升级、权限、系统集成、自部署、发布流程 |
+| [19 · 安卓原生 App 计划](./doc/19-安卓原生App计划.md) | 网页 → 原生功能对照、技术选型、登录协议、P1–P4 里程碑与验收记录 |
 
 ## 实现回顾
 
@@ -105,11 +113,11 @@ Agent 接入与远程 MCP 工具见 [docs/MCP.md](./docs/MCP.md)。
 | [v2.1 · Remote MCP](./doc/milestones/v2.1-MCP.md) | 零安装 Remote MCP、Agent 直传、OAuth 2.1、API Key 与细粒度 scope |
 | [v2.2 · 文件传输助手](./doc/milestones/v2.2-文件传输助手.md) | 「我的设备」会话、上传即附消息、真实文件卡片、Agent 用 chat_send/chat_list 与浏览器同流 |
 | [M10 · 移动端与 PWA](./doc/milestones/M10-移动端与PWA.md) | 两个断点、卡片列表与长按菜单、预览手势、SW allowlist 缓存;v2.3.0 |
-
 | [M11 · 备份与可观测](./doc/milestones/M11-备份与可观测.md) | rsync 异地副本 + 恢复演练(6 条字节级判据)、登录设备管理、分享访问统计、可信代理修复、磁盘回收 8G;v2.4.0 |
 | [v2.5 · 传输助手整改](./doc/milestones/v2.5-传输助手整改.md) | isIdle 修复、服务端自动落消息、乐观上屏/粘贴/拖拽/进度卡/翻历史/删除/搜索、refresh 宽限期 + 多标签互斥;v2.5.0 |
 | [v2.6 · 安卓 App 与分享](./doc/milestones/v2.6-安卓App与分享.md) | Capacitor 安卓壳 + 原生分享接收、PWA POST share_target、搜索定位上下文、CI、错误透传、手机端输入栏越界修复;v2.6.0 |
+| [v3.0 · 安卓原生 App](./doc/milestones/v3.0-安卓原生App.md) | Kotlin + Compose 重写:后台传输引擎、原生预览、管理端、「文件」App 集成、站内更新、R8 包全量 E2E;壳删除;v3.0.0 |
 
 ## 读法
 
-想看全貌:01 → 02 → 03,或者直接读 12(产品说明,一页版)。要动手:04、05 是数据库与 GraphQL 合同,MCP 的协议合同单独见 docs/MCP.md。想知道每步实际怎么落地的:doc/milestones/。要部署:doc/09 照着走,装新机前先扫一遍 doc/10 的检查清单。只是用:doc/11 使用手册。
+想看全貌:01 → 02 → 03,或者直接读 12(产品说明,一页版)。要动手:04、05 是数据库与 GraphQL 合同,MCP 的协议合同单独见 docs/MCP.md。想知道每步实际怎么落地的:doc/milestones/。要部署:doc/09 照着走,装新机前先扫一遍 doc/10 的检查清单。只是用:doc/11 使用手册;安卓 App 看 doc/18。
