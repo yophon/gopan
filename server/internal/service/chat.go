@@ -35,6 +35,29 @@ type ChatMessage struct {
 	Body      string
 	NodeID    *uuid.UUID
 	CreatedAt time.Time
+	// Source 是写入渠道:ChatSourceWeb / ChatSourceMCP / ChatSourceWebDAV。只做展示。
+	Source string
+}
+
+// 消息来源常量。从 context 读取(WithChatSource),HTTP 入口各自注入,默认 web。
+const (
+	ChatSourceWeb    = "web"
+	ChatSourceMCP    = "mcp"
+	ChatSourceWebDAV = "webdav"
+)
+
+type chatSourceKey struct{}
+
+// WithChatSource 标记这条请求链路写入会话时的来源。dav / mcpserver 的入口中间件调用。
+func WithChatSource(ctx context.Context, source string) context.Context {
+	return context.WithValue(ctx, chatSourceKey{}, source)
+}
+
+func chatSourceFrom(ctx context.Context) string {
+	if s, ok := ctx.Value(chatSourceKey{}).(string); ok && s != "" {
+		return s
+	}
+	return ChatSourceWeb
 }
 
 const (
@@ -54,6 +77,7 @@ func attachChatMessage(ctx context.Context, q *store.Queries, owner uuid.UUID, p
 	}
 	_, err := q.InsertChatMessageForChatFolder(ctx, store.InsertChatMessageForChatFolderParams{
 		ID: uuid.Must(uuid.NewV7()), OwnerID: owner, NodeID: &nodeID, ParentID: parent,
+		Source: chatSourceFrom(ctx),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
@@ -68,6 +92,7 @@ func toChatMessage(row store.ChatMessage) ChatMessage {
 		Body:      row.Body,
 		NodeID:    row.NodeID,
 		CreatedAt: row.CreatedAt.Time,
+		Source:    row.Source,
 	}
 }
 
@@ -108,7 +133,7 @@ func (s *Chats) SendText(ctx context.Context, ownerID uuid.UUID, body string) (C
 		return ChatMessage{}, errf("INVALID_INPUT", "消息最长 %d 字", maxChatBodyBytes)
 	}
 	row, err := s.q.InsertChatMessage(ctx, store.InsertChatMessageParams{
-		ID: uuid.Must(uuid.NewV7()), OwnerID: ownerID, Body: body,
+		ID: uuid.Must(uuid.NewV7()), OwnerID: ownerID, Body: body, Source: chatSourceFrom(ctx),
 	})
 	if err != nil {
 		return ChatMessage{}, err
@@ -144,6 +169,7 @@ func (s *Chats) SendNode(ctx context.Context, ownerID, nodeID uuid.UUID) (ChatMe
 		ID:      uuid.Must(uuid.NewV7()),
 		OwnerID: ownerID,
 		NodeID:  &nodeID,
+		Source:  chatSourceFrom(ctx),
 	})
 	if err != nil {
 		return ChatMessage{}, err

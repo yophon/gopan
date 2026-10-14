@@ -81,6 +81,7 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 		}
 		ctx := context.WithValue(r.Context(), principalKey{}, principal)
 		ctx = context.WithValue(ctx, baseURLKey{}, requestBaseURL(r))
+		ctx = service.WithChatSource(ctx, service.ChatSourceMCP)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

@@ -86,7 +86,9 @@ func withBasicAuth(next http.Handler, ap *service.AppPasswords, trustedProxies [
 		rc := http.NewResponseController(w)
 		_ = rc.SetReadDeadline(time.Time{})
 		_ = rc.SetWriteDeadline(time.Time{})
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), keyOwner, owner)))
+		ctx := context.WithValue(r.Context(), keyOwner, owner)
+		ctx = service.WithChatSource(ctx, service.ChatSourceWebDAV)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

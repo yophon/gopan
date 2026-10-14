@@ -36,6 +36,7 @@ type ChatMessage struct {
 	Body      string
 	NodeID    *uuid.UUID
 	CreatedAt pgtype.Timestamptz
+	Source    string
 }
 
 type Derivative struct {

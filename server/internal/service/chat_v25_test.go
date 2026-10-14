@@ -35,6 +35,9 @@ func TestChatSendNodeIdempotent(t *testing.T) {
 	if m1.ID != m2.ID {
 		t.Fatalf("同一节点再次发送应返回已有消息:%s vs %s", m1.ID, m2.ID)
 	}
+	if m1.Source != service.ChatSourceWeb {
+		t.Fatalf("默认来源应为 web,got %q", m1.Source)
+	}
 	msgs, err := chats.ListRecent(ctx, owner, nil, 10)
 	if err != nil {
 		t.Fatal(err)
@@ -144,6 +147,41 @@ func TestChatSearch(t *testing.T) {
 	hits, err = chats.Search(ctx, owner, "   ", 10)
 	if err != nil || len(hits) != 0 {
 		t.Fatalf("空关键词应返回空:%+v err=%v", hits, err)
+	}
+}
+
+// 来源标记:context 里带 WithChatSource 的写入按该来源落库,文本与文件消息都生效。
+func TestChatSourceFromContext(t *testing.T) {
+	pool := setup(t)
+	ctx := context.Background()
+	owner := registerChatUser(t, pool, "chat_source")
+	chats, nodes := newChats(pool)
+
+	mcpCtx := service.WithChatSource(ctx, service.ChatSourceMCP)
+	text, err := chats.SendText(mcpCtx, owner, "来自 agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text.Source != service.ChatSourceMCP {
+		t.Fatalf("文本来源应为 mcp,got %q", text.Source)
+	}
+	f, err := nodes.CreateFolder(ctx, owner, nil, "附件")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := chats.SendNode(service.WithChatSource(ctx, service.ChatSourceWebDAV), owner, f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Source != service.ChatSourceWebDAV {
+		t.Fatalf("文件来源应为 webdav,got %q", file.Source)
+	}
+	msgs, err := chats.ListRecent(ctx, owner, nil, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 2 || msgs[0].Source != service.ChatSourceMCP || msgs[1].Source != service.ChatSourceWebDAV {
+		t.Fatalf("回读应带来源:%+v", msgs)
 	}
 }
 

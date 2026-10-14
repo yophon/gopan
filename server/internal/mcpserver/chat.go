@@ -25,6 +25,7 @@ type ChatMessageOutput struct {
 	Body      string  `json:"body,omitempty"`
 	NodeID    *string `json:"node_id,omitempty"`
 	CreatedAt string  `json:"created_at"`
+	Source    string  `json:"source" jsonschema:"who wrote it: web (browser), mcp (an agent), webdav"`
 }
 
 type ChatListOutput struct {
@@ -37,6 +38,7 @@ func toChatMessageOutput(m service.ChatMessage) ChatMessageOutput {
 		Body:      m.Body,
 		NodeID:    idString(m.NodeID),
 		CreatedAt: m.CreatedAt.Format(time.RFC3339),
+		Source:    m.Source,
 	}
 }
 

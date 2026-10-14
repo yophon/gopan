@@ -47,6 +47,9 @@ func TestWebDAVPutIntoChatFolder(t *testing.T) {
 	if len(msgs) != 1 || msgs[0].NodeID == nil {
 		t.Fatalf("PUT 到传输助手文件夹应自动成一条文件消息,got %+v", msgs)
 	}
+	if msgs[0].Source != service.ChatSourceWebDAV {
+		t.Fatalf("WebDAV 写入的消息来源应为 webdav,got %q", msgs[0].Source)
+	}
 	n, err := nodes.Get(ctx, e.owner, *msgs[0].NodeID)
 	if err != nil || n.Name != "from-rclone.txt" || n.ParentID == nil || *n.ParentID != folder.ID {
 		t.Fatalf("消息应指向刚 PUT 的文件:%+v err=%v", n, err)

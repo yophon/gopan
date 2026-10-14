@@ -212,6 +212,8 @@ type ChatMessage {
   id: ID!
   body: String!
   createdAt: Time!
+  # 写入渠道:web / mcp / webdav。只做展示
+  source: String!
   # 附件节点;无附件时为 null。节点被删/彻删后仍为消息,此字段返回 null。
   node: Node
 }

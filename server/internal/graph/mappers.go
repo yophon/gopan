@@ -77,6 +77,7 @@ func gqlChatMessage(m service.ChatMessage) *ChatMessage {
 		ID:        m.ID.String(),
 		Body:      m.Body,
 		CreatedAt: m.CreatedAt,
+		Source:    m.Source,
 		NodeID:    "",
 	}
 	if m.NodeID != nil {

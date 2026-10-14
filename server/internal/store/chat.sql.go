@@ -29,7 +29,7 @@ func (q *Queries) DeleteChatMessage(ctx context.Context, arg DeleteChatMessagePa
 }
 
 const getChatMessageByNode = `-- name: GetChatMessageByNode :one
-SELECT id, owner_id, body, node_id, created_at
+SELECT id, owner_id, body, node_id, created_at, source
 FROM chat_messages
 WHERE owner_id = $1 AND node_id = $2
 ORDER BY id
@@ -51,13 +51,14 @@ func (q *Queries) GetChatMessageByNode(ctx context.Context, arg GetChatMessageBy
 		&i.Body,
 		&i.NodeID,
 		&i.CreatedAt,
+		&i.Source,
 	)
 	return i, err
 }
 
 const insertChatMessage = `-- name: InsertChatMessage :one
-INSERT INTO chat_messages (id, owner_id, body, node_id)
-VALUES ($1, $2, $3, $4) RETURNING id, owner_id, body, node_id, created_at
+INSERT INTO chat_messages (id, owner_id, body, node_id, source)
+VALUES ($1, $2, $3, $4, $5) RETURNING id, owner_id, body, node_id, created_at, source
 `
 
 type InsertChatMessageParams struct {
@@ -65,6 +66,7 @@ type InsertChatMessageParams struct {
 	OwnerID uuid.UUID
 	Body    string
 	NodeID  *uuid.UUID
+	Source  string
 }
 
 func (q *Queries) InsertChatMessage(ctx context.Context, arg InsertChatMessageParams) (ChatMessage, error) {
@@ -73,6 +75,7 @@ func (q *Queries) InsertChatMessage(ctx context.Context, arg InsertChatMessagePa
 		arg.OwnerID,
 		arg.Body,
 		arg.NodeID,
+		arg.Source,
 	)
 	var i ChatMessage
 	err := row.Scan(
@@ -81,28 +84,30 @@ func (q *Queries) InsertChatMessage(ctx context.Context, arg InsertChatMessagePa
 		&i.Body,
 		&i.NodeID,
 		&i.CreatedAt,
+		&i.Source,
 	)
 	return i, err
 }
 
 const insertChatMessageForChatFolder = `-- name: InsertChatMessageForChatFolder :one
-INSERT INTO chat_messages (id, owner_id, node_id)
-SELECT $1, $2, $3
+INSERT INTO chat_messages (id, owner_id, node_id, source)
+SELECT $1, $2, $3, $4
 FROM users u
 WHERE u.id = $2
   AND u.chat_folder_id IS NOT NULL
-  AND u.chat_folder_id = $4
+  AND u.chat_folder_id = $5
   AND NOT EXISTS (
     SELECT 1 FROM chat_messages c
     WHERE c.owner_id = $2 AND c.node_id = $3
   )
-RETURNING id, owner_id, body, node_id, created_at
+RETURNING id, owner_id, body, node_id, created_at, source
 `
 
 type InsertChatMessageForChatFolderParams struct {
 	ID       uuid.UUID
 	OwnerID  uuid.UUID
 	NodeID   *uuid.UUID
+	Source   string
 	ParentID *uuid.UUID
 }
 
@@ -113,6 +118,7 @@ func (q *Queries) InsertChatMessageForChatFolder(ctx context.Context, arg Insert
 		arg.ID,
 		arg.OwnerID,
 		arg.NodeID,
+		arg.Source,
 		arg.ParentID,
 	)
 	var i ChatMessage
@@ -122,12 +128,13 @@ func (q *Queries) InsertChatMessageForChatFolder(ctx context.Context, arg Insert
 		&i.Body,
 		&i.NodeID,
 		&i.CreatedAt,
+		&i.Source,
 	)
 	return i, err
 }
 
 const listChatMessages = `-- name: ListChatMessages :many
-SELECT id, owner_id, body, node_id, created_at
+SELECT id, owner_id, body, node_id, created_at, source
 FROM chat_messages
 WHERE owner_id = $1
 ORDER BY id DESC
@@ -154,6 +161,7 @@ func (q *Queries) ListChatMessages(ctx context.Context, arg ListChatMessagesPara
 			&i.Body,
 			&i.NodeID,
 			&i.CreatedAt,
+			&i.Source,
 		); err != nil {
 			return nil, err
 		}
@@ -166,7 +174,7 @@ func (q *Queries) ListChatMessages(ctx context.Context, arg ListChatMessagesPara
 }
 
 const listChatMessagesBefore = `-- name: ListChatMessagesBefore :many
-SELECT id, owner_id, body, node_id, created_at
+SELECT id, owner_id, body, node_id, created_at, source
 FROM chat_messages
 WHERE owner_id = $1 AND id < $2
 ORDER BY id DESC
@@ -195,6 +203,7 @@ func (q *Queries) ListChatMessagesBefore(ctx context.Context, arg ListChatMessag
 			&i.Body,
 			&i.NodeID,
 			&i.CreatedAt,
+			&i.Source,
 		); err != nil {
 			return nil, err
 		}
@@ -218,7 +227,7 @@ func (q *Queries) ReadUserChatFolderID(ctx context.Context, id uuid.UUID) (*uuid
 }
 
 const searchChatMessages = `-- name: SearchChatMessages :many
-SELECT c.id, c.owner_id, c.body, c.node_id, c.created_at
+SELECT c.id, c.owner_id, c.body, c.node_id, c.created_at, c.source
 FROM chat_messages c
 LEFT JOIN nodes n ON n.id = c.node_id
 WHERE c.owner_id = $1
@@ -249,6 +258,7 @@ func (q *Queries) SearchChatMessages(ctx context.Context, arg SearchChatMessages
 			&i.Body,
 			&i.NodeID,
 			&i.CreatedAt,
+			&i.Source,
 		); err != nil {
 			return nil, err
 		}

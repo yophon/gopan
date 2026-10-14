@@ -26,6 +26,9 @@ func TestChatSendAndList(t *testing.T) {
 	if sent.ID == "" || sent.Body != "你好,世界" || sent.NodeID != nil {
 		t.Fatalf("chat_send 文本输出不符:%+v", sent)
 	}
+	if sent.Source != "mcp" {
+		t.Fatalf("经 MCP 发的消息来源应为 mcp,got %q", sent.Source)
+	}
 
 	// 2. 发文件消息:节点用 create_folder 的文件夹(服务端 SendNode 只校验属主活跃)
 	// create_folder 走 files:write,所以上面的 token 需要同时带该 scope。

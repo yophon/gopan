@@ -5,14 +5,17 @@
 文件上传到传输助手文件夹要由服务端自动落消息,再 sendChatMessage 同一节点要幂等;
 文件删掉后消息要留存、node 字段要退化成 null(前端据此显示「文件已不存在」)。
 """
+import base64
 import os
 import sys
+import time
+import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from common import gql, mkdir, register, upload  # noqa: E402
+from common import BASE, gql, mkdir, register, upload  # noqa: E402
 
-MSG_FIELDS = "id body createdAt node{id name kind size}"
+MSG_FIELDS = "id body createdAt source node{id name kind size}"
 
 uname, TOKEN = register("m10")
 print(f"== 注册 {uname} ==")
@@ -42,7 +45,30 @@ data = b"chat attachment\n" * 100
 fid = upload("chat-note.txt", data, f1["id"], TOKEN)
 auto = gql("query{chatMessages{%s}}" % MSG_FIELDS, token=TOKEN)["chatMessages"]
 assert len(auto) == 2 and auto[1]["node"] and auto[1]["node"]["id"] == fid, f"上传应自动成消息:{auto}"
+assert auto[1]["source"] == "web" and sent["source"] == "web", auto
 print("== 上传到传输助手文件夹自动成消息 OK ==")
+
+# 4a. WebDAV(rclone 同一协议)往传输助手文件夹 PUT 一个文件 → 5 秒内会话里出现、来源 webdav
+app_pass = gql('mutation{createAppPassword(name:"smoke-rclone")}', token=TOKEN)["createAppPassword"]
+dav_req = urllib.request.Request(
+    f"{BASE}/dav/{urllib.request.quote(f1['name'])}/from-rclone.txt", data=b"hello from rclone", method="PUT",
+    headers={"Authorization": "Basic " + base64.b64encode(f"{uname}:{app_pass}".encode()).decode()},
+)
+with urllib.request.urlopen(dav_req) as resp:
+    assert resp.status in (200, 201, 204), resp.status
+t0 = time.monotonic()
+dav_msg = None
+while time.monotonic() - t0 < 5:
+    for m in gql("query{chatMessages{%s}}" % MSG_FIELDS, token=TOKEN)["chatMessages"]:
+        if m["node"] and m["node"]["name"] == "from-rclone.txt":
+            dav_msg = m
+    if dav_msg:
+        break
+    time.sleep(0.3)
+assert dav_msg, "WebDAV PUT 到传输助手文件夹后 5 秒内应出现文件消息"
+assert dav_msg["source"] == "webdav", dav_msg
+print(f"== WebDAV PUT 自动成消息 OK({time.monotonic() - t0:.1f}s,source=webdav) ==")
+gql("mutation($i:ID!){deleteChatMessage(id:$i)}", {"i": dav_msg["id"]}, TOKEN)
 
 # 4b. 客户端再补发同一节点 → 幂等,返回同一条
 file_msg = gql(

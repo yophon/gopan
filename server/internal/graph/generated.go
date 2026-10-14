@@ -73,6 +73,7 @@ type ComplexityRoot struct {
 		CreatedAt func(childComplexity int) int
 		ID        func(childComplexity int) int
 		Node      func(childComplexity int) int
+		Source    func(childComplexity int) int
 	}
 
 	MCPAPIKey struct {
@@ -529,6 +530,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ChatMessage.Node(childComplexity), true
+	case "ChatMessage.source":
+		if e.ComplexityRoot.ChatMessage.Source == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChatMessage.Source(childComplexity), true
 
 	case "MCPAPIKey.createdAt":
 		if e.ComplexityRoot.MCPAPIKey.CreatedAt == nil {
@@ -2000,6 +2007,8 @@ type ChatMessage {
   id: ID!
   body: String!
   createdAt: Time!
+  # 写入渠道:web / mcp / webdav。只做展示
+  source: String!
   # 附件节点;无附件时为 null。节点被删/彻删后仍为消息,此字段返回 null。
   node: Node
 }
@@ -2189,6 +2198,8 @@ func (ec *executionContext) childFields_ChatMessage(ctx context.Context, field g
 		return ec.fieldContext_ChatMessage_body(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_ChatMessage_createdAt(ctx, field)
+	case "source":
+		return ec.fieldContext_ChatMessage_source(ctx, field)
 	case "node":
 		return ec.fieldContext_ChatMessage_node(ctx, field)
 	}
@@ -4032,6 +4043,29 @@ func (ec *executionContext) _ChatMessage_createdAt(ctx context.Context, field gr
 }
 func (ec *executionContext) fieldContext_ChatMessage_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ChatMessage", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _ChatMessage_source(ctx context.Context, field graphql.CollectedField, obj *ChatMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ChatMessage_source(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Source, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ChatMessage_source(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ChatMessage", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _ChatMessage_node(ctx context.Context, field graphql.CollectedField, obj *ChatMessage) (ret graphql.Marshaler) {
@@ -10225,6 +10259,11 @@ func (ec *executionContext) _ChatMessage(ctx context.Context, sel ast.SelectionS
 			}
 		case "createdAt":
 			out.Values[i] = ec._ChatMessage_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "source":
+			out.Values[i] = ec._ChatMessage_source(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
