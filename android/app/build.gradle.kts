@@ -20,6 +20,10 @@ val yophonIdIssuer = gopanProp("gopan.idIssuer", "https://id.979687.xyz")
 val yophonIdClientId = gopanProp("gopan.idClientId", "gopan-android")
 val yophonIdRedirect = gopanProp("gopan.idRedirect", "xyz.yophon.gopan:/oauthredirect")
 
+// ---- debug 包可选的 applicationId 后缀:手机上装着 release 签名的包(v2.6 壳或正式版)时 debug 包装不进去,
+//      加后缀即可并存安装:./gradlew -Pgopan.debugAppIdSuffix=.dev :app:installDebug;默认为空,id 仍是 xyz.yophon.gopan ----
+val debugAppIdSuffix = gopanProp("gopan.debugAppIdSuffix", "")
+
 // ---- 发布签名:android/keystore.properties(gitignore)给 storeFile/storePassword/keyAlias/keyPassword;
 //      没有这个文件时 release 退回 debug 签名,只能用于本地验证 ----
 val keystoreProps = Properties().apply {
@@ -61,6 +65,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            if (debugAppIdSuffix.isNotEmpty()) applicationIdSuffix = debugAppIdSuffix
+        }
         release {
             // P1 先不混淆,发布阶段(P4)再开 R8 并补规则
             isMinifyEnabled = false

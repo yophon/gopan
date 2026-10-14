@@ -15,18 +15,24 @@ import java.util.concurrent.atomic.AtomicInteger
  * - Refresh:要求 Cookie 里有 gopan_rt;[refreshOk] 为 false 时回 UNAUTHENTICATED;
  *   成功时轮换 cookie、发下一枚 token,可用 [refreshDelayMs] 放慢以制造并发;
  * - Me:Authorization 必须是当前有效 token([validToken]),否则 UNAUTHENTICATED;
- * - Logout:清 cookie。
+ * - Logout:清 cookie;
+ * - ChangePassword:要求有效 token,oldPassword 必须等于 [password],否则 BAD_CREDENTIALS;
+ *   成功时记下新密码、轮换 cookie 并给当前会话重发一枚 token(与服务端一致,当前设备不下线)。
  */
 class FakeGopanServer : AutoCloseable {
     val server = MockWebServer()
     val refreshCount = AtomicInteger()
     val meCount = AtomicInteger()
+    val changePasswordCount = AtomicInteger()
 
     @Volatile var refreshOk = true
     @Volatile var refreshDelayMs = 0L
     @Volatile var validToken = "t1"
     @Volatile var nextRefreshToken = "t2"
     @Volatile var expectedCookie = "rt1"
+
+    /** 当前账号密码;只有 ChangePassword 校验它(Login 一律成功) */
+    @Volatile var password = "secret"
 
     /** 票据交换入口(/api/auth/id/mobile)的行为 */
     @Volatile var mobileEntryStatus = 303
@@ -49,7 +55,8 @@ class FakeGopanServer : AutoCloseable {
 
     private fun graphql(request: RecordedRequest): MockResponse {
         val body = request.body.readUtf8()
-        val op = Json.parseToJsonElement(body).jsonObject["operationName"]?.jsonPrimitive?.content
+        val json = Json.parseToJsonElement(body).jsonObject
+        val op = json["operationName"]?.jsonPrimitive?.content
         val auth = request.getHeader("Authorization")
         val cookie = request.getHeader("Cookie").orEmpty()
         return when (op) {
@@ -78,6 +85,26 @@ class FakeGopanServer : AutoCloseable {
             "Logout" -> MockResponse()
                 .addHeader("Set-Cookie", "gopan_rt=; Path=/query; Max-Age=0; HttpOnly; SameSite=Lax")
                 .setBody("""{"data":{"logout":true}}""")
+            "ChangePassword" -> {
+                val n = changePasswordCount.incrementAndGet()
+                val vars = json["variables"]?.jsonObject
+                val oldPassword = vars?.get("oldPassword")?.jsonPrimitive?.content
+                val newPassword = vars?.get("newPassword")?.jsonPrimitive?.content
+                when {
+                    auth != "Bearer $validToken" -> unauthenticated("changePassword")
+                    oldPassword != password || newPassword.isNullOrEmpty() ->
+                        gopanError("changePassword", "BAD_CREDENTIALS", "旧密码错误")
+                    else -> {
+                        password = newPassword
+                        val token = "t-pw$n"
+                        validToken = token
+                        expectedCookie = "rt-$token"
+                        MockResponse()
+                            .addHeader("Set-Cookie", setCookie("rt-$token"))
+                            .setBody(authPayload("changePassword", token))
+                    }
+                }
+            }
             else -> MockResponse().setResponseCode(400).setBody("""{"errors":[{"message":"unknown operation $op"}]}""")
         }
     }
@@ -117,8 +144,11 @@ class FakeGopanServer : AutoCloseable {
         fun authPayload(field: String, token: String) =
             """{"data":{"$field":{"__typename":"AuthPayload","accessToken":"$token","user":$USER_JSON}}}"""
 
-        fun unauthenticated(path: String) = MockResponse().setBody(
-            """{"errors":[{"message":"登录已失效","path":["$path"],"extensions":{"code":"UNAUTHENTICATED"}}],"data":null}""",
+        /** 服务端风格的 GraphQL 错误:HTTP 200,errors[].extensions.code 带错误码 */
+        fun gopanError(path: String, code: String, message: String) = MockResponse().setBody(
+            """{"errors":[{"message":"$message","path":["$path"],"extensions":{"code":"$code"}}],"data":null}""",
         )
+
+        fun unauthenticated(path: String) = gopanError(path, "UNAUTHENTICATED", "登录已失效")
     }
 }

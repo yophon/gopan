@@ -73,7 +73,7 @@ fun ErrorState(
 /** 整页空态 */
 @Composable
 fun EmptyState(
-    title: String = stringResource(R.string.state_empty),
+    title: String = stringResource(R.string.state_empty_title),
     modifier: Modifier = Modifier,
     description: String? = null,
     icon: ImageVector = Icons.Outlined.Inbox,

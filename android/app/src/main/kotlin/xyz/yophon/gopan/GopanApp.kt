@@ -1,16 +1,24 @@
 package xyz.yophon.gopan
 
 import android.app.Application
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import dagger.hilt.android.HiltAndroidApp
+import okhttp3.OkHttpClient
 import timber.log.Timber
 import xyz.yophon.gopan.core.auth.SessionManager
 import javax.inject.Inject
 
 @HiltAndroidApp
-class GopanApp : Application() {
+class GopanApp : Application(), SingletonImageLoader.Factory {
 
     @Inject
     lateinit var sessionManager: SessionManager
+
+    @Inject
+    lateinit var okHttpClient: OkHttpClient
 
     override fun onCreate() {
         super.onCreate()
@@ -18,4 +26,12 @@ class GopanApp : Application() {
         if (BuildConfig.DEBUG) Timber.plant(Timber.DebugTree())
         sessionManager.startBootstrap()
     }
+
+    /**
+     * Coil 复用全局 OkHttpClient(连接池、超时)。缩略图是 15 分钟预签名 URL、走对象存储域名,
+     * GopanCookieJar 只服务基址 host 的 /query,Bearer 由 Apollo 拦截器加,所以这里不会把凭证带给图片请求。
+     */
+    override fun newImageLoader(context: PlatformContext): ImageLoader = ImageLoader.Builder(context)
+        .components { add(OkHttpNetworkFetcherFactory(callFactory = okHttpClient)) }
+        .build()
 }

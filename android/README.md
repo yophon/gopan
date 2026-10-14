@@ -1,7 +1,9 @@
 # gopan 安卓原生客户端
 
 Kotlin + Jetpack Compose(Material 3)重写的 gopan 客户端,替代 v2.6 的 Capacitor 壳(`app/`)。
-总计划见 `doc/19-安卓原生App计划.md`;本目录是 P1 的工程骨架与认证/网络核心。
+总计划见 `doc/19-安卓原生App计划.md`。P1 已完成:工程骨架、认证/网络核心、登录(Yophon ID + 密码登录/注册)、
+文件(列表/网格、排序、分页、多选批量、新建/重命名/移动/复制/删除、回收站、搜索)与「我的」(用量、改密码、外观、退出);
+传输助手(P2)、分享(P3)、设备/应用密码/Agent/管理端(P3/P4)还是占位页。
 
 ## 构建
 
@@ -46,31 +48,53 @@ applicationId 仍是 `xyz.yophon.gopan`、签名同一把 key,可原地覆盖安
 例:`./gradlew -Pgopan.baseUrl=http://10.0.2.2:8090 :app:installDebug`(模拟器打本机实例)。
 debug 包的 `network_security_config` 只放行 `10.0.2.2` / `127.0.0.1` / `localhost` 的明文 HTTP,release 一律 HTTPS。
 
+手机上装着 release 签名的 `xyz.yophon.gopan`(v2.6 壳或正式版)时,debug 签名的包装不进去(`INSTALL_FAILED_UPDATE_INCOMPATIBLE`),
+不必卸载:`-Pgopan.debugAppIdSuffix=.dev` 让 debug 包以 `xyz.yophon.gopan.dev` 并存安装(`gopan.debugAppIdSuffix` 留空即无后缀)。
+两个包都注册了 `xyz.yophon.gopan:/oauthredirect` 的 scheme 时,Yophon ID 授权回跳可能弹出应用选择器,选带后缀的那个即可。
+
 ## 目录结构
 
 单模块 `:app`,按包分层(模块化留到 P3):
 
 ```
-app/src/main/graphql/            GraphQL operations(按域一个文件,字段选择与 web/src/api/operations 一致)
+app/src/main/graphql/            GraphQL operations(按域一个文件,字段选择与 web/src/api/operations 一致;
+                                 nodes.graphql 的 NodeItem 片段供 Children/SearchNodes/Trash/Node/CreateFolder/RenameNode 共用)
 app/src/main/kotlin/xyz/yophon/gopan/
-  GopanApp.kt                    @HiltAndroidApp;启动时跑 SessionManager.startBootstrap()
+  GopanApp.kt                    @HiltAndroidApp;启动时跑 SessionManager.startBootstrap();
+                                 实现 Coil 的 SingletonImageLoader.Factory,缩略图加载复用全局 OkHttpClient
   MainActivity.kt                唯一 Activity:GopanTheme → RootNavHost
   MainViewModel.kt               登录态 + 主题偏好
   RootNavHost.kt                 按 AuthState 切换:启动页 / 登录图 / MainScaffold
-  MainScaffold.kt                底部导航(文件 / 传输助手 / 分享 / 我的)+ 主 NavHost —— 底部栏与 NavHost 只在这里
-  di/AppModule.kt                Hilt 根模块:AppConfig、OkHttp、Apollo、SecureStore、DataStore
+  MainScaffold.kt                底部导航(文件 / 传输助手 / 分享 / 我的)+ 主 NavHost —— 底部栏与 NavHost 只在这里;
+                                 innerPadding 已含系统栏并 consumeWindowInsets,tab 内页面的 TopAppBar/Scaffold
+                                 用默认 insets 或零 insets(feature.drive.NestedScreenInsets)都不会双倍留白
+  di/AppModule.kt                Hilt 根模块:AppConfig、OkHttp、Apollo、SecureStore、DataStore;
+                                 功能线自己的 @Module(core.data.DataModule、feature.login.LoginModule)由 Hilt 自动聚合
   core/AppConfig.kt              服务端/账号中心地址(BuildConfig → 对象,测试可替换)
   core/network/                  SecureStore(加密 KV)、GopanCookieJar、OkHttp/Apollo 工厂、AuthInterceptor、GopanException
   core/auth/                     AuthState/UserSummary、SessionStore、SessionManager、Pkce、TicketExchange、YophonIdLogin
+  core/data/                     Node / NodeListing 模型、NodesRepository(接口)+ NodesRepositoryImpl(Apollo;文件夹 LRU 解析面包屑)、
+                                 ListingCache;db/:GopanDatabase、cached_listing 表 + RoomListingCache(按 (用户, 目录) 存首页,断网回退);DataModule
   core/prefs/                    UserPreferencesRepository(DataStore:主题、列表视图、排序)
   core/ui/theme|components|format|nav   主题、通用组件(Loading/Error/Empty/Confirm/TextInput/Placeholder)、格式化、Routes
-  feature/{login,drive,chat,shares,account}/<Feature>Graph.kt   各功能线的导航图,Scaffold 阶段全是占位
-app/src/test/kotlin/             JVM 单测;testutil/ 里有假 gopan 服务端(FakeGopanServer)与装配好的 TestHarness
+  feature/login/                 LoginScreen(Yophon ID 主入口 + 登录/注册 tab)、LoginViewModel、LoginRules(校验、错误码→文案)、LoginGateway + LoginModule
+  feature/drive/                 DriveScreen / DriveViewModel(列表/网格、排序、下拉刷新、自动翻页、多选批量)、NodeActionsViewModel(新建/重命名/移动/复制/删除)、
+                                 FolderPickerDialog(全屏目标选择器)、BreadcrumbBar、NodeSheets(详情/操作)、DriveGraph(文件 tab 嵌套图,含回收站与搜索路由)
+  feature/trash/                 TrashScreen / TrashViewModel(还原、彻删、清空两次确认)、TrashExpiry(剩余天数)
+  feature/search/                SearchScreen / SearchViewModel(300ms 防抖、分页)
+  feature/account/               AccountScreen / AccountViewModel(用量条、回收站入口、改密码对话框、主题与列表视图偏好、退出登录;
+                                 登录设备 / 应用密码 / Agent / 管理端是占位路由)、AccountUsage、ChangePasswordForm
+  feature/{chat,shares}/         传输助手(P2)、分享(P3):目前只有占位页
+app/src/test/kotlin/             JVM 单测;testutil/ 里有假 gopan 服务端(FakeGopanServer:Login/Refresh/Me/Logout/ChangePassword 与票据入口)
+                                 与装配好的 TestHarness
 ```
 
 功能线的规则:只改自己 `feature.<x>` 包下的文件、自己的 `res/values/strings_<x>.xml` 与测试;
 共享文件(`Routes`、`AppModule`、`MainScaffold`、`AndroidManifest`、主题)需要改动时写进返回结果,由 Integrate 阶段统一做。
 GraphQL operations 按域各自一个文件(`nodes.graphql` 归文件线,`chat.graphql` 归传输助手线……),改了 schema 重新 `assembleDebug` 即重新生成。
+本地数据库只有一个 `core.data.db.GopanDatabase`:P2 的上传/下载队列表往里追加 entity 并把 `version` +1
+(当前 `exportSchema = false`、`fallbackToDestructiveMigration`,缓存可丢;正式发布前再补 schema 导出与迁移)。
+回收站页注册在文件 tab 的嵌套图里(`Routes.Trash`),同一 NavHost 内从任何 tab `navigate(Routes.Trash)` 都能进(「我的」页的入口就是这样)。
 
 ## 协议要点
 

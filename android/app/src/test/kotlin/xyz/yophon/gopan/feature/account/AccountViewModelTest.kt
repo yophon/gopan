@@ -16,12 +16,6 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.mockwebserver.Dispatcher
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -48,31 +42,12 @@ class AccountViewModelTest {
     private lateinit var h: TestHarness
     private lateinit var prefs: UserPreferencesRepository
 
-    /** ChangePassword 的假响应;FakeGopanServer 不认识这个 operation,测试里按需注入 */
-    @Volatile private var changePasswordResponse: ((oldPw: String, newPw: String) -> MockResponse)? = null
-
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         server = FakeGopanServer()
         h = TestHarness(server)
         prefs = UserPreferencesRepository(InMemoryPreferencesDataStore())
-
-        val original = server.server.dispatcher
-        server.server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse {
-                if (request.path != "/query") return original.dispatch(request)
-                val body = request.body.peek().readUtf8()
-                val json = Json.parseToJsonElement(body).jsonObject
-                val op = json["operationName"]?.jsonPrimitive?.content
-                val handler = changePasswordResponse
-                if (op == "ChangePassword" && handler != null) {
-                    val vars = json["variables"]!!.jsonObject
-                    return handler(vars["oldPassword"]!!.jsonPrimitive.content, vars["newPassword"]!!.jsonPrimitive.content)
-                }
-                return original.dispatch(request)
-            }
-        }
     }
 
     @After
@@ -189,13 +164,7 @@ class AccountViewModelTest {
     @Test
     fun `successful password change adopts the new token, closes the dialog and notifies`() = runBlocking {
         signIn()
-        changePasswordResponse = { oldPw, newPw ->
-            assertThat(oldPw).isEqualTo("oldpass123")
-            assertThat(newPw).isEqualTo("newpass456")
-            MockResponse()
-                .addHeader("Set-Cookie", "gopan_rt=rt-after-change; Path=/query; Max-Age=1209600; HttpOnly; SameSite=Lax")
-                .setBody(FakeGopanServer.authPayload("changePassword", "t-after-change"))
-        }
+        server.password = "oldpass123"
         val vm = newViewModel()
         vm.awaitIdle()
 
@@ -203,19 +172,18 @@ class AccountViewModelTest {
         vm.submitPasswordChange("oldpass123", "newpass456", "newpass456")
         val s = vm.awaitState { it.passwordDialog == null && it.message != null }
         assertThat(s.message?.text).isEqualTo(AccountViewModel.MESSAGE_PASSWORD_CHANGED)
+        assertThat(server.changePasswordCount.get()).isEqualTo(1)
+        assertThat(server.password).isEqualTo("newpass456")
         // 服务端重发的凭证直接采用,当前设备不需要重新登录
-        assertThat(h.store.accessToken).isEqualTo("t-after-change")
+        assertThat(h.store.accessToken).isEqualTo(server.validToken)
+        assertThat(h.store.accessToken).isNotEqualTo("t1")
         assertThat(h.store.state.value).isInstanceOf(AuthState.SignedIn::class.java)
     }
 
     @Test
     fun `server rejection keeps the dialog open with the server message`() = runBlocking {
         signIn()
-        changePasswordResponse = { _, _ ->
-            MockResponse().setBody(
-                """{"errors":[{"message":"旧密码错误","path":["changePassword"],"extensions":{"code":"BAD_CREDENTIALS"}}],"data":null}""",
-            )
-        }
+        server.password = "oldpass123"
         val vm = newViewModel()
         vm.awaitIdle()
 
@@ -226,6 +194,7 @@ class AccountViewModelTest {
         assertThat(s.passwordDialog?.serverError).isEqualTo("旧密码错误")
         assertThat(s.message).isNull()
         assertThat(h.store.accessToken).isEqualTo("t1")
+        assertThat(server.password).isEqualTo("oldpass123")
     }
 
     @Test

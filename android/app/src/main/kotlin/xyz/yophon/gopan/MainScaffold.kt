@@ -1,6 +1,7 @@
 package xyz.yophon.gopan
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -90,7 +91,9 @@ fun MainScaffold() {
         NavHost(
             navController = navController,
             startDestination = Routes.DriveTab,
-            modifier = Modifier.padding(innerPadding),
+            // innerPadding 已含状态栏与底部栏高度;再把这部分 insets 标记为已消费,
+            // tab 内页面的 TopAppBar / Scaffold 无论用默认 insets 还是零 insets 都不会出现双倍留白
+            modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
         ) {
             driveGraph(navController)
             chatGraph(navController)
