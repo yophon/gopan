@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="preview_back">返回</string>
+    <string name="preview_more">更多</string>
+    <string name="preview_close">关闭</string>
+    <string name="preview_download">下载</string>
+    <string name="preview_open_with">用其他应用打开</string>
+    <string name="preview_send_to_chat">发到传输助手</string>
+    <string name="preview_share">分享链接</string>
+    <string name="preview_view_original">查看原图</string>
+    <string name="preview_not_loaded">还没加载完,稍后再试</string>
+    <string name="preview_unsupported">该类型暂不支持预览</string>
+    <string name="preview_image_error">图片加载失败</string>
+    <string name="preview_office_converting">文档转换中,请稍候…</string>
+    <string name="preview_office_unavailable">本站未开启 Office 在线预览</string>
+    <string name="preview_office_failed">文档转换失败</string>
+    <string name="preview_office_retry">重试转换</string>
+    <string name="preview_pdf_loading">正在加载文档 %1$d%%</string>
+    <string name="preview_pdf_error">无法打开这个 PDF(可能有密码或已损坏)</string>
+    <string name="preview_pdf_page">%1$d / %2$d</string>
+    <string name="preview_text_partial">已显示 %1$s / 共 %2$s</string>
+    <string name="preview_text_partial_unknown">已显示 %1$s</string>
+    <string name="preview_text_more">继续加载</string>
+    <string name="preview_audio_play">播放</string>
+    <string name="preview_audio_pause">暂停</string>
+    <string name="preview_audio_back">后退 10 秒</string>
+    <string name="preview_audio_forward">前进 10 秒</string>
+</resources>

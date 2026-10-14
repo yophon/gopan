@@ -41,6 +41,12 @@ describe('describeUserAgent', () => {
     expect(describeUserAgent(ANDROID_CHROME)).toBe('Chrome · Android · 手机')
   })
 
+  it('gopan 安卓 App 不会被归成脚本客户端', () => {
+    expect(describeUserAgent('gopan-android/3.0.0 (Android 16; HUAWEI AAK-AN00) okhttp/4.12.0')).toBe(
+      'gopan 安卓 App · Android · 手机',
+    )
+  })
+
   it('WebDAV / 脚本客户端', () => {
     expect(describeUserAgent('rclone/v1.65.0')).toBe('rclone')
     expect(describeUserAgent('curl/8.4.0')).toBe('curl')

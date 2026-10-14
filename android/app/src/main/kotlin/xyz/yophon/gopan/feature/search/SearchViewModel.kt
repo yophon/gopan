@@ -25,6 +25,7 @@ import xyz.yophon.gopan.feature.drive.ListStatus
 import xyz.yophon.gopan.feature.drive.NodeActionsViewModel
 import xyz.yophon.gopan.feature.drive.NodeEffect
 import xyz.yophon.gopan.feature.drive.UiText
+import xyz.yophon.gopan.feature.preview.PreviewSessionStore
 import javax.inject.Inject
 
 @Immutable
@@ -48,7 +49,8 @@ data class SearchUiState(
 class SearchViewModel @Inject constructor(
     repo: NodesRepository,
     transfers: TransferActions,
-) : NodeActionsViewModel(repo, transfers) {
+    previews: PreviewSessionStore,
+) : NodeActionsViewModel(repo, transfers, previews) {
 
     private val _state = MutableStateFlow(SearchUiState())
     val state: StateFlow<SearchUiState> = _state.asStateFlow()
@@ -81,8 +83,10 @@ class SearchViewModel @Inject constructor(
     }
 
     fun onItemClick(node: Node) {
-        if (node.isFolder) send(NodeEffect.OpenFolder(node.id)) else showDetails(node)
+        if (node.isFolder) send(NodeEffect.OpenFolder(node.id)) else preview(node)
     }
+
+    override fun previewSiblings(): List<Node> = _state.value.items
 
     private suspend fun search(q: String, silent: Boolean) {
         // 换了关键词(或重搜):在途的翻页属于旧结果,游标也不绑定关键词,必须取消,否则旧页会拼进新列表

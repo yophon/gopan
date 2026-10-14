@@ -1,6 +1,7 @@
 package xyz.yophon.gopan.di
 
 import android.content.Context
+import android.os.Build
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import coil3.SingletonImageLoader
@@ -27,6 +28,7 @@ import xyz.yophon.gopan.core.network.GopanCookieJar
 import xyz.yophon.gopan.core.network.SecureStore
 import xyz.yophon.gopan.core.network.TokenRefresher
 import xyz.yophon.gopan.core.network.buildApolloClient
+import xyz.yophon.gopan.core.network.appUserAgent
 import xyz.yophon.gopan.core.network.buildOkHttpClient
 import xyz.yophon.gopan.core.network.withoutRedirects
 import xyz.yophon.gopan.core.prefs.userPreferencesDataStore
@@ -77,7 +79,10 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(cookieJar: GopanCookieJar): OkHttpClient = buildOkHttpClient(cookieJar)
+    fun provideOkHttpClient(cookieJar: GopanCookieJar): OkHttpClient = buildOkHttpClient(
+        cookieJar,
+        appUserAgent(BuildConfig.VERSION_NAME, Build.VERSION.RELEASE.orEmpty(), Build.MANUFACTURER.orEmpty(), Build.MODEL.orEmpty()),
+    )
 
     @Provides
     @Singleton

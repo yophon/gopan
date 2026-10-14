@@ -9,6 +9,8 @@
 type Rule = [RegExp, string]
 
 const CLIENT_RULES: Rule[] = [
+  // 安卓 App:gopan-android/3.0.0 (Android 16; HUAWEI AAK-AN00),必须排在 okhttp 前面
+  [/gopan-android/i, 'gopan 安卓 App'],
   [/micromessenger/i, '微信'],
   [/edg\//i, 'Edge'],
   [/opr\/|opera/i, 'Opera'],

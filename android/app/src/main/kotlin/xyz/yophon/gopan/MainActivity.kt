@@ -39,10 +39,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val viewModel: MainViewModel = hiltViewModel()
-            val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+            val appearance by viewModel.appearance.collectAsStateWithLifecycle()
             val authState by viewModel.authState.collectAsStateWithLifecycle()
             // 偏好读出来之前先不画(几毫秒,露出的是窗口背景):否则首帧按"跟随系统"渲染,再翻转成用户选的主题,每次启动都闪一下
-            val mode = themeMode ?: return@setContent
+            val look = appearance ?: return@setContent
+            val mode = look.theme
             val dark = when (mode) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
@@ -57,7 +58,7 @@ class MainActivity : ComponentActivity() {
                 )
                 onDispose {}
             }
-            GopanTheme(themeMode = mode) {
+            GopanTheme(themeMode = mode, dynamicColor = look.dynamicColor) {
                 RootNavHost(authState = authState)
             }
         }

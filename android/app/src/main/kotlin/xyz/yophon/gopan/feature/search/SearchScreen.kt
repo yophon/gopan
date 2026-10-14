@@ -76,6 +76,7 @@ fun SearchScreen(
     onBack: () -> Unit,
     onOpenFolder: (folderId: String) -> Unit,
     onOpenRoot: () -> Unit,
+    onOpenPreview: (nodeId: String) -> Unit,
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -88,6 +89,7 @@ fun SearchScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
     val currentOnOpenFolder by rememberUpdatedState(onOpenFolder)
+    val currentOnOpenPreview by rememberUpdatedState(onOpenPreview)
 
     var text by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(text) { viewModel.onQueryChange(text) }
@@ -104,6 +106,7 @@ fun SearchScreen(
             when (effect) {
                 is NodeEffect.Message -> launch { snackbarHostState.showSnackbar(effect.text.resolve(context)) }
                 is NodeEffect.OpenFolder -> currentOnOpenFolder(effect.folderId)
+                is NodeEffect.OpenPreview -> currentOnOpenPreview(effect.nodeId)
                 NodeEffect.RequestStoragePermission -> permissions.requestStoragePermission()
                 NodeEffect.TransferQueued -> permissions.onTransferQueued()
             }

@@ -53,4 +53,6 @@
     <string name="account_pwd_err_new_too_long">新密码过长(最多 72 字节)</string>
     <string name="account_pwd_err_same_as_old">新密码不能与旧密码相同</string>
     <string name="account_pwd_err_mismatch">两次输入的新密码不一致</string>
+    <string name="account_item_dynamic_color">动态取色</string>
+    <string name="account_item_dynamic_color_hint">配色跟随壁纸</string>
 </resources>

@@ -19,6 +19,7 @@ import xyz.yophon.gopan.core.network.gopanResult
 import xyz.yophon.gopan.core.network.toGopanException
 import xyz.yophon.gopan.core.transfer.PackResult
 import xyz.yophon.gopan.core.transfer.TransferActions
+import xyz.yophon.gopan.feature.preview.PreviewSessionStore
 
 /** 面包屑 / 目录选择器里的一级;id 为 null 表示根目录 */
 @Immutable
@@ -48,6 +49,9 @@ sealed interface NodeDialog {
     /** singleName:只删一项时的名字(文案用),多项为 null */
     data class ConfirmDelete(val ids: List<String>, val singleName: String?) : NodeDialog
 
+    /** 新建分享;token 区分两次打开(每次一个干净的表单) */
+    data class Share(val node: Node, val token: Long = System.nanoTime()) : NodeDialog
+
     /** token 区分两次打开:选择器 ViewModel 据此决定要不要回到根目录 */
     data class Picker(val mode: PickerMode, val ids: List<String>, val token: Long = System.nanoTime()) : NodeDialog
 }
@@ -56,6 +60,9 @@ sealed interface NodeEffect {
     data class Message(val text: UiText) : NodeEffect
 
     data class OpenFolder(val folderId: String) : NodeEffect
+
+    /** 打开预览:会话列表已放进 PreviewSessionStore */
+    data class OpenPreview(val nodeId: String) : NodeEffect
 
     /** Android 9 及以下保存到公共「下载」目录前要申请存储权限;结果回 [NodeActionsViewModel.onStoragePermission] */
     data object RequestStoragePermission : NodeEffect
@@ -75,6 +82,7 @@ data class InputError(val name: String, val message: UiText)
 abstract class NodeActionsViewModel(
     protected val repo: NodesRepository,
     protected val transfers: TransferActions,
+    private val previews: PreviewSessionStore,
 ) : ViewModel() {
 
     private val _dialog = MutableStateFlow<NodeDialog?>(null)
@@ -111,6 +119,8 @@ abstract class NodeActionsViewModel(
     fun showDetails(node: Node) = showDialog(NodeDialog.Details(node))
 
     fun requestRename(node: Node) = showDialog(NodeDialog.Rename(node))
+
+    fun requestShare(node: Node) = showDialog(NodeDialog.Share(node))
 
     fun requestDelete(nodes: List<Node>) {
         if (nodes.isEmpty()) return
@@ -185,6 +195,18 @@ abstract class NodeActionsViewModel(
                 send(NodeEffect.TransferQueued)
             }
         }
+    }
+
+    /** 当前列表里可以左右翻的节点(文件夹会被去掉);默认只有被点的那个 */
+    protected open fun previewSiblings(): List<Node> = emptyList()
+
+    /** 预览文件:左右翻的是当前列表里的文件 */
+    fun preview(node: Node) {
+        if (node.isFolder) return
+        closeDialog()
+        val siblings = previewSiblings().takeIf { list -> list.any { it.id == node.id } } ?: listOf(node)
+        previews.open(siblings)
+        send(NodeEffect.OpenPreview(node.id))
     }
 
     /** 下到缓存后弹"用其他应用打开" */

@@ -49,6 +49,8 @@ data class TransferPrefs(
 
 data class UserPreferences(
     val theme: ThemeMode = ThemeMode.SYSTEM,
+    /** Material You 动态取色(跟随壁纸,Android 12+);关掉用 App 自己的配色 */
+    val dynamicColor: Boolean = true,
     val driveViewMode: DriveViewMode = DriveViewMode.LIST,
     val driveSort: DriveSort = DriveSort(),
     val transfer: TransferPrefs = TransferPrefs(),
@@ -74,6 +76,10 @@ class UserPreferencesRepository @Inject constructor(
 
     suspend fun setTheme(mode: ThemeMode) {
         dataStore.edit { it[Keys.theme] = mode.name }
+    }
+
+    suspend fun setDynamicColor(on: Boolean) {
+        dataStore.edit { it[Keys.dynamicColor] = on }
     }
 
     suspend fun setDriveViewMode(mode: DriveViewMode) {
@@ -122,6 +128,7 @@ class UserPreferencesRepository @Inject constructor(
 
     private object Keys {
         val theme = stringPreferencesKey("theme")
+        val dynamicColor = booleanPreferencesKey("dynamic_color")
         val wifiOnly = booleanPreferencesKey("transfer_wifi_only")
         val partsOnWifi = intPreferencesKey("transfer_parts_wifi")
         val partsOnMobile = intPreferencesKey("transfer_parts_mobile")
@@ -135,6 +142,7 @@ class UserPreferencesRepository @Inject constructor(
 
     private fun Preferences.toUserPreferences() = UserPreferences(
         theme = enumOrDefault(this[Keys.theme], ThemeMode.SYSTEM),
+        dynamicColor = this[Keys.dynamicColor] ?: true,
         driveViewMode = enumOrDefault(this[Keys.driveViewMode], DriveViewMode.LIST),
         driveSort = DriveSort(
             order = enumOrDefault(this[Keys.driveSortOrder], DriveSortOrder.NAME),

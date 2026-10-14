@@ -39,9 +39,13 @@ query Children($parentId: ID, $cursor: String, $order: NodeOrder, $desc: Boolean
 query NodePreview($id: ID!) {
   node(id: $id) {
     id
+    parentId
     name
     kind
     size
+    mime
+    sha256
+    updatedAt
     preview {
       kind
       thumbUrl

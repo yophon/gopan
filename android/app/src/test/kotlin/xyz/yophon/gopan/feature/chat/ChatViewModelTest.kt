@@ -25,6 +25,7 @@ import xyz.yophon.gopan.feature.drive.FakeTransferActions
 import xyz.yophon.gopan.feature.drive.InMemoryPreferencesDataStore
 import xyz.yophon.gopan.feature.drive.MainDispatcherRule
 import java.io.File
+import xyz.yophon.gopan.feature.preview.PreviewSessionStore
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelTest {
@@ -40,7 +41,7 @@ class ChatViewModelTest {
     }
     private var vm: ChatViewModel? = null
 
-    private fun viewModel() = ChatViewModel(repo, transfers, prefs, inbox, net).also { vm = it }
+    private fun viewModel() = ChatViewModel(repo, transfers, prefs, inbox, net, PreviewSessionStore()).also { vm = it }
 
     /**
      * 轮询循环跑在测试调度器上:测试体结束前必须停掉,否则 runTest 收尾时永远等不到空闲。

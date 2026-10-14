@@ -29,6 +29,7 @@ import xyz.yophon.gopan.core.prefs.DriveViewMode
 import xyz.yophon.gopan.core.prefs.UserPreferencesRepository
 import xyz.yophon.gopan.core.transfer.EnqueueResult
 import xyz.yophon.gopan.core.transfer.TransferActions
+import xyz.yophon.gopan.feature.preview.PreviewSessionStore
 import xyz.yophon.gopan.core.transfer.TransferEvent
 import android.net.Uri
 import java.io.File
@@ -80,7 +81,8 @@ class DriveViewModel @Inject constructor(
     repo: NodesRepository,
     private val prefs: UserPreferencesRepository,
     transfers: TransferActions,
-) : NodeActionsViewModel(repo, transfers) {
+    previews: PreviewSessionStore,
+) : NodeActionsViewModel(repo, transfers, previews) {
 
     val parentId: String? = savedStateHandle[FOLDER_ID_ARG]
 
@@ -287,9 +289,11 @@ class DriveViewModel @Inject constructor(
         } else if (node.isFolder) {
             send(NodeEffect.OpenFolder(node.id))
         } else {
-            showDetails(node)
+            preview(node)
         }
     }
+
+    override fun previewSiblings(): List<Node> = _state.value.items
 
     fun onItemLongClick(node: Node) {
         _state.update { it.copy(selectionMode = true, selection = it.selection + node.id) }

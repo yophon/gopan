@@ -5,9 +5,11 @@ Kotlin + Jetpack Compose(Material 3)重写的 gopan 客户端,替代 v2.6 的 Ca
 - P1:工程骨架、认证/网络核心、登录(Yophon ID + 密码登录/注册)、文件(列表/网格、排序、分页、多选批量、
   新建/重命名/移动/复制/删除、回收站、搜索)与「我的」(用量、改密码、外观、退出);
 - P2:上传 / 下载引擎(后台前台服务、断网与杀进程后续传、秒传、打包下载)、传输列表与传输设置、
-  传输助手(网页端全部功能)、系统分享直达传输助手。
+  传输助手(网页端全部功能)、系统分享直达传输助手;
+- P3:预览(图片缩放翻页、视频、音频后台播放、PDF、文本、Office 派生 PDF)、分享(新建 / 列表 / 访问记录 / 取消)、
+  登录设备、WebDAV 应用密码、Agent 接入(API Key / OAuth 授权 / 目录范围 / 操作记录)、动态取色开关、平板侧边导航与双栏预览。
 
-分享(P3)、设备/应用密码/Agent/管理端(P3/P4)还是占位页。
+管理端(P4)还是占位页。
 
 ## 构建
 
@@ -68,9 +70,9 @@ app/src/main/kotlin/xyz/yophon/gopan/
                                  实现 Coil 的 SingletonImageLoader.Factory,缩略图加载复用全局 OkHttpClient
   MainActivity.kt                唯一 Activity:GopanTheme → RootNavHost;接住系统分享(SEND / SEND_MULTIPLE)与通知点按,
                                  转成 core.share 的待处理内容与跳转请求
-  MainViewModel.kt               登录态 + 主题偏好
-  RootNavHost.kt                 按 AuthState 切换:启动页 / 登录图 / MainScaffold
-  MainScaffold.kt                底部导航(文件 / 传输助手 / 分享 / 我的)+ 主 NavHost —— 底部栏与 NavHost 只在这里;
+  MainViewModel.kt               登录态 + 外观偏好(深浅、动态取色)
+  RootNavHost.kt                 按 AuthState 切换:启动页 / 登录图 / MainScaffold;全屏预览(Routes.Preview)也挂在这一层,盖住底部导航
+  MainScaffold.kt                底部导航(文件 / 传输助手 / 分享 / 我的;宽 ≥ 600dp 换成侧边导航栏)+ 主 NavHost —— 导航栏与 NavHost 只在这里;
                                  innerPadding 已含系统栏并 consumeWindowInsets,tab 内页面的 TopAppBar/Scaffold
                                  用默认 insets 或零 insets(feature.drive.NestedScreenInsets)都不会双倍留白;键盘弹起时收起底部栏。
                                  传输列表(Routes.Transfers)是这里的顶层路由,不属于哪个 tab
@@ -83,6 +85,10 @@ app/src/main/kotlin/xyz/yophon/gopan/
   core/data/                     Node / NodeListing 模型、NodesRepository(接口)+ NodesRepositoryImpl(Apollo;文件夹 LRU 解析面包屑)、
                                  ListingCache;db/:GopanDatabase、cached_listing 表 + RoomListingCache(按 (用户, 目录) 存首页,断网回退);DataModule
   core/data/chat/                ChatMessage 模型、ChatRepository(接口)+ ApolloChatRepository(列表 / 翻历史 / 搜索 / 发送 / 删除 / 文件夹)
+  core/data/preview/             PreviewRepository:单节点预览信息(预签名地址现取)、Office 转换触发、文本分段拉取(TextFetcher:Range、UTF-8 / GB18030)、
+                                 PDF 下到缓存(cacheDir/preview-pdf,内容寻址,300 MB 封顶)
+  core/data/shares/              SharesRepository:我的分享、新建、取消、访问明细
+  core/data/security/            SecurityRepository:登录设备、WebDAV 应用密码、MCP API Key / OAuth 授权 / 目录范围 / 操作记录
   core/prefs/                    UserPreferencesRepository(DataStore:主题、列表视图、排序、传输设置、传输助手草稿)
   core/transfer/                 传输引擎,见下文「传输引擎」:TransferEngine、TransferWorker + TransferScheduler、TransferNotifications、
                                  SourceStore(来源读取、哈希、私有副本)、NetworkMonitor、FileOpener、TransferActions(界面入口);
@@ -90,18 +96,26 @@ app/src/main/kotlin/xyz/yophon/gopan/
                                  db/(upload_task、download_task 两张队列表)
   core/share/                    IncomingShareStore(系统分享的接收与暂存)、AppNavRequests(外部入口的跳转请求)
   core/ui/transfer/              上传选择器(文件 / 照片和视频 / 拍照)与通知、存储权限的申请
-  core/ui/theme|components|format|nav   主题、通用组件(Loading/Error/Empty/Confirm/TextInput/Placeholder)、格式化、Routes
+  core/ui/theme|components|format|nav   主题(动态取色经 LocalDynamicColor 传给嵌套主题)、通用组件(Loading/Error/Empty/Confirm/TextInput/Placeholder、
+                                 Zoomable 双指 / 双击缩放)、格式化(含 describeUserAgent,规则与网页端一致)、Routes
+  core/ui/SystemActions.kt       复制、系统分享面板发文本、浏览器打开链接
+  core/ui/WindowSize.kt          宽度断点:600dp 侧边导航栏、840dp 列表 + 预览双栏
   feature/login/                 LoginScreen(Yophon ID 主入口 + 登录/注册 tab)、LoginViewModel、LoginRules(校验、错误码→文案)、LoginGateway + LoginModule
-  feature/drive/                 DriveScreen / DriveViewModel(列表/网格、排序、下拉刷新、自动翻页、多选批量)、NodeActionsViewModel(新建/重命名/移动/复制/删除)、
+  feature/drive/                 DriveScreen / DriveViewModel(列表/网格、排序、下拉刷新、自动翻页、多选批量;宽屏时点文件在右侧栏预览)、
+                                 NodeActionsViewModel(新建/重命名/移动/复制/删除/分享/预览)、
                                  FolderPickerDialog(全屏目标选择器)、BreadcrumbBar、NodeSheets(详情/操作)、DriveGraph(文件 tab 嵌套图,含回收站与搜索路由)
   feature/trash/                 TrashScreen / TrashViewModel(还原、彻删、清空两次确认)、TrashExpiry(剩余天数)
   feature/search/                SearchScreen / SearchViewModel(300ms 防抖、分页)
-  feature/account/               AccountScreen / AccountViewModel(用量条、回收站与传输列表入口、传输设置、改密码对话框、主题与列表视图偏好、退出登录;
-                                 登录设备 / 应用密码 / Agent / 管理端是占位路由)、AccountUsage、ChangePasswordForm
+  feature/account/               AccountScreen / AccountViewModel(用量条、回收站与传输列表入口、传输设置、改密码对话框、主题 / 动态取色 / 列表视图偏好、
+                                 退出登录;管理端是占位路由)、AccountUsage、ChangePasswordForm
+  feature/account/security/      登录设备、WebDAV 应用密码、Agent 接入三页(SecurityScreens / SecurityViewModels)与 MCP 权限中文名(McpScopes)
   feature/chat/                  传输助手:ChatScreen / ChatItems(消息、九宫格、上传卡片)/ ChatViewModel(轮询、搜索定位、乐观发送、分享落地)/
                                  ChatLogic(按 id 合并、按天分组、网格、链接识别,纯函数)
   feature/transfers/             传输列表(TransfersScreen / TransfersViewModel)与传输设置对话框
-  feature/shares/                分享(P3):目前只有占位页
+  feature/shares/                「分享」tab(SharesScreen:我的分享与操作、访问记录)与新建分享对话框(ShareCreate,文件页 / 搜索页 / 预览共用)
+  feature/preview/               全屏预览(PreviewScreen:翻页器、顶栏、沉浸)与平板侧栏(PreviewPane);PreviewViewModel(会话列表、最近 6 页)、
+                                 PreviewPage(单页加载与 Office 轮询)、PreviewPages(各类型的页面)、PdfDocument(PdfRenderer 串行封装)、
+                                 PlaybackService(音频后台播放的 Media3 会话服务)
 app/src/test/kotlin/             JVM 单测;testutil/ 里有假 gopan 服务端(FakeGopanServer:Login/Refresh/Me/Logout/ChangePassword 与票据入口)
                                  与装配好的 TestHarness
 ```
@@ -169,6 +183,36 @@ GraphQL operations 按域各自一个文件(`nodes.graphql` 归文件线,`chat.g
 长文本(> 4000 字节)入队成功后才清草稿;删除时 NOT_FOUND 当成功;上传卡片按 nodeId 等对应消息出现再撤。
 只在页面可见(STARTED)时每 2 秒刷新,进后台即停;回到前台、系统网络恢复时立即刷新。
 系统分享:文本接到草稿后面(不自动发),文件直接发;未登录时暂存,登录后处理。
+
+## 预览(P3)
+
+- **入口**:文件页、搜索结果、传输助手里点文件 → 全屏预览,左右翻的是打开时那个列表里的文件(传输助手是当前显示的消息,从旧到新)。
+  列表放在 `PreviewSessionStore`(路由只带起点 nodeId);进程被回收后只剩当时看的那一个文件。平板(宽 ≥ 840dp)文件页点文件在右侧栏预览。
+- **加载**:每页现取 `node(id){preview{…}}`(预签名 15 分钟),只留最近 6 页,屏幕上(含左右各预加载一页)的不释放。
+  - 图片:2048 大图派生(没有派生时原图,解码边长封顶 4096),加载出来之前用列表缩略图垫底;双指 / 双击缩放,放大时不翻页;「查看原图」换原图。
+  - 视频:页面内 ExoPlayer,翻到才缓冲并自动播放,翻走暂停,离开即释放;播放控件显隐与顶栏同步。
+  - 音频:交给 `PlaybackService`(Media3 会话服务,mediaPlayback 前台服务 + 通知控制),离开预览、锁屏照常播;
+    预签名过期时播放器拿到 403 按 mediaId(节点 id)重取地址、从原位置续播(视频同理)。
+  - PDF(含 Office 派生):下到缓存后用系统 `PdfRenderer` 逐页渲染(同一时刻只能开一页,全部串行在一个线程上);点一页全屏 2.5 倍清晰度放大。
+    加密或损坏的 PDF 引导「用其他应用打开」。
+  - 文本:按 512 KB 一段用 Range 读(服务端只把 1 MB 以内的文本归为可预览),第一段识别编码(UTF-8 解不开按 GB18030),
+    段尾半个字符留给下一段;开头与末尾各有一条「已显示 x / 共 y · 继续加载」,滑到末尾自动接着读;分块交给 LazyColumn,几百 KB 也不卡。
+  - Office:没有派生时触发一次转换,转换中每 2 秒查一次(只在这页显示着时查);本站没开转换(UNAVAILABLE)、转换失败都给「用其他应用打开」,失败可重试。
+- **顶栏**:下载、更多(查看原图 / 分享链接 / 用其他应用打开 / 发到传输助手);单击收起(连同系统栏,沉浸看图)。
+
+## 分享与账户安全(P3)
+
+- 分享:文件页 / 搜索页的「分享」与预览里的「分享链接」打开同一个对话框(有效期 1 / 7 / 30 天或永久、可选密码,打开密码保护时预填 4 位随机码);
+  创建后显示链接(`{base}/s/{token}`)与密码,「发送」拉起系统分享面板,「复制」连密码一起。「分享」tab:我的分享(访问 / 下载计数是近 180 天的)、
+  复制 / 发送 / 浏览器打开链接、访问记录(最近 50 条)、取消分享。
+- 登录设备:本机标「本机」,吊销其它设备后那台下次 refresh 被登出;App 的请求都带 `gopan-android/<版本> (Android <版本>; <厂商> <型号>)`,
+  设备列表与访问记录里显示为「gopan 安卓 App」(网页端同一条规则)。
+- WebDAV 应用密码与 Agent 接入(API Key、OAuth 授权、目录范围、操作记录)与网页端对话框一致;新生成的密码 / Key 明文只在这一页显示一次。
+
+## 外观与平板(P3)
+
+- 「我的 → 外观」:深浅主题、动态取色(Android 12+,默认开,关掉用 App 自己的配色)、列表视图。
+- 宽 ≥ 600dp(横屏、平板、折叠屏展开)底部导航换成侧边导航栏;宽 ≥ 840dp 文件页是列表 + 预览双栏,返回键先收起侧栏。
 
 ## 代码规则
 

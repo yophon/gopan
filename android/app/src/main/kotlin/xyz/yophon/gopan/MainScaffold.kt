@@ -44,6 +44,16 @@ import xyz.yophon.gopan.feature.account.accountGraph
 import xyz.yophon.gopan.feature.chat.chatGraph
 import xyz.yophon.gopan.feature.drive.driveGraph
 import xyz.yophon.gopan.feature.shares.sharesGraph
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.ui.platform.testTag
+import xyz.yophon.gopan.core.ui.isMediumWidth
 
 /** 底部 tab 定义;顺序即显示顺序 */
 private class MainTab(
@@ -67,12 +77,22 @@ private val mainTabs = listOf(
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun MainScaffold(viewModel: MainScaffoldViewModel = hiltViewModel()) {
+fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffoldViewModel = hiltViewModel()) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     // 键盘弹起时收起底部导航:否则输入框(传输助手、搜索)和键盘之间隔着一条导航栏
     val imeVisible = WindowInsets.isImeVisible
+    // 宽屏(横屏、平板、折叠屏展开)用侧边导航栏,底部不再占一条
+    val rail = isMediumWidth()
+    fun selectTab(tab: MainTab) {
+        navController.navigate(tab.route) {
+            // 切 tab:保留各 tab 自己的返回栈,回到起点时不重复入栈
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
 
     // 外部入口:系统分享 → 传输助手;通知点按 → 传输列表
     val request by viewModel.navRequest.collectAsStateWithLifecycle()
@@ -94,52 +114,64 @@ fun MainScaffold(viewModel: MainScaffoldViewModel = hiltViewModel()) {
         }
     }
 
-    Scaffold(
-        bottomBar = {
-            if (!imeVisible) NavigationBar {
+    Row(Modifier.fillMaxSize()) {
+        if (rail) {
+            NavigationRail(modifier = Modifier.testTag("main_rail")) {
+                Spacer(Modifier.weight(1f))
                 mainTabs.forEach { tab ->
                     val selected = currentDestination?.hierarchy?.any { tab.matches(it) } == true
-                    NavigationBarItem(
+                    NavigationRailItem(
                         selected = selected,
-                        onClick = {
-                            navController.navigate(tab.route) {
-                                // 切 tab:保留各 tab 自己的返回栈,回到起点时不重复入栈
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = if (selected) tab.selectedIcon else tab.icon,
-                                contentDescription = null,
-                            )
-                        },
+                        onClick = { selectTab(tab) },
+                        icon = { Icon(imageVector = if (selected) tab.selectedIcon else tab.icon, contentDescription = null) },
                         label = { Text(stringResource(tab.label)) },
                     )
                 }
+                Spacer(Modifier.weight(1f))
             }
-        },
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = Routes.DriveTab,
-            // innerPadding 已含状态栏与底部栏高度;再把这部分 insets 标记为已消费,
-            // tab 内页面的 TopAppBar / Scaffold 无论用默认 insets 还是零 insets 都不会出现双倍留白
-            modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
-        ) {
-            driveGraph(navController)
-            chatGraph(navController)
-            sharesGraph(navController)
-            accountGraph(navController)
-            // 传输列表:全局页,不属于哪个 tab(文件页菜单、传输助手、「我的」、通知都能进)
-            composable<Routes.Transfers> { entry ->
-                TransfersScreen(
-                    onBack = { entry.ifResumed { navController.popBackStack() } },
-                    onOpenFolder = { id ->
-                        entry.ifResumed { navController.navigate(if (id == null) Routes.Drive else Routes.Folder(id)) }
-                    },
-                )
+        }
+        Scaffold(
+            // 侧边导航栏已经让出了起始侧的系统栏(横屏三键导航在左边时)
+            modifier = if (rail) Modifier.consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)) else Modifier,
+            bottomBar = {
+                if (!rail && !imeVisible) NavigationBar {
+                    mainTabs.forEach { tab ->
+                        val selected = currentDestination?.hierarchy?.any { tab.matches(it) } == true
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { selectTab(tab) },
+                            icon = {
+                                Icon(
+                                    imageVector = if (selected) tab.selectedIcon else tab.icon,
+                                    contentDescription = null,
+                                )
+                            },
+                            label = { Text(stringResource(tab.label)) },
+                        )
+                    }
+                }
+            },
+        ) { innerPadding ->
+            NavHost(
+                navController = navController,
+                startDestination = Routes.DriveTab,
+                // innerPadding 已含状态栏与底部栏高度;再把这部分 insets 标记为已消费,
+                // tab 内页面的 TopAppBar / Scaffold 无论用默认 insets 还是零 insets 都不会出现双倍留白
+                modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
+            ) {
+                driveGraph(navController, onOpenPreview)
+                chatGraph(navController, onOpenPreview)
+                sharesGraph(navController)
+                accountGraph(navController)
+                // 传输列表:全局页,不属于哪个 tab(文件页菜单、传输助手、「我的」、通知都能进)
+                composable<Routes.Transfers> { entry ->
+                    TransfersScreen(
+                        onBack = { entry.ifResumed { navController.popBackStack() } },
+                        onOpenFolder = { id ->
+                            entry.ifResumed { navController.navigate(if (id == null) Routes.Drive else Routes.Folder(id)) }
+                        },
+                    )
+                }
             }
         }
     }

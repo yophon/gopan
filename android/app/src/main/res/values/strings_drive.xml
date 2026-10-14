@@ -40,10 +40,12 @@
     <string name="drive_action_copy">复制到…</string>
     <string name="drive_action_delete">删除</string>
     <string name="drive_action_details">详情</string>
-    <string name="drive_action_open">打开</string>
+    <string name="drive_action_open">用其他应用打开</string>
+    <string name="drive_action_preview">预览</string>
     <string name="drive_action_download">下载</string>
     <string name="drive_action_pack">打包下载(zip)</string>
     <string name="drive_action_send_to_chat">发到传输助手</string>
+    <string name="drive_action_share">分享</string>
     <string name="drive_action_transfers">传输列表</string>
 
     <string name="drive_dialog_new_folder">新建文件夹</string>

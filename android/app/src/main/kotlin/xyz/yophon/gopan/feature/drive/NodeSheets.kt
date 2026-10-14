@@ -26,6 +26,8 @@ import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.RestoreFromTrash
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -54,6 +56,7 @@ import xyz.yophon.gopan.core.ui.components.ConfirmDialog
 import xyz.yophon.gopan.core.ui.components.TextInputDialog
 import xyz.yophon.gopan.core.ui.format.formatBytes
 import xyz.yophon.gopan.core.ui.format.formatTime
+import xyz.yophon.gopan.feature.shares.ShareCreateDialog
 
 /** 长按 / ⋮ 弹出的操作;文件页、搜索页、回收站各挑自己的子集 */
 enum class NodeAction(@StringRes val label: Int, val icon: ImageVector, val destructive: Boolean = false) {
@@ -61,6 +64,7 @@ enum class NodeAction(@StringRes val label: Int, val icon: ImageVector, val dest
     DOWNLOAD(R.string.drive_action_download, Icons.Outlined.Download),
     PACK(R.string.drive_action_pack, Icons.Outlined.FolderZip),
     SEND_TO_CHAT(R.string.drive_action_send_to_chat, Icons.AutoMirrored.Outlined.Send),
+    SHARE(R.string.drive_action_share, Icons.Outlined.Share),
     RENAME(R.string.drive_action_rename, Icons.Outlined.DriveFileRenameOutline),
     MOVE(R.string.drive_action_move, Icons.AutoMirrored.Outlined.DriveFileMove),
     COPY(R.string.drive_action_copy, Icons.Outlined.ContentCopy),
@@ -75,6 +79,7 @@ val DRIVE_ACTIONS = listOf(
     NodeAction.OPEN,
     NodeAction.DOWNLOAD,
     NodeAction.PACK,
+    NodeAction.SHARE,
     NodeAction.SEND_TO_CHAT,
     NodeAction.RENAME,
     NodeAction.MOVE,
@@ -142,7 +147,7 @@ fun NodeActionSheet(
 }
 
 /**
- * 详情 BottomSheet:名称、类型、大小、时间;文件有「打开」「下载」两个按钮。
+ * 详情 BottomSheet:名称、类型、大小、时间;文件有「预览」「下载」两个按钮。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -179,9 +184,9 @@ fun NodeDetailsSheet(
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (onOpen != null) {
                         FilledTonalButton(onClick = onOpen, modifier = Modifier.weight(1f)) {
-                            Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null)
+                            Icon(Icons.Outlined.Visibility, contentDescription = null)
                             Spacer(Modifier.size(8.dp))
-                            Text(stringResource(R.string.drive_action_open))
+                            Text(stringResource(R.string.drive_action_preview))
                         }
                     }
                     if (onDownload != null) {
@@ -280,6 +285,7 @@ fun NodeDialogHost(
                     NodeAction.DOWNLOAD -> viewModel.download(listOf(node))
                     NodeAction.PACK -> viewModel.pack(listOf(node))
                     NodeAction.SEND_TO_CHAT -> viewModel.sendToChat(node)
+                    NodeAction.SHARE -> viewModel.requestShare(node)
                     NodeAction.RENAME -> viewModel.requestRename(node)
                     NodeAction.MOVE -> viewModel.requestMove(listOf(node.id))
                     NodeAction.COPY -> viewModel.requestCopy(listOf(node.id))
@@ -294,7 +300,7 @@ fun NodeDialogHost(
         is NodeDialog.Details -> NodeDetailsSheet(
             node = dialog.node,
             onDismiss = viewModel::dismissDialog,
-            onOpen = { viewModel.open(dialog.node) },
+            onOpen = { viewModel.preview(dialog.node) },
             onDownload = { viewModel.download(listOf(dialog.node)) },
         )
         is NodeDialog.Rename -> NodeNameDialog(
@@ -316,6 +322,12 @@ fun NodeDialogHost(
             busy = busy,
             onConfirm = { viewModel.confirmDelete(dialog.ids) },
             onDismiss = viewModel::dismissDialog,
+        )
+        is NodeDialog.Share -> ShareCreateDialog(
+            node = dialog.node,
+            instanceKey = dialog.token.toString(),
+            onDismiss = viewModel::dismissDialog,
+            onMessage = { viewModel.message(UiText.Plain(it)) },
         )
         is NodeDialog.Picker -> FolderPickerDialog(
             mode = dialog.mode,

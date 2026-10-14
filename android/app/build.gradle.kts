@@ -40,8 +40,8 @@ android {
         applicationId = "xyz.yophon.gopan"
         minSdk = 26
         targetSdk = 36
-        versionCode = 30002
-        versionName = "3.0.0-p2"
+        versionCode = 30003
+        versionName = "3.0.0-p3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // AppAuth 的 RedirectUriReceiverActivity 由库 manifest 合并,这里只给 scheme;
@@ -152,6 +152,12 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.timber)
+
+    // 预览:音视频(流式 + 后台播放与通知控制)
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.session)
+    implementation(libs.androidx.media3.datasource.okhttp)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

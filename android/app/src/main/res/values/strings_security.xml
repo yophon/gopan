@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_copy">复制</string>
+    <string name="security_copied">已复制</string>
+    <string name="security_revoke">吊销</string>
+    <string name="security_never">从未</string>
+    <string name="security_secret_done">我已保存</string>
+
+    <string name="devices_title">登录设备</string>
+    <string name="devices_hint">账号当前登录的会话。不在身边的设备可以随时吊销 —— 吊销后那台设备需要重新登录。改密码会一次性吊销全部设备。</string>
+    <string name="devices_empty">没有登录记录</string>
+    <string name="devices_current">本机</string>
+    <string name="devices_inactive">已失效</string>
+    <string name="devices_secondary">%1$s · 最近 %2$s · 登录于 %3$s</string>
+    <string name="devices_revoke_title">吊销设备</string>
+    <string name="devices_revoke_text">吊销后「%1$s」需要重新登录才能再访问。确定继续?</string>
+    <string name="devices_msg_revoked">已吊销该设备</string>
+
+    <string name="app_passwords_title">WebDAV 应用密码</string>
+    <string name="app_passwords_dav">WebDAV 地址</string>
+    <string name="app_passwords_hint">在 Finder / 资源管理器 / rclone / 手机文件 App 里挂载上面的地址:账号是你的用户名(%1$s),密码用下面生成的应用密码(不是登录密码)。</string>
+    <string name="app_passwords_created">新应用密码(只显示这一次,离开这页就没了)</string>
+    <string name="app_passwords_name_hint">设备名,如 MacBook / rclone-nas</string>
+    <string name="app_passwords_create">生成</string>
+    <string name="app_passwords_empty">还没有应用密码</string>
+    <string name="app_passwords_secondary">创建于 %1$s · 最近使用 %2$s</string>
+    <string name="app_passwords_revoke_title">吊销应用密码</string>
+    <string name="app_passwords_revoke_text">吊销后用「%1$s」挂载的设备立即断开,确定?</string>
+    <string name="app_passwords_msg_revoked">已吊销,该设备立即失效</string>
+
+    <string name="agent_title">Agent 接入</string>
+    <string name="agent_endpoint">MCP 地址</string>
+    <string name="agent_admin_endpoint">管理员 MCP</string>
+    <string name="agent_help">支持 OAuth 的客户端填写 MCP 地址后,选择登录并授权即可。上传和下载还需要客户端具备 HTTP 文件传输能力;文本读取、目录整理可直接通过 MCP 完成。</string>
+    <string name="agent_tab_keys">API Key</string>
+    <string name="agent_tab_oauth">OAuth 授权</string>
+    <string name="agent_tab_audit">操作记录</string>
+    <string name="agent_keys_help">适合 CI 或不支持 OAuth 的客户端。每个客户端使用单独的 Key,并选择所需权限。</string>
+    <string name="agent_admin_key">创建管理员专用 Key</string>
+    <string name="agent_key_created">新 API Key,只显示这一次</string>
+    <string name="agent_key_name_hint">名称,如 Codex / CI</string>
+    <string name="agent_key_create">创建</string>
+    <string name="agent_keys_empty">还没有 API Key</string>
+    <string name="agent_last_used">最近使用 %1$s</string>
+    <string name="agent_root_all">全盘</string>
+    <string name="agent_root_admin">目录范围:管理员接口</string>
+    <string name="agent_root_label">目录范围:%1$s</string>
+    <string name="agent_root_title">「%1$s」的目录范围</string>
+    <string name="agent_root_hint">允许访问的目录,如 /AI工作区;留空 = 全盘</string>
+    <string name="agent_root_save">保存范围</string>
+    <string name="agent_msg_root_saved">目录范围已更新</string>
+    <string name="agent_oauth_help">在客户端发起登录后,这里会显示已授权应用。客户端可自动刷新登录状态;撤销授权后立即失效。</string>
+    <string name="agent_oauth_empty">还没有 OAuth 授权</string>
+    <string name="agent_granted_at">授权于 %1$s</string>
+    <string name="agent_oauth_revoke">撤销</string>
+    <string name="agent_oauth_revoke_title">撤销授权</string>
+    <string name="agent_oauth_revoke_text">撤销后「%1$s」立即断开,确定?</string>
+    <string name="agent_key_revoke_title">吊销 API Key</string>
+    <string name="agent_key_revoke_text">吊销后「%1$s」立即失效,确定?</string>
+    <string name="agent_msg_key_revoked">API Key 已吊销</string>
+    <string name="agent_msg_grant_revoked">OAuth 授权已撤销</string>
+    <string name="agent_audit_refresh">刷新最新记录</string>
+    <string name="agent_audit_empty">暂无 MCP 操作记录</string>
+    <string name="agent_audit_more">更早记录</string>
+</resources>

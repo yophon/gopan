@@ -67,14 +67,11 @@ object Routes {
     data object Shares
 
     @Serializable
-    data class ShareVisits(val shareId: String)
+    data class ShareVisits(val shareId: String, val name: String = "")
 
     // ---- 我的 ----
     @Serializable
     data object Account
-
-    @Serializable
-    data object ChangePassword
 
     @Serializable
     data object Sessions
@@ -84,9 +81,6 @@ object Routes {
 
     @Serializable
     data object AgentCredentials
-
-    @Serializable
-    data object Settings
 
     @Serializable
     data object Admin

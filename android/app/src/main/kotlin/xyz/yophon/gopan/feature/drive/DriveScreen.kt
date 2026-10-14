@@ -48,7 +48,12 @@ import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.runtime.saveable.rememberSaveable
+import xyz.yophon.gopan.core.ui.isExpandedWidth
+import xyz.yophon.gopan.feature.preview.PreviewPane
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -112,6 +117,7 @@ fun DriveScreen(
     onOpenSearch: () -> Unit,
     onOpenTrash: () -> Unit,
     onOpenTransfers: () -> Unit,
+    onOpenPreview: (nodeId: String) -> Unit,
     onBack: (() -> Unit)?,
     viewModel: DriveViewModel = hiltViewModel(),
 ) {
@@ -122,6 +128,11 @@ fun DriveScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val currentOnOpenFolder by rememberUpdatedState(onOpenFolder)
+    val currentOnOpenPreview by rememberUpdatedState(onOpenPreview)
+    // 平板(宽 ≥ 840dp):点文件在右侧栏预览,列表留在左边
+    val twoPane = isExpandedWidth()
+    val currentTwoPane by rememberUpdatedState(twoPane)
+    var paneNodeId by rememberSaveable { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val pickers = rememberUploadPickers(
         onUris = viewModel::uploadUris,
@@ -135,6 +146,7 @@ fun DriveScreen(
             when (effect) {
                 is NodeEffect.Message -> launch { snackbarHostState.showSnackbar(effect.text.resolve(context)) }
                 is NodeEffect.OpenFolder -> currentOnOpenFolder(effect.folderId)
+                is NodeEffect.OpenPreview -> if (currentTwoPane) paneNodeId = effect.nodeId else currentOnOpenPreview(effect.nodeId)
                 NodeEffect.RequestStoragePermission -> permissions.requestStoragePermission()
                 NodeEffect.TransferQueued -> permissions.onTransferQueued()
             }
@@ -142,32 +154,42 @@ fun DriveScreen(
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
     BackHandler(enabled = state.selectionMode) { viewModel.clearSelection() }
+    // 侧栏开着时返回先收起侧栏
+    BackHandler(enabled = !state.selectionMode && twoPane && paneNodeId != null) { paneNodeId = null }
 
-    Scaffold(
-        contentWindowInsets = NestedScreenInsets,
-        topBar = {
-            if (state.selectionMode) {
-                SelectionTopBar(state, viewModel)
-            } else {
-                DriveTopBar(state, viewModel, onBack, onCrumbClick, onOpenSearch, onOpenTrash, onOpenTransfers)
-            }
-        },
-        floatingActionButton = {
-            if (!state.selectionMode) {
-                FloatingActionButton(onClick = viewModel::openFabMenu) {
-                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.drive_fab_add))
+    val pane = paneNodeId?.takeIf { twoPane }
+    Row(Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = if (pane != null) Modifier.weight(0.42f) else Modifier.fillMaxSize(),
+            contentWindowInsets = NestedScreenInsets,
+            topBar = {
+                if (state.selectionMode) {
+                    SelectionTopBar(state, viewModel)
+                } else {
+                    DriveTopBar(state, viewModel, onBack, onCrumbClick, onOpenSearch, onOpenTrash, onOpenTransfers)
                 }
-            }
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { padding ->
-        DriveContent(
-            state = state,
-            viewModel = viewModel,
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
-        )
+            },
+            floatingActionButton = {
+                if (!state.selectionMode) {
+                    FloatingActionButton(onClick = viewModel::openFabMenu) {
+                        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.drive_fab_add))
+                    }
+                }
+            },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+        ) { padding ->
+            DriveContent(
+                state = state,
+                viewModel = viewModel,
+                modifier = Modifier
+                    .padding(padding)
+                    .fillMaxSize(),
+            )
+        }
+        if (pane != null) {
+            VerticalDivider()
+            PreviewPane(nodeId = pane, onClose = { paneNodeId = null }, modifier = Modifier.weight(0.58f).fillMaxHeight())
+        }
     }
 
     when (val d = dialog) {

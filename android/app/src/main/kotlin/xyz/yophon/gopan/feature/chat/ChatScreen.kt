@@ -79,6 +79,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -120,6 +121,7 @@ import java.time.ZoneId
 fun ChatScreen(
     onOpenFolder: (String) -> Unit,
     onOpenTransfers: () -> Unit,
+    onOpenPreview: (String) -> Unit,
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -130,6 +132,7 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val currentOnOpenFolder by rememberUpdatedState(onOpenFolder)
+    val currentOnOpenPreview by rememberUpdatedState(onOpenPreview)
     var actionTarget by remember { mutableStateOf<ChatMessage?>(null) }
     var deleteTarget by remember { mutableStateOf<ChatMessage?>(null) }
 
@@ -148,7 +151,7 @@ fun ChatScreen(
 
     // 是否"跟随底部":只在一次滚动(手势或动画)结束时按当时的位置更新。不能在新数据到了之后再看位置:
     // reverseLayout 里新条目插在下标 0,LazyColumn 按 key 锚住原来的底部条目,新条目落在视口下面,那时位置已经"不在底部"
-    var followBottom by remember { mutableStateOf(true) }
+    var followBottom by rememberSaveable { mutableStateOf(true) }
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
             if (!scrolling) {
@@ -200,6 +203,7 @@ fun ChatScreen(
                     }
                 }
                 is ChatEffect.OpenFolder -> currentOnOpenFolder(effect.folderId)
+                is ChatEffect.OpenPreview -> currentOnOpenPreview(effect.nodeId)
                 ChatEffect.TransferQueued -> permissions.onTransferQueued()
             }
         }
@@ -380,7 +384,7 @@ private fun ChatRow(
             Column {
                 MessageShell(
                     highlighted = m.id == highlightId,
-                    onClick = node?.let { n -> { viewModel.open(n) } },
+                    onClick = node?.let { n -> { viewModel.preview(n) } },
                     onLongClick = { onActions(m) },
                     testTag = "chat_msg_${m.id}",
                 ) {
@@ -403,7 +407,7 @@ private fun ChatRow(
                     MediaGrid(
                         messages = item.messages,
                         highlightId = highlightId,
-                        onOpen = { m -> m.node?.let(viewModel::open) },
+                        onOpen = { m -> m.node?.let(viewModel::preview) },
                         onLongPress = onActions,
                     )
                 }

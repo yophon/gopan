@@ -19,6 +19,7 @@ import xyz.yophon.gopan.core.prefs.UserPreferencesRepository
 import xyz.yophon.gopan.feature.drive.FakeNodesRepository.Companion.file
 import xyz.yophon.gopan.feature.drive.FakeNodesRepository.Companion.folder
 import xyz.yophon.gopan.feature.drive.FakeNodesRepository.Companion.page
+import xyz.yophon.gopan.feature.preview.PreviewSessionStore
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DriveViewModelTest {
@@ -29,12 +30,14 @@ class DriveViewModelTest {
     private val repo = FakeNodesRepository()
     private val prefs = UserPreferencesRepository(InMemoryPreferencesDataStore())
     private val transfers = FakeTransferActions()
+    private val previews = PreviewSessionStore()
 
     private fun viewModel(folderId: String? = null) = DriveViewModel(
         savedStateHandle = if (folderId == null) SavedStateHandle() else SavedStateHandle(mapOf(DriveViewModel.FOLDER_ID_ARG to folderId)),
         repo = repo,
         prefs = prefs,
         transfers = transfers,
+        previews = previews,
     )
 
     @Test
@@ -221,20 +224,24 @@ class DriveViewModelTest {
     }
 
     @Test
-    fun `tapping a folder opens it, tapping a file shows details`() = runTest {
+    fun `tapping a folder opens it, tapping a file previews it with the files of this listing`() = runTest {
         val a = file("a")
+        val b = file("b")
         val c = folder("c")
-        repo.listings[null] = listOf(page(a, c))
+        repo.listings[null] = listOf(page(a, c, b))
         val vm = viewModel()
         advanceUntilIdle()
 
         vm.effects.test {
             vm.onItemClick(c)
             assertThat(awaitItem()).isEqualTo(NodeEffect.OpenFolder("c"))
+            vm.onItemClick(b)
+            assertThat(awaitItem()).isEqualTo(NodeEffect.OpenPreview("b"))
             cancelAndIgnoreRemainingEvents()
         }
-        vm.onItemClick(a)
-        assertThat(vm.dialog.value).isEqualTo(NodeDialog.Details(a))
+        // 左右翻的是这一页里的文件(文件夹去掉),顺序与列表一致
+        assertThat(previews.itemsFor("b").map { it.nodeId }).containsExactly("a", "b").inOrder()
+        assertThat(vm.dialog.value).isNull()
     }
 
     @Test

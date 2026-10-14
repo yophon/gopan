@@ -13,6 +13,7 @@ import xyz.yophon.gopan.feature.drive.FakeNodesRepository.Companion.file
 import xyz.yophon.gopan.feature.drive.FakeNodesRepository.Companion.page
 import xyz.yophon.gopan.feature.drive.ListStatus
 import xyz.yophon.gopan.feature.drive.MainDispatcherRule
+import xyz.yophon.gopan.feature.preview.PreviewSessionStore
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SearchViewModelTest {
@@ -25,7 +26,7 @@ class SearchViewModelTest {
     @Test
     fun `debounces typing and searches the trimmed keyword once`() = runTest {
         repo.searchResults["报告"] = listOf(page(file("r1", "报告.pdf"), nextCursor = "1", total = 2), page(file("r2", "报告2.pdf"), total = 2))
-        val vm = SearchViewModel(repo, FakeTransferActions())
+        val vm = SearchViewModel(repo, FakeTransferActions(), PreviewSessionStore())
 
         vm.onQueryChange("报")
         vm.onQueryChange("报告")
@@ -51,7 +52,7 @@ class SearchViewModelTest {
     @Test
     fun `clearing the keyword goes back to idle without searching`() = runTest {
         repo.searchResults["a"] = listOf(page(file("a")))
-        val vm = SearchViewModel(repo, FakeTransferActions())
+        val vm = SearchViewModel(repo, FakeTransferActions(), PreviewSessionStore())
         vm.onQueryChange("a")
         advanceUntilIdle()
         assertThat(vm.state.value.items).hasSize(1)
@@ -66,7 +67,7 @@ class SearchViewModelTest {
 
     @Test
     fun `no hits is an empty state, network failure is an error state with retry`() = runTest {
-        val vm = SearchViewModel(repo, FakeTransferActions())
+        val vm = SearchViewModel(repo, FakeTransferActions(), PreviewSessionStore())
         vm.onQueryChange("nothing")
         advanceUntilIdle()
         assertThat(vm.state.value.isEmpty).isTrue()
@@ -87,7 +88,7 @@ class SearchViewModelTest {
     @Test
     fun `a successful mutation re-runs the current search silently`() = runTest {
         repo.searchResults["a"] = listOf(page(file("a")))
-        val vm = SearchViewModel(repo, FakeTransferActions())
+        val vm = SearchViewModel(repo, FakeTransferActions(), PreviewSessionStore())
         vm.onQueryChange("a")
         advanceUntilIdle()
 

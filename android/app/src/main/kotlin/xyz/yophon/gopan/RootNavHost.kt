@@ -1,5 +1,8 @@
 package xyz.yophon.gopan
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +26,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import xyz.yophon.gopan.core.auth.AuthState
 import xyz.yophon.gopan.core.ui.nav.Routes
+import xyz.yophon.gopan.feature.drive.ifResumed
 import xyz.yophon.gopan.feature.login.loginGraph
+import xyz.yophon.gopan.feature.preview.PreviewScreen
 
 /**
  * 根导航:一个 NavHost 装下启动页、登录图与主界面,按 [AuthState] 切换。
@@ -48,7 +53,18 @@ fun RootNavHost(authState: AuthState) {
         NavHost(navController = navController, startDestination = Routes.Startup) {
             composable<Routes.Startup> { StartupScreen() }
             loginGraph(navController)
-            composable<Routes.Main> { MainScaffold() }
+            composable<Routes.Main> { entry ->
+                MainScaffold(onOpenPreview = { id -> entry.ifResumed { navController.navigate(Routes.Preview(id)) } })
+            }
+            // 预览:根导航上的全屏页,盖住底部导航;从文件、搜索、传输助手进来
+            composable<Routes.Preview>(
+                enterTransition = { fadeIn(tween(FADE_MS)) },
+                exitTransition = { fadeOut(tween(FADE_MS)) },
+                popEnterTransition = { fadeIn(tween(FADE_MS)) },
+                popExitTransition = { fadeOut(tween(FADE_MS)) },
+            ) { entry ->
+                PreviewScreen(onBack = { entry.ifResumed { navController.popBackStack() } })
+            }
         }
     }
 
@@ -66,6 +82,8 @@ fun RootNavHost(authState: AuthState) {
         }
     }
 }
+
+private const val FADE_MS = 180
 
 @Composable
 private fun StartupScreen() {

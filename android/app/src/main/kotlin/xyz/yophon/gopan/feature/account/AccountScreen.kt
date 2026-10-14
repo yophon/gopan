@@ -88,6 +88,10 @@ import xyz.yophon.gopan.core.ui.components.LoadingState
 import xyz.yophon.gopan.feature.transfers.TransferSettingsDialog
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.ColorLens
+import androidx.compose.material3.Switch
+import androidx.compose.ui.platform.testTag
+import xyz.yophon.gopan.core.ui.theme.supportsDynamicColor
 
 /** 「我的」页入口:导航回调由 AccountGraph 提供,页面本身不认识 NavController */
 @Composable
@@ -117,6 +121,7 @@ fun AccountScreen(
         onPasswordInputChanged = viewModel::clearPasswordErrors,
         onSubmitPassword = viewModel::submitPasswordChange,
         onSetTheme = viewModel::setTheme,
+        onSetDynamicColor = viewModel::setDynamicColor,
         onSetDriveViewMode = viewModel::setDriveViewMode,
         onComingSoon = viewModel::notifyComingSoon,
         onLogout = viewModel::logout,
@@ -140,6 +145,7 @@ internal fun AccountContent(
     onPasswordInputChanged: () -> Unit,
     onSubmitPassword: (old: String, new: String, confirm: String) -> Unit,
     onSetTheme: (ThemeMode) -> Unit,
+    onSetDynamicColor: (Boolean) -> Unit,
     onSetDriveViewMode: (DriveViewMode) -> Unit,
     onComingSoon: () -> Unit,
     onLogout: () -> Unit,
@@ -188,6 +194,8 @@ internal fun AccountContent(
                     user = user,
                     usage = state.usage ?: UsageSummary(user.usedBytes, user.quotaBytes),
                     theme = state.theme,
+                    dynamicColor = state.dynamicColor,
+                    onSetDynamicColor = onSetDynamicColor,
                     driveViewMode = state.driveViewMode,
                     versionName = versionName,
                     loggingOut = state.loggingOut,
@@ -260,6 +268,8 @@ private fun AccountList(
     user: UserSummary,
     usage: UsageSummary,
     theme: ThemeMode,
+    dynamicColor: Boolean,
+    onSetDynamicColor: (Boolean) -> Unit,
     driveViewMode: DriveViewMode,
     versionName: String,
     loggingOut: Boolean,
@@ -311,13 +321,13 @@ private fun AccountList(
             SettingItem(icon = Icons.Outlined.Lock, title = stringResource(R.string.account_item_change_password), onClick = onOpenPasswordDialog)
         }
         item("sessions") {
-            SettingItem(icon = Icons.Outlined.Devices, title = stringResource(R.string.account_item_sessions), value = comingSoon, onClick = onOpenSessions)
+            SettingItem(icon = Icons.Outlined.Devices, title = stringResource(R.string.account_item_sessions), onClick = onOpenSessions)
         }
         item("apppass") {
-            SettingItem(icon = Icons.Outlined.Key, title = stringResource(R.string.account_item_app_passwords), value = comingSoon, onClick = onOpenAppPasswords)
+            SettingItem(icon = Icons.Outlined.Key, title = stringResource(R.string.account_item_app_passwords), onClick = onOpenAppPasswords)
         }
         item("agent") {
-            SettingItem(icon = Icons.Outlined.SmartToy, title = stringResource(R.string.account_item_agent), value = comingSoon, onClick = onOpenAgent)
+            SettingItem(icon = Icons.Outlined.SmartToy, title = stringResource(R.string.account_item_agent), onClick = onOpenAgent)
         }
 
         item("appearance") { SectionTitle(stringResource(R.string.account_section_appearance)) }
@@ -328,6 +338,20 @@ private fun AccountList(
                 value = stringResource(theme.labelRes()),
                 onClick = onOpenThemeDialog,
             )
+        }
+        if (supportsDynamicColor) {
+            item("dynamic-color") {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.account_item_dynamic_color)) },
+                    supportingContent = { Text(stringResource(R.string.account_item_dynamic_color_hint)) },
+                    leadingContent = { Icon(Icons.Outlined.ColorLens, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    trailingContent = {
+                        Switch(checked = dynamicColor, onCheckedChange = onSetDynamicColor, modifier = Modifier.testTag("account_dynamic_color"))
+                    },
+                    modifier = Modifier.clickable { onSetDynamicColor(!dynamicColor) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                )
+            }
         }
         item("view") {
             SettingItem(

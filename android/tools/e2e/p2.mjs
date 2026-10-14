@@ -426,7 +426,7 @@ await scenario('S9', '下载文件夹(客户端展开)与打包下载(zip)', asy
   expect(zip.includes(Buffer.from(`${folderName}/sub/b.txt`)), 'zip 里没有 sub/b.txt');
 });
 
-await scenario('S10', '打开图片 → 系统选择器 / 查看器', async () => {
+await scenario('S10', '用其他应用打开图片 → 系统选择器 / 查看器', async () => {
   const name = `open-${RUN}.png`;
   const work = await ensureWorkFolder();
   await host.upload(work.id, name, await makePng(240, 180, 5));
@@ -434,7 +434,7 @@ await scenario('S10', '打开图片 → 系统选择器 / 查看器', async () =
   app.pullToRefresh();
   await sleep(2000);
   await app.openRowMenu(name);
-  await device.tap({ text: '打开' });
+  await device.tap({ text: '用其他应用打开' });
   // 前台换成别的应用(选择器或图片查看器);切换动画期间焦点会短暂为空,不算
   await waitServer(
     async () => {

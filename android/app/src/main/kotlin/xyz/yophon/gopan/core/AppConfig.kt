@@ -30,4 +30,13 @@ data class AppConfig(
     val mobileEntryUrl: String get() = base.newBuilder().encodedPath("/api/auth/id/mobile").build().toString()
 
     val ticketUrl: String get() = idIssuer.trimEnd('/') + "/api/mobile/ticket"
+
+    /** 分享链接(访客页),与网页端 `${location.origin}/s/${token}` 一致 */
+    fun shareUrl(token: String): String = base.newBuilder().encodedPath("/s/").addPathSegment(token).build().toString()
+
+    /** WebDAV 挂载地址 */
+    val davUrl: String get() = base.newBuilder().encodedPath("/dav").build().toString()
+
+    /** Agent 接入的 MCP 地址(管理员另有 /mcp/admin) */
+    val mcpUrl: String get() = base.newBuilder().encodedPath("/mcp").build().toString()
 }

@@ -47,6 +47,7 @@ data class AccountUiState(
     /** 没有用户可显示时的整页错误;有用户时错误走 [message] */
     val loadError: String? = null,
     val theme: ThemeMode = ThemeMode.SYSTEM,
+    val dynamicColor: Boolean = true,
     val driveViewMode: DriveViewMode = DriveViewMode.LIST,
     val passwordDialog: PasswordDialogState? = null,
     val loggingOut: Boolean = false,
@@ -82,7 +83,7 @@ class AccountViewModel @Inject constructor(
         }
         viewModelScope.launch {
             preferences.preferences.collect { prefs ->
-                _state.update { it.copy(theme = prefs.theme, driveViewMode = prefs.driveViewMode) }
+                _state.update { it.copy(theme = prefs.theme, dynamicColor = prefs.dynamicColor, driveViewMode = prefs.driveViewMode) }
             }
         }
         load()
@@ -185,6 +186,12 @@ class AccountViewModel @Inject constructor(
     fun setTheme(mode: ThemeMode) {
         viewModelScope.launch {
             runCatching { preferences.setTheme(mode) }.onFailure { Timber.w(it, "写主题偏好失败") }
+        }
+    }
+
+    fun setDynamicColor(on: Boolean) {
+        viewModelScope.launch {
+            runCatching { preferences.setDynamicColor(on) }.onFailure { Timber.w(it, "写动态取色偏好失败") }
         }
     }
 

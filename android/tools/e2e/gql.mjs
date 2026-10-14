@@ -17,15 +17,18 @@ export const NODE_FIELDS =
   'id parentId name kind size mime createdAt updatedAt deletedAt purgeAt subtreeBytes subtreeCount statsStale preview { kind thumbUrl status }';
 
 export class GopanClient {
-  constructor(base = GOPAN_HOST_BASE) {
+  constructor(base = GOPAN_HOST_BASE, { userAgent = null } = {}) {
     this.base = base;
     this.token = null;
     this.refreshCookie = null;
     this.user = null;
+    /** 自定义 User-Agent(登录设备列表里据此认出这台「设备」) */
+    this.userAgent = userAgent;
   }
 
   async raw(query, variables = {}, { auth = true } = {}) {
     const headers = { 'content-type': 'application/json' };
+    if (this.userAgent) headers['user-agent'] = this.userAgent;
     if (auth && this.token) headers.authorization = `Bearer ${this.token}`;
     if (this.refreshCookie) headers.cookie = `gopan_rt=${this.refreshCookie}`;
     const res = await fetch(`${this.base}/query`, {

@@ -27,6 +27,7 @@ cd ../.. && ./gradlew :app:assembleDebug -Pgopan.baseUrl=http://localhost:8090 -
 adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
 cd tools/e2e && node p1.mjs     # P1:12 个场景,失败截图在 .run/fail-*.png
 node p2.mjs                     # P2:上传 / 下载 / 传输助手 / 系统分享,失败截图在 .run/p2-fail-*.png
+node p3.mjs                     # P3:预览 / 分享 / 账户安全 / 主题 / 平板,失败截图在 .run/p3-fail-*.png
 node stack.mjs stop
 ```
 
@@ -69,15 +70,43 @@ URI 列表)走模拟器自带的「文件」应用与系统分享面板(S13,界�
 | S7 | 同一文件再分享 → 秒传 |
 | S8 | 下载文件:传输列表里看到进度 → 断网 15 秒 → 续传完成,`Download/gopan` 里 sha256 一致 |
 | S9 | 下载文件夹(客户端展开,子目录结构)与打包下载(zip 有 EOCD、含子目录条目) |
-| S10 | 「打开」图片 → 前台切到系统选择器 / 查看器 |
+| S10 | 「用其他应用打开」图片 → 前台切到系统选择器 / 查看器 |
 | S11 | 长按删除消息;主机彻删图片后消息保留、显示「文件已不存在」 |
 | S12 | 搜索 → 定位(进入定位模式)→ 回到最新 |
 | S13 | 「文件」应用里多选 20 张图 → 系统分享面板选「发到传输助手」(真实的 SEND_MULTIPLE)→ 20 张都到服务端,App 里合成 9 + 9 + 2 的网格 |
 | S14 | 上传开始后锁屏并 `dumpsys deviceidle force-idle` 强制深度 Doze → 前台服务里的上传照常传完,sha256 一致 |
 
+## 场景(p3.mjs)
+
+用密码账号 other 登录;测试文件由主机上传到根目录下的 `0p3-<随机>` 工作目录:两张 PNG、模拟器 `screenrecord` 录的 6 秒视频
+(录屏时来回滑动屏幕,静止画面录出来不到 1 秒)、90 秒正弦波 WAV、3 页 PDF、UTF-8 中文文本、GBK 文本、700 KB 日志、假的 docx、随机二进制。
+主机侧用另一个 GopanClient 扮访客(验分享密码)和「另一台设备」(带 Firefox UA 登录,被吊销后 refresh 失败);
+WebDAV 用 PROPFIND、MCP 用 initialize 请求核对应用密码 / API Key 的生效与吊销。
+
+| 场景 | 验证点 |
+|---|---|
+| V0 | 清数据、密码登录、上传测试文件 |
+| V1 | 图片:点开预览(位置 1 / 10)、双击放大后左右滑不翻页、复位后左右翻、单击收起顶栏(沉浸)、返回列表 |
+| V2 | 视频:播放器读出时长(预签名地址经 OkHttp 流式播放),无播放错误 |
+| V3 | 音频:自动播放(媒体会话 PLAYING)、离开预览继续放且有媒体通知、回来仍是这首、暂停 |
+| V4 | PDF:逐页渲染、页码 1 / 3、点页全屏放大、返回 |
+| V5 | 文本:UTF-8 中文、GBK 文件按 GB18030 解码、700 KB 日志先读 512 KB(开头提示「已显示 512.0 KB / 共 …」),「继续加载」读完第二段 |
+| V6 | Office:本地栈没开转换时显示「未开启」,开了但转不了时显示「转换失败」,重试后再次失败;都有「用其他应用打开」 |
+| V7 | 不支持的类型:提示,「下载」后 `Download/gopan` 里 sha256 一致 |
+| V8 | 传输助手:点网格里的图进预览,右滑到上一张,返回仍在传输助手 |
+| V9 | 搜索结果点文件进预览 |
+| H1 | 文件「分享」:7 天 + 密码 → 链接与密码;服务端有效期约 7 天;访客错密码被拒、对密码拿到 token;「发送」拉起系统分享面板 |
+| H2 | 分享页:「访问 1」、访问记录里有「打开分享」、「打开链接」交给浏览器、取消分享后链接失效 |
+| H3 | 预览里「分享链接」:永久、无密码 |
+| A1 | 登录设备:本机显示「gopan 安卓 App」;吊销主机那台(Firefox · Linux)后它 refresh 得到 UNAUTHENTICATED |
+| A2 | WebDAV 应用密码:生成后 PROPFIND 207;吊销后 401 |
+| A3 | Agent 接入:建 API Key(浏览与搜索 + 读取与下载)能通过 MCP 认证、服务端权限一致;设目录范围;吊销后 401 |
+| T1 | 动态取色关掉后冷启动仍是关(再打开恢复) |
+| W1 | `wm size 1280x800`:侧边导航栏;文件页点文件在右侧栏预览、列表仍在,点另一个文件侧栏跟着换,关闭侧栏;结束恢复原尺寸 |
+
 ## 文件
 
 - `stack.mjs` 本地栈启停(`start` 幂等;`--rebuild` 强制重建服务端)与 `idAdmin`(账号中心管理脚本,stdin 传 JSON)
 - `device.mjs` adb / uiautomator 封装;`chrome.mjs` 模拟器 Chrome 的 CDP;`app.mjs` App 页面操作
-- `gql.mjs` 主机侧 GraphQL 客户端(含上传协议);`data.mjs` 造数据
+- `gql.mjs` 主机侧 GraphQL 客户端(含上传协议,可指定 User-Agent);`data.mjs` 造数据;`media.mjs` 预览用的 WAV / PDF / GBK 文本
 - `.run/` 运行数据(账号、数据库、日志、截图),已 gitignore

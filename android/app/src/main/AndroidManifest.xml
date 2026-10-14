@@ -7,6 +7,8 @@
     <!-- 上传 / 下载在前台服务里跑(WorkManager 长任务,dataSync 类型),通知栏显示进度 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- 音频预览的后台播放(Media3 会话服务,播放时前台服务 + 带控制按钮的通知) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Android 8–9 没有 MediaStore.Downloads,保存到公共「下载」目录需要它;10+ 不需要 -->
     <uses-permission
@@ -71,6 +73,16 @@
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
+
+        <!-- 音频预览的后台播放:exported 供系统媒体控制(通知、锁屏、蓝牙按键)连接会话 -->
+        <service
+            android:name=".feature.preview.PlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
 
         <!-- AppAuth 的 RedirectUriReceiverActivity 由库 manifest 合并,scheme 由 build.gradle.kts 的
              manifestPlaceholders["appAuthRedirectScheme"] 提供(xyz.yophon.gopan:/oauthredirect) -->

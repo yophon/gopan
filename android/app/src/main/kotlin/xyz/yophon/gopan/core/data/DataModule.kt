@@ -51,4 +51,13 @@ abstract class DataBindsModule {
 
     @Binds
     abstract fun bindChatRepository(impl: xyz.yophon.gopan.core.data.chat.ApolloChatRepository): xyz.yophon.gopan.core.data.chat.ChatRepository
+
+    @Binds
+    abstract fun bindPreviewRepository(impl: xyz.yophon.gopan.core.data.preview.DefaultPreviewRepository): xyz.yophon.gopan.core.data.preview.PreviewRepository
+
+    @Binds
+    abstract fun bindSharesRepository(impl: xyz.yophon.gopan.core.data.shares.ApolloSharesRepository): xyz.yophon.gopan.core.data.shares.SharesRepository
+
+    @Binds
+    abstract fun bindSecurityRepository(impl: xyz.yophon.gopan.core.data.security.ApolloSecurityRepository): xyz.yophon.gopan.core.data.security.SecurityRepository
 }

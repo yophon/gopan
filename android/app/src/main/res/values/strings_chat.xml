@@ -45,7 +45,7 @@
     <string name="chat_action_title_message">消息</string>
     <string name="chat_action_copy_text">复制文本</string>
     <string name="chat_action_copy_name">复制文件名</string>
-    <string name="chat_action_open">打开</string>
+    <string name="chat_action_open">用其他应用打开</string>
     <string name="chat_action_download">下载</string>
     <string name="chat_action_locate">在文件中查看</string>
     <string name="chat_action_delete">删除消息</string>

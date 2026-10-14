@@ -23,6 +23,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.ui.exposeTestTags
 
 /** 确认对话框;destructive 时确认按钮用错误色(删除、清空回收站) */
 @Composable
@@ -73,19 +74,25 @@ fun TextInputDialog(
     dismissText: String = stringResource(R.string.action_cancel),
     busy: Boolean = false,
     validate: (String) -> String? = { null },
+    /** 允许提交空值(例如「清空 = 不限制」) */
+    allowEmpty: Boolean = false,
+    /** 没动过输入框也显示错误(服务端拒绝了原样提交的值) */
+    showErrorUntouched: Boolean = false,
 ) {
     var value by rememberSaveable(initialValue, stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue(initialValue, selection = TextRange(0, initialValue.length)))
     }
     var touched by remember { mutableStateOf(false) }
     val error = validate(value.text)
-    val canConfirm = error == null && value.text.isNotBlank() && !busy
+    val showError = (touched || showErrorUntouched) && error != null
+    val canConfirm = error == null && (allowEmpty || value.text.isNotBlank()) && !busy
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
+        modifier = Modifier.exposeTestTags(),
         title = { Text(title) },
         text = {
             OutlinedTextField(
@@ -95,8 +102,8 @@ fun TextInputDialog(
                 label = label?.let { { Text(it) } },
                 placeholder = placeholder?.let { { Text(it) } },
                 singleLine = true,
-                isError = touched && error != null,
-                supportingText = if (touched && error != null) ({ Text(error) }) else null,
+                isError = showError,
+                supportingText = if (showError) ({ Text(error.orEmpty()) }) else null,
                 enabled = !busy,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { if (canConfirm) onConfirm(value.text.trim()) }),

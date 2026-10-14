@@ -41,6 +41,7 @@ import xyz.yophon.gopan.core.transfer.Connectivity
 import xyz.yophon.gopan.core.transfer.EnqueueResult
 import xyz.yophon.gopan.core.transfer.TransferActions
 import xyz.yophon.gopan.core.transfer.TransferEvent
+import xyz.yophon.gopan.feature.preview.PreviewSessionStore
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
@@ -87,6 +88,9 @@ sealed interface ChatEffect {
 
     data class OpenFolder(val folderId: String) : ChatEffect
 
+    /** 打开预览:会话列表(当前显示的消息里的文件)已放进 PreviewSessionStore */
+    data class OpenPreview(val nodeId: String) : ChatEffect
+
     data object TransferQueued : ChatEffect
 }
 
@@ -104,6 +108,7 @@ class ChatViewModel @Inject constructor(
     private val prefs: UserPreferencesRepository,
     private val shareInbox: ShareInbox,
     private val connectivity: Connectivity,
+    private val previews: PreviewSessionStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -524,6 +529,22 @@ class ChatViewModel @Inject constructor(
                 _effects.trySend(ChatEffect.TransferQueued)
             }
         }
+    }
+
+    /**
+     * 点文件 / 图片:全屏预览,左右翻的是当前显示的消息(搜索时是搜索结果)里的全部文件,
+     * 从旧到新(与网页端一致)。文件夹直接进文件页。
+     */
+    fun preview(node: Node) {
+        if (node.isFolder) {
+            _effects.trySend(ChatEffect.OpenFolder(node.id))
+            return
+        }
+        val s = _state.value
+        val shown = if (s.searchOpen && s.searchResults != null) s.searchResults else s.messages
+        val files = shown.mapNotNull { it.node }.filter { !it.isFolder }.distinctBy { it.id }
+        previews.open(if (files.any { it.id == node.id }) files else listOf(node))
+        _effects.trySend(ChatEffect.OpenPreview(node.id))
     }
 
     /** 在文件页里看这个文件所在的目录 */
