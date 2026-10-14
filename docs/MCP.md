@@ -127,14 +127,14 @@ OAuth 与 API Key 共用以下权限：
 
 ### 我的设备会话
 
-「我的设备」是每个账号唯一的文件传输会话，网页端与 Agent 写的是同一条消息流，append-only（消息不可删除）。`chat_send` 一次只收一个动作——发 `text` 或发 `node_id`：
+「我的设备」（网页端叫「传输助手」）是每个账号唯一的文件传输会话，网页端与 Agent 写的是同一条消息流。消息只能在网页端删除，MCP 不暴露删除。`chat_send` 一次只收一个动作——发 `text` 或发 `node_id`：
 
 ```json
 {"text":"今晚把合同发我"}
 {"node_id":"6b8a…","idempotency_key":"send-contract-retry"}
 ```
 
-`node_id` 必须是当前账号已保存的文件/文件夹节点；传他人或已删除的节点返回 `NOT_FOUND`（防探测）。附件本身走既定上传路径（`prepare_upload` 等），会话消息只引用节点、不承载字节。`chat_list` 返回升序（旧→新），`limit` 上限 200，`before_id` 是消息 ID 游标，用于读取更早的历史：
+`node_id` 必须是当前账号已保存的文件/文件夹节点；传他人或已删除的节点返回 `NOT_FOUND`（防探测）。同一节点已在会话里时直接返回那条消息，不重复插入。附件本身走既定上传路径（`prepare_upload` 等），会话消息只引用节点、不承载字节。**把文件直接上传到「我的设备」文件夹本身就会自动成为一条消息**（浏览器、WebDAV、Agent 任一渠道），不需要再 `chat_send`；上传到别处再 `chat_send({"node_id":…})` 才需要显式发。`chat_list` 返回升序（旧→新），`limit` 上限 200，`before_id` 是消息 ID 游标，用于读取更早的历史：
 
 ```json
 {"limit":50,"before_id":"018f…"}

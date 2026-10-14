@@ -214,9 +214,9 @@ extend type Mutation {
 - 访客 token 下,`node`/`children`/`searchNodes` 的入参 node 一律先过 `IsDescendant(shareRoot, id)`;`searchNodes` 范围限分享子树。
 - `refresh` 与 `login` 在 resolver 里写 Set-Cookie(httpOnly, Secure, SameSite=Lax, path=/query),GraphQL body 永远不带 refresh token。
 
-## v2.2 文件传输助手(我的设备)
+## 传输助手(v2.2 建立,v2.5 整改)
 
-单用户单会话,append-only。ChatMessage 的 `node` 是附件,惰性解析:
+单用户单会话。ChatMessage 的 `node` 是附件,惰性解析:
 
 ```graphql
 type ChatMessage {
@@ -227,19 +227,24 @@ type ChatMessage {
 }
 
 extend type Query {
-  chatMessages(limit: Int = 200): [ChatMessage!]!  # 最近 limit 条,升序(旧→新)
+  # 最近 limit 条,升序(旧→新)。before:消息 id 游标,只取更旧的;
+  # query:正文或附件名 ILIKE 关键词(忽略 before,取最新 limit 条命中后升序返回)
+  chatMessages(limit: Int = 200, before: ID, query: String): [ChatMessage!]!
   chatFolder: Node                                # 当前指针;从未创建返回 null,不触发创建
 }
 extend type Mutation {
-  sendChatMessage(body: String, nodeId: ID): ChatMessage!  # 至少其一
-  ensureChatFolder: Node!                                  # 幂等创建"我的设备"
+  sendChatMessage(body: String, nodeId: ID): ChatMessage!  # 至少其一;同一节点幂等
+  deleteChatMessage(id: ID!): Boolean!                     # 只删消息,附件文件不动
+  ensureChatFolder: Node!                                  # 幂等创建传输助手文件夹
 }
 ```
 
-- **不用 cursor 分页**:单用户 append-only,`limit ≤ 200` 全量即可;未来需翻历史再加 `after` 游标。
-- `sendChatMessage` 走 `UserFrom`(拒绝 guest);`nodeId` 必须是当前用户的活跃节点,否则 `NOT_FOUND`(防探测,服务层 `GetActiveNodeOwned` 单事务校验)。
+- **分页**:`before` 是 uuid v7 消息 id,服务层 `ListRecent(last)` 取 `id < last` 的 `limit` 条;前端滚到顶部按 100 条一页往上翻。`query` 非空时走 `Chats.Search`,`%` `_` `\\` 先转义,按字面匹配。
+- **文件进会话由服务端负责**:任何渠道(浏览器分片、秒传、WebDAV PUT、Agent 传输)在 `CreateNode` 之后调用 `attachChatMessage`,parent 等于 `users.chat_folder_id` 时在同一事务里插一条文件消息;指针为空、parent 不匹配、该节点已有消息都是 no-op。前端上传完成只 `invalidateQueries`,不再补发 `sendChatMessage(nodeId)`。覆盖写(WebDAV 同名 PUT)走 `ReplaceNodeBlob`,不新建节点也就不重复落消息。
+- `sendChatMessage` 走 `UserFrom`(拒绝 guest);`nodeId` 必须是当前用户的活跃节点,否则 `NOT_FOUND`(防探测,服务层 `GetActiveNodeOwned` 单事务校验)。同一节点已在会话里(自动落的或之前发过的)直接返回那条,不重复插。
+- `deleteChatMessage` 只删 `chat_messages` 行;不存在/非本人 `NOT_FOUND`。MCP 不暴露删除。
 - `ChatMessage.node` resolver 捕获 `service.ErrNotFound` 返回 `(nil,nil)`——文件删除不传染消息读取,前端展示「文件已不存在」态。
-- 附件落点:网盘根目录固定文件夹「我的设备」,`ensureChatFolder` 用 advisory lock 保证并发只建一个;指针在 `users.chat_folder_id`,改名/移动不失效。
+- 附件落点:网盘根目录固定文件夹(数据库里仍叫「我的设备」,界面统称传输助手),`ensureChatFolder` 用 advisory lock 保证并发只建一个;指针在 `users.chat_folder_id`,改名/移动不失效。
 
 ## 版本策略
 
