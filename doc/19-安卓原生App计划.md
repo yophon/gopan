@@ -167,7 +167,7 @@ P3 的验收在本地栈上做:本地栈配了 Office 转换但转不出来,E2E 
 
 P4 与计划的出入:App 内检查更新不读 GitHub Releases(仓库私有,匿名请求 404),改由站点发布:服务端 `/api/app/android/latest`
 读发版目录里的 `latest.json`,安装包同站下载(doc/09「安卓安装包发布」),GitHub Releases 只做维护者存档。
-「微信发送文件面板里能选 gopan」用系统「文件」App 与 Storage Access Framework 的选择器验证(模拟器上没有微信),真机内测时补。
+「微信发送文件面板里能选 gopan」已在华为 AAK-AN00(Android 16)真机上验过:微信「文件」会唤起系统文件选择器,里面能浏览 gopan 云端的文件。
 
 P2 期间顺带修的服务端问题:
 
