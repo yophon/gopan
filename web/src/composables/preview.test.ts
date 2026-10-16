@@ -25,6 +25,8 @@ describe('openPreview', () => {
     expect(previewState.index).toBe(1)
     openPreview(['a', 'b'], -3)
     expect(previewState.index).toBe(0)
+    openPreview(['a', 'b'], Number.NaN)
+    expect(previewState.index).toBe(0)
   })
   it('空列表 no-op,不置 visible', () => {
     openPreview([], 0)

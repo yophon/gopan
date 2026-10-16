@@ -323,6 +323,10 @@ func (s *Server) getFileInfo(ctx context.Context, _ *mcp.CallToolRequest, in Nod
 	if err != nil {
 		return nil, NodeOutput{}, err
 	}
+	return nil, nodeFromInfo(row), nil
+}
+
+func nodeFromInfo(row store.GetNodeWithBlobRow) NodeOutput {
 	out := NodeOutput{
 		ID: row.ID.String(), ParentID: idString(row.ParentID), Name: row.Name, Kind: row.Kind,
 		Size: row.BlobSize, Mime: row.BlobMime, SHA256: row.BlobSha256,
@@ -331,7 +335,7 @@ func (s *Server) getFileInfo(ctx context.Context, _ *mcp.CallToolRequest, in Nod
 	if row.Kind == "folder" {
 		out.SubtreeBytes, out.SubtreeCount, out.StatsStale = &row.SubtreeBytes, &row.SubtreeCount, &row.StatsStale
 	}
-	return nil, out, nil
+	return out
 }
 
 type ReadTextInput struct {
@@ -536,6 +540,19 @@ func uploadOutput(init *service.AgentUploadInit) UploadOutput {
 	return transferOutput(init.Mode, init.Transfer)
 }
 
+// transferResult 在 transferOutput 之上把已落盘的节点换成完整信息(updated_at、大小、sha256 等);
+// 节点查不到(刚被删)时保留会话里的最小信息。
+func (s *Server) transferResult(ctx context.Context, owner uuid.UUID, view *service.AgentTransferView) UploadOutput {
+	out := transferOutput(view.Session.Transport, view)
+	if view.Session.NodeID != nil {
+		if row, err := s.uploads.NodeInfo(ctx, owner, *view.Session.NodeID); err == nil {
+			node := nodeFromInfo(row)
+			out.Node = &node
+		}
+	}
+	return out
+}
+
 func transferOutput(mode string, view *service.AgentTransferView) UploadOutput {
 	sess := view.Session
 	out := UploadOutput{
@@ -581,7 +598,11 @@ func (s *Server) prepareUpload(ctx context.Context, _ *mcp.CallToolRequest, in P
 			return nil, UploadOutput{}, err
 		}
 	}
-	return nil, uploadOutput(init), nil
+	out := uploadOutput(init)
+	if init.Node == nil && init.Transfer.Session.NodeID != nil {
+		out = s.transferResult(ctx, p.UserID, init.Transfer) // 幂等键命中了已完成的会话
+	}
+	return nil, out, nil
 }
 
 type UploadPartsInput struct {
@@ -603,7 +624,7 @@ func (s *Server) getUploadParts(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if err != nil {
 		return nil, UploadOutput{}, err
 	}
-	return nil, transferOutput(view.Session.Transport, view), nil
+	return nil, s.transferResult(ctx, p.UserID, view), nil
 }
 
 func (s *Server) completeUpload(ctx context.Context, _ *mcp.CallToolRequest, in UploadPartsInput) (*mcp.CallToolResult, UploadOutput, error) {
@@ -622,7 +643,7 @@ func (s *Server) completeUpload(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if err != nil {
 		return nil, UploadOutput{}, err
 	}
-	return nil, transferOutput(view.Session.Transport, view), nil
+	return nil, s.transferResult(ctx, p.UserID, view), nil
 }
 
 func (s *Server) getUploadStatus(ctx context.Context, _ *mcp.CallToolRequest, in UploadPartsInput) (*mcp.CallToolResult, UploadOutput, error) {
@@ -638,7 +659,7 @@ func (s *Server) getUploadStatus(ctx context.Context, _ *mcp.CallToolRequest, in
 	if err != nil {
 		return nil, UploadOutput{}, err
 	}
-	return nil, transferOutput(view.Session.Transport, view), nil
+	return nil, s.transferResult(ctx, p.UserID, view), nil
 }
 
 func (s *Server) abortUpload(ctx context.Context, _ *mcp.CallToolRequest, in UploadPartsInput) (*mcp.CallToolResult, SuccessOutput, error) {

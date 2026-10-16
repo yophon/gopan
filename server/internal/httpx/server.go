@@ -140,6 +140,27 @@ func ClientIPFrom(r *http.Request, trustedProxies []*net.IPNet) string {
 	return host
 }
 
+// WithForwardedTrust 在请求不是来自可信反代时删掉 X-Forwarded-Proto / X-Forwarded-Host。
+// OAuth 与 MCP 用这两个头拼对外地址(metadata 里的 issuer、各 endpoint);绕过反代直连端口的客户端
+// 若能伪造它们,就能污染返回给别人的 metadata。判定与 ClientIPFrom 同一套 trustedProxies,
+// 所以经反代部署必须配 GOPAN_TRUSTED_PROXIES(生产 compose 已给 docker 私有网段的默认值)。
+func WithForwardedTrust(next http.Handler, trustedProxies []*net.IPNet) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Forwarded-Proto") != "" || r.Header.Get("X-Forwarded-Host") != "" {
+			host, _, err := net.SplitHostPort(r.RemoteAddr)
+			if err != nil {
+				host = r.RemoteAddr
+			}
+			if !ipInAny(host, trustedProxies) {
+				r = r.Clone(r.Context())
+				r.Header.Del("X-Forwarded-Proto")
+				r.Header.Del("X-Forwarded-Host")
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func ipInAny(host string, nets []*net.IPNet) bool {
 	ip := net.ParseIP(host)
 	if ip == nil {

@@ -558,9 +558,11 @@ func TestMCPNodeTools(t *testing.T) {
 	if _, _, err = s.restoreNodes(ctxB, nil, NodeIDsInput{NodeIDs: []string{docs.ID}}); err != service.ErrNotFound {
 		t.Fatalf("越权还原应 NOT_FOUND,got %v", err)
 	}
-	// trashNodes 的软删按 owner_id 过滤,对他人节点静默无效:调用"成功"但不产生任何影响
-	if _, ok, err := s.trashNodes(ctxB, nil, NodeIDsInput{NodeIDs: []string{docs.ID}}); err != nil || !ok.Success {
-		t.Fatalf("越权 trash 静默无效路径:%+v err=%v", ok, err)
+	if _, ok, err := s.trashNodes(ctxB, nil, NodeIDsInput{NodeIDs: []string{docs.ID}}); err != service.ErrNotFound || ok.Success {
+		t.Fatalf("越权 trash 应 NOT_FOUND,got %+v err=%v", ok, err)
+	}
+	if _, ok, err := s.trashNodes(ctxB, nil, NodeIDsInput{NodeIDs: []string{uuid.NewString()}}); err != service.ErrNotFound || ok.Success {
+		t.Fatalf("trash 不存在的节点应 NOT_FOUND,got %+v err=%v", ok, err)
 	}
 	if _, _, err = s.getFileInfo(ctxA, nil, NodeIDInput{NodeID: docs.ID}); err != nil {
 		t.Fatalf("越权 trash 后 alice 的节点必须原样健在:%v", err)

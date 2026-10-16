@@ -1,6 +1,6 @@
 /** 字节数 → 人类可读大小;null/undefined(文件夹)返回占位符 */
 export function formatBytes(size: number | null | undefined): string {
-  if (size === null || size === undefined) return '—'
+  if (size === null || size === undefined || !Number.isFinite(size) || size < 0) return '—'
   if (size < 1024) return `${size} B`
   const units = ['KB', 'MB', 'GB', 'TB', 'PB'] as const
   let value = size

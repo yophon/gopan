@@ -420,6 +420,7 @@ async function uploadOnePart(
         if (session.uploadedParts.includes(partNumber)) return // 服务端已有该片
         const fresh = session.partUrls.find((p) => p.partNumber === partNumber)
         if (fresh) currentUrl = fresh.url
+        else await sleep(1000 * 2 ** attempt) // 没拿到新签名:照常退避,别拿过期 URL 连打
       } else {
         await sleep(1000 * 2 ** attempt)
       }

@@ -75,6 +75,9 @@ describe('loadRecords(localStorage 反序列化)', () => {
       { sessionId: 1, fileName: 'x', size: 1, lastModified: 1, sha256: 'a' },
       { sessionId: 's2', fileName: 'x', size: '1', lastModified: 1, sha256: 'a' },
       { sessionId: 's3' },
+      // parentId 缺失或类型不对:否则 undefined 会流进 task.parentId
+      { sessionId: 's4', fileName: 'x', size: 1, lastModified: 1, sha256: 'a' },
+      { sessionId: 's5', fileName: 'x', size: 1, lastModified: 1, sha256: 'a', parentId: 7 },
     ]
     stubLocalStorage({ gopan_uploads: JSON.stringify([good, ...bad]) })
     setActivePinia(createPinia())

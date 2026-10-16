@@ -207,9 +207,6 @@ func (w *Pool) saveDerivative(ctx context.Context, blob store.Blob, kind string,
 }
 
 func lastLine(s string) string {
-	lines := strings.Split(strings.TrimSpace(s), "\n")
-	if len(lines) == 0 {
-		return ""
-	}
-	return lines[len(lines)-1]
+	s = strings.TrimSpace(s)
+	return s[strings.LastIndexByte(s, '\n')+1:]
 }

@@ -22,7 +22,8 @@ export const previewState = reactive<PreviewState>({
 export function openPreview(ids: string[], index: number): void {
   if (ids.length === 0) return
   previewState.ids = [...ids]
-  previewState.index = Math.min(Math.max(index, 0), ids.length - 1)
+  const i = Number.isFinite(index) ? index : 0
+  previewState.index = Math.min(Math.max(i, 0), ids.length - 1)
   previewState.visible = true
 }
 

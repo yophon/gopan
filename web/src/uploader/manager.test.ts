@@ -393,6 +393,36 @@ describe('上传主流程', () => {
     expect(callsFor(UploadSessionDocument)).toHaveLength(1)
     expect(t.uploadedBytes).toBe(8)
   })
+
+  it('分片 403 且刷新后既没有新签名、服务端也没有该片:退避后再试,不立刻重打', async () => {
+    vi.useFakeTimers()
+    let forbidden = 1
+    FakeXHR.behavior = (xhr) =>
+      xhr.url === 'https://s3/p1' && forbidden-- > 0 ? xhr.fail(403) : xhr.succeed()
+    requestMock.mockImplementation((document: unknown) => {
+      if (document === InitUploadDocument) {
+        return Promise.resolve({
+          initUpload: {
+            instant: false,
+            session: session({ partUrls: [{ partNumber: 1, url: 'https://s3/p1' }] }),
+          },
+        })
+      }
+      if (document === UploadSessionDocument) return Promise.resolve({ uploadSession: session() })
+      if (document === CompleteUploadDocument) return Promise.resolve({ completeUpload: {} })
+      return Promise.reject(new Error('unexpected request'))
+    })
+    const store = useUploadsStore()
+
+    enqueueFiles([makeFile('f.bin', 'abcd')], null) // 4 字节单片
+    const t = store.tasks[0]!
+    await vi.advanceTimersByTimeAsync(0)
+    expect(FakeXHR.instances).toHaveLength(1) // 403 之后在退避,没有马上重打
+
+    await vi.advanceTimersByTimeAsync(1100)
+    expect(t.status).toBe('done')
+    expect(FakeXHR.instances.map((x) => x.url)).toEqual(['https://s3/p1', 'https://s3/p1'])
+  })
 })
 
 // ---------- 失败与重试 ----------

@@ -69,7 +69,9 @@ function loadRecords(): ResumableRecord[] {
         typeof (r as ResumableRecord).fileName === 'string' &&
         typeof (r as ResumableRecord).size === 'number' &&
         typeof (r as ResumableRecord).lastModified === 'number' &&
-        typeof (r as ResumableRecord).sha256 === 'string',
+        typeof (r as ResumableRecord).sha256 === 'string' &&
+        (typeof (r as ResumableRecord).parentId === 'string' ||
+          (r as ResumableRecord).parentId === null),
     )
   } catch {
     return []

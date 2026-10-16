@@ -507,7 +507,14 @@ func (s *Nodes) PurgeExpiredTrash(ctx context.Context, ttl time.Duration) (int, 
 	return purged, nil
 }
 
+// Delete 把节点(整棵子树)移进回收站。任何一个 id 不存在或不属于 owner 就整批返回 ErrNotFound、一个都不删,
+// 与 rename/move/restore 一致;已在回收站里的节点再删一次是空操作。
 func (s *Nodes) Delete(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) error {
+	for _, id := range ids {
+		if _, err := s.Get(ctx, owner, id); err != nil {
+			return err
+		}
+	}
 	for _, id := range ids {
 		if err := s.q.SoftDeleteSubtree(ctx, store.SoftDeleteSubtreeParams{ID: id, OwnerID: owner}); err != nil {
 			return err

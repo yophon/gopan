@@ -7,6 +7,10 @@ describe('formatBytes', () => {
     expect(formatBytes(null)).toBe('—')
     expect(formatBytes(undefined)).toBe('—')
   })
+  it('负数与 NaN 不是合法大小,也给占位符', () => {
+    expect(formatBytes(-5)).toBe('—')
+    expect(formatBytes(Number.NaN)).toBe('—')
+  })
   it('1024 边界与单位递进', () => {
     expect(formatBytes(0)).toBe('0 B')
     expect(formatBytes(1023)).toBe('1023 B')

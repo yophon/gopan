@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 )
@@ -52,5 +53,35 @@ func TestClientIPFrom(t *testing.T) {
 				t.Fatalf("ClientIPFrom() = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestWithForwardedTrust:只有可信反代转来的请求才保留 X-Forwarded-Proto / Host,
+// 直连端口的客户端伪造的会被删掉(trusted 为空时一律删)。
+func TestWithForwardedTrust(t *testing.T) {
+	trusted := mustCIDRs(t, "172.16.0.0/12")
+	cases := []struct {
+		name, remote string
+		trusted      []*net.IPNet
+		wantProto    string
+		wantHost     string
+	}{
+		{"可信反代", "172.18.0.1:5555", trusted, "https", "pan.example.com"},
+		{"直连伪造", "203.0.113.9:5555", trusted, "", ""},
+		{"未配可信代理", "172.18.0.1:5555", nil, "", ""},
+	}
+	for _, c := range cases {
+		var gotProto, gotHost string
+		h := WithForwardedTrust(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotProto, gotHost = r.Header.Get("X-Forwarded-Proto"), r.Header.Get("X-Forwarded-Host")
+		}), c.trusted)
+		req := httptest.NewRequest("GET", "/.well-known/oauth-authorization-server", nil)
+		req.RemoteAddr = c.remote
+		req.Header.Set("X-Forwarded-Proto", "https")
+		req.Header.Set("X-Forwarded-Host", "pan.example.com")
+		h.ServeHTTP(httptest.NewRecorder(), req)
+		if gotProto != c.wantProto || gotHost != c.wantHost {
+			t.Fatalf("%s: proto=%q host=%q,want %q %q", c.name, gotProto, gotHost, c.wantProto, c.wantHost)
+		}
 	}
 }
