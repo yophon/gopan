@@ -32,7 +32,7 @@ flowchart LR
     Android <-. "预签名直传 / 直取<br/>(后台续传)" .-> MinIO
     Agent["Agent · MCP Host"] -- "Streamable HTTP /mcp<br/>OAuth 2.1 / API Key" --> MCP
     Agent <-. "预签名 PUT / GET<br/>Agent 自主传输" .-> MinIO
-    DAV["Finder · rclone · 文件 App"] -- "WebDAV /dav<br/>应用密码" --> REST
+    DAV["Finder · rclone · WebDAV 客户端"] -- "WebDAV /dav<br/>应用密码" --> REST
 
     subgraph Gopan["gopan · Go 单二进制"]
         GQL["gqlgen"] --> Service["service 业务层"]
