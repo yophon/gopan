@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { useMutation, useQuery } from '@tanstack/vue-query'
 import { useEventListener } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
@@ -18,6 +18,7 @@ import { errorText } from '@/api/errors'
 import {
   NodeDownloadUrlDocument,
   NodePreviewDocument,
+  PlaylistDocument,
   RequestPreviewDocument,
 } from '@/api/gen/graphql'
 import type { Variables } from 'graphql-request'
@@ -25,7 +26,11 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core'
 import { formatBytes } from '@/utils/format'
 import { useBreakpoints } from '@/composables/breakpoints'
 import { useSwipe } from '@vueuse/core'
-import { closePreview, previewNext, previewPrev, previewState } from '@/composables/preview'
+import { closePreview, openPreview, previewNext, previewPrev, previewState } from '@/composables/preview'
+import { reportProgress } from '@/composables/media'
+import { useAuthStore } from '@/stores/auth'
+import { usePlayerStore } from '@/stores/player'
+import { formatDuration, resumePage } from '@/utils/media'
 import {
   currentConnection,
   prefetchBudget,
@@ -36,6 +41,8 @@ import {
 const PdfViewer = defineAsyncComponent(() => import('./PdfViewer.vue'))
 import ImageViewer from './ImageViewer.vue'
 import ArchiveViewer from './ArchiveViewer.vue'
+import VideoPlayer from './VideoPlayer.vue'
+import AudioPanel from '@/components/player/AudioPanel.vue'
 
 /** 访客模式(分享页):带访客 token 请求;访客是只读白名单,不能触发文档转换 */
 const props = defineProps<{ guestToken?: string }>()
@@ -79,6 +86,98 @@ const preview = computed(() => node.value?.preview ?? null)
 
 /** 初次拿到元数据前的整体 loading(轮询中的 refetch 不算) */
 const initialLoading = computed(() => isFetching.value && !data.value)
+
+// ---------- 影音(doc/22 二):字幕 token、签名过期重取、下一集、全站音乐播放器、阅读进度 ----------
+
+const auth = useAuthStore()
+const player = usePlayerStore()
+
+/** /sub 用的 token;NodePreview 刚走过 request(),过期的已经刷新过了 */
+const mediaToken = computed(() => props.guestToken ?? auth.accessToken ?? '')
+
+/** 播放中签名过期:重新查一次当前节点,拿新的 contentUrl */
+async function refreshContentUrl(): Promise<string | null> {
+  const id = currentId.value
+  const res = await refetch()
+  if (res.isError || currentId.value !== id) return null
+  return res.data?.node.preview.contentUrl ?? null
+}
+
+/** 视频的同文件夹连播列表(访客在分享范围内也能查) */
+const { data: playlistData } = useQuery({
+  queryKey: ['playlist', currentId],
+  enabled: computed(() => currentId.value !== null && preview.value?.kind === 'VIDEO'),
+  queryFn: () => req(PlaylistDocument, { nodeId: currentId.value! }),
+  staleTime: 60_000,
+})
+const nextVideo = computed(() => {
+  const list = playlistData.value?.playlist ?? []
+  const i = list.findIndex((n) => n.id === currentId.value)
+  return i >= 0 ? (list[i + 1] ?? null) : null
+})
+
+function playNextVideo() {
+  const next = nextVideo.value
+  if (!next) return
+  const i = previewState.ids.indexOf(next.id)
+  if (i >= 0) {
+    previewState.index = i
+    return
+  }
+  // 下一集不在当前列表里(列表只加载了一部分等):换成连播列表
+  const ids = (playlistData.value?.playlist ?? []).map((n) => n.id)
+  openPreview(ids, ids.indexOf(next.id))
+}
+
+/** 登录用户的音频交给全站播放器(关掉预览接着放);访客照旧用自己的 <audio> */
+const useGlobalAudio = computed(() => !props.guestToken && player.attached)
+
+watch(
+  [data, currentId],
+  ([val, id]) => {
+    if (!val || !id || val.node.id !== id || !useGlobalAudio.value) return
+    const p = val.node.preview
+    if (p.kind !== 'AUDIO' || !p.contentUrl) return
+    void player.openFromPreview(
+      { id: val.node.id, name: val.node.name, parentId: val.node.parentId },
+      { url: p.contentUrl, progress: val.node.playProgress },
+    )
+  },
+  { immediate: true },
+)
+
+/** PDF 打开时翻到哪页:内容搜索命中页优先,其次上次读到的页(访客不续读) */
+const pdfInitialPage = computed(() => {
+  const id = currentId.value
+  if (!id) return undefined
+  const hit = previewState.pages[id]
+  if (hit) return hit
+  if (props.guestToken) return undefined
+  return resumePage(node.value?.playProgress) ?? undefined
+})
+
+// 翻页后 5 秒报一次;切走 / 关掉时把没报的补上
+let pdfPending: { nodeId: string; page: number; total: number } | null = null
+let pdfTimer: ReturnType<typeof setTimeout> | null = null
+
+function flushPdfProgress() {
+  if (pdfTimer) clearTimeout(pdfTimer)
+  pdfTimer = null
+  const p = pdfPending
+  pdfPending = null
+  if (p) reportProgress(p.nodeId, p.page, p.total, true)
+}
+
+function onPdfPage(page: number, total: number) {
+  const id = currentId.value
+  if (!id || props.guestToken || preview.value?.kind !== 'PDF') return
+  pdfPending = { nodeId: id, page, total }
+  if (pdfTimer) clearTimeout(pdfTimer)
+  pdfTimer = setTimeout(flushPdfProgress, 5000)
+}
+
+watch(currentId, () => flushPdfProgress())
+onBeforeUnmount(flushPdfProgress)
 
 // ---------- OFFICE:status 为空说明从未触发转换,自动触发一次 ----------
 
@@ -219,6 +318,7 @@ useSwipe(previewBodyRef, {
   threshold: 60,
   onSwipeEnd(_e, direction) {
     if (!isMobile.value || imageMagnified.value || videoPlaying.value) return
+    if (preview.value?.kind === 'AUDIO' && useGlobalAudio.value && player.playing) return
     if (direction === 'left' && hasNext.value) previewNext()
     else if (direction === 'right' && hasPrev.value) previewPrev()
   },
@@ -259,14 +359,6 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   else if (e.key === 'ArrowRight') previewNext()
 })
 
-// ---------- 展示辅助 ----------
-
-function formatDuration(sec: number | null | undefined): string {
-  if (sec === null || sec === undefined || sec < 0) return ''
-  const m = Math.floor(sec / 60)
-  const s = Math.floor(sec % 60)
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-}
 </script>
 
 <template>
@@ -344,19 +436,28 @@ function formatDuration(sec: number | null | undefined): string {
             :alt="node?.name"
           />
 
-          <!-- VIDEO -->
-          <video
-            v-else-if="preview?.kind === 'VIDEO' && preview.contentUrl"
-            class="preview-video"
-            controls
-            autoplay
-            @play="videoPlaying = true"
-            @pause="videoPlaying = false"
-            :poster="preview.largeUrl ?? undefined"
+          <!-- VIDEO:外挂字幕、续播、下一集、签名过期重取 -->
+          <VideoPlayer
+            v-else-if="preview?.kind === 'VIDEO' && preview.contentUrl && node"
+            :node-id="node.id"
             :src="preview.contentUrl"
+            :poster="preview.largeUrl"
+            :subtitles="preview.subtitles"
+            :token="mediaToken"
+            :progress="node.playProgress"
+            :track-progress="!props.guestToken"
+            :refresh="refreshContentUrl"
+            :next-name="nextVideo?.name ?? null"
+            @playing="(v) => (videoPlaying = v)"
+            @next="playNextVideo"
+            @download="onDownload"
           />
 
-          <!-- AUDIO -->
+          <!-- AUDIO:登录用户绑全站播放器 -->
+          <AudioPanel
+            v-else-if="preview?.kind === 'AUDIO' && preview.contentUrl && useGlobalAudio"
+            @download="onDownload"
+          />
           <div v-else-if="preview?.kind === 'AUDIO' && preview.contentUrl" class="preview-audio">
             <el-icon :size="88" class="audio-icon"><Headset /></el-icon>
             <div v-if="formatDuration(preview.durationSec)" class="audio-duration">
@@ -369,7 +470,8 @@ function formatDuration(sec: number | null | undefined): string {
           <PdfViewer
             v-else-if="preview?.kind === 'PDF' && preview.contentUrl"
             :url="preview.contentUrl"
-            :initial-page="currentId ? previewState.pages[currentId] : undefined"
+            :initial-page="pdfInitialPage"
+            @page="onPdfPage"
           />
 
           <!-- TEXT -->
@@ -563,11 +665,6 @@ function formatDuration(sec: number | null | undefined): string {
   max-height: 100%;
   object-fit: contain;
   border-radius: 4px;
-}
-.preview-video {
-  max-width: 100%;
-  max-height: 100%;
-  outline: none;
 }
 .preview-audio {
   display: flex;

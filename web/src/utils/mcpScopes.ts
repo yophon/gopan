@@ -18,7 +18,17 @@ export const mcpAdminScopeOptions = [
   { value: 'admin:purge', label: '永久删除回收站文件' },
 ] as const
 
-const labels = new Map<string, string>([...mcpScopeOptions, ...mcpAdminScopeOptions].map((item) => [item.value, item.label]))
+/** 图床密钥(doc/22 四.3):只能往图床文件夹传图片,不能和别的 scope 混用,不在 Agent 接入里选 */
+export const IMG_UPLOAD_SCOPE = 'img:upload'
+
+export function isImageKey(scopes: readonly string[]): boolean {
+  return scopes.includes(IMG_UPLOAD_SCOPE)
+}
+
+const labels = new Map<string, string>([
+  ...[...mcpScopeOptions, ...mcpAdminScopeOptions].map((item): [string, string] => [item.value, item.label]),
+  [IMG_UPLOAD_SCOPE, '图床上传'],
+])
 
 export function mcpScopeLabel(scope: string): string {
   return labels.get(scope) ?? scope

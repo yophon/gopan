@@ -84,6 +84,13 @@ export const useUploadsStore = defineStore('uploads', () => {
 
   /** 抽屉收起状态 */
   const collapsed = ref(false)
+  /** 从通知「后台任务」点进来:抽屉展开并定位到后台任务(UploadDrawer 接手后复位) */
+  const jobsFocus = ref(false)
+
+  function focusJobs() {
+    collapsed.value = false
+    jobsFocus.value = true
+  }
 
   // ---------- 任务 ----------
 
@@ -159,6 +166,8 @@ export const useUploadsStore = defineStore('uploads', () => {
     tasks,
     records,
     collapsed,
+    jobsFocus,
+    focusJobs,
     activeCount,
     hasActive,
     orphanRecords,

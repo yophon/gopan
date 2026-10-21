@@ -1,0 +1,171 @@
+# ---------- 直链与图床(doc/22 四) ----------
+
+fragment LinkUsageFields on LinkUsage {
+  hits
+  bytes
+  blocked
+}
+
+fragment DirectLinkFields on DirectLink {
+  id
+  token
+  path
+  url
+  nodeId
+  name
+  mime
+  size
+  status
+  pauseReason
+  source
+  createdAt
+  expiresAt
+  refererHosts
+  allowNoReferer
+  dailyBytesCap
+  autoPause
+  hasGps
+  hitsTotal
+  bytesTotal
+  lastHitAt
+  today {
+    ...LinkUsageFields
+  }
+  last30Days {
+    ...LinkUsageFields
+  }
+}
+
+query LinksEnabled {
+  linksEnabled
+}
+
+query MyLinks($cursor: String) {
+  myLinks(cursor: $cursor) {
+    items {
+      ...DirectLinkFields
+    }
+    nextCursor
+    total
+  }
+}
+
+query Link($id: ID!) {
+  link(id: $id) {
+    ...DirectLinkFields
+  }
+}
+
+query LinkStats($id: ID!, $hours: Int) {
+  linkStats(id: $id, hours: $hours) {
+    hour
+    hits
+    bytes
+    blocked
+    ips
+  }
+}
+
+query LinkReferers($id: ID!, $days: Int) {
+  linkReferers(id: $id, days: $days) {
+    host
+    hits
+    bytes
+  }
+}
+
+query LinkHits($id: ID!, $cursor: String) {
+  linkHits(id: $id, cursor: $cursor) {
+    items {
+      at
+      ip
+      userAgent
+      referer
+      status
+      bytes
+    }
+    nextCursor
+  }
+}
+
+fragment LinkPrefsFields on LinkPrefs {
+  refererHosts
+  allowNoReferer
+  imageFolder
+  stripGps
+  dailyBytesCapDefault
+  monthlyBytesCap
+  monthlyBytesUsed
+}
+
+query LinkPrefs {
+  linkPrefs {
+    ...LinkPrefsFields
+  }
+}
+
+mutation CreateLinks($nodeIds: [ID!]!) {
+  createLinks(nodeIds: $nodeIds) {
+    ...DirectLinkFields
+  }
+}
+
+mutation UpdateLink($id: ID!, $input: DirectLinkInput!) {
+  updateLink(id: $id, input: $input) {
+    ...DirectLinkFields
+  }
+}
+
+mutation PauseLink($id: ID!, $paused: Boolean!) {
+  pauseLink(id: $id, paused: $paused) {
+    ...DirectLinkFields
+  }
+}
+
+mutation RevokeLink($id: ID!) {
+  revokeLink(id: $id)
+}
+
+mutation SetLinkPrefs($input: LinkPrefsInput!) {
+  setLinkPrefs(input: $input) {
+    ...LinkPrefsFields
+  }
+}
+
+# ---------- 管理端 ----------
+
+query AdminLinkStats {
+  adminLinkStats {
+    monthHits
+    monthBytes
+    monthlyBytesCap
+    top {
+      id
+      owner
+      name
+      path
+      status
+      monthHits
+      monthBytes
+    }
+  }
+}
+
+mutation AdminPauseLink($id: ID!, $paused: Boolean!) {
+  adminPauseLink(id: $id, paused: $paused)
+}
+
+mutation AdminRevokeLink($id: ID!) {
+  adminRevokeLink(id: $id)
+}
+
+# 直链列表里图片的缩略图:DirectLink 没带节点预览,用节点自己的缩略图(走直链 ?s=256 会被记成一次访问)
+query NodeThumb($id: ID!) {
+  node(id: $id) {
+    id
+    preview {
+      kind
+      thumbUrl
+    }
+  }
+}

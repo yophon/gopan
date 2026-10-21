@@ -36,6 +36,13 @@ export function getErrorCode(err: unknown): string | undefined {
   return undefined
 }
 
+/** 服务端给的原始错误文案(如推送测试失败时对方的回应);拿不到为 undefined */
+export function getErrorMessage(err: unknown): string | undefined {
+  if (!(err instanceof ClientError)) return undefined
+  const msg = err.response.errors?.[0]?.message
+  return typeof msg === 'string' && msg ? msg : undefined
+}
+
 export function hasErrorCode(err: unknown, code: string): boolean {
   if (!(err instanceof ClientError)) return false
   return (err.response.errors ?? []).some(

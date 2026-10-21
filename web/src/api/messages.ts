@@ -34,6 +34,9 @@ export const errorMessages: Record<string, string> = {
   TOO_MANY_JOBS: '排队中的后台任务过多,等前面的完成再来',
   JOB_FINISHED: '任务已经结束',
   JOB_NOT_RETRYABLE: '只有失败或已取消的任务能重试',
+  NOTIFY_FAILED: '推送失败',
+  LINKS_DISABLED: '本站没有开启直链',
+  TOO_MANY_LINKS: '一次最多 100 个文件',
 }
 
 /** 纯映射:错误码 → 文案,overrides > 全局表 > fallback */

@@ -8,23 +8,30 @@ import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
 import {
   AdminCreateUserDocument,
+  AdminLinkStatsDocument,
   AdminOverviewDocument,
+  AdminPauseLinkDocument,
+  AdminRevokeLinkDocument,
   AdminResetPasswordDocument,
   AdminRetryFailedTasksDocument,
   AdminSetDisabledDocument,
   AdminSetQuotaDocument,
   AdminUsersDocument,
 } from '@/api/gen/graphql'
-import type { AdminUsersQuery } from '@/api/gen/graphql'
+import type { AdminLinkStatsQuery, AdminUsersQuery } from '@/api/gen/graphql'
 import { useAuthStore } from '@/stores/auth'
 import { formatBytes, formatTime } from '@/utils/format'
+import { absoluteLinkUrl, linkStatusMeta } from '@/utils/links'
 import { useBreakpoints } from '@/composables/breakpoints'
+import { useLinksEnabled } from '@/composables/links'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
 import type { SheetItem } from '@/components/nodes/types'
 
 type AdminUser = AdminUsersQuery['adminUsers'][number]
+type AdminLinkRow = AdminLinkStatsQuery['adminLinkStats']['top'][number]
 
 const GB = 1 << 30
+const origin = location.origin
 const auth = useAuthStore()
 const { isMobile } = useBreakpoints()
 const queryClient = useQueryClient()
@@ -187,6 +194,55 @@ async function onResetPassword(u: AdminUser) {
   }
 }
 
+// ---------- 直链流量(doc/22 四.4):本月用量 / 上限,全站前 10,能暂停、吊销任何人的 ----------
+
+const linksEnabled = useLinksEnabled()
+const { data: linkStatsData } = useQuery({
+  queryKey: ['adminLinkStats'],
+  queryFn: () => request(AdminLinkStatsDocument),
+  enabled: linksEnabled,
+})
+const linkStats = computed(() => linkStatsData.value?.adminLinkStats ?? null)
+const linkPercent = computed(() => {
+  const s = linkStats.value
+  if (!s || s.monthlyBytesCap <= 0) return 0
+  return Math.min(100, Math.round((s.monthBytes / s.monthlyBytesCap) * 100))
+})
+
+function asLink(row: unknown): AdminLinkRow {
+  return row as AdminLinkRow
+}
+
+async function onAdminPauseLink(l: AdminLinkRow) {
+  const pause = l.status !== 'PAUSED'
+  try {
+    await request(AdminPauseLinkDocument, { id: l.id, paused: pause })
+    ElMessage.success(pause ? `已暂停 ${l.name}` : `已恢复 ${l.name}`)
+    void queryClient.invalidateQueries({ queryKey: ['adminLinkStats'] })
+  } catch (err) {
+    ElMessage.error(errorText(err, '操作失败'))
+  }
+}
+
+async function onAdminRevokeLink(l: AdminLinkRow) {
+  try {
+    await ElMessageBox.confirm(`${l.owner} 的「${l.name}」直链会立即失效(404),文件本身不受影响。`, '吊销直链?', {
+      type: 'warning',
+      confirmButtonText: '吊销',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  try {
+    await request(AdminRevokeLinkDocument, { id: l.id })
+    ElMessage.success('已吊销')
+    void queryClient.invalidateQueries({ queryKey: ['adminLinkStats'] })
+  } catch (err) {
+    ElMessage.error(errorText(err, '吊销失败'))
+  }
+}
+
 // ---------- 失败任务重排 ----------
 
 const retryMutation = useMutation({
@@ -237,6 +293,73 @@ const retryMutation = useMutation({
         <div class="card-value">{{ indexed }} 份 · {{ formatBytes(overview.contentIndex.textBytes) }}</div>
         <div class="card-sub">{{ indexSummary }}</div>
       </el-card>
+      <el-card v-if="linkStats" shadow="never">
+        <div class="card-label">直链流量(本月)</div>
+        <div class="card-value">{{ formatBytes(linkStats.monthBytes) }} / {{ formatBytes(linkStats.monthlyBytesCap) }}</div>
+        <el-progress
+          :percentage="linkPercent"
+          :status="linkPercent >= 100 ? 'exception' : linkPercent >= 80 ? 'warning' : undefined"
+          :stroke-width="6"
+          :show-text="false"
+          class="card-progress"
+        />
+        <div class="card-sub">{{ linkStats.monthHits }} 次访问</div>
+      </el-card>
+    </div>
+
+    <div v-if="linkStats && linkStats.top.length" class="link-top">
+      <h4 class="section-title">本月直链流量前 10</h4>
+      <el-table v-if="!isMobile" :data="linkStats.top" row-key="id" size="small">
+        <el-table-column label="用户" prop="owner" width="120" />
+        <el-table-column label="文件" min-width="200">
+          <template #default="{ row }">
+            <a class="link-name" :href="absoluteLinkUrl(asLink(row).path, origin)" target="_blank" rel="noopener">
+              {{ asLink(row).name }}
+            </a>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag size="small" :type="linkStatusMeta(asLink(row).status).type">
+              {{ linkStatusMeta(asLink(row).status).label }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="访问" width="90" align="right">
+          <template #default="{ row }">{{ asLink(row).monthHits }}</template>
+        </el-table-column>
+        <el-table-column label="流量" width="100" align="right">
+          <template #default="{ row }">{{ formatBytes(asLink(row).monthBytes) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="130" align="center">
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              :disabled="asLink(row).status === 'EXPIRED'"
+              @click="onAdminPauseLink(asLink(row))"
+            >
+              {{ asLink(row).status === 'PAUSED' ? '恢复' : '暂停' }}
+            </el-button>
+            <el-button link type="danger" @click="onAdminRevokeLink(asLink(row))">吊销</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div v-else class="user-cards">
+        <div v-for="l in linkStats.top" :key="l.id" class="user-card">
+          <div class="user-main">
+            <div class="user-name">
+              {{ l.name }}
+              <el-tag size="small" :type="linkStatusMeta(l.status).type">{{ linkStatusMeta(l.status).label }}</el-tag>
+            </div>
+            <div class="user-meta">{{ l.owner }} · {{ l.monthHits }} 次 · {{ formatBytes(l.monthBytes) }}</div>
+          </div>
+          <el-button link type="primary" :disabled="l.status === 'EXPIRED'" @click="onAdminPauseLink(l)">
+            {{ l.status === 'PAUSED' ? '恢复' : '暂停' }}
+          </el-button>
+          <el-button link type="danger" @click="onAdminRevokeLink(l)">吊销</el-button>
+        </div>
+      </div>
     </div>
 
     <div class="toolbar">
@@ -400,6 +523,23 @@ const retryMutation = useMutation({
   margin-top: 4px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+.card-progress {
+  margin-top: 6px;
+}
+.link-top {
+  margin-bottom: 20px;
+}
+.section-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.link-name {
+  color: var(--el-text-color-primary);
+  text-decoration: none;
+}
+.link-name:hover {
+  color: var(--el-color-primary);
 }
 .task-value {
   display: flex;

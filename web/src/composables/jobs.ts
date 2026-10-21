@@ -27,6 +27,8 @@ export function useJobs(enabled: Ref<boolean>) {
     (query.data.value?.myJobs.items ?? []).filter((j) => jobWorthShowing(j, Date.now())),
   )
   const activeCount = computed(() => items.value.filter(isActiveJob).length)
+  /** 服务端保留的全部(7 天内),通知点进来时看 */
+  const allItems = computed<JobItem[]>(() => query.data.value?.myJobs.items ?? [])
 
   // 速度:两次轮询之间的字节差
   const speeds = ref<Record<string, number>>({})
@@ -52,7 +54,7 @@ export function useJobs(enabled: Ref<boolean>) {
     speeds.value = next
   })
 
-  return { ...query, items, activeCount, speeds }
+  return { ...query, items, allItems, activeCount, speeds }
 }
 
 /** 本站是否开了离线下载;不常变,拉一次就够 */

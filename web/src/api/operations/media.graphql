@@ -1,0 +1,50 @@
+# ---------- 影音(doc/22 二):进度、最近播放、连播 ----------
+
+fragment PlayProgressFields on PlayProgress {
+  position
+  duration
+  finished
+  updatedAt
+}
+
+# 同文件夹里同类的文件,自然顺序,含自己
+query Playlist($nodeId: ID!) {
+  playlist(nodeId: $nodeId) {
+    id
+    parentId
+    name
+    kind
+    size
+    preview {
+      kind
+    }
+  }
+}
+
+query RecentPlays($limit: Int) {
+  recentPlays(limit: $limit) {
+    node {
+      id
+      parentId
+      name
+      kind
+      preview {
+        kind
+        thumbUrl
+      }
+    }
+    progress {
+      ...PlayProgressFields
+    }
+  }
+}
+
+mutation SaveProgress($nodeId: ID!, $position: Float!, $duration: Float!) {
+  saveProgress(nodeId: $nodeId, position: $position, duration: $duration) {
+    ...PlayProgressFields
+  }
+}
+
+mutation ClearProgress($nodeId: ID!) {
+  clearProgress(nodeId: $nodeId)
+}

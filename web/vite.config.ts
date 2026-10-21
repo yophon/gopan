@@ -20,6 +20,19 @@ export default defineConfig({
         target: 'http://127.0.0.1:8080',
         changeOrigin: true,
       },
+      // 压缩包条目、字幕、直链、图床上传(doc/21、doc/22)
+      '/arc': {
+        target: 'http://127.0.0.1:8080',
+      },
+      '/sub': {
+        target: 'http://127.0.0.1:8080',
+      },
+      '/x/': {
+        target: 'http://127.0.0.1:8080',
+      },
+      '/api/img': {
+        target: 'http://127.0.0.1:8080',
+      },
       '/mcp': {
         target: 'http://127.0.0.1:8080',
       },

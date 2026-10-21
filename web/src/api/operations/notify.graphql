@@ -1,0 +1,82 @@
+# ---------- 通知(doc/22 三) ----------
+
+query Notifications($cursor: String, $unreadOnly: Boolean) {
+  notifications(cursor: $cursor, unreadOnly: $unreadOnly) {
+    items {
+      id
+      kind
+      level
+      title
+      body
+      count
+      target {
+        kind
+        id
+        parentId
+      }
+      createdAt
+      updatedAt
+      read
+    }
+    nextCursor
+  }
+}
+
+mutation MarkNotificationsRead($ids: [ID!]) {
+  markNotificationsRead(ids: $ids)
+}
+
+mutation ClearNotifications {
+  clearNotifications
+}
+
+fragment NotifyChannelFields on NotifyChannel {
+  id
+  kind
+  name
+  enabled
+  events
+  url
+  topic
+  hasSecret
+  secretHint
+  lastOkAt
+  lastError
+  lastErrorAt
+  createdAt
+}
+
+query NotifyChannels {
+  notifyChannels {
+    ...NotifyChannelFields
+  }
+}
+
+query NotifyEventKinds {
+  notifyEventKinds {
+    kind
+    label
+    defaultPush
+    adminOnly
+  }
+}
+
+mutation CreateNotifyChannel($input: NotifyChannelInput!) {
+  createNotifyChannel(input: $input) {
+    ...NotifyChannelFields
+  }
+}
+
+mutation UpdateNotifyChannel($id: ID!, $input: NotifyChannelInput!) {
+  updateNotifyChannel(id: $id, input: $input) {
+    ...NotifyChannelFields
+  }
+}
+
+mutation DeleteNotifyChannel($id: ID!) {
+  deleteNotifyChannel(id: $id)
+}
+
+mutation TestNotifyChannel($id: ID!) {
+  testNotifyChannel(id: $id)
+}

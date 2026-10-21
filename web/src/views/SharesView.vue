@@ -15,6 +15,9 @@ import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
 import ShareVisitsDialog from '@/components/ShareVisitsDialog.vue'
 import FileRequestsPanel from '@/components/FileRequestsPanel.vue'
+import LinksPanel from '@/components/links/LinksPanel.vue'
+import { useLinksEnabled } from '@/composables/links'
+import { withoutQuery } from '@/utils/notifications'
 import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 
 type ShareItem = MySharesQuery['myShares'][number]
@@ -22,13 +25,27 @@ type ShareItem = MySharesQuery['myShares'][number]
 const queryClient = useQueryClient()
 const { isMobile, isCompact } = useBreakpoints()
 
-// 「分享」「收集」两个标签;?tab=collect 直达收集(收件提醒点进来)
+// 「分享」「收集」「直链」三个标签;?tab=collect(或 requests)直达收集、?tab=links 直达直链,
+// 再带 &id= 打开那一条(通知与推送链接),&panel=keys 打开直链的「上传接口」
 const route = useRoute()
 const router = useRouter()
+const linksEnabled = useLinksEnabled()
 const tab = computed({
-  get: () => (route.query.tab === 'collect' ? 'collect' : 'share'),
-  set: (v: string) => void router.replace({ query: v === 'collect' ? { tab: 'collect' } : {} }),
+  get: () => {
+    const t = route.query.tab
+    if (t === 'collect' || t === 'requests') return 'collect'
+    if (t === 'links' && linksEnabled.value) return 'links'
+    return 'share'
+  },
+  set: (v: string) => void router.replace({ query: v === 'share' ? {} : { tab: v } }),
 })
+const queryId = computed(() => (typeof route.query.id === 'string' ? route.query.id : null))
+const queryPanel = computed(() => (typeof route.query.panel === 'string' ? route.query.panel : null))
+
+/** 面板接手了 id / panel 后从地址里去掉,刷新不再弹 */
+function consumeQuery() {
+  void router.replace({ query: withoutQuery(route.query, ['id', 'panel']) })
+}
 
 const { data, isFetching } = useQuery({
   queryKey: ['myShares'],
@@ -151,9 +168,11 @@ function onSheetSelect(key: string) {
     <el-tabs v-model="tab" class="share-tabs">
       <el-tab-pane label="分享" name="share" />
       <el-tab-pane label="收集" name="collect" />
+      <el-tab-pane v-if="linksEnabled" label="直链" name="links" />
     </el-tabs>
 
-    <FileRequestsPanel v-if="tab === 'collect'" />
+    <FileRequestsPanel v-if="tab === 'collect'" :open-id="queryId" @consumed="consumeQuery" />
+    <LinksPanel v-else-if="tab === 'links'" :open-id="queryId" :panel="queryPanel" @consumed="consumeQuery" />
 
     <template v-else>
       <el-table

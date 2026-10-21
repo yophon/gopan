@@ -2,7 +2,21 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
-import { ChatDotRound, Connection, Delete, Folder, Key, Lock, Monitor, Search, Setting, Share, SwitchButton } from '@element-plus/icons-vue'
+import {
+  Bell,
+  ChatDotRound,
+  Connection,
+  Delete,
+  Folder,
+  Key,
+  Lock,
+  Monitor,
+  Search,
+  Setting,
+  Share,
+  SwitchButton,
+  VideoPlay,
+} from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { MeDocument } from '@/api/gen/graphql'
@@ -19,6 +33,8 @@ const emit = defineEmits<{
   (e: 'open-dav'): void
   (e: 'open-mcp'): void
   (e: 'open-pwd'): void
+  (e: 'open-notifications'): void
+  (e: 'open-recent'): void
   (e: 'logout'): void
 }>()
 
@@ -48,6 +64,7 @@ const { data: meData } = useQuery({
   queryFn: () => request(MeDocument),
 })
 const me = computed(() => meData.value?.me ?? null)
+const unread = computed(() => me.value?.unreadNotifications ?? 0)
 const quotaPercent = computed(() => {
   if (!me.value || me.value.quotaBytes <= 0) return 0
   return Math.min(100, Math.round((me.value.usedBytes / me.value.quotaBytes) * 100))
@@ -61,7 +78,19 @@ const quotaStatus = computed(() => {
 
 <template>
   <div class="side-nav">
-    <div class="brand">gopan 云盘</div>
+    <div class="brand">
+      <span>gopan 云盘</span>
+      <el-badge :value="unread" :max="99" :hidden="unread === 0" class="bell-badge">
+        <el-button
+          link
+          class="bell-btn"
+          :icon="Bell"
+          :title="unread ? `通知(${unread} 条未读)` : '通知'"
+          aria-label="通知"
+          @click="emit('open-notifications')"
+        />
+      </el-badge>
+    </div>
     <el-input
       v-model="searchInput"
       class="search-input"
@@ -96,6 +125,10 @@ const quotaStatus = computed(() => {
         <span>管理</span>
       </el-menu-item>
     </el-menu>
+    <button type="button" class="nav-extra" @click="emit('open-recent')">
+      <el-icon><VideoPlay /></el-icon>
+      <span>最近播放</span>
+    </button>
     <div v-if="me" class="quota-area">
       <el-progress
         :percentage="quotaPercent"
@@ -127,9 +160,40 @@ const quotaStatus = computed(() => {
   min-height: 0;
 }
 .brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 20px 16px 12px;
   font-size: 18px;
   font-weight: 600;
+}
+.bell-btn {
+  font-size: 18px;
+}
+.bell-badge :deep(.el-badge__content) {
+  font-weight: 400;
+}
+.nav-extra {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 8px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--el-text-color-regular);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.nav-extra:hover {
+  background: var(--el-fill-color-light);
+}
+.nav-extra .el-icon {
+  margin-right: 5px;
+  font-size: 18px;
 }
 .search-input {
   padding: 0 12px 8px;

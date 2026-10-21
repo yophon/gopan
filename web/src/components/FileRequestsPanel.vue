@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CopyDocument, Delete, EditPen, Folder, Lock, MoreFilled, Tickets, View } from '@element-plus/icons-vue'
@@ -18,6 +18,10 @@ import type { SheetItem } from '@/components/nodes/types'
 /** 「分享」页的「收集」标签:我开的收集链接、收件统计与操作(doc/20)。 */
 
 type Item = FileRequestFieldsFragment
+
+/** openId:通知点进来(/shares?tab=requests&id=)时直接打开这条的收件记录;打开后 emit consumed 让页面清掉 id */
+const props = defineProps<{ openId?: string | null }>()
+const emit = defineEmits<{ consumed: [] }>()
 
 const queryClient = useQueryClient()
 const { isMobile } = useBreakpoints()
@@ -98,6 +102,19 @@ const uploadsDialog = ref<{ visible: boolean; id: string; title: string; newCoun
 function openUploads(row: Item) {
   uploadsDialog.value = { visible: true, id: row.id, title: row.title, newCount: row.newCount }
 }
+
+watch(
+  [() => props.openId, items, isFetching],
+  ([id, list, fetching]) => {
+    if (!id) return
+    const row = list.find((r) => r.id === id)
+    if (row) openUploads(row)
+    else if (fetching) return // 等列表回来再找
+    else ElMessage.warning('这条收集链接已经不在了')
+    emit('consumed')
+  },
+  { immediate: true },
+)
 
 // ---------- 手机 ----------
 

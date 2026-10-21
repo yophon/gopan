@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useRoute, useRouter } from 'vue-router'
 import { useEventListener } from '@vueuse/core'
@@ -65,13 +65,44 @@ useEventListener(window, 'beforeunload', (e) => {
   }
 })
 
+// ---------- 通知「后台任务」点进来:展开并定位,没有任务也显示一个空分组 ----------
+
+const jobsPinned = ref(false)
+const jobsSection = ref<HTMLElement | null>(null)
+
+watch(
+  () => uploads.jobsFocus,
+  async (v) => {
+    if (!v) return
+    uploads.jobsFocus = false
+    jobsPinned.value = true
+    uploads.collapsed = false
+    void jobs.refetch()
+    await nextTick()
+    jobsSection.value?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  },
+  { immediate: true },
+)
+watch(
+  () => uploads.collapsed,
+  (c) => {
+    if (c) jobsPinned.value = false
+  },
+)
+
+/** 定位时把 7 天内的全列出来(失败的、早结束的都在),平时只列值得看的 */
+const jobItems = computed(() => (jobsPinned.value ? jobs.allItems.value : jobs.items.value))
+
 // 传输助手页自己渲染上传进度,抽屉(含收起后的浮动按钮)在那页会压住输入栏,整个隐藏
 const visible = computed(
   () =>
     route.name !== 'chat' &&
-    (uploads.tasks.length > 0 || uploads.orphanRecords.length > 0 || jobs.items.value.length > 0),
+    (jobsPinned.value ||
+      uploads.tasks.length > 0 ||
+      uploads.orphanRecords.length > 0 ||
+      jobs.items.value.length > 0),
 )
-const finishedJobs = computed(() => jobs.items.value.filter((j) => !isActiveJob(j)).length)
+const finishedJobs = computed(() => jobItems.value.filter((j) => !isActiveJob(j)).length)
 const finishedCount = computed(
   () => uploads.tasks.filter((t) => TERMINAL_STATUSES.includes(t.status)).length + finishedJobs.value,
 )
@@ -325,10 +356,11 @@ function onResumeFileChosen(e: Event) {
         </div>
 
         <!-- 后台任务:离线下载、解压(服务端执行,关掉页面也继续) -->
-        <template v-if="jobs.items.value.length > 0">
+        <template v-if="jobItems.length > 0 || jobsPinned">
           <el-divider v-if="uploads.tasks.length > 0 || uploads.orphanRecords.length > 0" class="divider" />
-          <div class="section-title">后台任务</div>
-          <div v-for="job in jobs.items.value" :key="job.id" class="task job">
+          <div ref="jobsSection" class="section-title">后台任务</div>
+          <div v-if="jobItems.length === 0" class="task-status empty-jobs">没有后台任务</div>
+          <div v-for="job in jobItems" :key="job.id" class="task job">
             <div class="task-main">
               <div class="task-name" :title="job.url ?? job.title">
                 <span class="job-kind">{{ job.kind === 'EXTRACT_ARCHIVE' ? '解压' : '离线下载' }}</span>
@@ -390,8 +422,12 @@ function onResumeFileChosen(e: Event) {
 .upload-drawer {
   position: fixed;
   right: 24px;
-  bottom: 24px;
+  /* 底部迷你播放条显示时往上让(MiniPlayer 写这个变量) */
+  bottom: calc(24px + var(--player-bar-h, 0px));
   z-index: 2000;
+}
+.empty-jobs {
+  padding: 6px 0;
 }
 .fab {
   box-shadow: var(--el-box-shadow);
@@ -412,7 +448,7 @@ function onResumeFileChosen(e: Event) {
 @media (max-width: 767px) {
   .upload-drawer {
     right: 12px;
-    bottom: calc(12px + var(--sab));
+    bottom: calc(12px + max(var(--sab), var(--player-bar-h, 0px)));
     left: 12px;
   }
   .panel {

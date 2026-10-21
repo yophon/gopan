@@ -14,7 +14,7 @@ import {
   McpAccessRootsDocument, SetMcpAccessRootDocument, McpAuditDocument,
 } from '@/api/gen/graphql'
 import { formatTime } from '@/utils/format'
-import { mcpScopeLabel, mcpScopeOptions, mcpAdminScopeOptions } from '@/utils/mcpScopes'
+import { isImageKey, mcpScopeLabel, mcpScopeOptions, mcpAdminScopeOptions } from '@/utils/mcpScopes'
 import { useAuthStore } from '@/stores/auth'
 
 const visible = defineModel<boolean>({ required: true })
@@ -165,7 +165,13 @@ async function copy(text: string) {
         </div>
 
         <el-table v-loading="keysFetching" :data="keys" row-key="id" empty-text="还没有 API Key">
-          <el-table-column label="名称" prop="name" min-width="130" />
+          <el-table-column label="名称" min-width="130">
+            <template #default="{ row }">
+              {{ row.name }}
+              <!-- 图床密钥(doc/22 四.3)在「分享 → 直链 → 上传接口」里建,这里只标出来 -->
+              <el-tag v-if="isImageKey(row.scopes)" size="small" type="success">图床密钥</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="权限" min-width="240">
             <template #default="{ row }">
               <div class="scope-tags">
@@ -183,6 +189,7 @@ async function copy(text: string) {
           <el-table-column label="目录范围" min-width="130">
             <template #default="{ row }">
               <span v-if="row.scopes.some((s: string) => s.startsWith('admin:'))">管理员接口</span>
+              <span v-else-if="isImageKey(row.scopes)">图床文件夹</span>
               <el-button v-else link type="primary" @click="editRoot(row.id, 'api_key')">{{ rootLabel(row.id, 'api_key') }}</el-button>
             </template>
           </el-table-column>

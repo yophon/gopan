@@ -1,17 +1,24 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useQueryClient } from '@tanstack/vue-query'
-import { Menu as MenuIcon } from '@element-plus/icons-vue'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { Bell, Menu as MenuIcon } from '@element-plus/icons-vue'
 
+import { request } from '@/api/client'
+import { MeDocument } from '@/api/gen/graphql'
 import { useAuthStore } from '@/stores/auth'
+import { useUploadsStore } from '@/stores/uploads'
 import { useBreakpoints } from '@/composables/breakpoints'
+import { shellPanel, withoutQuery } from '@/utils/notifications'
 import UploadDrawer from '@/components/UploadDrawer.vue'
 import PreviewModal from '@/components/preview/PreviewModal.vue'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import AppPasswordsDialog from '@/components/AppPasswordsDialog.vue'
 import MCPAccessDialog from '@/components/MCPAccessDialog.vue'
 import SideNav from '@/components/SideNav.vue'
+import NotificationDrawer from '@/components/notify/NotificationDrawer.vue'
+import RecentPlaysDialog from '@/components/RecentPlaysDialog.vue'
+import MiniPlayer from '@/components/player/MiniPlayer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -32,6 +39,41 @@ const pwdDialogVisible = ref(false)
 const davDialogVisible = ref(false)
 const mcpDialogVisible = ref(false)
 
+// ---------- 通知与最近播放 ----------
+
+const notifyVisible = ref(false)
+const recentVisible = ref(false)
+
+const { data: meData } = useQuery({ queryKey: ['me'], queryFn: () => request(MeDocument) })
+const unread = computed(() => meData.value?.me.unreadNotifications ?? 0)
+
+function openNotifications() {
+  navOpen.value = false
+  notifyVisible.value = true
+}
+
+function openRecent() {
+  navOpen.value = false
+  recentVisible.value = true
+}
+
+// ---------- ?panel=:通知与推送消息里的链接直达(doc/22 三.4),做完就从地址里去掉 ----------
+
+const uploads = useUploadsStore()
+
+watch(
+  () => route.query.panel,
+  (raw) => {
+    const panel = shellPanel(raw)
+    if (!panel) return
+    if (panel === 'jobs') uploads.focusJobs()
+    else if (panel === 'webdav') davDialogVisible.value = true
+    else mcpDialogVisible.value = true
+    void router.replace({ path: route.path, query: withoutQuery(route.query, ['panel']), hash: route.hash })
+  },
+  { immediate: true },
+)
+
 async function onLogout() {
   navOpen.value = false
   await auth.logoutAction()
@@ -47,6 +89,8 @@ async function onLogout() {
         @open-dav="davDialogVisible = true"
         @open-mcp="mcpDialogVisible = true"
         @open-pwd="pwdDialogVisible = true"
+        @open-notifications="openNotifications"
+        @open-recent="openRecent"
         @logout="onLogout"
       />
     </el-aside>
@@ -62,10 +106,21 @@ async function onLogout() {
           @click="navOpen = true"
         />
         <span class="topbar-title">gopan 云盘</span>
+        <el-badge :value="unread" :max="99" :hidden="unread === 0" class="topbar-badge">
+          <el-button
+            text
+            class="topbar-btn"
+            :icon="Bell"
+            :title="unread ? `通知(${unread} 条未读)` : '通知'"
+            aria-label="通知"
+            @click="openNotifications"
+          />
+        </el-badge>
       </header>
       <el-main class="main">
         <router-view />
       </el-main>
+      <MiniPlayer />
     </el-container>
 
     <el-drawer
@@ -80,6 +135,8 @@ async function onLogout() {
         @open-dav="davDialogVisible = true"
         @open-mcp="mcpDialogVisible = true"
         @open-pwd="pwdDialogVisible = true"
+        @open-notifications="openNotifications"
+        @open-recent="openRecent"
         @logout="onLogout"
       />
     </el-drawer>
@@ -89,6 +146,8 @@ async function onLogout() {
     <ChangePasswordDialog v-model="pwdDialogVisible" />
     <AppPasswordsDialog v-model="davDialogVisible" />
     <MCPAccessDialog v-model="mcpDialogVisible" />
+    <NotificationDrawer v-model="notifyVisible" />
+    <RecentPlaysDialog v-model="recentVisible" />
   </el-container>
 </template>
 
@@ -117,8 +176,13 @@ async function onLogout() {
   font-size: 20px;
 }
 .topbar-title {
+  flex: 1;
   font-size: 16px;
   font-weight: 600;
+}
+.topbar-badge :deep(.el-badge__content.is-fixed) {
+  top: 8px;
+  right: 14px;
 }
 .main {
   padding: 16px 24px;

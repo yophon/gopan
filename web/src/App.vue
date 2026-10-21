@@ -9,7 +9,8 @@ let timer:ReturnType<typeof setInterval>, checking=false
 async function check() {
   if (!auth.accessToken || checking) return
   checking=true
-  try { await request(MeDocument) } catch { if(!auth.accessToken) queryClient.clear() }
+  // 结果写回 ['me'] 缓存:侧栏的用量条与通知角标都跟着这一次轮询更新,不另起轮询
+  try { queryClient.setQueryData(['me'], await request(MeDocument)) } catch { if(!auth.accessToken) queryClient.clear() }
   finally { checking=false }
 }
 function resume() { if(!document.hidden) void check() }

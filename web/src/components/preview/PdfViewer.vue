@@ -8,8 +8,10 @@ import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
-/** initialPage:打开时先翻到这一页(内容搜索命中页) */
+/** initialPage:打开时先翻到这一页(内容搜索命中页 / 上次读到的页) */
 const props = defineProps<{ url: string; initialPage?: number }>()
+/** 用户翻页后报出来(页码从 1 开始, 总页数),给阅读进度用;打开时的那一页不报 */
+const emit = defineEmits<{ page: [page: number, total: number] }>()
 
 const containerEl = ref<HTMLDivElement | null>(null)
 const canvasEl = ref<HTMLCanvasElement | null>(null)
@@ -89,12 +91,14 @@ function prevPage() {
   if (page.value <= 1) return
   page.value--
   void renderPage()
+  emit('page', page.value, pageCount.value)
 }
 
 function nextPage() {
   if (page.value >= pageCount.value) return
   page.value++
   void renderPage()
+  emit('page', page.value, pageCount.value)
 }
 
 watch(

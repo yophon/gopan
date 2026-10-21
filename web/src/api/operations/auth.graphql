@@ -48,6 +48,7 @@ query Me {
     quotaBytes
     usedBytes
     isAdmin
+    unreadNotifications
   }
 }
 

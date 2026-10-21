@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useEventListener } from '@vueuse/core'
@@ -15,6 +15,7 @@ import {
   Grid,
   Link,
   List,
+  Paperclip,
   Rank,
   Share,
   Tickets,
@@ -46,6 +47,10 @@ import FetchDialog from '@/components/FetchDialog.vue'
 import { useFetchEnabled } from '@/composables/jobs'
 import { useExtract } from '@/composables/extract'
 import { isArchiveName } from '@/utils/archive'
+import { copyDirectLinks, useLinksEnabled } from '@/composables/links'
+import { linkFormatLabels } from '@/utils/links'
+import type { LinkFormat } from '@/utils/links'
+import { withoutQuery } from '@/utils/notifications'
 import NodeTable from '@/components/nodes/NodeTable.vue'
 import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
@@ -513,6 +518,66 @@ function onOpen(row: NodeListItem) {
   }
 }
 
+// ---------- ?open=<nodeId>:通知与推送链接直达(doc/22 三.4) ----------
+// 文件夹 → 进去;文件 → 在所在文件夹的列表里打开预览。做完从地址里去掉,刷新不再弹。
+
+async function openFromQuery(id: string) {
+  try {
+    const res = await request(NodeDocument, { id })
+    const n = res.node
+    if (n.kind === 'FOLDER') {
+      await router.replace(`/drive/${n.id}`)
+      return
+    }
+    await router.replace({ path: route.path, query: withoutQuery(route.query, ['open']) })
+    const list = await queryClient.ensureQueryData({
+      queryKey: ['children', folderId.value],
+      queryFn: () => request(ChildrenDocument, { parentId: folderId.value }),
+    })
+    const files = list.children.items.filter((i) => i.kind === 'FILE')
+    const idx = files.findIndex((f) => f.id === n.id)
+    if (idx >= 0) openPreview(files.map((f) => f.id), idx)
+    else openPreview([n.id], 0)
+  } catch (err) {
+    ElMessage.error(errorText(err, '文件不存在或已被删除'))
+    void router.replace({ path: route.path, query: withoutQuery(route.query, ['open']) })
+  }
+}
+
+watch(
+  () => route.query.open,
+  (id) => {
+    if (typeof id === 'string' && id) void openFromQuery(id)
+  },
+  { immediate: true },
+)
+
+// ---------- 复制直链(doc/22 四.4):只对文件,多选一行一条 ----------
+
+const linksEnabled = useLinksEnabled()
+const linkSheet = ref<{ visible: boolean; nodes: NodeListItem[] }>({ visible: false, nodes: [] })
+const linkFormatItems: SheetItem[] = (['url', 'markdown', 'html'] as LinkFormat[]).map((f) => ({
+  key: f,
+  label: linkFormatLabels[f],
+}))
+
+function fileTargets(nodes: NodeListItem[]): NodeListItem[] {
+  return nodes.filter((n) => n.kind === 'FILE')
+}
+
+function openLinkSheet(nodes: NodeListItem[]) {
+  const files = fileTargets(nodes)
+  if (files.length === 0) {
+    ElMessage.warning('直链只能给文件生成')
+    return
+  }
+  linkSheet.value = { visible: true, nodes: files }
+}
+
+function onLinkSheetSelect(key: string) {
+  void copyDirectLinks(linkSheet.value.nodes, key as LinkFormat)
+}
+
 // ---------- 触屏操作菜单 ----------
 
 const sheet = ref<{ visible: boolean; node: NodeListItem | null }>({
@@ -532,6 +597,7 @@ const sheetItems = computed<SheetItem[]>(() => {
     { key: 'open', label: node.kind === 'FOLDER' ? '打开' : '预览' },
     { key: 'download', label: node.kind === 'FOLDER' ? '打包下载' : '下载', icon: Download },
     { key: 'share', label: '分享', icon: Share },
+    ...(node.kind === 'FILE' && linksEnabled.value ? [{ key: 'link', label: '复制直链', icon: Paperclip }] : []),
     ...(node.kind === 'FOLDER' ? [{ key: 'collect', label: '收集文件', icon: Tickets }] : []),
     ...(isArchive(node)
       ? [
@@ -559,6 +625,9 @@ function onSheetSelect(key: string) {
       break
     case 'share':
       openShare(node)
+      break
+    case 'link':
+      openLinkSheet([node])
       break
     case 'collect':
       openCollect(node)
@@ -629,6 +698,20 @@ function onContextCollect() {
   const row = contextMenu.value.row
   closeContextMenu()
   if (row) openCollect(row)
+}
+
+/** 右键的那一行在多选里就对整组(其中的文件)生效,否则只对这一行 */
+const contextLinkTargets = computed<NodeListItem[]>(() => {
+  const row = contextMenu.value.row
+  if (!row) return []
+  const inSelection = selection.value.length > 1 && selection.value.some((n) => n.id === row.id)
+  return fileTargets(inSelection ? selection.value : [row])
+})
+
+function onContextLink(fmt: LinkFormat) {
+  const targets = contextLinkTargets.value
+  closeContextMenu()
+  void copyDirectLinks(targets, fmt)
 }
 
 function onContextExtract(to: boolean) {
@@ -757,6 +840,15 @@ function onContextExtract(to: boolean) {
         <el-button size="small" :icon="Share" :disabled="selection.length !== 1" @click="selection[0] && openShare(selection[0])">
           分享
         </el-button>
+        <el-button
+          v-if="linksEnabled"
+          size="small"
+          :icon="Paperclip"
+          :disabled="!fileTargets(selection).length"
+          @click="openLinkSheet(selection)"
+        >
+          直链
+        </el-button>
         <el-button size="small" type="danger" :icon="Delete" :disabled="!selection.length" @click="onDelete(selectedIds)">
           删除
         </el-button>
@@ -769,6 +861,13 @@ function onContextExtract(to: boolean) {
       :title="sheet.node?.name"
       :items="sheetItems"
       @select="onSheetSelect"
+    />
+
+    <NodeActionSheet
+      v-model:visible="linkSheet.visible"
+      :title="linkSheet.nodes.length > 1 ? `复制 ${linkSheet.nodes.length} 个文件的直链` : '复制直链'"
+      :items="linkFormatItems"
+      @select="onLinkSheetSelect"
     />
 
     <MoveDialog
@@ -808,6 +907,20 @@ function onContextExtract(to: boolean) {
       <li class="context-menu-item" @click="onContextShare">
         <el-icon><Share /></el-icon>
         分享
+      </li>
+      <li
+        v-if="linksEnabled && contextLinkTargets.length"
+        class="context-menu-item has-sub"
+        @click.stop
+      >
+        <el-icon><Paperclip /></el-icon>
+        复制直链{{ contextLinkTargets.length > 1 ? `(${contextLinkTargets.length} 个)` : '' }}
+        <span class="sub-arrow">›</span>
+        <ul class="context-submenu">
+          <li class="context-menu-item" @click="onContextLink('url')">链接</li>
+          <li class="context-menu-item" @click="onContextLink('markdown')">Markdown</li>
+          <li class="context-menu-item" @click="onContextLink('html')">HTML</li>
+        </ul>
       </li>
       <li v-if="contextMenu.row?.kind === 'FOLDER'" class="context-menu-item" @click="onContextCollect">
         <el-icon><Tickets /></el-icon>
@@ -896,6 +1009,31 @@ function onContextExtract(to: boolean) {
 }
 .context-menu-item:hover {
   background: var(--el-fill-color-light);
+}
+.context-menu-item.has-sub {
+  position: relative;
+}
+.sub-arrow {
+  margin-left: auto;
+  padding-left: 12px;
+  color: var(--el-text-color-secondary);
+}
+.context-submenu {
+  display: none;
+  position: absolute;
+  top: -5px;
+  left: 100%;
+  min-width: 110px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--el-bg-color-overlay);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 6px;
+  box-shadow: var(--el-box-shadow-light);
+}
+.has-sub:hover > .context-submenu {
+  display: block;
 }
 
 /* 手机:工具栏可换行,多选时给底部操作栏留出空间 */
