@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/disintegration/imaging"
@@ -22,6 +24,15 @@ import (
 )
 
 const maxImageBytes = 100 << 20 // 解码上限,防超大图打爆内存
+
+// 解码后每像素约 5.5 字节(YCbCr 原图 + 缩放用的 NRGBA 副本):60MP 约 330MB,
+// 已覆盖 48 / 50MP 的手机原图;再大就不做缩略图。
+const (
+	maxImagePixels = 60_000_000
+	bigImagePixels = 16_000_000
+)
+
+var bigDecode sync.Mutex
 
 // enqueueDerivatives 在 hash 校验通过后按类型派生(只看 mime,够用)。
 func (w *Pool) enqueueDerivatives(ctx context.Context, blob store.Blob) {
@@ -46,6 +57,19 @@ func (w *Pool) makeThumbs(ctx context.Context, blobID uuid.UUID) error {
 	}
 	if blob.Size > maxImageBytes {
 		return nil // 超大图不做缩略图,前端用图标
+	}
+	// 文件大小管不住解码内存:几万×几万的 PNG 压缩后可以很小。先只读头部拿尺寸。
+	px, err := w.imagePixels(ctx, blob.Sha256)
+	if err != nil {
+		return fmt.Errorf("图片解码失败: %w", err)
+	}
+	if px > maxImagePixels {
+		return nil
+	}
+	if px > bigImagePixels {
+		// 大图一次只解一张:两个 worker 同时解两张 50MP 的图,精简档的容器就满了
+		bigDecode.Lock()
+		defer bigDecode.Unlock()
 	}
 	rc, err := w.obj.Open(ctx, objstore.BlobKey(blob.Sha256))
 	if err != nil {
@@ -74,6 +98,20 @@ func (w *Pool) makeThumbs(ctx context.Context, blobID uuid.UUID) error {
 		}
 	}
 	return nil
+}
+
+// imagePixels 只解析图片头部,返回像素数。
+func (w *Pool) imagePixels(ctx context.Context, sha string) (int64, error) {
+	rc, err := w.obj.Open(ctx, objstore.BlobKey(sha))
+	if err != nil {
+		return 0, err
+	}
+	defer rc.Close()
+	cfg, _, err := image.DecodeConfig(rc)
+	if err != nil {
+		return 0, err
+	}
+	return int64(cfg.Width) * int64(cfg.Height), nil
 }
 
 // ---- 音视频 ----

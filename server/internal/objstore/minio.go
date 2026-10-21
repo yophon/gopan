@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -148,13 +149,35 @@ func (s *Store) PresignGet(ctx context.Context, key, filename string) (string, e
 	return u.String(), nil
 }
 
-// PresignGetInline 预览用:不带 attachment,浏览器内联打开。
-func (s *Store) PresignGetInline(ctx context.Context, key string) (string, error) {
-	u, err := s.public.Presign(ctx, "GET", s.bucket, key, s.getTTL, nil)
+// PresignGetInline 预览用:不带 attachment,浏览器内联打开。mime 是对象内容的类型,
+// 响应类型由 InlineOverrides 按它改写。
+func (s *Store) PresignGetInline(ctx context.Context, key, mime string) (string, error) {
+	u, err := s.public.Presign(ctx, "GET", s.bucket, key, s.getTTL, InlineOverrides(mime))
 	if err != nil {
 		return "", err
 	}
 	return u.String(), nil
+}
+
+// InlineOverrides 决定内联预签名的响应头。预签名地址与站点同源(/gopan/* 反代到 MinIO),
+// 响应不经过 Go、没有站点的 CSP,而对象的类型又来自上传者起的文件名:html / svg 若按原类型返回,
+// 被顶层打开时脚本就以站点身份运行(doc/20 二.6)。所以响应类型一律显式给出:
+// 图片 / 音视频 / PDF 保留;SVG 保留类型(<img> 靠它渲染)但加 attachment,顶层打开只会下载;
+// 其余(文本、html、xml、未知)都按纯文本返回。
+func InlineOverrides(mime string) url.Values {
+	m := strings.ToLower(strings.TrimSpace(strings.SplitN(mime, ";", 2)[0]))
+	v := url.Values{}
+	switch {
+	case m == "image/svg+xml":
+		v.Set("response-content-type", m)
+		v.Set("response-content-disposition", "attachment")
+	case strings.HasPrefix(m, "image/"), strings.HasPrefix(m, "video/"), strings.HasPrefix(m, "audio/"),
+		m == "application/pdf":
+		v.Set("response-content-type", m)
+	default:
+		v.Set("response-content-type", "text/plain; charset=utf-8")
+	}
+	return v
 }
 
 // Open 流式读对象(hash 校验、生成派生物用),记得 Close。

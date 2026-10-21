@@ -45,6 +45,7 @@ type Config struct {
 	AppReleaseDir string
 	FFmpegPath    string
 	FFprobePath   string
+	Workers       int // 后台任务并发(hash 校验、缩略图、封面、转换),1–16
 }
 
 func Load() (*Config, error) {
@@ -76,6 +77,7 @@ func Load() (*Config, error) {
 		AppReleaseDir: env("APP_RELEASE_DIR", ""),
 		FFmpegPath:    env("FFMPEG_PATH", "ffmpeg"),
 		FFprobePath:   env("FFPROBE_PATH", "ffprobe"),
+		Workers:       int(envInt64("WORKERS", 2)),
 	}
 	tp, err := parseCIDRs(env("TRUSTED_PROXIES", ""))
 	if err != nil {
@@ -90,6 +92,9 @@ func Load() (*Config, error) {
 		c.S3PublicEndpoint = c.S3Endpoint // 单机同网默认
 	}
 	c.S3PublicUseSSL = envBool("S3_PUBLIC_USE_SSL", c.S3UseSSL)
+	if c.Workers < 1 || c.Workers > 16 {
+		return nil, fmt.Errorf("GOPAN_WORKERS 必须在 1 到 16 之间")
+	}
 	if c.PartSize < 5<<20 {
 		return nil, fmt.Errorf("GOPAN_PART_SIZE 不能小于 5MiB(S3 multipart 规定)")
 	}

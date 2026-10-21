@@ -75,6 +75,7 @@ func (w *Pool) Run(ctx context.Context, n int) {
 	go w.periodic(ctx, 24*time.Hour, "auth-session-cleanup", w.cleanupAuthSessions)
 	go w.periodic(ctx, 24*time.Hour, "share-visit-cleanup", w.cleanupShareVisits)
 	go w.periodic(ctx, time.Minute, "subtree-stats", w.recomputeStats)
+	go w.periodic(ctx, 5*time.Minute, "task-reap", w.reapTasks)
 	<-ctx.Done()
 }
 
@@ -127,7 +128,10 @@ func (w *Pool) execute(ctx context.Context, t store.Task) {
 			status = "pending" // 交还队列重试
 		}
 	}
-	if ferr := w.q.FinishTask(ctx, store.FinishTaskParams{ID: t.ID, Status: status, LastError: errText}); ferr != nil {
+	// 停机时 ctx 已取消:收尾仍要写回,否则任务停在 running,要等 5 分钟才被重新领
+	fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if ferr := w.q.FinishTask(fctx, store.FinishTaskParams{ID: t.ID, Status: status, LastError: errText}); ferr != nil {
 		slog.Error("finish task", "err", ferr)
 	}
 	metrics.Tasks.WithLabelValues(t.Kind, status).Inc()
@@ -288,6 +292,15 @@ func (w *Pool) cleanupShareVisits(ctx context.Context) error {
 	if n > 0 {
 		slog.Info("share visits cleanup", "deleted", n)
 		metrics.Cleanup.WithLabelValues("share_visits").Add(float64(n))
+	}
+	return err
+}
+
+// reapTasks 把用完重试次数后中断在 running 的任务落到 failed(见 FailExhaustedTasks)。
+func (w *Pool) reapTasks(ctx context.Context) error {
+	n, err := w.q.FailExhaustedTasks(ctx)
+	if n > 0 {
+		slog.Warn("tasks reaped", "failed", n)
 	}
 	return err
 }

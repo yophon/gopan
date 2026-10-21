@@ -110,11 +110,11 @@ func (s *Previews) ForList(ctx context.Context, name string, sha, mime *string, 
 	info := PreviewInfo{Kind: kind}
 	if kind == PvImage || kind == PvVideo {
 		thumbKind := "thumb256"
-		if u, err := s.obj.PresignGetInline(ctx, objstore.DerivedKey(*sha, thumbKind)); err == nil {
+		if u, err := s.obj.PresignGetInline(ctx, objstore.DerivedKey(*sha, thumbKind), derivedMime(thumbKind)); err == nil {
 			info.ThumbURL = &u
 		}
 		if kind == PvVideo {
-			if u, err := s.obj.PresignGetInline(ctx, objstore.DerivedKey(*sha, "cover")); err == nil {
+			if u, err := s.obj.PresignGetInline(ctx, objstore.DerivedKey(*sha, "cover"), derivedMime("cover")); err == nil {
 				info.ThumbURL = &u
 			}
 		}
@@ -137,11 +137,11 @@ func (s *Previews) ForNode(ctx context.Context, name string, sha *string, mime *
 	case PvImage:
 		s.fillDerived(ctx, &info, blob, "thumb2048", &info.LargeURL)
 		// 原图兜底(小图没生成 2048 版)
-		if u, err := s.obj.PresignGetInline(ctx, objstore.BlobKey(*sha)); err == nil {
+		if u, err := s.obj.PresignGetInline(ctx, objstore.BlobKey(*sha), blob.Mime); err == nil {
 			info.ContentURL = &u
 		}
 	case PvPDF, PvText, PvVideo, PvAudio:
-		if u, err := s.obj.PresignGetInline(ctx, objstore.BlobKey(*sha)); err == nil {
+		if u, err := s.obj.PresignGetInline(ctx, objstore.BlobKey(*sha), blob.Mime); err == nil {
 			info.ContentURL = &u
 		}
 		if info.Kind == PvVideo {
@@ -208,12 +208,20 @@ func (s *Previews) fillDerived(ctx context.Context, info *PreviewInfo, blob stor
 	}
 	for _, d := range ds {
 		if d.Kind == kind {
-			if u, err := s.obj.PresignGetInline(ctx, d.MinioKey); err == nil {
+			if u, err := s.obj.PresignGetInline(ctx, d.MinioKey, derivedMime(kind)); err == nil {
 				*target = &u
 			}
 			return
 		}
 	}
+}
+
+// derivedMime:派生物都是自己生成的,类型按种类固定。
+func derivedMime(kind string) string {
+	if kind == "pdf" {
+		return "application/pdf"
+	}
+	return "image/jpeg" // thumb256 / thumb2048 / cover
 }
 
 func durationFromMeta(meta []byte) *int {

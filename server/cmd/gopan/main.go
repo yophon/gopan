@@ -133,7 +133,7 @@ func run() error {
 	wk.SetUploads(uploads)
 	uploads.SetEnqueue(wk.Enqueue)
 	previews.SetEnqueue(wk.Enqueue)
-	go wk.Run(ctx, 2)
+	go wk.Run(ctx, cfg.Workers)
 
 	es := graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
 		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass, MCPTokens: mcpTokens, OAuth: oauth, Chats: chats,

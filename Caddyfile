@@ -6,6 +6,13 @@
 
 	@s3 path /gopan/*
 	handle @s3 {
+		# 对象响应与站点同源,却不经过 gopan、没有站点的 CSP:不许它们作为页面执行脚本(doc/20 二.6)。
+		# defer:盖掉 MinIO 自己带的同名头
+		header {
+			defer
+			Content-Security-Policy "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'"
+			X-Content-Type-Options nosniff
+		}
 		reverse_proxy minio:9000
 	}
 

@@ -345,3 +345,80 @@ func TestClaimTaskSemantics(t *testing.T) {
 		t.Fatalf("应领到 pending 与滞留 running 各一,got %v", got)
 	}
 }
+
+// verify_hash 先于其它任务被领,哪怕它入队更晚:WebDAV / Agent 上传要等它才可用。
+func TestClaimTaskPrefersVerifyHash(t *testing.T) {
+	_, pool, _ := setup(t)
+	ctx := context.Background()
+	q := store.New(pool)
+
+	var blobs []uuid.UUID
+	for i := byte(0); i < 3; i++ {
+		id := uuid.Must(uuid.NewV7())
+		mustExec(t, pool, `INSERT INTO blobs (id, sha256, size) VALUES ($1, $2, 1)`,
+			id, hex.EncodeToString(bytes.Repeat([]byte{0x50 + i}, 32)))
+		blobs = append(blobs, id)
+	}
+	for i, kind := range []string{"thumb", "media_probe"} {
+		mustExec(t, pool, `INSERT INTO tasks (id, kind, blob_id, created_at) VALUES ($1, $2, $3, now() - make_interval(mins => $4))`,
+			uuid.Must(uuid.NewV7()), kind, blobs[i], 10-i)
+	}
+	mustExec(t, pool, `INSERT INTO tasks (id, kind, blob_id) VALUES ($1, 'verify_hash', $2)`, uuid.Must(uuid.NewV7()), blobs[2])
+
+	var order []string
+	for {
+		task, err := q.ClaimTask(ctx)
+		if err == pgx.ErrNoRows {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		order = append(order, task.Kind)
+	}
+	if len(order) != 3 || order[0] != "verify_hash" || order[1] != "thumb" || order[2] != "media_probe" {
+		t.Fatalf("应先 verify_hash、其余按入队先后,got %v", order)
+	}
+}
+
+// 第 3 次运行中断的任务不会再被领,FailExhaustedTasks 把它落到 failed;还有重试机会的不动。
+func TestFailExhaustedTasks(t *testing.T) {
+	_, pool, _ := setup(t)
+	ctx := context.Background()
+	q := store.New(pool)
+
+	blob := uuid.Must(uuid.NewV7())
+	mustExec(t, pool, `INSERT INTO blobs (id, sha256, size) VALUES ($1, $2, 1)`,
+		blob, hex.EncodeToString(bytes.Repeat([]byte{0x60}, 32)))
+	insert := func(kind string, attempts, staleMin int) uuid.UUID {
+		id := uuid.Must(uuid.NewV7())
+		mustExec(t, pool, `INSERT INTO tasks (id, kind, blob_id, status, attempts, updated_at) VALUES ($1, $2, $3, 'running', $4, now() - make_interval(mins => $5))`,
+			id, kind, blob, attempts, staleMin)
+		return id
+	}
+	dead := insert("thumb", 3, 10)
+	busy := insert("media_probe", 3, 1) // 还在跑
+	retry := insert("video_cover", 2, 10)
+
+	n, err := q.FailExhaustedTasks(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("只应收尾一个,got %d", n)
+	}
+	for id, want := range map[uuid.UUID]string{dead: "failed", busy: "running", retry: "running"} {
+		var st string
+		if err := pool.QueryRow(ctx, `SELECT status FROM tasks WHERE id = $1`, id).Scan(&st); err != nil {
+			t.Fatal(err)
+		}
+		if st != want {
+			t.Fatalf("任务 %s 应为 %s,got %s", id, want, st)
+		}
+	}
+	// 还有重试机会的滞留任务照常被领走
+	task, err := q.ClaimTask(ctx)
+	if err != nil || task.ID != retry {
+		t.Fatalf("应领到可重试的滞留任务,got %v %v", task.ID, err)
+	}
+}

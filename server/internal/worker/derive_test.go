@@ -8,7 +8,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/png"
@@ -140,6 +142,45 @@ func TestMakeThumbsSkipsHuge(t *testing.T) {
 	if n != 0 {
 		t.Fatal("超大图不应产出派生物")
 	}
+}
+
+// 像素炸弹:文件只有几十字节,头部声称 20000×20000。只读头部就该放弃,不去解码。
+func TestMakeThumbsSkipsPixelBomb(t *testing.T) {
+	w, pool, obj := setup(t)
+	ctx := context.Background()
+	blob, _ := seedBlobWithObject(t, pool, obj, pngHeaderOnly(20000, 20000), "image/png")
+	if err := w.makeThumbs(ctx, blob); err != nil {
+		t.Fatalf("超过像素上限应静默跳过,got %v", err)
+	}
+	var n int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM derivatives WHERE blob_id = $1`, blob).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatal("像素炸弹不应产出派生物")
+	}
+}
+
+// pngHeaderOnly 造一个只有签名、IHDR 与 IEND 的 PNG:DecodeConfig 能读出尺寸,真解码会失败。
+func pngHeaderOnly(wd, ht uint32) []byte {
+	var buf bytes.Buffer
+	buf.Write([]byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}) // PNG 签名
+	chunk := func(typ string, data []byte) {
+		_ = binary.Write(&buf, binary.BigEndian, uint32(len(data)))
+		crc := crc32.NewIEEE()
+		crc.Write([]byte(typ))
+		crc.Write(data)
+		buf.WriteString(typ)
+		buf.Write(data)
+		_ = binary.Write(&buf, binary.BigEndian, crc.Sum32())
+	}
+	ihdr := make([]byte, 13)
+	binary.BigEndian.PutUint32(ihdr[0:], wd)
+	binary.BigEndian.PutUint32(ihdr[4:], ht)
+	ihdr[8], ihdr[9] = 8, 6 // 8 bit RGBA
+	chunk("IHDR", ihdr)
+	chunk("IEND", nil)
+	return buf.Bytes()
 }
 
 func TestMakeThumbsBadImage(t *testing.T) {

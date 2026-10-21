@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/yophon/gopan/server/internal/service"
@@ -111,8 +112,13 @@ func TestExecuteRetryThenFail(t *testing.T) {
 		t.Fatalf("attempts 未满应交还队列重试并记错误,got %s/%v", status, lastErr)
 	}
 
-	// 手动把 attempts 提到 2,再认领(→3)执行:应进 failed 终态
-	mustExec(t, pool, `UPDATE tasks SET attempts = 2 WHERE id = $1`, task.ID)
+	// 刚交还的任务在退避期内(30 秒 × attempts)不可领
+	if _, err := q.ClaimTask(ctx); err != pgx.ErrNoRows {
+		t.Fatalf("退避期内不应被领走,got %v", err)
+	}
+
+	// 手动把 attempts 提到 2 并让退避期过去,再认领(→3)执行:应进 failed 终态
+	mustExec(t, pool, `UPDATE tasks SET attempts = 2, updated_at = now() - interval '61 seconds' WHERE id = $1`, task.ID)
 	task, err = q.ClaimTask(ctx)
 	if err != nil {
 		t.Fatal(err)
