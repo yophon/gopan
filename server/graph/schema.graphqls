@@ -90,6 +90,23 @@ type AdminOverview {
   blobCount: Int!
   blobBytes: Int64!
   taskCounts: [TaskCount!]!
+  contentIndex: ContentIndexStats!
+}
+
+# 内容搜索的索引进度(doc/20)。按内容(blob)计,同一份内容多个文件共享一份。
+type ContentIndexStats {
+  # GOPAN_CONTENT_INDEX 关掉时为 false,其余数字照旧给出
+  enabled: Boolean!
+  done: Int!
+  # 支持的格式但没有文字(扫描件、空文档)
+  empty: Int!
+  # 文字太长只收了前一部分
+  truncated: Int!
+  unsupported: Int!
+  failed: Int!
+  # 还没提过或提取器版本旧了,等着排队的
+  pending: Int!
+  textBytes: Int64!
 }
 
 enum NodeKind { FILE, FOLDER }

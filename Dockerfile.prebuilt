@@ -12,4 +12,11 @@
 #     && docker compose -f docker-compose.prod.yml up -d --no-build gopan
 ARG BASE=gopan:latest
 FROM ${BASE}
+# v3.2 起内容搜索要 pdftotext:老的运行层没有就补装一次(apt 安装,不编译,小内存机器也扛得住);
+# 之后的 gopan:latest 已经带着,这一步只是检查一下就过去
+USER root
+RUN command -v pdftotext >/dev/null 2>&1 || ( apt-get update \
+    && apt-get install -y --no-install-recommends poppler-utils poppler-data \
+    && rm -rf /var/lib/apt/lists/* )
 COPY --chown=root:root --chmod=755 gopan-linux /usr/local/bin/gopan
+USER gopan

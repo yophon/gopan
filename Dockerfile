@@ -28,8 +28,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags='-s -w' -o /
 FROM mwader/static-ffmpeg:7.1 AS ffmpeg
 
 FROM debian:bookworm-slim
+# poppler-utils:内容搜索提取 PDF 文字(pdftotext);poppler-data:中文 PDF 的 CMap(doc/20)
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && apt-get install -y --no-install-recommends ca-certificates curl poppler-utils poppler-data \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -r -u 10001 gopan
 COPY --from=ffmpeg /ffmpeg /ffprobe /usr/local/bin/

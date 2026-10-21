@@ -72,6 +72,23 @@ const { data: overviewData } = useQuery({
   queryFn: () => request(AdminOverviewDocument),
 })
 const overview = computed(() => overviewData.value?.adminOverview ?? null)
+
+/** 内容索引:有文字可搜的份数,其余分类一行列出(只列非零的) */
+const indexed = computed(() => {
+  const ci = overview.value?.contentIndex
+  return ci ? ci.done + ci.truncated : 0
+})
+const indexSummary = computed(() => {
+  const ci = overview.value?.contentIndex
+  if (!ci) return ''
+  const parts: string[] = []
+  if (ci.pending) parts.push(`待处理 ${ci.pending}`)
+  if (ci.truncated) parts.push(`截断 ${ci.truncated}`)
+  if (ci.empty) parts.push(`无文字 ${ci.empty}`)
+  if (ci.unsupported) parts.push(`不支持 ${ci.unsupported}`)
+  if (ci.failed) parts.push(`失败 ${ci.failed}`)
+  return parts.join(' · ') || '全部处理完'
+})
 const failedTasks = computed(
   () => overview.value?.taskCounts.find((t) => t.status === 'failed')?.count ?? 0,
 )
@@ -214,6 +231,11 @@ const retryMutation = useMutation({
             重排失败任务
           </el-button>
         </div>
+      </el-card>
+      <el-card shadow="never">
+        <div class="card-label">内容索引{{ overview.contentIndex.enabled ? '' : '(已关闭)' }}</div>
+        <div class="card-value">{{ indexed }} 份 · {{ formatBytes(overview.contentIndex.textBytes) }}</div>
+        <div class="card-sub">{{ indexSummary }}</div>
       </el-card>
     </div>
 
@@ -373,6 +395,11 @@ const retryMutation = useMutation({
   margin-top: 4px;
   font-size: 20px;
   font-weight: 600;
+}
+.card-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 .task-value {
   display: flex;

@@ -20,6 +20,16 @@ query AdminOverview {
       status
       count
     }
+    contentIndex {
+      enabled
+      done
+      empty
+      truncated
+      unsupported
+      failed
+      pending
+      textBytes
+    }
   }
 }
 

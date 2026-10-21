@@ -54,12 +54,16 @@ jobs:
           check-latest: true
           cache-dependency-path: server/go.sum
 
+      # 内容搜索的 PDF 提取用例要真跑 pdftotext(与生产镜像同一套 poppler)
+      - name: Install poppler
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends poppler-utils poppler-data
+
       - name: go vet
         working-directory: server
         run: go vet ./...
 
       # -p 1:集成测试包共用一个库,setup 会 DROP SCHEMA 重建,不能并行。
-      # 没有 ffmpeg / gotenberg:worker 的音视频与 Office 派生用例按设计 skip。
+      # 没有 ffmpeg / gotenberg:worker 的音视频与 Office 派生用例按设计 skip;pdftotext 上面装了。
       - name: go test
         working-directory: server
         run: go test -p 1 -count=1 ./...

@@ -34,6 +34,9 @@ type Pool struct {
 	ffmpeg    string
 	ffprobe   string
 	gotenberg string
+	// 内容搜索:是否提取文字、pdftotext 路径(空 = PDF 不提)
+	textIndex bool
+	pdftotext string
 }
 
 func New(pool *pgxpool.Pool, obj *objstore.Store, nodes *service.Nodes, trashTTL time.Duration, ffmpeg, ffprobe, gotenberg string) *Pool {
@@ -84,6 +87,9 @@ func (w *Pool) Run(ctx context.Context, n int) {
 	}
 	go w.periodic(ctx, time.Minute, "subtree-stats", w.recomputeStats)
 	go w.periodic(ctx, 5*time.Minute, "task-reap", w.reapTasks)
+	if w.textIndex {
+		go w.periodic(ctx, time.Minute, "text-backfill", w.backfillText)
+	}
 	<-ctx.Done()
 }
 
@@ -123,6 +129,8 @@ func (w *Pool) execute(ctx context.Context, t store.Task) {
 		err = w.makeVideoCover(ctx, t.BlobID)
 	case "office_pdf":
 		err = w.makeOfficePDF(ctx, t.BlobID)
+	case "extract_text":
+		err = w.extractText(ctx, t.BlobID)
 	default:
 		err = fmt.Errorf("未知任务类型 %s", t.Kind)
 	}

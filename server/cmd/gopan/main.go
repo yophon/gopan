@@ -11,6 +11,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -125,6 +126,7 @@ func run() error {
 	shares := service.NewShares(q, auth)
 	collects := service.NewCollects(pool, auth, uploads)
 	admin := service.NewAdmin(q, cfg.DefaultQuota)
+	admin.SetContentIndex(cfg.ContentIndex)
 	appPass := service.NewAppPasswords(q)
 	mcpTokens := service.NewMCPTokens(q)
 	oauth := service.NewOAuth(q)
@@ -133,6 +135,7 @@ func run() error {
 	wk := worker.New(pool, obj, nodes, cfg.TrashTTL, cfg.FFmpegPath, cfg.FFprobePath, cfg.GotenbergURL)
 	wk.SetUploads(uploads)
 	wk.SetCollects(collects)
+	wk.SetTextIndex(cfg.ContentIndex, lookPathOrEmpty(cfg.PdftotextPath))
 	uploads.SetEnqueue(wk.Enqueue)
 	previews.SetEnqueue(wk.Enqueue)
 	go wk.Run(ctx, cfg.Workers)
@@ -246,4 +249,17 @@ func migrate(dbURL string) error {
 		return err
 	}
 	return goose.Up(sqlDB, "migrations")
+}
+
+// lookPathOrEmpty 找不到可执行文件时返回空串:内容索引照开,只是 PDF 记为不支持。
+func lookPathOrEmpty(name string) string {
+	if name == "" {
+		return ""
+	}
+	p, err := exec.LookPath(name)
+	if err != nil {
+		slog.Warn("pdftotext not found, PDF text will not be indexed", "path", name)
+		return ""
+	}
+	return p
 }

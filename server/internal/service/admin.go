@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/yophon/gopan/server/internal/fulltext"
 	"github.com/yophon/gopan/server/internal/store"
 )
 
@@ -17,11 +18,15 @@ import (
 type Admin struct {
 	q            *store.Queries
 	defaultQuota int64
+	contentIndex bool // 只用来在概览里显示开没开
 }
 
 func NewAdmin(q *store.Queries, defaultQuota int64) *Admin {
-	return &Admin{q: q, defaultQuota: defaultQuota}
+	return &Admin{q: q, defaultQuota: defaultQuota, contentIndex: true}
 }
+
+// SetContentIndex 由 main 按 GOPAN_CONTENT_INDEX 注入。
+func (a *Admin) SetContentIndex(v bool) { a.contentIndex = v }
 
 func (a *Admin) require(ctx context.Context, callerID uuid.UUID) error {
 	u, err := a.q.GetUserByID(ctx, callerID)
@@ -148,6 +153,14 @@ type OverviewView struct {
 	BlobCount      int64
 	BlobBytes      int64
 	TaskCounts     []store.CountTasksByStatusRow
+	ContentIndex   ContentIndexView
+}
+
+type ContentIndexView struct {
+	Enabled                                     bool
+	Done, Empty, Truncated, Unsupported, Failed int64
+	Pending                                     int64
+	TextBytes                                   int64
 }
 
 func (a *Admin) Overview(ctx context.Context, callerID uuid.UUID) (*OverviewView, error) {
@@ -166,11 +179,40 @@ func (a *Admin) Overview(ctx context.Context, callerID uuid.UUID) (*OverviewView
 	if err != nil {
 		return nil, err
 	}
+	ci, err := a.contentIndexStats(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return &OverviewView{
 		UserCount: us.UserCount, TotalUsedBytes: us.TotalUsed,
 		BlobCount: bs.BlobCount, BlobBytes: bs.BlobBytes,
-		TaskCounts: ts,
+		TaskCounts: ts, ContentIndex: ci,
 	}, nil
+}
+
+func (a *Admin) contentIndexStats(ctx context.Context) (ContentIndexView, error) {
+	v := ContentIndexView{Enabled: a.contentIndex}
+	rows, err := a.q.ContentIndexStats(ctx)
+	if err != nil {
+		return v, err
+	}
+	for _, r := range rows {
+		v.TextBytes += r.Bytes
+		switch r.Status {
+		case "done":
+			v.Done = r.Count
+		case "empty":
+			v.Empty = r.Count
+		case "truncated":
+			v.Truncated = r.Count
+		case "unsupported":
+			v.Unsupported = r.Count
+		case "failed":
+			v.Failed = r.Count
+		}
+	}
+	v.Pending, err = a.q.CountBlobsNeedingText(ctx, fulltext.Version)
+	return v, err
 }
 
 // RetryFailedTasks 失败任务清零重排。worker 有 30 秒兜底轮询,无需显式唤醒。

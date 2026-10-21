@@ -46,6 +46,9 @@ type Config struct {
 	FFmpegPath    string
 	FFprobePath   string
 	Workers       int // 后台任务并发(hash 校验、缩略图、封面、转换),1–16
+	// 内容搜索:false 关掉文字提取,内容搜索返回不可用;pdftotext 找不到时 PDF 不提(doc/20)
+	ContentIndex  bool
+	PdftotextPath string
 }
 
 func Load() (*Config, error) {
@@ -78,6 +81,8 @@ func Load() (*Config, error) {
 		FFmpegPath:    env("FFMPEG_PATH", "ffmpeg"),
 		FFprobePath:   env("FFPROBE_PATH", "ffprobe"),
 		Workers:       int(envInt64("WORKERS", 2)),
+		ContentIndex:  envBool("CONTENT_INDEX", true),
+		PdftotextPath: env("PDFTOTEXT_PATH", "pdftotext"),
 	}
 	tp, err := parseCIDRs(env("TRUSTED_PROXIES", ""))
 	if err != nil {

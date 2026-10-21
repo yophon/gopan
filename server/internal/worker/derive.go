@@ -46,6 +46,10 @@ func (w *Pool) enqueueDerivatives(ctx context.Context, blob store.Blob) {
 	case service.PvAudio:
 		w.Enqueue(ctx, "media_probe", blob.ID)
 	}
+	// 文字提取不看 mime(那是第一个上传者的文件名定的),一律排上,由提取器嗅探
+	if w.textIndex {
+		w.Enqueue(ctx, "extract_text", blob.ID)
+	}
 }
 
 // ---- 图片缩略图 ----
@@ -229,7 +233,14 @@ func (w *Pool) makeOfficePDF(ctx context.Context, blobID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	return w.saveDerivative(ctx, blob, "pdf", pdf, "application/pdf")
+	if err := w.saveDerivative(ctx, blob, "pdf", pdf, "application/pdf"); err != nil {
+		return err
+	}
+	// 旧版 doc / xls / ppt 只能从转出的 PDF 里提文字:转好了就重提一遍
+	if w.textIndex {
+		w.requeue(ctx, "extract_text", blob.ID)
+	}
+	return nil
 }
 
 // ---- 公共 ----

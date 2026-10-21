@@ -41,6 +41,7 @@ type ComplexityRoot struct {
 	AdminOverview struct {
 		BlobBytes      func(childComplexity int) int
 		BlobCount      func(childComplexity int) int
+		ContentIndex   func(childComplexity int) int
 		TaskCounts     func(childComplexity int) int
 		TotalUsedBytes func(childComplexity int) int
 		UserCount      func(childComplexity int) int
@@ -84,6 +85,17 @@ type ComplexityRoot struct {
 		CreatedAt func(childComplexity int) int
 		Name      func(childComplexity int) int
 		Size      func(childComplexity int) int
+	}
+
+	ContentIndexStats struct {
+		Done        func(childComplexity int) int
+		Empty       func(childComplexity int) int
+		Enabled     func(childComplexity int) int
+		Failed      func(childComplexity int) int
+		Pending     func(childComplexity int) int
+		TextBytes   func(childComplexity int) int
+		Truncated   func(childComplexity int) int
+		Unsupported func(childComplexity int) int
 	}
 
 	FileRequest struct {
@@ -489,6 +501,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AdminOverview.BlobCount(childComplexity), true
+	case "AdminOverview.contentIndex":
+		if e.ComplexityRoot.AdminOverview.ContentIndex == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminOverview.ContentIndex(childComplexity), true
 	case "AdminOverview.taskCounts":
 		if e.ComplexityRoot.AdminOverview.TaskCounts == nil {
 			break
@@ -645,6 +663,55 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CollectUpload.Size(childComplexity), true
+
+	case "ContentIndexStats.done":
+		if e.ComplexityRoot.ContentIndexStats.Done == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContentIndexStats.Done(childComplexity), true
+	case "ContentIndexStats.empty":
+		if e.ComplexityRoot.ContentIndexStats.Empty == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContentIndexStats.Empty(childComplexity), true
+	case "ContentIndexStats.enabled":
+		if e.ComplexityRoot.ContentIndexStats.Enabled == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContentIndexStats.Enabled(childComplexity), true
+	case "ContentIndexStats.failed":
+		if e.ComplexityRoot.ContentIndexStats.Failed == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContentIndexStats.Failed(childComplexity), true
+	case "ContentIndexStats.pending":
+		if e.ComplexityRoot.ContentIndexStats.Pending == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContentIndexStats.Pending(childComplexity), true
+	case "ContentIndexStats.textBytes":
+		if e.ComplexityRoot.ContentIndexStats.TextBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContentIndexStats.TextBytes(childComplexity), true
+	case "ContentIndexStats.truncated":
+		if e.ComplexityRoot.ContentIndexStats.Truncated == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContentIndexStats.Truncated(childComplexity), true
+	case "ContentIndexStats.unsupported":
+		if e.ComplexityRoot.ContentIndexStats.Unsupported == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContentIndexStats.Unsupported(childComplexity), true
 
 	case "FileRequest.createdAt":
 		if e.ComplexityRoot.FileRequest.CreatedAt == nil {
@@ -2342,6 +2409,23 @@ type AdminOverview {
   blobCount: Int!
   blobBytes: Int64!
   taskCounts: [TaskCount!]!
+  contentIndex: ContentIndexStats!
+}
+
+# 内容搜索的索引进度(doc/20)。按内容(blob)计,同一份内容多个文件共享一份。
+type ContentIndexStats {
+  # GOPAN_CONTENT_INDEX 关掉时为 false,其余数字照旧给出
+  enabled: Boolean!
+  done: Int!
+  # 支持的格式但没有文字(扫描件、空文档)
+  empty: Int!
+  # 文字太长只收了前一部分
+  truncated: Int!
+  unsupported: Int!
+  failed: Int!
+  # 还没提过或提取器版本旧了,等着排队的
+  pending: Int!
+  textBytes: Int64!
 }
 
 enum NodeKind { FILE, FOLDER }
@@ -2700,6 +2784,8 @@ func (ec *executionContext) childFields_AdminOverview(ctx context.Context, field
 		return ec.fieldContext_AdminOverview_blobBytes(ctx, field)
 	case "taskCounts":
 		return ec.fieldContext_AdminOverview_taskCounts(ctx, field)
+	case "contentIndex":
+		return ec.fieldContext_AdminOverview_contentIndex(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type AdminOverview", field.Name)
 }
@@ -2782,6 +2868,28 @@ func (ec *executionContext) childFields_CollectUpload(ctx context.Context, field
 		return ec.fieldContext_CollectUpload_createdAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CollectUpload", field.Name)
+}
+
+func (ec *executionContext) childFields_ContentIndexStats(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "enabled":
+		return ec.fieldContext_ContentIndexStats_enabled(ctx, field)
+	case "done":
+		return ec.fieldContext_ContentIndexStats_done(ctx, field)
+	case "empty":
+		return ec.fieldContext_ContentIndexStats_empty(ctx, field)
+	case "truncated":
+		return ec.fieldContext_ContentIndexStats_truncated(ctx, field)
+	case "unsupported":
+		return ec.fieldContext_ContentIndexStats_unsupported(ctx, field)
+	case "failed":
+		return ec.fieldContext_ContentIndexStats_failed(ctx, field)
+	case "pending":
+		return ec.fieldContext_ContentIndexStats_pending(ctx, field)
+	case "textBytes":
+		return ec.fieldContext_ContentIndexStats_textBytes(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ContentIndexStats", field.Name)
 }
 
 func (ec *executionContext) childFields_FileRequest(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -4566,6 +4674,38 @@ func (ec *executionContext) fieldContext_AdminOverview_taskCounts(_ context.Cont
 	return fc, nil
 }
 
+func (ec *executionContext) _AdminOverview_contentIndex(ctx context.Context, field graphql.CollectedField, obj *AdminOverview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminOverview_contentIndex(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ContentIndex, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ContentIndexStats) graphql.Marshaler {
+			return ec.marshalNContentIndexStats2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐContentIndexStats(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminOverview_contentIndex(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AdminOverview",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ContentIndexStats(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _AdminUser_id(ctx context.Context, field graphql.CollectedField, obj *AdminUser) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -5088,6 +5228,190 @@ func (ec *executionContext) _CollectUpload_createdAt(ctx context.Context, field 
 }
 func (ec *executionContext) fieldContext_CollectUpload_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CollectUpload", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _ContentIndexStats_enabled(ctx context.Context, field graphql.CollectedField, obj *ContentIndexStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContentIndexStats_enabled(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Enabled, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContentIndexStats_enabled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContentIndexStats", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _ContentIndexStats_done(ctx context.Context, field graphql.CollectedField, obj *ContentIndexStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContentIndexStats_done(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Done, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContentIndexStats_done(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContentIndexStats", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ContentIndexStats_empty(ctx context.Context, field graphql.CollectedField, obj *ContentIndexStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContentIndexStats_empty(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Empty, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContentIndexStats_empty(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContentIndexStats", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ContentIndexStats_truncated(ctx context.Context, field graphql.CollectedField, obj *ContentIndexStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContentIndexStats_truncated(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Truncated, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContentIndexStats_truncated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContentIndexStats", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ContentIndexStats_unsupported(ctx context.Context, field graphql.CollectedField, obj *ContentIndexStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContentIndexStats_unsupported(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Unsupported, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContentIndexStats_unsupported(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContentIndexStats", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ContentIndexStats_failed(ctx context.Context, field graphql.CollectedField, obj *ContentIndexStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContentIndexStats_failed(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Failed, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContentIndexStats_failed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContentIndexStats", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ContentIndexStats_pending(ctx context.Context, field graphql.CollectedField, obj *ContentIndexStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContentIndexStats_pending(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Pending, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContentIndexStats_pending(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContentIndexStats", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ContentIndexStats_textBytes(ctx context.Context, field graphql.CollectedField, obj *ContentIndexStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContentIndexStats_textBytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TextBytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContentIndexStats_textBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContentIndexStats", field, false, false, errors.New("field of type Int64 does not have child fields"))
 }
 
 func (ec *executionContext) _FileRequest_id(ctx context.Context, field graphql.CollectedField, obj *FileRequest) (ret graphql.Marshaler) {
@@ -12499,6 +12823,11 @@ func (ec *executionContext) _AdminOverview(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "contentIndex":
+			out.Values[i] = ec._AdminOverview_contentIndex(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -12837,6 +13166,79 @@ func (ec *executionContext) _CollectUpload(ctx context.Context, sel ast.Selectio
 			}
 		case "createdAt":
 			out.Values[i] = ec._CollectUpload_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var contentIndexStatsImplementors = []string{"ContentIndexStats"}
+
+func (ec *executionContext) _ContentIndexStats(ctx context.Context, sel ast.SelectionSet, obj *ContentIndexStats) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, contentIndexStatsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ContentIndexStats")
+		case "enabled":
+			out.Values[i] = ec._ContentIndexStats_enabled(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "done":
+			out.Values[i] = ec._ContentIndexStats_done(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "empty":
+			out.Values[i] = ec._ContentIndexStats_empty(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "truncated":
+			out.Values[i] = ec._ContentIndexStats_truncated(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unsupported":
+			out.Values[i] = ec._ContentIndexStats_unsupported(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "failed":
+			out.Values[i] = ec._ContentIndexStats_failed(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pending":
+			out.Values[i] = ec._ContentIndexStats_pending(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "textBytes":
+			out.Values[i] = ec._ContentIndexStats_textBytes(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -15967,6 +16369,16 @@ func (ec *executionContext) marshalNCollectUpload2ᚖgithubᚗcomᚋyophonᚋgop
 		return graphql.Null
 	}
 	return ec._CollectUpload(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNContentIndexStats2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐContentIndexStats(ctx context.Context, sel ast.SelectionSet, v *ContentIndexStats) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ContentIndexStats(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNFileRequest2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐFileRequest(ctx context.Context, sel ast.SelectionSet, v FileRequest) graphql.Marshaler {

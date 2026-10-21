@@ -11,11 +11,12 @@ import (
 )
 
 type AdminOverview struct {
-	UserCount      int          `json:"userCount"`
-	TotalUsedBytes int64        `json:"totalUsedBytes"`
-	BlobCount      int          `json:"blobCount"`
-	BlobBytes      int64        `json:"blobBytes"`
-	TaskCounts     []*TaskCount `json:"taskCounts"`
+	UserCount      int                `json:"userCount"`
+	TotalUsedBytes int64              `json:"totalUsedBytes"`
+	BlobCount      int                `json:"blobCount"`
+	BlobBytes      int64              `json:"blobBytes"`
+	TaskCounts     []*TaskCount       `json:"taskCounts"`
+	ContentIndex   *ContentIndexStats `json:"contentIndex"`
 }
 
 type AdminUser struct {
@@ -58,6 +59,17 @@ type CollectUpload struct {
 	Name      string    `json:"name"`
 	Size      int64     `json:"size"`
 	CreatedAt time.Time `json:"createdAt"`
+}
+
+type ContentIndexStats struct {
+	Enabled     bool  `json:"enabled"`
+	Done        int   `json:"done"`
+	Empty       int   `json:"empty"`
+	Truncated   int   `json:"truncated"`
+	Unsupported int   `json:"unsupported"`
+	Failed      int   `json:"failed"`
+	Pending     int   `json:"pending"`
+	TextBytes   int64 `json:"textBytes"`
 }
 
 type FileRequest struct {

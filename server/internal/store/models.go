@@ -30,6 +30,16 @@ type Blob struct {
 	DerefAt   pgtype.Timestamptz
 }
 
+type BlobText struct {
+	BlobID     uuid.UUID
+	Status     string
+	Extractor  int32
+	Content    string
+	Terms      []string
+	PageStarts []int32
+	UpdatedAt  pgtype.Timestamptz
+}
+
 type ChatMessage struct {
 	ID        uuid.UUID
 	OwnerID   uuid.UUID

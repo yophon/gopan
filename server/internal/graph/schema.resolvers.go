@@ -1339,12 +1339,17 @@ func (r *queryResolver) AdminOverview(ctx context.Context) (*AdminOverview, erro
 	for _, tc := range ov.TaskCounts {
 		counts = append(counts, &TaskCount{Status: tc.Status, Count: int(tc.Count)})
 	}
+	ci := ov.ContentIndex
 	return &AdminOverview{
 		UserCount:      int(ov.UserCount),
 		TotalUsedBytes: ov.TotalUsedBytes,
 		BlobCount:      int(ov.BlobCount),
 		BlobBytes:      ov.BlobBytes,
 		TaskCounts:     counts,
+		ContentIndex: &ContentIndexStats{
+			Enabled: ci.Enabled, Done: int(ci.Done), Empty: int(ci.Empty), Truncated: int(ci.Truncated),
+			Unsupported: int(ci.Unsupported), Failed: int(ci.Failed), Pending: int(ci.Pending), TextBytes: ci.TextBytes,
+		},
 	}, nil
 }
 
