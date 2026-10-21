@@ -29,6 +29,11 @@ export const errorMessages: Record<string, string> = {
   NOT_A_FOLDER: '目标不是文件夹',
   FORBIDDEN: '没有权限执行该操作',
   NOT_FOUND: '对象不存在或已被删除',
+  FETCH_DISABLED: '本站没有开启离线下载',
+  INVALID_URL: '链接格式不对,只支持 http / https',
+  TOO_MANY_JOBS: '排队中的后台任务过多,等前面的完成再来',
+  JOB_FINISHED: '任务已经结束',
+  JOB_NOT_RETRYABLE: '只有失败或已取消的任务能重试',
 }
 
 /** 纯映射:错误码 → 文案,overrides > 全局表 > fallback */

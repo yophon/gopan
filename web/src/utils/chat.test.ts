@@ -47,6 +47,7 @@ describe('sourceLabel', () => {
     expect(sourceLabel('web')).toBe('')
     expect(sourceLabel('mcp')).toBe('Agent')
     expect(sourceLabel('webdav')).toBe('WebDAV')
+    expect(sourceLabel('fetch')).toBe('离线下载')
     expect(sourceLabel('')).toBe('')
   })
 })

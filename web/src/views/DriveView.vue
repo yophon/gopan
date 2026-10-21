@@ -11,7 +11,9 @@ import {
   Download,
   EditPen,
   FolderAdd,
+  FolderOpened,
   Grid,
+  Link,
   List,
   Rank,
   Share,
@@ -40,6 +42,10 @@ import { useUiStore } from '@/stores/ui'
 import MoveDialog from '@/components/MoveDialog.vue'
 import ShareDialog from '@/components/ShareDialog.vue'
 import FileRequestDialog from '@/components/FileRequestDialog.vue'
+import FetchDialog from '@/components/FetchDialog.vue'
+import { useFetchEnabled } from '@/composables/jobs'
+import { useExtract } from '@/composables/extract'
+import { isArchiveName } from '@/utils/archive'
 import NodeTable from '@/components/nodes/NodeTable.vue'
 import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
@@ -457,6 +463,36 @@ function openCollect(row: { id: string; name: string }) {
   collectDialogVisible.value = true
 }
 
+// ---------- 离线下载(doc/21) ----------
+
+const fetchEnabled = useFetchEnabled()
+const fetchDialogVisible = ref(false)
+const folderName = computed(() => crumbs.value?.at(-1)?.name ?? '我的文件')
+
+// ---------- 解压(doc/21 四.4):只对压缩包 ----------
+
+const { extract } = useExtract()
+const extractPickVisible = ref(false)
+const extractTarget = ref<NodeListItem | null>(null)
+
+function isArchive(row: NodeListItem | null | undefined): boolean {
+  return !!row && row.kind === 'FILE' && (row.preview?.kind === 'ARCHIVE' || isArchiveName(row.name))
+}
+
+function extractHere(row: NodeListItem) {
+  void extract({ nodeId: row.id, parentId: folderId.value })
+}
+
+function pickExtract(row: NodeListItem) {
+  extractTarget.value = row
+  extractPickVisible.value = true
+}
+
+function onExtractConfirm(parentId: string | null) {
+  const row = extractTarget.value
+  if (row) void extract({ nodeId: row.id, parentId })
+}
+
 // ---------- 打开 ----------
 // 桌面:双击表格行;手机:轻点卡片。语义一致,只是触发方式不同。
 
@@ -497,6 +533,12 @@ const sheetItems = computed<SheetItem[]>(() => {
     { key: 'download', label: node.kind === 'FOLDER' ? '打包下载' : '下载', icon: Download },
     { key: 'share', label: '分享', icon: Share },
     ...(node.kind === 'FOLDER' ? [{ key: 'collect', label: '收集文件', icon: Tickets }] : []),
+    ...(isArchive(node)
+      ? [
+          { key: 'extract', label: '解压到这里', icon: FolderOpened },
+          { key: 'extractTo', label: '解压到…', icon: FolderOpened },
+        ]
+      : []),
     { key: 'rename', label: '重命名', icon: EditPen },
     { key: 'move', label: '移动', icon: Rank },
     { key: 'copy', label: '复制', icon: CopyDocument },
@@ -520,6 +562,12 @@ function onSheetSelect(key: string) {
       break
     case 'collect':
       openCollect(node)
+      break
+    case 'extract':
+      extractHere(node)
+      break
+    case 'extractTo':
+      pickExtract(node)
       break
     case 'rename':
       void onRename(node)
@@ -582,6 +630,14 @@ function onContextCollect() {
   closeContextMenu()
   if (row) openCollect(row)
 }
+
+function onContextExtract(to: boolean) {
+  const row = contextMenu.value.row
+  closeContextMenu()
+  if (!row) return
+  if (to) pickExtract(row)
+  else extractHere(row)
+}
 </script>
 
 <template>
@@ -601,6 +657,7 @@ function onContextCollect() {
     <div v-if="!isMobile" class="toolbar">
       <el-button type="primary" :icon="Upload" @click="onPickFiles">上传文件</el-button>
       <el-button :icon="FolderAdd" @click="onCreateFolder">新建文件夹</el-button>
+      <el-button v-if="fetchEnabled" :icon="Link" @click="fetchDialogVisible = true">离线下载</el-button>
       <el-button :icon="EditPen" :disabled="selection.length !== 1" @click="selection[0] && onRename(selection[0])">
         重命名
       </el-button>
@@ -634,8 +691,16 @@ function onContextCollect() {
 
     <!-- 手机工具栏:四个入口,重命名/移动等交给长按菜单与多选底栏 -->
     <div v-else class="toolbar mobile">
-      <el-button type="primary" :icon="Upload" @click="onPickFiles">上传文件</el-button>
-      <el-button :icon="FolderAdd" @click="onCreateFolder">新建文件夹</el-button>
+      <!-- 390px 宽要放下 5 个入口,文字按钮缩成两个字(图标在,意思不变) -->
+      <el-button type="primary" :icon="Upload" @click="onPickFiles">上传</el-button>
+      <el-button :icon="FolderAdd" title="新建文件夹" @click="onCreateFolder">新建</el-button>
+      <el-button
+        v-if="fetchEnabled"
+        :icon="Link"
+        title="离线下载"
+        aria-label="离线下载"
+        @click="fetchDialogVisible = true"
+      />
       <el-button
         :icon="ui.viewMode === 'grid' ? List : Grid"
         :title="ui.viewMode === 'grid' ? '切换为列表' : '切换为网格'"
@@ -748,10 +813,22 @@ function onContextCollect() {
         <el-icon><Tickets /></el-icon>
         收集文件
       </li>
+      <template v-if="isArchive(contextMenu.row)">
+        <li class="context-menu-item" @click="onContextExtract(false)">
+          <el-icon><FolderOpened /></el-icon>
+          解压到这里
+        </li>
+        <li class="context-menu-item" @click="onContextExtract(true)">
+          <el-icon><FolderOpened /></el-icon>
+          解压到…
+        </li>
+      </template>
     </ul>
 
     <ShareDialog v-model="shareDialogVisible" :node="shareTarget" />
     <FileRequestDialog v-model="collectDialogVisible" :folder="collectTarget" />
+    <FetchDialog v-model="fetchDialogVisible" :folder-id="folderId" :folder-name="folderName" />
+    <MoveDialog v-model="extractPickVisible" mode="extract" :exclude-ids="[]" @confirm="onExtractConfirm" />
   </div>
 </template>
 

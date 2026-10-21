@@ -35,6 +35,7 @@ import {
 // pdfjs-dist 体积大(~1MB),按需异步加载,只有真正预览 PDF 时才拉
 const PdfViewer = defineAsyncComponent(() => import('./PdfViewer.vue'))
 import ImageViewer from './ImageViewer.vue'
+import ArchiveViewer from './ArchiveViewer.vue'
 
 /** 访客模式(分享页):带访客 token 请求;访客是只读白名单,不能触发文档转换 */
 const props = defineProps<{ guestToken?: string }>()
@@ -409,6 +410,15 @@ function formatDuration(sec: number | null | undefined): string {
               </el-button>
             </div>
           </div>
+
+          <!-- ARCHIVE:包内浏览、预览、解压 -->
+          <ArchiveViewer
+            v-else-if="preview?.kind === 'ARCHIVE' && node"
+            :node-id="node.id"
+            :parent-id="node.parentId"
+            :guest-token="props.guestToken"
+            @download="onDownload"
+          />
 
           <!-- NONE / 兜底 -->
           <div v-else class="preview-placeholder">

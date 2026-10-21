@@ -20,9 +20,12 @@ interface TreeItem {
 const props = defineProps<{
   /** 被移动/复制的节点 id,树中排除 */
   excludeIds: string[]
-  /** 复制模式只改文案,选择逻辑一致 */
-  mode?: 'move' | 'copy'
+  /** 复制 / 解压模式只改文案,选择逻辑一致 */
+  mode?: 'move' | 'copy' | 'extract'
 }>()
+
+const TITLES = { move: '移动到', copy: '复制到', extract: '解压到' } as const
+const CONFIRMS = { move: '移动到此处', copy: '复制到此处', extract: '解压到此处' } as const
 
 /** 手机上目录树必须全屏,否则点不准 */
 const { isMobile } = useBreakpoints()
@@ -69,7 +72,7 @@ function onOpen() {
 <template>
   <el-dialog
     v-model="visible"
-    :title="props.mode === 'copy' ? '复制到' : '移动到'"
+    :title="TITLES[props.mode ?? 'move']"
     width="min(420px, 94vw)"
     :fullscreen="isMobile"
     destroy-on-close
@@ -88,7 +91,7 @@ function onOpen() {
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
       <el-button type="primary" :disabled="!selectedKey" @click="onConfirm">
-        {{ props.mode === 'copy' ? '复制到此处' : '移动到此处' }}
+        {{ CONFIRMS[props.mode ?? 'move'] }}
       </el-button>
     </template>
   </el-dialog>

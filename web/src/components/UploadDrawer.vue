@@ -1,19 +1,29 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useQueryClient } from '@tanstack/vue-query'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useEventListener } from '@vueuse/core'
+import { ElMessage } from 'element-plus'
 import {
   ArrowDown,
   ArrowUp,
   Close,
   CircleCheck,
   Delete,
+  FolderOpened,
   RefreshRight,
   Upload,
   VideoPause,
   VideoPlay,
+  WarningFilled,
 } from '@element-plus/icons-vue'
+
+import { request } from '@/api/client'
+import { errorText } from '@/api/errors'
+import { CancelJobDocument, ClearFinishedJobsDocument, RetryJobDocument } from '@/api/gen/graphql'
+import { useJobs } from '@/composables/jobs'
+import type { JobItem } from '@/composables/jobs'
+import { isActiveJob, jobPercent, jobStatusText } from '@/utils/jobs'
 
 import { TERMINAL_STATUSES, useUploadsStore } from '@/stores/uploads'
 import type { ResumableRecord, UploadTask } from '@/stores/uploads'
@@ -30,12 +40,14 @@ import { formatBytes } from '@/utils/format'
 
 /**
  * 全局上传抽屉:右下角浮动面板,AppShell 挂载。
- * 任务列表 + 可恢复的上传(localStorage 断点记录)。
+ * 任务列表 + 可恢复的上传(localStorage 断点记录)+ 服务端的后台任务(离线下载、解压,doc/21)。
  */
 
 const uploads = useUploadsStore()
 const queryClient = useQueryClient()
 const route = useRoute()
+const router = useRouter()
+const jobs = useJobs(ref(true))
 
 // 任务 done → 刷新对应目录列表(manager 无组件上下文,由这里注入)
 setUploadInvalidator((parentId) => {
@@ -55,11 +67,52 @@ useEventListener(window, 'beforeunload', (e) => {
 
 // 传输助手页自己渲染上传进度,抽屉(含收起后的浮动按钮)在那页会压住输入栏,整个隐藏
 const visible = computed(
-  () => route.name !== 'chat' && (uploads.tasks.length > 0 || uploads.orphanRecords.length > 0),
+  () =>
+    route.name !== 'chat' &&
+    (uploads.tasks.length > 0 || uploads.orphanRecords.length > 0 || jobs.items.value.length > 0),
 )
+const finishedJobs = computed(() => jobs.items.value.filter((j) => !isActiveJob(j)).length)
 const finishedCount = computed(
-  () => uploads.tasks.filter((t) => TERMINAL_STATUSES.includes(t.status)).length,
+  () => uploads.tasks.filter((t) => TERMINAL_STATUSES.includes(t.status)).length + finishedJobs.value,
 )
+const activeCount = computed(() => uploads.activeCount + jobs.activeCount.value)
+
+async function clearFinished() {
+  uploads.clearFinished()
+  if (finishedJobs.value === 0) return
+  try {
+    await request(ClearFinishedJobsDocument)
+  } catch (err) {
+    ElMessage.error(errorText(err, '清除失败'))
+  }
+  void queryClient.invalidateQueries({ queryKey: ['jobs'] })
+}
+
+// ---------- 后台任务 ----------
+
+async function jobAction(job: JobItem, action: 'cancel' | 'retry') {
+  try {
+    if (action === 'cancel') await request(CancelJobDocument, { id: job.id })
+    else await request(RetryJobDocument, { id: job.id })
+  } catch (err) {
+    ElMessage.error(errorText(err, action === 'cancel' ? '取消失败' : '重试失败'))
+  }
+  void queryClient.invalidateQueries({ queryKey: ['jobs'] })
+}
+
+/** 打开所在位置:下载的文件进它的文件夹;解压出来的进新文件夹 */
+function openJob(job: JobItem) {
+  const r = job.result
+  if (!r) return
+  const folder = r.kind === 'FOLDER' ? r.id : r.parentId
+  void router.push(folder ? `/drive/${folder}` : '/drive')
+}
+
+function jobProgressStatus(job: JobItem): 'success' | 'exception' | 'warning' | undefined {
+  if (job.status === 'DONE') return job.errorCode ? 'warning' : 'success'
+  if (job.status === 'FAILED' || job.status === 'CANCELED') return 'exception'
+  return undefined
+}
 
 // ---------- 任务展示 ----------
 
@@ -137,8 +190,8 @@ function onResumeFileChosen(e: Event) {
     <!-- 收起态:浮动按钮 + 徽标 -->
     <el-badge
       v-if="uploads.collapsed"
-      :value="uploads.activeCount"
-      :hidden="uploads.activeCount === 0"
+      :value="activeCount"
+      :hidden="activeCount === 0"
       class="fab-badge"
     >
       <el-button
@@ -155,10 +208,10 @@ function onResumeFileChosen(e: Event) {
     <div v-else class="panel">
       <div class="panel-header">
         <span class="panel-title">
-          上传任务
+          传输
           <el-badge
-            :value="uploads.activeCount"
-            :hidden="uploads.activeCount === 0"
+            :value="activeCount"
+            :hidden="activeCount === 0"
             class="title-badge"
           />
         </span>
@@ -167,7 +220,7 @@ function onResumeFileChosen(e: Event) {
             v-if="finishedCount > 0"
             link
             size="small"
-            @click="uploads.clearFinished()"
+            @click="clearFinished()"
           >
             清除已结束
           </el-button>
@@ -270,6 +323,62 @@ function onResumeFileChosen(e: Event) {
             />
           </div>
         </div>
+
+        <!-- 后台任务:离线下载、解压(服务端执行,关掉页面也继续) -->
+        <template v-if="jobs.items.value.length > 0">
+          <el-divider v-if="uploads.tasks.length > 0 || uploads.orphanRecords.length > 0" class="divider" />
+          <div class="section-title">后台任务</div>
+          <div v-for="job in jobs.items.value" :key="job.id" class="task job">
+            <div class="task-main">
+              <div class="task-name" :title="job.url ?? job.title">
+                <span class="job-kind">{{ job.kind === 'EXTRACT_ARCHIVE' ? '解压' : '离线下载' }}</span>
+                {{ job.title }}
+              </div>
+              <el-progress
+                :percentage="jobPercent(job) ?? 30"
+                :indeterminate="job.status === 'RUNNING' && jobPercent(job) === null"
+                :status="jobProgressStatus(job)"
+                :stroke-width="6"
+                :show-text="false"
+              />
+              <div
+                class="task-status"
+                :class="{ error: job.status === 'FAILED', warn: job.status === 'DONE' && !!job.errorCode }"
+              >
+                <span class="job-text" :title="jobStatusText(job, jobs.speeds.value[job.id])">
+                  {{ jobStatusText(job, jobs.speeds.value[job.id]) }}
+                </span>
+              </div>
+            </div>
+            <div class="task-ops">
+              <el-button
+                v-if="isActiveJob(job)"
+                link
+                size="small"
+                :icon="Close"
+                title="取消"
+                @click="jobAction(job, 'cancel')"
+              />
+              <el-button
+                v-if="job.status === 'FAILED' || job.status === 'CANCELED'"
+                link
+                size="small"
+                :icon="RefreshRight"
+                title="重试"
+                @click="jobAction(job, 'retry')"
+              />
+              <el-icon v-if="job.status === 'DONE' && job.errorCode" class="warn-icon"><WarningFilled /></el-icon>
+              <el-button
+                v-if="job.status === 'DONE' && job.result"
+                link
+                size="small"
+                :icon="FolderOpened"
+                title="打开所在位置"
+                @click="openJob(job)"
+              />
+            </div>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -373,6 +482,25 @@ function onResumeFileChosen(e: Event) {
 }
 .task-status.error {
   color: var(--el-color-danger);
+}
+.task-status.warn {
+  color: var(--el-color-warning);
+}
+.job-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.job-kind {
+  margin-right: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+.warn-icon {
+  color: var(--el-color-warning);
 }
 .task-ops {
   display: inline-flex;

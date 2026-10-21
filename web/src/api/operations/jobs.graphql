@@ -1,0 +1,63 @@
+# ---------- 后台任务(doc/21):离线下载、解压 ----------
+
+fragment JobFields on Job {
+  id
+  kind
+  status
+  title
+  url
+  parentId
+  bytesDone
+  bytesTotal
+  filesDone
+  filesTotal
+  filesSkipped
+  errorCode
+  errorMessage
+  attempts
+  source
+  createdAt
+  startedAt
+  finishedAt
+  result {
+    id
+    name
+    kind
+    parentId
+  }
+}
+
+query MyJobs($active: Boolean, $cursor: String) {
+  myJobs(active: $active, cursor: $cursor) {
+    items {
+      ...JobFields
+    }
+    nextCursor
+  }
+}
+
+query FetchEnabled {
+  fetchEnabled
+}
+
+mutation FetchUrls($urls: [String!]!, $parentId: ID) {
+  fetchUrls(urls: $urls, parentId: $parentId) {
+    ...JobFields
+  }
+}
+
+mutation CancelJob($id: ID!) {
+  cancelJob(id: $id) {
+    ...JobFields
+  }
+}
+
+mutation RetryJob($id: ID!) {
+  retryJob(id: $id) {
+    ...JobFields
+  }
+}
+
+mutation ClearFinishedJobs {
+  clearFinishedJobs
+}
