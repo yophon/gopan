@@ -44,6 +44,7 @@ const (
 	ChatSourceWeb    = "web"
 	ChatSourceMCP    = "mcp"
 	ChatSourceWebDAV = "webdav"
+	ChatSourceFetch  = "fetch" // 离线下载进传输助手文件夹的文件
 )
 
 type chatSourceKey struct{}

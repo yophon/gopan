@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -49,6 +50,14 @@ type Config struct {
 	// 内容搜索:false 关掉文字提取,内容搜索返回不可用;pdftotext 找不到时 PDF 不提(doc/20)
 	ContentIndex  bool
 	PdftotextPath string
+
+	// 离线下载(doc/21 三):服务器替用户从链接拉文件。挡内网的规则见 fetcher.Guard
+	Fetch             bool
+	FetchMaxSize      int64          // 单文件上限
+	FetchRate         int64          // 每个任务每秒最多读多少字节,0 = 不限
+	FetchDeny         []netip.Prefix // 额外拒绝的网段(部署时把 VPS 自己的公网 IP 加进来)
+	FetchAllowPrivate bool           // 放开私有网段(从局域网 NAS 拉文件)
+	JobWorkers        int            // 后台任务(离线下载、解压)并发,1–8
 }
 
 func Load() (*Config, error) {
@@ -83,12 +92,31 @@ func Load() (*Config, error) {
 		Workers:       int(envInt64("WORKERS", 2)),
 		ContentIndex:  envBool("CONTENT_INDEX", true),
 		PdftotextPath: env("PDFTOTEXT_PATH", "pdftotext"),
+
+		Fetch:             envBool("FETCH", true),
+		FetchMaxSize:      envInt64("FETCH_MAX_SIZE", 20<<30),
+		FetchRate:         envInt64("FETCH_RATE", 0),
+		FetchAllowPrivate: envBool("FETCH_ALLOW_PRIVATE", false),
+		JobWorkers:        int(envInt64("JOB_WORKERS", 1)),
 	}
 	tp, err := parseCIDRs(env("TRUSTED_PROXIES", ""))
 	if err != nil {
 		return nil, fmt.Errorf("GOPAN_TRUSTED_PROXIES: %w", err)
 	}
 	c.TrustedProxies = tp
+	deny, err := parseCIDRs(env("FETCH_DENY", ""))
+	if err != nil {
+		return nil, fmt.Errorf("GOPAN_FETCH_DENY: %w", err)
+	}
+	for _, n := range deny {
+		c.FetchDeny = append(c.FetchDeny, netip.MustParsePrefix(n.String()))
+	}
+	if c.JobWorkers < 1 || c.JobWorkers > 8 {
+		return nil, fmt.Errorf("GOPAN_JOB_WORKERS 必须在 1 到 8 之间")
+	}
+	if c.FetchMaxSize <= 0 || c.FetchRate < 0 {
+		return nil, fmt.Errorf("GOPAN_FETCH_MAX_SIZE 必须大于 0,GOPAN_FETCH_RATE 不能为负")
+	}
 
 	if c.DBURL == "" {
 		return nil, fmt.Errorf("GOPAN_DB_URL is required")

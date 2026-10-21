@@ -16,7 +16,7 @@ WHERE id = (
     WHERE ((t.status = 'pending' AND t.updated_at <= now() - interval '30 seconds' * t.attempts)
         OR (t.status = 'running' AND t.updated_at < now() - interval '5 minutes'))
       AND t.attempts < 3
-    ORDER BY CASE t.kind WHEN 'verify_hash' THEN 0 WHEN 'extract_text' THEN 2 ELSE 1 END, t.created_at
+    ORDER BY CASE t.kind WHEN 'verify_hash' THEN 0 WHEN 'extract_text' THEN 2 WHEN 'archive_index' THEN 2 ELSE 1 END, t.created_at
     FOR UPDATE SKIP LOCKED
     LIMIT 1
 )

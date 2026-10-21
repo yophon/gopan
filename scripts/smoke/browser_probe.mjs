@@ -267,7 +267,7 @@ if (shell.table) die('BROWSER PROBE FAILED:手机视口下不应渲染宽表格'
 
 // 手机上必须有触屏可达的操作入口:先建一个文件夹造出卡片,再长按它
 await evalJS(
-  `[...document.querySelectorAll('.toolbar button')].find(b => b.textContent.includes('新建文件夹'))?.click()`,
+  `[...document.querySelectorAll('.toolbar button')].find(b => b.textContent.includes('新建文件夹') || b.title === '新建文件夹')?.click()`,
 )
 await new Promise((r) => setTimeout(r, 800))
 await evalJS(`(() => {

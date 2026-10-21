@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/yophon/gopan/server/internal/archive"
 	"github.com/yophon/gopan/server/internal/fulltext"
 	"github.com/yophon/gopan/server/internal/objstore"
 	"github.com/yophon/gopan/server/internal/store"
@@ -231,6 +232,21 @@ func (w *Pool) backfillText(ctx context.Context) error {
 	}
 	if len(ids) > 0 {
 		slog.Info("text backfill queued", "count", len(ids))
+	}
+	return nil
+}
+
+// backfillArchives 存量压缩包每分钟补 30 个索引,与内容索引一样细水长流。
+func (w *Pool) backfillArchives(ctx context.Context) error {
+	ids, err := w.q.ListBlobsNeedingArchiveIndex(ctx, store.ListBlobsNeedingArchiveIndexParams{Indexer: archive.Version, Limit: textBackfillBatch})
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		w.requeue(ctx, "archive_index", id)
+	}
+	if len(ids) > 0 {
+		slog.Info("archive backfill queued", "count", len(ids))
 	}
 	return nil
 }

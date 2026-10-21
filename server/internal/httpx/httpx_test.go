@@ -20,6 +20,7 @@ func TestNormalizePath(t *testing.T) {
 		"/s/AbC123xyz9":               "/s/:token",
 		"/mcp":                        "/mcp",
 		"/mcp-download/eyJhbGciOi...": "/mcp-download/:ticket",
+		"/arc/0192-uuid/12":           "/arc/:node/:idx",
 		"/oauth/token":                "/oauth/:endpoint",
 		"/.well-known/oauth-authorization-server": "/.well-known/oauth-*",
 		"/dav":                    "/dav",

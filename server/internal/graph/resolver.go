@@ -21,4 +21,6 @@ type Resolver struct {
 	Chats     *service.Chats
 	Collects  *service.Collects
 	Content   *service.ContentSearch
+	Jobs      *service.Jobs
+	Archives  *service.Archives
 }

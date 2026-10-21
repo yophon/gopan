@@ -32,6 +32,7 @@ import (
 
 	gdb "github.com/yophon/gopan/server/db"
 	"github.com/yophon/gopan/server/internal/config"
+	"github.com/yophon/gopan/server/internal/fetcher"
 	"github.com/yophon/gopan/server/internal/objstore"
 	"github.com/yophon/gopan/server/internal/service"
 	"github.com/yophon/gopan/server/internal/store"
@@ -51,6 +52,7 @@ type mcpEnv struct {
 	oauth   *service.OAuth
 	tickets *service.PackTickets
 	chats   *service.Chats
+	jobs    *service.Jobs
 	alice   uuid.UUID // 主角
 	bob     uuid.UUID // 用于越权测试的第二个用户
 }
@@ -119,12 +121,14 @@ func setupEnv(t *testing.T) *mcpEnv {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(NewHandler(nodes, uploads, tokens, oauth, packer, tickets, chats, service.NewContentSearch(pool, true)))
+	// 离线下载的源站是本机 httptest:测试里放开回环
+	jobs := service.NewJobs(pool, obj, uploads, service.FetchConfig{Enabled: true, MaxSize: 1 << 30, Guard: fetcher.Guard{AllowLoopback: true}})
+	srv := httptest.NewServer(NewHandler(nodes, uploads, tokens, oauth, packer, tickets, chats, service.NewContentSearch(pool, true), jobs, nil))
 	t.Cleanup(srv.Close)
 	return &mcpEnv{
 		pool: pool, q: q, obj: obj, srv: srv,
 		s:     &Server{nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, packer: packer, tickets: tickets, chats: chats},
-		nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, tickets: tickets, chats: chats,
+		nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, tickets: tickets, chats: chats, jobs: jobs,
 		alice: resA.User.ID, bob: resB.User.ID,
 	}
 }
@@ -273,13 +277,13 @@ func TestMCPEndToEndOverHTTP(t *testing.T) {
 	}
 	sess := e.connect(t, plain)
 
-	// 工具清单:33 个工具全部注册
+	// 工具清单:38 个工具全部注册
 	lt, err := sess.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(lt.Tools) != 33 {
-		t.Fatalf("应注册 33 个工具,got %d", len(lt.Tools))
+	if len(lt.Tools) != 38 {
+		t.Fatalf("应注册 38 个工具,got %d", len(lt.Tools))
 	}
 
 	// create_folder → list_files → search_files → get_file_info → rename → trash → restore

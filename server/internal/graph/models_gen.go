@@ -36,6 +36,35 @@ type AppPassword struct {
 	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
 }
 
+type ArchiveEntry struct {
+	Idx          int        `json:"idx"`
+	Path         string     `json:"path"`
+	Name         string     `json:"name"`
+	IsDir        bool       `json:"isDir"`
+	Size         int64      `json:"size"`
+	ModifiedAt   *time.Time `json:"modifiedAt,omitempty"`
+	Flag         *string    `json:"flag,omitempty"`
+	Previewable  bool       `json:"previewable"`
+	Downloadable bool       `json:"downloadable"`
+}
+
+type ArchiveEntryPage struct {
+	Items      []*ArchiveEntry `json:"items"`
+	NextCursor *string         `json:"nextCursor,omitempty"`
+	Total      int             `json:"total"`
+}
+
+type ArchiveInfo struct {
+	Status     ArchiveStatus `json:"status"`
+	Format     string        `json:"format"`
+	EntryCount int           `json:"entryCount"`
+	FileCount  int           `json:"fileCount"`
+	TotalSize  int64         `json:"totalSize"`
+	Solid      bool          `json:"solid"`
+	Encrypted  bool          `json:"encrypted"`
+	Error      *string       `json:"error,omitempty"`
+}
+
 type AuthPayload struct {
 	AccessToken string `json:"accessToken"`
 	User        *User  `json:"user"`
@@ -140,6 +169,37 @@ type FileRequestUpload struct {
 type FileRequestUploadPage struct {
 	Items      []*FileRequestUpload `json:"items"`
 	NextCursor *string              `json:"nextCursor,omitempty"`
+}
+
+type Job struct {
+	ID           string     `json:"id"`
+	Kind         JobKind    `json:"kind"`
+	Status       JobStatus  `json:"status"`
+	Title        string     `json:"title"`
+	URL          *string    `json:"url,omitempty"`
+	ParentID     *string    `json:"parentId,omitempty"`
+	Result       *Node      `json:"result,omitempty"`
+	BytesDone    int64      `json:"bytesDone"`
+	BytesTotal   *int64     `json:"bytesTotal,omitempty"`
+	FilesDone    int        `json:"filesDone"`
+	FilesTotal   *int       `json:"filesTotal,omitempty"`
+	FilesSkipped int        `json:"filesSkipped"`
+	ErrorCode    *string    `json:"errorCode,omitempty"`
+	ErrorMessage *string    `json:"errorMessage,omitempty"`
+	Attempts     int        `json:"attempts"`
+	Source       string     `json:"source"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	StartedAt    *time.Time `json:"startedAt,omitempty"`
+	FinishedAt   *time.Time `json:"finishedAt,omitempty"`
+	// 由转换器置位
+	OwnerID string `json:"-"`
+	// 由转换器置位:下好的文件 / 解出来的文件夹,供 result 字段 resolver 取节点
+	ResultID string `json:"-"`
+}
+
+type JobPage struct {
+	Items      []*Job  `json:"items"`
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 type MCPAPIKey struct {
@@ -333,6 +393,183 @@ type User struct {
 	IsAdmin    bool   `json:"isAdmin"`
 }
 
+type ArchiveStatus string
+
+const (
+	ArchiveStatusPending     ArchiveStatus = "PENDING"
+	ArchiveStatusDone        ArchiveStatus = "DONE"
+	ArchiveStatusTruncated   ArchiveStatus = "TRUNCATED"
+	ArchiveStatusUnsupported ArchiveStatus = "UNSUPPORTED"
+	ArchiveStatusFailed      ArchiveStatus = "FAILED"
+)
+
+var AllArchiveStatus = []ArchiveStatus{
+	ArchiveStatusPending,
+	ArchiveStatusDone,
+	ArchiveStatusTruncated,
+	ArchiveStatusUnsupported,
+	ArchiveStatusFailed,
+}
+
+func (e ArchiveStatus) IsValid() bool {
+	switch e {
+	case ArchiveStatusPending, ArchiveStatusDone, ArchiveStatusTruncated, ArchiveStatusUnsupported, ArchiveStatusFailed:
+		return true
+	}
+	return false
+}
+
+func (e ArchiveStatus) String() string {
+	return string(e)
+}
+
+func (e *ArchiveStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ArchiveStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ArchiveStatus", str)
+	}
+	return nil
+}
+
+func (e ArchiveStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ArchiveStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ArchiveStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type JobKind string
+
+const (
+	JobKindFetchURL       JobKind = "FETCH_URL"
+	JobKindExtractArchive JobKind = "EXTRACT_ARCHIVE"
+)
+
+var AllJobKind = []JobKind{
+	JobKindFetchURL,
+	JobKindExtractArchive,
+}
+
+func (e JobKind) IsValid() bool {
+	switch e {
+	case JobKindFetchURL, JobKindExtractArchive:
+		return true
+	}
+	return false
+}
+
+func (e JobKind) String() string {
+	return string(e)
+}
+
+func (e *JobKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = JobKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid JobKind", str)
+	}
+	return nil
+}
+
+func (e JobKind) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *JobKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e JobKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type JobStatus string
+
+const (
+	JobStatusQueued   JobStatus = "QUEUED"
+	JobStatusRunning  JobStatus = "RUNNING"
+	JobStatusDone     JobStatus = "DONE"
+	JobStatusFailed   JobStatus = "FAILED"
+	JobStatusCanceled JobStatus = "CANCELED"
+)
+
+var AllJobStatus = []JobStatus{
+	JobStatusQueued,
+	JobStatusRunning,
+	JobStatusDone,
+	JobStatusFailed,
+	JobStatusCanceled,
+}
+
+func (e JobStatus) IsValid() bool {
+	switch e {
+	case JobStatusQueued, JobStatusRunning, JobStatusDone, JobStatusFailed, JobStatusCanceled:
+		return true
+	}
+	return false
+}
+
+func (e JobStatus) String() string {
+	return string(e)
+}
+
+func (e *JobStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = JobStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid JobStatus", str)
+	}
+	return nil
+}
+
+func (e JobStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *JobStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e JobStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 type NodeKind string
 
 const (
@@ -456,6 +693,7 @@ const (
 	PreviewKindAudio     PreviewKind = "AUDIO"
 	PreviewKindText      PreviewKind = "TEXT"
 	PreviewKindOffice    PreviewKind = "OFFICE"
+	PreviewKindArchive   PreviewKind = "ARCHIVE"
 )
 
 var AllPreviewKind = []PreviewKind{
@@ -467,11 +705,12 @@ var AllPreviewKind = []PreviewKind{
 	PreviewKindAudio,
 	PreviewKindText,
 	PreviewKindOffice,
+	PreviewKindArchive,
 }
 
 func (e PreviewKind) IsValid() bool {
 	switch e {
-	case PreviewKindNone, PreviewKindImage, PreviewKindPDF, PreviewKindNativePDF, PreviewKindVideo, PreviewKindAudio, PreviewKindText, PreviewKindOffice:
+	case PreviewKindNone, PreviewKindImage, PreviewKindPDF, PreviewKindNativePDF, PreviewKindVideo, PreviewKindAudio, PreviewKindText, PreviewKindOffice, PreviewKindArchive:
 		return true
 	}
 	return false

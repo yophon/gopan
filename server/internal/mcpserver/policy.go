@@ -26,7 +26,7 @@ func addTool[In, Out any](s *Server, server *mcp.Server, tool *mcp.Tool, handler
 			return nil, out, e
 		}
 		safe := map[string]any{}
-		for _, key := range []string{"node_id", "node_ids", "path", "paths", "parent_id", "parent_path", "target_folder_id", "target_path", "upload_id", "share_id", "user_id", "operation", "dry_run"} {
+		for _, key := range []string{"node_id", "node_ids", "path", "paths", "parent_id", "parent_path", "target_folder_id", "target_path", "upload_id", "share_id", "user_id", "operation", "dry_run", "job_id"} {
 			if v, ok := args[key]; ok {
 				safe[key] = v
 			}
@@ -180,7 +180,7 @@ func (s *Server) enforceRoot(ctx context.Context, p *service.MCPPrincipal, tool 
 	switch tool {
 	case "list_files":
 		idField, pathField = "parent_id", "path"
-	case "create_folder", "prepare_upload":
+	case "create_folder", "prepare_upload", "fetch_url":
 		idField, pathField = "parent_id", "parent_path"
 	case "move_nodes", "copy_nodes":
 		idField, pathField = "target_folder_id", "target_path"

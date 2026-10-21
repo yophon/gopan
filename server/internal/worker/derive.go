@@ -50,6 +50,23 @@ func (w *Pool) enqueueDerivatives(ctx context.Context, blob store.Blob) {
 	if w.textIndex {
 		w.Enqueue(ctx, "extract_text", blob.ID)
 	}
+	if w.archives != nil && w.hasArchiveName(ctx, blob.ID) {
+		w.Enqueue(ctx, "archive_index", blob.ID)
+	}
+}
+
+// hasArchiveName 引用这份内容的文件里有没有叫 .zip / .rar / .7z / .tar.* 的。
+func (w *Pool) hasArchiveName(ctx context.Context, blobID uuid.UUID) bool {
+	nodes, err := w.q.ListNodesByBlob(ctx, &blobID)
+	if err != nil {
+		return false
+	}
+	for _, n := range nodes {
+		if !n.DeletedAt.Valid && service.IsArchiveName(n.Name) {
+			return true
+		}
+	}
+	return false
 }
 
 // ---- 图片缩略图 ----

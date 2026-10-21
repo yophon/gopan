@@ -133,7 +133,8 @@ type Node {
   statsStale: Boolean
 }
 
-enum PreviewKind { NONE, IMAGE, PDF, NATIVE_PDF, VIDEO, AUDIO, TEXT, OFFICE }
+# ARCHIVE:压缩包(zip / 7z / rar / tar.*),用 archiveInfo / archiveEntries 浏览
+enum PreviewKind { NONE, IMAGE, PDF, NATIVE_PDF, VIDEO, AUDIO, TEXT, OFFICE, ARCHIVE }
 
 type PreviewInfo {
   kind: PreviewKind!
@@ -325,6 +326,86 @@ type CollectUpload {
   createdAt: Time!
 }
 
+# ---------- 后台任务(doc/21):离线下载、解压 ----------
+
+enum JobKind { FETCH_URL, EXTRACT_ARCHIVE }
+enum JobStatus { QUEUED, RUNNING, DONE, FAILED, CANCELED }
+
+type Job {
+  id: ID!
+  kind: JobKind!
+  status: JobStatus!
+  # 列表上显示的名字:下载的文件名(拿到响应头之前是链接的主机名)/ 压缩包名
+  title: String!
+  # 离线下载的链接;解压任务为 null
+  url: String
+  # 目标文件夹;null = 根目录
+  parentId: ID
+  # 下好的文件 / 解出来的文件夹;没完成、或已经删掉时为 null
+  result: Node
+  bytesDone: Int64!
+  # 未知(源站没给长度)为 null
+  bytesTotal: Int64
+  filesDone: Int!
+  filesTotal: Int
+  # 解压时跳过的条目(路径不安全、软链接、名字不合法)
+  filesSkipped: Int!
+  # 失败原因;成功但有提示时也有(GOT_HTML:拿到的是网页,不是文件)
+  errorCode: String
+  errorMessage: String
+  attempts: Int!
+  # 提交渠道:web / android / mcp
+  source: String!
+  createdAt: Time!
+  startedAt: Time
+  finishedAt: Time
+}
+
+type JobPage {
+  items: [Job!]!
+  nextCursor: String
+}
+
+# ---------- 压缩包(doc/21 四) ----------
+
+enum ArchiveStatus { PENDING, DONE, TRUNCATED, UNSUPPORTED, FAILED }
+
+type ArchiveInfo {
+  # PENDING:还在读目录;TRUNCATED:条目太多或包太大,只列了一部分;UNSUPPORTED / FAILED 见 error
+  status: ArchiveStatus!
+  # zip / 7z / rar / tar / tar.gz / tar.bz2 / tar.xz
+  format: String!
+  entryCount: Int!
+  fileCount: Int!
+  # 解压后总大小(按条目声明)
+  totalSize: Int64!
+  solid: Boolean!
+  encrypted: Boolean!
+  error: String
+}
+
+type ArchiveEntry {
+  # 包内行号:单个文件的地址是 /arc/{nodeId}/{idx}?token=<access>(加 &download=1 为下载)
+  idx: Int!
+  path: String!
+  name: String!
+  isDir: Boolean!
+  size: Int64!
+  modifiedAt: Time
+  # 非空时不能预览、不能解压:encrypted / unsafe(路径带 ..)/ link / unsupported
+  flag: String
+  # 能直接预览(图片、PDF、文本,且大小与在包里的深度都在限度内)
+  previewable: Boolean!
+  # 能单独下载(大小与深度在限度内)
+  downloadable: Boolean!
+}
+
+type ArchiveEntryPage {
+  items: [ArchiveEntry!]!
+  nextCursor: String
+  total: Int!
+}
+
 # ---------- 文件传输助手(我的设备) ----------
 
 type ChatMessage {
@@ -379,6 +460,16 @@ type Query {
   chatMessages(limit: Int = 200, before: ID, after: ID, query: String): [ChatMessage!]!
   # 当前"我的设备"文件夹;从未创建过返回 null,不触发创建。
   chatFolder: Node
+
+  # 压缩包概要;还没读完目录时 status = PENDING。分享访客在分享范围内可用
+  archiveInfo(nodeId: ID!): ArchiveInfo!
+  # 压缩包里某个目录(path 为空即根目录)的条目,目录在前、按名字
+  archiveEntries(nodeId: ID!, path: String, cursor: String): ArchiveEntryPage!
+  # 后台任务(离线下载、解压),新的在前;active 只列排队与进行中的
+  myJobs(active: Boolean = false, cursor: String): JobPage!
+  job(id: ID!): Job!
+  # 本站是否开了离线下载(GOPAN_FETCH)
+  fetchEnabled: Boolean!
 
   adminUsers: [AdminUser!]!
   adminOverview: AdminOverview!
@@ -458,6 +549,18 @@ type Mutation {
   deleteChatMessage(id: ID!): Boolean!
   # 幂等返回"我的设备"文件夹(首次调用才创建)。
   ensureChatFolder: Node!
+
+  # 离线下载:每条链接一个任务,存到 parentId(null = 根目录)。一次最多 10 条,每人排队 + 进行中最多 10 个
+  fetchUrls(urls: [String!]!, parentId: ID): [Job!]!
+  # 解压:paths(包内完整路径)为空即 base 下的全部,解出的路径相对 base;
+  # 解到 parentId 下的新文件夹(以压缩包名命名,撞名改名;null = 根目录)。后台执行,返回任务
+  extractArchive(nodeId: ID!, base: String, paths: [String!], parentId: ID): Job!
+  # 取消排队或进行中的任务(进行中的会停下并清掉已下载的部分)
+  cancelJob(id: ID!): Job!
+  # 失败或已取消的任务重新排队
+  retryJob(id: ID!): Job!
+  # 清掉已结束的任务记录(不动下好的文件),返回清掉的条数
+  clearFinishedJobs: Int!
 
   adminCreateUser(username: String!, password: String!, quotaBytes: Int64): AdminUser!
   adminSetQuota(userId: ID!, quotaBytes: Int64!): AdminUser!

@@ -257,6 +257,8 @@ func normalizePath(p string) string {
 		return "/c/:token"
 	case strings.HasPrefix(p, "/mcp-download/"):
 		return "/mcp-download/:ticket"
+	case strings.HasPrefix(p, "/arc/"):
+		return "/arc/:node/:idx"
 	case p == "/dav" || strings.HasPrefix(p, "/dav/"):
 		return "/dav"
 	case strings.HasPrefix(p, AndroidReleasePath):

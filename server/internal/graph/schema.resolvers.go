@@ -41,6 +41,11 @@ func (r *chatMessageResolver) Node(ctx context.Context, obj *ChatMessage) (*Node
 	return n, nil
 }
 
+// Result is the resolver for the result field.
+func (r *jobResolver) Result(ctx context.Context, obj *Job) (*Node, error) {
+	return r.jobResult(ctx, obj)
+}
+
 // SetMCPAccessRoot is the resolver for the setMCPAccessRoot field.
 func (r *mutationResolver) SetMCPAccessRoot(ctx context.Context, credentialID string, credentialType string, rootPath *string) (bool, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -690,6 +695,92 @@ func (r *mutationResolver) EnsureChatFolder(ctx context.Context) (*Node, error) 
 	return gqlNode(n), nil
 }
 
+// FetchUrls is the resolver for the fetchUrls field.
+func (r *mutationResolver) FetchUrls(ctx context.Context, urls []string, parentID *string) ([]*Job, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pid, err := parseIDPtr(parentID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.Jobs.FetchURLs(ctx, ident.UserID, pid, urls, jobSource(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return gqlJobs(rows), nil
+}
+
+// ExtractArchive is the resolver for the extractArchive field.
+func (r *mutationResolver) ExtractArchive(ctx context.Context, nodeID string, base *string, paths []string, parentID *string) (*Job, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nid, err := parseID(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	pid, err := parseIDPtr(parentID)
+	if err != nil {
+		return nil, err
+	}
+	req := service.ExtractRequest{NodeID: nid, Paths: paths, Parent: pid}
+	if base != nil {
+		req.Base = *base
+	}
+	row, err := r.Archives.Extract(ctx, r.Jobs, ident.UserID, req, jobSource(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return gqlJob(row), nil
+}
+
+// CancelJob is the resolver for the cancelJob field.
+func (r *mutationResolver) CancelJob(ctx context.Context, id string) (*Job, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	jid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.Jobs.Cancel(ctx, ident.UserID, jid)
+	if err != nil {
+		return nil, err
+	}
+	return gqlJob(row), nil
+}
+
+// RetryJob is the resolver for the retryJob field.
+func (r *mutationResolver) RetryJob(ctx context.Context, id string) (*Job, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	jid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.Jobs.Retry(ctx, ident.UserID, jid)
+	if err != nil {
+		return nil, err
+	}
+	return gqlJob(row), nil
+}
+
+// ClearFinishedJobs is the resolver for the clearFinishedJobs field.
+func (r *mutationResolver) ClearFinishedJobs(ctx context.Context) (int, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n, err := r.Jobs.ClearFinished(ctx, ident.UserID)
+	return int(n), err
+}
+
 // AdminCreateUser is the resolver for the adminCreateUser field.
 func (r *mutationResolver) AdminCreateUser(ctx context.Context, username string, password string, quotaBytes *int64) (*AdminUser, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -1325,6 +1416,78 @@ func (r *queryResolver) ChatFolder(ctx context.Context) (*Node, error) {
 	return gqlNode(*n), nil
 }
 
+// ArchiveInfo is the resolver for the archiveInfo field.
+func (r *queryResolver) ArchiveInfo(ctx context.Context, nodeID string) (*ArchiveInfo, error) {
+	owner, nid, err := r.archiveAccess(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	info, err := r.Archives.Info(ctx, owner, nid)
+	if err != nil {
+		return nil, err
+	}
+	return gqlArchiveInfo(info), nil
+}
+
+// ArchiveEntries is the resolver for the archiveEntries field.
+func (r *queryResolver) ArchiveEntries(ctx context.Context, nodeID string, path *string, cursor *string) (*ArchiveEntryPage, error) {
+	owner, nid, err := r.archiveAccess(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	dir := ""
+	if path != nil {
+		dir = *path
+	}
+	rows, next, total, err := r.Archives.Entries(ctx, owner, nid, dir, cursor)
+	if err != nil {
+		return nil, err
+	}
+	out := &ArchiveEntryPage{Items: make([]*ArchiveEntry, 0, len(rows)), NextCursor: next, Total: int(total)}
+	for _, e := range rows {
+		out.Items = append(out.Items, gqlArchiveEntry(e))
+	}
+	return out, nil
+}
+
+// MyJobs is the resolver for the myJobs field.
+func (r *queryResolver) MyJobs(ctx context.Context, active *bool, cursor *string) (*JobPage, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, next, err := r.Jobs.List(ctx, ident.UserID, active != nil && *active, cursor, 0)
+	if err != nil {
+		return nil, err
+	}
+	return &JobPage{Items: gqlJobs(rows), NextCursor: next}, nil
+}
+
+// Job is the resolver for the job field.
+func (r *queryResolver) Job(ctx context.Context, id string) (*Job, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	jid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.Jobs.Get(ctx, ident.UserID, jid)
+	if err != nil {
+		return nil, err
+	}
+	return gqlJob(row), nil
+}
+
+// FetchEnabled is the resolver for the fetchEnabled field.
+func (r *queryResolver) FetchEnabled(ctx context.Context) (bool, error) {
+	if _, err := httpx.UserFrom(ctx); err != nil {
+		return false, err
+	}
+	return r.Jobs.FetchEnabled(), nil
+}
+
 // AdminUsers is the resolver for the adminUsers field.
 func (r *queryResolver) AdminUsers(ctx context.Context) ([]*AdminUser, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -1373,6 +1536,9 @@ func (r *queryResolver) AdminOverview(ctx context.Context) (*AdminOverview, erro
 // ChatMessage returns ChatMessageResolver implementation.
 func (r *Resolver) ChatMessage() ChatMessageResolver { return &chatMessageResolver{r} }
 
+// Job returns JobResolver implementation.
+func (r *Resolver) Job() JobResolver { return &jobResolver{r} }
+
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
@@ -1384,6 +1550,7 @@ func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
 type (
 	chatMessageResolver struct{ *Resolver }
+	jobResolver         struct{ *Resolver }
 	mutationResolver    struct{ *Resolver }
 	nodeResolver        struct{ *Resolver }
 	queryResolver       struct{ *Resolver }

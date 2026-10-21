@@ -224,6 +224,27 @@ func (s *Store) Put(ctx context.Context, key string, r io.Reader, size int64, co
 	return err
 }
 
+// ReadAtCloser 随机读对象(压缩包的目录在文件末尾)。
+type ReadAtCloser interface {
+	io.ReaderAt
+	io.Closer
+}
+
+// OpenReaderAt 返回可 ReadAt 的对象与大小。minio 的每次 ReadAt 都是一个新的 GET,
+// 调用方要自己合并成块读(archive.ChunkReader)。
+func (s *Store) OpenReaderAt(ctx context.Context, key string) (ReadAtCloser, int64, error) {
+	o, err := s.internal.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, 0, err
+	}
+	info, err := o.Stat()
+	if err != nil {
+		o.Close()
+		return nil, 0, err
+	}
+	return o, info.Size, nil
+}
+
 // OpenSeeker 可 Seek 的流式读(WebDAV 的 http.ServeContent 需要 Seek 探大小与处理 Range)。
 // minio.Object 的 Seek 是惰性的,不会真的把对象拉回来。
 func (s *Store) OpenSeeker(ctx context.Context, key string) (io.ReadSeekCloser, error) {

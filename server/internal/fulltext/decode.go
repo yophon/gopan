@@ -124,6 +124,18 @@ func DecodeText(b []byte) (string, bool) {
 	return out, true
 }
 
+// DecodeName 解文件名一类的短字节串:合法 UTF-8 原样返回,否则按 GB18030 解
+// (Windows 中文系统打的 zip、tar 里的名字,以及老网站 Content-Disposition 里的 filename)。
+func DecodeName(b []byte) string {
+	if utf8.Valid(b) {
+		return string(b)
+	}
+	if s, err := simplifiedchinese.GB18030.NewDecoder().Bytes(b); err == nil {
+		return string(s)
+	}
+	return strings.ToValidUTF8(string(b), "_")
+}
+
 // trimPartialRune 去掉末尾被截断的半个 UTF-8 字符(最多 3 个字节)。
 func trimPartialRune(b []byte) []byte {
 	for i := 0; i < 3 && len(b) > 0; i++ {

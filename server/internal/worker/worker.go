@@ -29,6 +29,7 @@ type Pool struct {
 	nodes     *service.Nodes
 	uploads   *service.Uploads
 	collects  *service.Collects
+	archives  *service.Archives
 	trashTTL  time.Duration
 	wake      chan struct{}
 	ffmpeg    string
@@ -50,6 +51,11 @@ func (w *Pool) SetUploads(uploads *service.Uploads) {
 
 func (w *Pool) SetCollects(collects *service.Collects) {
 	w.collects = collects
+}
+
+// SetArchives 压缩包目录索引(doc/21 四.2):注入后才建索引、才跑回填。
+func (w *Pool) SetArchives(archives *service.Archives) {
+	w.archives = archives
 }
 
 // Enqueue 入队并唤醒 worker(注入给 service 用)。
@@ -89,6 +95,9 @@ func (w *Pool) Run(ctx context.Context, n int) {
 	go w.periodic(ctx, 5*time.Minute, "task-reap", w.reapTasks)
 	if w.textIndex {
 		go w.periodic(ctx, time.Minute, "text-backfill", w.backfillText)
+	}
+	if w.archives != nil {
+		go w.periodic(ctx, time.Minute, "archive-backfill", w.backfillArchives)
 	}
 	<-ctx.Done()
 }
@@ -131,6 +140,10 @@ func (w *Pool) execute(ctx context.Context, t store.Task) {
 		err = w.makeOfficePDF(ctx, t.BlobID)
 	case "extract_text":
 		err = w.extractText(ctx, t.BlobID)
+	case "archive_index":
+		if w.archives != nil {
+			err = w.archives.BuildIndex(ctx, t.BlobID)
+		}
 	default:
 		err = fmt.Errorf("未知任务类型 %s", t.Kind)
 	}

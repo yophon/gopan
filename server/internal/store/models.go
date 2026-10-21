@@ -18,6 +18,21 @@ type AppPassword struct {
 	LastUsedAt pgtype.Timestamptz
 }
 
+type ArchiveEntry struct {
+	BlobID     uuid.UUID
+	Idx        int32
+	Src        int32
+	Path       string
+	Parent     string
+	Name       string
+	IsDir      bool
+	Size       int64
+	PackedSize int64
+	Mtime      pgtype.Timestamptz
+	Flag       string
+	Cost       int64
+}
+
 type Blob struct {
 	ID        uuid.UUID
 	Sha256    string
@@ -28,6 +43,20 @@ type Blob struct {
 	MediaMeta []byte
 	CreatedAt pgtype.Timestamptz
 	DerefAt   pgtype.Timestamptz
+}
+
+type BlobArchive struct {
+	BlobID     uuid.UUID
+	Format     string
+	Status     string
+	Solid      bool
+	Encrypted  bool
+	EntryCount int32
+	FileCount  int32
+	TotalSize  int64
+	Indexer    int32
+	Error      *string
+	UpdatedAt  pgtype.Timestamptz
 }
 
 type BlobText struct {
@@ -315,4 +344,28 @@ type User struct {
 	CreatedAt    pgtype.Timestamptz
 	DisabledAt   pgtype.Timestamptz
 	ChatFolderID *uuid.UUID
+}
+
+type UserJob struct {
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	Kind         string
+	Status       string
+	Params       []byte
+	ParentID     *uuid.UUID
+	ResultNodeID *uuid.UUID
+	Title        string
+	BytesDone    int64
+	BytesTotal   *int64
+	FilesDone    int32
+	FilesTotal   *int32
+	FilesSkipped int32
+	ErrorCode    *string
+	ErrorMessage *string
+	Attempts     int32
+	Source       string
+	HeartbeatAt  pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	StartedAt    pgtype.Timestamptz
+	FinishedAt   pgtype.Timestamptz
 }

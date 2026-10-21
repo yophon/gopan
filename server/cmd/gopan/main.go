@@ -26,6 +26,7 @@ import (
 	"github.com/yophon/gopan/server/db"
 	"github.com/yophon/gopan/server/internal/config"
 	"github.com/yophon/gopan/server/internal/dav"
+	"github.com/yophon/gopan/server/internal/fetcher"
 	"github.com/yophon/gopan/server/internal/graph"
 	"github.com/yophon/gopan/server/internal/httpx"
 	"github.com/yophon/gopan/server/internal/mcpserver"
@@ -139,10 +140,21 @@ func run() error {
 	wk.SetTextIndex(cfg.ContentIndex, lookPathOrEmpty(cfg.PdftotextPath))
 	uploads.SetEnqueue(wk.Enqueue)
 	previews.SetEnqueue(wk.Enqueue)
+	// 离线下载与压缩包(doc/21):后台任务有自己的 runner,不占 worker
+	archives := service.NewArchives(pool, obj, uploads)
+	archives.SetEnqueue(wk.Enqueue)
+	wk.SetArchives(archives)
+	jobs := service.NewJobs(pool, obj, uploads, service.FetchConfig{
+		Enabled: cfg.Fetch, MaxSize: cfg.FetchMaxSize, Rate: cfg.FetchRate,
+		Guard:     fetcher.Guard{AllowPrivate: cfg.FetchAllowPrivate, Deny: cfg.FetchDeny},
+		UserAgent: "Mozilla/5.0 (compatible; gopan-offline-download)",
+	})
+	jobs.SetArchives(archives)
 	go wk.Run(ctx, cfg.Workers)
+	go jobs.Run(ctx, cfg.JobWorkers)
 
 	es := graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
-		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass, MCPTokens: mcpTokens, OAuth: oauth, Chats: chats, Collects: collects, Content: content,
+		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass, MCPTokens: mcpTokens, OAuth: oauth, Chats: chats, Collects: collects, Content: content, Jobs: jobs, Archives: archives,
 	}})
 
 	mux := http.NewServeMux()
@@ -171,10 +183,11 @@ func run() error {
 	mux.HandleFunc("GET /oauth/authorize", oauthHTTP.Authorize)
 	mux.HandleFunc("POST /oauth/token", oauthHTTP.Token)
 	mux.HandleFunc("POST /oauth/register", oauthHTTP.Register)
-	mux.Handle("/mcp", mcpserver.NewHandler(nodes, uploads, mcpTokens, oauth, packer, packTickets, chats, content))
+	mux.Handle("/mcp", mcpserver.NewHandler(nodes, uploads, mcpTokens, oauth, packer, packTickets, chats, content, jobs, archives))
 	mux.Handle("/mcp/admin", mcpserver.NewAdminHandler(nodes, mcpTokens, oauth, cfg.DefaultQuota))
 	mux.Handle("GET /mcp-download/{ticket}", httpx.MCPPackHandler(packTickets, packer))
 	mux.Handle("GET /pack", httpx.PackHandler(auth, packer, shares, cfg.TrustedProxies))
+	mux.Handle("GET /arc/{node}/{idx}", httpx.ArchiveEntryHandler(auth, archives, shares))
 	// WebDAV:应用密码 Basic 认证,/dav 与 /dav/ 都接(Finder/资源管理器会裸打前缀)
 	davHandler := dav.Handler(appPass, dav.NewBackend(q, obj, nodes, uploads), cfg.TrustedProxies)
 	mux.Handle("/dav", davHandler)

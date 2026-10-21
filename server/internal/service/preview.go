@@ -17,13 +17,14 @@ import (
 
 // PreviewKind 与 GraphQL 枚举同名。
 const (
-	PvNone   = "NONE"
-	PvImage  = "IMAGE"
-	PvPDF    = "PDF" // 文件本身是 PDF,原文直出
-	PvVideo  = "VIDEO"
-	PvAudio  = "AUDIO"
-	PvText   = "TEXT"
-	PvOffice = "OFFICE" // 需转换,contentUrl 是 derived pdf
+	PvNone    = "NONE"
+	PvImage   = "IMAGE"
+	PvPDF     = "PDF" // 文件本身是 PDF,原文直出
+	PvVideo   = "VIDEO"
+	PvAudio   = "AUDIO"
+	PvText    = "TEXT"
+	PvOffice  = "OFFICE"  // 需转换,contentUrl 是 derived pdf
+	PvArchive = "ARCHIVE" // 压缩包,浏览走 archiveEntries
 )
 
 // StUnavailable 是 TaskStatus 里唯一不来自 tasks 表的值:该派生任务在本次部署中被关掉了。
@@ -59,6 +60,8 @@ func ClassifyPreview(name string, mime *string, size *int64) string {
 		return PvVideo
 	case strings.HasPrefix(m, "audio/"):
 		return PvAudio
+	case IsArchiveName(name):
+		return PvArchive
 	case officeExts[ext]:
 		return PvOffice
 	case (strings.HasPrefix(m, "text/") || textExts[ext]) && size != nil && *size <= maxTextPreview:

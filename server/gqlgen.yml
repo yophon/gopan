@@ -37,6 +37,17 @@ models:
     fields:
       node:
         resolver: true
+  Job:
+    extraFields:
+      ResultID:
+        type: string
+        description: "由转换器置位:下好的文件 / 解出来的文件夹,供 result 字段 resolver 取节点"
+      OwnerID:
+        type: string
+        description: "由转换器置位"
+    fields:
+      result:
+        resolver: true
   ID:
     model: github.com/99designs/gqlgen/graphql.String
   Int64:
