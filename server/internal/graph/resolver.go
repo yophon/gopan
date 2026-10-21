@@ -20,4 +20,5 @@ type Resolver struct {
 	OAuth     *service.OAuth
 	Chats     *service.Chats
 	Collects  *service.Collects
+	Content   *service.ContentSearch
 }

@@ -7,6 +7,7 @@ beforeEach(() => {
   previewState.visible = false
   previewState.ids = []
   previewState.index = 0
+  previewState.pages = {}
 })
 
 describe('openPreview', () => {
@@ -19,6 +20,12 @@ describe('openPreview', () => {
     // 防外部数组变异:内部持有的是拷贝
     ids.push('d')
     expect(previewState.ids).toEqual(['a', 'b', 'c'])
+  })
+  it('带页码打开:记下每个节点要先翻到的页,下次打开不带页码就清掉', () => {
+    openPreview(['a', 'b'], 0, { b: 3 })
+    expect(previewState.pages).toEqual({ b: 3 })
+    openPreview(['a'], 0)
+    expect(previewState.pages).toEqual({})
   })
   it('index 越界钳制到 [0, len-1]', () => {
     openPreview(['a', 'b'], 99)

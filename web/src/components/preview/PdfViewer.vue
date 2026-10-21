@@ -8,7 +8,8 @@ import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
-const props = defineProps<{ url: string }>()
+/** initialPage:打开时先翻到这一页(内容搜索命中页) */
+const props = defineProps<{ url: string; initialPage?: number }>()
 
 const containerEl = ref<HTMLDivElement | null>(null)
 const canvasEl = ref<HTMLCanvasElement | null>(null)
@@ -41,7 +42,7 @@ async function loadDocument(url: string) {
     }
     doc = loaded
     pageCount.value = loaded.numPages
-    page.value = 1
+    page.value = Math.min(Math.max(props.initialPage ?? 1, 1), loaded.numPages)
     await renderPage()
   } catch (err) {
     if (seq !== renderSeq) return

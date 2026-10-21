@@ -118,3 +118,31 @@ query SearchNodes($q: String!, $cursor: String) {
     total
   }
 }
+
+# 按内容搜索(doc/20):命中片段 + 高亮区间 + PDF 页码
+query SearchContent($q: String!, $cursor: String) {
+  searchContent(q: $q, cursor: $cursor) {
+    items {
+      node {
+        id
+        parentId
+        name
+        kind
+        size
+        mime
+        updatedAt
+        preview {
+          kind
+          thumbUrl
+        }
+      }
+      snippet
+      highlights {
+        start
+        length
+      }
+      page
+    }
+    nextCursor
+  }
+}

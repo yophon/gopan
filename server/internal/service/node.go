@@ -719,7 +719,7 @@ func decodeCursor(c *string, order string, desc bool) *cursorPayload {
 	if err := json.Unmarshal([]byte(decodeB64(*c)), &p); err != nil {
 		return nil
 	}
-	if p.V != 2 || p.O != order || (order != orderSearch && order != orderTrash && p.D != desc) {
+	if p.V != 2 || p.O != order || (order != orderSearch && order != orderTrash && order != orderContent && p.D != desc) {
 		return nil
 	}
 	return &p

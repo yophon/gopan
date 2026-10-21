@@ -125,6 +125,7 @@ func run() error {
 	previews.SetOfficeEnabled(cfg.GotenbergURL != "") // 未配 Gotenberg = 本次部署不提供 Office 预览
 	shares := service.NewShares(q, auth)
 	collects := service.NewCollects(pool, auth, uploads)
+	content := service.NewContentSearch(pool, cfg.ContentIndex)
 	admin := service.NewAdmin(q, cfg.DefaultQuota)
 	admin.SetContentIndex(cfg.ContentIndex)
 	appPass := service.NewAppPasswords(q)
@@ -141,7 +142,7 @@ func run() error {
 	go wk.Run(ctx, cfg.Workers)
 
 	es := graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
-		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass, MCPTokens: mcpTokens, OAuth: oauth, Chats: chats, Collects: collects,
+		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass, MCPTokens: mcpTokens, OAuth: oauth, Chats: chats, Collects: collects, Content: content,
 	}})
 
 	mux := http.NewServeMux()
@@ -170,7 +171,7 @@ func run() error {
 	mux.HandleFunc("GET /oauth/authorize", oauthHTTP.Authorize)
 	mux.HandleFunc("POST /oauth/token", oauthHTTP.Token)
 	mux.HandleFunc("POST /oauth/register", oauthHTTP.Register)
-	mux.Handle("/mcp", mcpserver.NewHandler(nodes, uploads, mcpTokens, oauth, packer, packTickets, chats))
+	mux.Handle("/mcp", mcpserver.NewHandler(nodes, uploads, mcpTokens, oauth, packer, packTickets, chats, content))
 	mux.Handle("/mcp/admin", mcpserver.NewAdminHandler(nodes, mcpTokens, oauth, cfg.DefaultQuota))
 	mux.Handle("GET /mcp-download/{ticket}", httpx.MCPPackHandler(packTickets, packer))
 	mux.Handle("GET /pack", httpx.PackHandler(auth, packer, shares, cfg.TrustedProxies))

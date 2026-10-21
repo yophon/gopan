@@ -35,7 +35,9 @@ const searchInput = ref(typeof route.query.q === 'string' ? route.query.q : '')
 function onSearch() {
   const q = searchInput.value.trim()
   if (!q) return
-  void router.push({ path: '/search', query: { q } })
+  // 正在看「内容」标签时换关键词,留在内容标签
+  const inContent = route.path === '/search' && route.query.in === 'content'
+  void router.push({ path: '/search', query: inContent ? { q, in: 'content' } : { q } })
   emit('navigate')
 }
 

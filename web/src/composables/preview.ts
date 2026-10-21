@@ -11,17 +11,21 @@ interface PreviewState {
   ids: string[]
   /** 当前预览的下标 */
   index: number
+  /** PDF 打开时先翻到的页(内容搜索命中页),按节点 id */
+  pages: Record<string, number>
 }
 
 export const previewState = reactive<PreviewState>({
   visible: false,
   ids: [],
   index: 0,
+  pages: {},
 })
 
-export function openPreview(ids: string[], index: number): void {
+export function openPreview(ids: string[], index: number, pages: Record<string, number> = {}): void {
   if (ids.length === 0) return
   previewState.ids = [...ids]
+  previewState.pages = { ...pages }
   const i = Number.isFinite(index) ? index : 0
   previewState.index = Math.min(Math.max(i, 0), ids.length - 1)
   previewState.visible = true

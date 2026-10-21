@@ -87,6 +87,18 @@ type ComplexityRoot struct {
 		Size      func(childComplexity int) int
 	}
 
+	ContentHit struct {
+		Highlights func(childComplexity int) int
+		Node       func(childComplexity int) int
+		Page       func(childComplexity int) int
+		Snippet    func(childComplexity int) int
+	}
+
+	ContentHitPage struct {
+		Items      func(childComplexity int) int
+		NextCursor func(childComplexity int) int
+	}
+
 	ContentIndexStats struct {
 		Done        func(childComplexity int) int
 		Empty       func(childComplexity int) int
@@ -300,6 +312,7 @@ type ComplexityRoot struct {
 		Node                      func(childComplexity int, id string) int
 		OauthAuthorizationRequest func(childComplexity int, input OAuthAuthorizationInput) int
 		OauthGrants               func(childComplexity int) int
+		SearchContent             func(childComplexity int, q string, cursor *string) int
 		SearchNodes               func(childComplexity int, q string, cursor *string) int
 		Sessions                  func(childComplexity int) int
 		ShareInfo                 func(childComplexity int, token string) int
@@ -359,6 +372,11 @@ type ComplexityRoot struct {
 	TaskCount struct {
 		Count  func(childComplexity int) int
 		Status func(childComplexity int) int
+	}
+
+	TextRange struct {
+		Length func(childComplexity int) int
+		Start  func(childComplexity int) int
 	}
 
 	UploadInit struct {
@@ -450,6 +468,7 @@ type QueryResolver interface {
 	Node(ctx context.Context, id string) (*Node, error)
 	Children(ctx context.Context, parentID *string, cursor *string, order *NodeOrder, desc *bool) (*NodePage, error)
 	SearchNodes(ctx context.Context, q string, cursor *string) (*NodePage, error)
+	SearchContent(ctx context.Context, q string, cursor *string) (*ContentHitPage, error)
 	Trash(ctx context.Context, cursor *string) (*NodePage, error)
 	MyShares(ctx context.Context) ([]*Share, error)
 	ShareVisits(ctx context.Context, shareID string, limit *int) ([]*ShareVisit, error)
@@ -663,6 +682,44 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CollectUpload.Size(childComplexity), true
+
+	case "ContentHit.highlights":
+		if e.ComplexityRoot.ContentHit.Highlights == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContentHit.Highlights(childComplexity), true
+	case "ContentHit.node":
+		if e.ComplexityRoot.ContentHit.Node == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContentHit.Node(childComplexity), true
+	case "ContentHit.page":
+		if e.ComplexityRoot.ContentHit.Page == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContentHit.Page(childComplexity), true
+	case "ContentHit.snippet":
+		if e.ComplexityRoot.ContentHit.Snippet == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContentHit.Snippet(childComplexity), true
+
+	case "ContentHitPage.items":
+		if e.ComplexityRoot.ContentHitPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContentHitPage.Items(childComplexity), true
+	case "ContentHitPage.nextCursor":
+		if e.ComplexityRoot.ContentHitPage.NextCursor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContentHitPage.NextCursor(childComplexity), true
 
 	case "ContentIndexStats.done":
 		if e.ComplexityRoot.ContentIndexStats.Done == nil {
@@ -1883,6 +1940,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.OauthGrants(childComplexity), true
+	case "Query.searchContent":
+		if e.ComplexityRoot.Query.SearchContent == nil {
+			break
+		}
+
+		args, err := ec.field_Query_searchContent_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.SearchContent(childComplexity, args["q"].(string), args["cursor"].(*string)), true
 	case "Query.searchNodes":
 		if e.ComplexityRoot.Query.SearchNodes == nil {
 			break
@@ -2143,6 +2211,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.TaskCount.Status(childComplexity), true
+
+	case "TextRange.length":
+		if e.ComplexityRoot.TextRange.Length == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TextRange.Length(childComplexity), true
+	case "TextRange.start":
+		if e.ComplexityRoot.TextRange.Start == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TextRange.Start(childComplexity), true
 
 	case "UploadInit.instant":
 		if e.ComplexityRoot.UploadInit.Instant == nil {
@@ -2472,6 +2553,28 @@ type NodePage {
   total: Int!
 }
 
+# 内容搜索的一条结果(doc/20 第三节)
+type ContentHit {
+  node: Node!
+  # 第一处命中前后的一段原文,两头被截时带"…"
+  snippet: String!
+  # 片段里每处命中的位置(按字符)
+  highlights: [TextRange!]!
+  # 命中所在页(PDF / 由 Office 转出的 PDF);其余格式为 null
+  page: Int
+}
+
+type TextRange {
+  start: Int!
+  length: Int!
+}
+
+# 不返回 total:要把所有候选都复核一遍才数得出来,代价高
+type ContentHitPage {
+  items: [ContentHit!]!
+  nextCursor: String
+}
+
 type UploadInit {
   instant: Boolean!
   node: Node
@@ -2647,6 +2750,8 @@ type Query {
   node(id: ID!): Node!
   children(parentId: ID, cursor: String, order: NodeOrder = NAME, desc: Boolean = false): NodePage!
   searchNodes(q: String!, cursor: String): NodePage!
+  # 按内容搜索:关键词至少两个汉字或三个字母(QUERY_TOO_SHORT);本站关了内容索引则 CONTENT_SEARCH_DISABLED
+  searchContent(q: String!, cursor: String): ContentHitPage!
   trash(cursor: String): NodePage!
   myShares: [Share!]!
   # 某个分享最近的访问明细,只允许属主看
@@ -2868,6 +2973,30 @@ func (ec *executionContext) childFields_CollectUpload(ctx context.Context, field
 		return ec.fieldContext_CollectUpload_createdAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CollectUpload", field.Name)
+}
+
+func (ec *executionContext) childFields_ContentHit(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "node":
+		return ec.fieldContext_ContentHit_node(ctx, field)
+	case "snippet":
+		return ec.fieldContext_ContentHit_snippet(ctx, field)
+	case "highlights":
+		return ec.fieldContext_ContentHit_highlights(ctx, field)
+	case "page":
+		return ec.fieldContext_ContentHit_page(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ContentHit", field.Name)
+}
+
+func (ec *executionContext) childFields_ContentHitPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_ContentHitPage_items(ctx, field)
+	case "nextCursor":
+		return ec.fieldContext_ContentHitPage_nextCursor(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ContentHitPage", field.Name)
 }
 
 func (ec *executionContext) childFields_ContentIndexStats(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3264,6 +3393,16 @@ func (ec *executionContext) childFields_TaskCount(ctx context.Context, field gra
 		return ec.fieldContext_TaskCount_count(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type TaskCount", field.Name)
+}
+
+func (ec *executionContext) childFields_TextRange(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "start":
+		return ec.fieldContext_TextRange_start(ctx, field)
+	case "length":
+		return ec.fieldContext_TextRange_length(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TextRange", field.Name)
 }
 
 func (ec *executionContext) childFields_UploadInit(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -4404,6 +4543,28 @@ func (ec *executionContext) field_Query_oauthAuthorizationRequest_args(ctx conte
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_searchContent_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "q",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["q"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "cursor",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["cursor"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_searchNodes_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -5228,6 +5389,171 @@ func (ec *executionContext) _CollectUpload_createdAt(ctx context.Context, field 
 }
 func (ec *executionContext) fieldContext_CollectUpload_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CollectUpload", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _ContentHit_node(ctx context.Context, field graphql.CollectedField, obj *ContentHit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContentHit_node(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Node, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Node) graphql.Marshaler {
+			return ec.marshalNNode2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNode(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContentHit_node(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ContentHit",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Node(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ContentHit_snippet(ctx context.Context, field graphql.CollectedField, obj *ContentHit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContentHit_snippet(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Snippet, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContentHit_snippet(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContentHit", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ContentHit_highlights(ctx context.Context, field graphql.CollectedField, obj *ContentHit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContentHit_highlights(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Highlights, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*TextRange) graphql.Marshaler {
+			return ec.marshalNTextRange2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐTextRangeᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContentHit_highlights(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ContentHit",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TextRange(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ContentHit_page(ctx context.Context, field graphql.CollectedField, obj *ContentHit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContentHit_page(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Page, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ContentHit_page(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContentHit", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ContentHitPage_items(ctx context.Context, field graphql.CollectedField, obj *ContentHitPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContentHitPage_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*ContentHit) graphql.Marshaler {
+			return ec.marshalNContentHit2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐContentHitᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContentHitPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ContentHitPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ContentHit(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ContentHitPage_nextCursor(ctx context.Context, field graphql.CollectedField, obj *ContentHitPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContentHitPage_nextCursor(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NextCursor, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ContentHitPage_nextCursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContentHitPage", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _ContentIndexStats_enabled(ctx context.Context, field graphql.CollectedField, obj *ContentIndexStats) (ret graphql.Marshaler) {
@@ -9659,6 +9985,50 @@ func (ec *executionContext) fieldContext_Query_searchNodes(ctx context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_searchContent(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_searchContent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().SearchContent(ctx, fc.Args["q"].(string), fc.Args["cursor"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ContentHitPage) graphql.Marshaler {
+			return ec.marshalNContentHitPage2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐContentHitPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_searchContent(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ContentHitPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_searchContent_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_trash(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -11180,6 +11550,52 @@ func (ec *executionContext) _TaskCount_count(ctx context.Context, field graphql.
 }
 func (ec *executionContext) fieldContext_TaskCount_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("TaskCount", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TextRange_start(ctx context.Context, field graphql.CollectedField, obj *TextRange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TextRange_start(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Start, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TextRange_start(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TextRange", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TextRange_length(ctx context.Context, field graphql.CollectedField, obj *TextRange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TextRange_length(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Length, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TextRange_length(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TextRange", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _UploadInit_instant(ctx context.Context, field graphql.CollectedField, obj *UploadInit) (ret graphql.Marshaler) {
@@ -13190,6 +13606,102 @@ func (ec *executionContext) _CollectUpload(ctx context.Context, sel ast.Selectio
 	return out
 }
 
+var contentHitImplementors = []string{"ContentHit"}
+
+func (ec *executionContext) _ContentHit(ctx context.Context, sel ast.SelectionSet, obj *ContentHit) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, contentHitImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ContentHit")
+		case "node":
+			out.Values[i] = ec._ContentHit_node(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "snippet":
+			out.Values[i] = ec._ContentHit_snippet(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "highlights":
+			out.Values[i] = ec._ContentHit_highlights(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "page":
+			out.Values[i] = ec._ContentHit_page(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var contentHitPageImplementors = []string{"ContentHitPage"}
+
+func (ec *executionContext) _ContentHitPage(ctx context.Context, sel ast.SelectionSet, obj *ContentHitPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, contentHitPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ContentHitPage")
+		case "items":
+			out.Values[i] = ec._ContentHitPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "nextCursor":
+			out.Values[i] = ec._ContentHitPage_nextCursor(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var contentIndexStatsImplementors = []string{"ContentIndexStats"}
 
 func (ec *executionContext) _ContentIndexStats(ctx context.Context, sel ast.SelectionSet, obj *ContentIndexStats) graphql.Marshaler {
@@ -14797,6 +15309,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "searchContent":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_searchContent(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "trash":
 			field := field
 
@@ -15636,6 +16170,49 @@ func (ec *executionContext) _TaskCount(ctx context.Context, sel ast.SelectionSet
 	return out
 }
 
+var textRangeImplementors = []string{"TextRange"}
+
+func (ec *executionContext) _TextRange(ctx context.Context, sel ast.SelectionSet, obj *TextRange) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, textRangeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TextRange")
+		case "start":
+			out.Values[i] = ec._TextRange_start(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "length":
+			out.Values[i] = ec._TextRange_length(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var uploadInitImplementors = []string{"UploadInit"}
 
 func (ec *executionContext) _UploadInit(ctx context.Context, sel ast.SelectionSet, obj *UploadInit) graphql.Marshaler {
@@ -16371,6 +16948,46 @@ func (ec *executionContext) marshalNCollectUpload2ᚖgithubᚗcomᚋyophonᚋgop
 	return ec._CollectUpload(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNContentHit2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐContentHitᚄ(ctx context.Context, sel ast.SelectionSet, v []*ContentHit) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNContentHit2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐContentHit(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNContentHit2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐContentHit(ctx context.Context, sel ast.SelectionSet, v *ContentHit) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ContentHit(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNContentHitPage2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐContentHitPage(ctx context.Context, sel ast.SelectionSet, v ContentHitPage) graphql.Marshaler {
+	return ec._ContentHitPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNContentHitPage2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐContentHitPage(ctx context.Context, sel ast.SelectionSet, v *ContentHitPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ContentHitPage(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNContentIndexStats2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐContentIndexStats(ctx context.Context, sel ast.SelectionSet, v *ContentIndexStats) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -17039,6 +17656,32 @@ func (ec *executionContext) marshalNTaskCount2ᚖgithubᚗcomᚋyophonᚋgopan�
 		return graphql.Null
 	}
 	return ec._TaskCount(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNTextRange2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐTextRangeᚄ(ctx context.Context, sel ast.SelectionSet, v []*TextRange) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNTextRange2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐTextRange(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNTextRange2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐTextRange(ctx context.Context, sel ast.SelectionSet, v *TextRange) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TextRange(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNTime2timeᚐTime(ctx context.Context, v any) (time.Time, error) {

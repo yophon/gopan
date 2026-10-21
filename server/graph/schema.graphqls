@@ -153,6 +153,28 @@ type NodePage {
   total: Int!
 }
 
+# 内容搜索的一条结果(doc/20 第三节)
+type ContentHit {
+  node: Node!
+  # 第一处命中前后的一段原文,两头被截时带"…"
+  snippet: String!
+  # 片段里每处命中的位置(按字符)
+  highlights: [TextRange!]!
+  # 命中所在页(PDF / 由 Office 转出的 PDF);其余格式为 null
+  page: Int
+}
+
+type TextRange {
+  start: Int!
+  length: Int!
+}
+
+# 不返回 total:要把所有候选都复核一遍才数得出来,代价高
+type ContentHitPage {
+  items: [ContentHit!]!
+  nextCursor: String
+}
+
 type UploadInit {
   instant: Boolean!
   node: Node
@@ -328,6 +350,8 @@ type Query {
   node(id: ID!): Node!
   children(parentId: ID, cursor: String, order: NodeOrder = NAME, desc: Boolean = false): NodePage!
   searchNodes(q: String!, cursor: String): NodePage!
+  # 按内容搜索:关键词至少两个汉字或三个字母(QUERY_TOO_SHORT);本站关了内容索引则 CONTENT_SEARCH_DISABLED
+  searchContent(q: String!, cursor: String): ContentHitPage!
   trash(cursor: String): NodePage!
   myShares: [Share!]!
   # 某个分享最近的访问明细,只允许属主看

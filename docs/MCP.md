@@ -98,6 +98,8 @@ OAuth 与 API Key 共用以下权限：
 | `search_files` | `files:read` | 按名称搜索 |
 | `get_file_info` | `files:read` | 读取节点、大小、MIME、SHA 等元数据 |
 | `read_text_file` | `files:download` | 分段读取 UTF-8 文本，每次最多 64 KiB |
+| `search_file_contents` | `files:read` | 按文件里的文字搜索（PDF、Word / Excel / PowerPoint、ODF、文本与代码），字面子串、不分大小写；返回首处命中的片段与 PDF 页码。关键词至少两个汉字或三个字母 |
+| `read_document_text` | `files:download` | 不下载文件，按字符偏移分段读提取出的文字（PDF / Office 也行），每次最多 5 万字 |
 | `prepare_download` | `files:download` | 签发文件 GET URL 或文件夹/批量 ZIP 票据 |
 | `create_folder` | `files:write` | 创建目录 |
 | `rename_node` | `files:write` | 重命名文件或目录 |
@@ -126,7 +128,7 @@ OAuth 与 API Key 共用以下权限：
 | `chat_send` | `chat:write` | 发送文本或已保存的文件节点到「我的设备」会话 |
 | `chat_list` | `chat:read` | 分页读取「我的设备」会话消息（升序） |
 
-文件与会话接口共 31 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
+文件与会话接口共 33 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
 
 ### 我的设备会话
 

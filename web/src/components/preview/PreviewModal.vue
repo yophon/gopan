@@ -368,6 +368,7 @@ function formatDuration(sec: number | null | undefined): string {
           <PdfViewer
             v-else-if="preview?.kind === 'PDF' && preview.contentUrl"
             :url="preview.contentUrl"
+            :initial-page="currentId ? previewState.pages[currentId] : undefined"
           />
 
           <!-- TEXT -->
@@ -396,6 +397,7 @@ function formatDuration(sec: number | null | undefined): string {
           <PdfViewer
             v-else-if="preview?.kind === 'OFFICE' && preview.status === 'DONE' && preview.contentUrl"
             :url="preview.contentUrl"
+            :initial-page="currentId ? previewState.pages[currentId] : undefined"
           />
           <div v-else-if="preview?.kind === 'OFFICE' && preview.status === 'FAILED'" class="preview-placeholder office-failed">
             <el-icon :size="48" class="failed-icon"><WarningFilled /></el-icon>

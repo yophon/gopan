@@ -14,6 +14,7 @@ import { useBreakpoints } from '@/composables/breakpoints'
 import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
 import NodeIcon from '@/components/nodes/NodeIcon.vue'
+import ContentResults from '@/components/ContentResults.vue'
 import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 
 type Item = SearchNodesQuery['searchNodes']['items'][number]
@@ -24,7 +25,13 @@ const { isMobile } = useBreakpoints()
 
 const q = computed(() => (typeof route.query.q === 'string' ? route.query.q.trim() : ''))
 
-// 手动累积分页:换关键词清空重来,nextCursor 驱动「加载更多」
+// 「文件名」「内容」两个标签;?in=content 直达内容(换关键词时保留)
+const tab = computed({
+  get: () => (route.query.in === 'content' ? 'content' : 'name'),
+  set: (v: string) => void router.replace({ query: { ...route.query, in: v === 'content' ? 'content' : undefined } }),
+})
+
+// 文件名结果:手动累积分页,换关键词清空重来,nextCursor 驱动「加载更多」
 const items = ref<Item[]>([])
 const total = ref(0)
 const nextCursor = ref<string | null>(null)
@@ -54,7 +61,13 @@ async function fetchPage(cursor: string | null) {
   }
 }
 
-watch(q, () => void fetchPage(null), { immediate: true })
+watch(
+  [q, tab],
+  () => {
+    if (tab.value === 'name') void fetchPage(null)
+  },
+  { immediate: true },
+)
 
 function onLoadMore() {
   if (nextCursor.value) void fetchPage(nextCursor.value)
@@ -110,54 +123,63 @@ function onSheetSelect(key: string) {
   <div class="search-view">
     <h3 class="page-title">
       搜索「{{ q }}」
-      <span v-if="!loading" class="result-count">{{ total }} 个结果</span>
+      <span v-if="!loading && tab === 'name'" class="result-count">{{ total }} 个结果</span>
     </h3>
 
-    <el-table
-      v-if="!isMobile"
-      v-loading="loading && items.length === 0"
-      :data="items"
-      row-key="id"
-      empty-text="没有匹配的文件"
-      @row-dblclick="(row: unknown) => onOpen(asItem(row))"
-    >
-      <el-table-column label="名称" min-width="320">
-        <template #default="{ row }">
-          <span class="name-cell">
-            <NodeIcon :node="asItem(row)" :size="28" />
-            {{ asItem(row).name }}
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="大小" width="120">
-        <template #default="{ row }">
-          {{ asItem(row).kind === 'FOLDER' ? '—' : formatBytes(asItem(row).size) }}
-        </template>
-      </el-table-column>
-      <el-table-column label="修改时间" width="180">
-        <template #default="{ row }">{{ formatTime(asItem(row).updatedAt) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="120" align="center">
-        <template #default="{ row }">
-          <el-button link type="primary" @click.stop="onLocate(asItem(row))">所在目录</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <el-tabs v-model="tab" class="search-tabs">
+      <el-tab-pane label="文件名" name="name" />
+      <el-tab-pane label="内容" name="content" />
+    </el-tabs>
 
-    <NodeCardList
-      v-else
-      :items="items"
-      mode="list"
-      :selection-mode="false"
-      :selected-ids="[]"
-      :loading="loading && items.length === 0"
-      @open="onOpen"
-      @menu="(node) => (sheet = { visible: true, node })"
-    />
+    <ContentResults v-if="tab === 'content'" :q="q" />
 
-    <div v-if="nextCursor" class="load-more">
-      <el-button :loading="loading" @click="onLoadMore">加载更多</el-button>
-    </div>
+    <template v-else>
+      <el-table
+        v-if="!isMobile"
+        v-loading="loading && items.length === 0"
+        :data="items"
+        row-key="id"
+        empty-text="没有匹配的文件"
+        @row-dblclick="(row: unknown) => onOpen(asItem(row))"
+      >
+        <el-table-column label="名称" min-width="320">
+          <template #default="{ row }">
+            <span class="name-cell">
+              <NodeIcon :node="asItem(row)" :size="28" />
+              {{ asItem(row).name }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="大小" width="120">
+          <template #default="{ row }">
+            {{ asItem(row).kind === 'FOLDER' ? '—' : formatBytes(asItem(row).size) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="修改时间" width="180">
+          <template #default="{ row }">{{ formatTime(asItem(row).updatedAt) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" align="center">
+          <template #default="{ row }">
+            <el-button link type="primary" @click.stop="onLocate(asItem(row))">所在目录</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <NodeCardList
+        v-else
+        :items="items"
+        mode="list"
+        :selection-mode="false"
+        :selected-ids="[]"
+        :loading="loading && items.length === 0"
+        @open="onOpen"
+        @menu="(node) => (sheet = { visible: true, node })"
+      />
+
+      <div v-if="nextCursor" class="load-more">
+        <el-button :loading="loading" @click="onLoadMore">加载更多</el-button>
+      </div>
+    </template>
 
     <NodeActionSheet
       v-model:visible="sheet.visible"
@@ -170,7 +192,10 @@ function onSheetSelect(key: string) {
 
 <style scoped>
 .page-title {
-  margin: 0 0 16px;
+  margin: 0 0 8px;
+}
+.search-tabs {
+  margin-bottom: 4px;
 }
 .result-count {
   margin-left: 8px;

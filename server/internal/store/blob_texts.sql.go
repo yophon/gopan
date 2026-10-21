@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const contentIndexStats = `-- name: ContentIndexStats :many
@@ -111,6 +112,51 @@ func (q *Queries) ListBlobsNeedingText(ctx context.Context, arg ListBlobsNeeding
 	return items, nil
 }
 
+const readNodeText = `-- name: ReadNodeText :one
+SELECT n.id, n.name, bt.status,
+       substr(bt.content, $1::int + 1, $2::int)::text AS chunk,
+       char_length(bt.content)::int AS total,
+       bt.page_starts
+FROM nodes n JOIN blob_texts bt ON bt.blob_id = n.blob_id
+WHERE n.id = $3 AND n.owner_id = $4 AND n.deleted_at IS NULL
+`
+
+type ReadNodeTextParams struct {
+	Off     int32
+	Len     int32
+	ID      uuid.UUID
+	OwnerID uuid.UUID
+}
+
+type ReadNodeTextRow struct {
+	ID         uuid.UUID
+	Name       string
+	Status     string
+	Chunk      string
+	Total      int32
+	PageStarts []int32
+}
+
+// 按字符偏移分段读一个文件提取出的文字(MCP read_document_text)
+func (q *Queries) ReadNodeText(ctx context.Context, arg ReadNodeTextParams) (ReadNodeTextRow, error) {
+	row := q.db.QueryRow(ctx, readNodeText,
+		arg.Off,
+		arg.Len,
+		arg.ID,
+		arg.OwnerID,
+	)
+	var i ReadNodeTextRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Status,
+		&i.Chunk,
+		&i.Total,
+		&i.PageStarts,
+	)
+	return i, err
+}
+
 const requeueTask = `-- name: RequeueTask :exec
 INSERT INTO tasks (id, kind, blob_id)
 VALUES ($1, $2, $3)
@@ -129,6 +175,191 @@ type RequeueTaskParams struct {
 func (q *Queries) RequeueTask(ctx context.Context, arg RequeueTaskParams) error {
 	_, err := q.db.Exec(ctx, requeueTask, arg.ID, arg.Kind, arg.BlobID)
 	return err
+}
+
+const searchContent = `-- name: SearchContent :many
+SELECT n.id, n.parent_id, n.name, n.created_at, n.updated_at,
+       b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256,
+       substr(bt.content, greatest(h.pos - 60, 1), least(h.pos, 61) - 1 + char_length($1::text) + 100)::text AS snippet,
+       greatest(h.pos - 60, 1)::int AS snippet_start,
+       char_length(bt.content)::int AS content_len,
+       h.pos::int AS pos,
+       bt.page_starts
+FROM blob_texts bt
+JOIN nodes n ON n.blob_id = bt.blob_id
+JOIN blobs b ON b.id = bt.blob_id
+CROSS JOIN LATERAL (SELECT strpos(lower(bt.content), lower($1::text)) AS pos) h
+WHERE bt.terms @> $2::text[]
+  AND n.owner_id = $3 AND n.deleted_at IS NULL AND h.pos > 0
+  AND ($4::timestamptz IS NULL
+       OR n.updated_at < $4::timestamptz
+       OR (n.updated_at = $4::timestamptz AND n.id > $5::uuid))
+ORDER BY n.updated_at DESC, n.id
+LIMIT $6
+`
+
+type SearchContentParams struct {
+	Q        string
+	Terms    []string
+	OwnerID  uuid.UUID
+	CUpdated pgtype.Timestamptz
+	CID      *uuid.UUID
+	Lim      int32
+}
+
+type SearchContentRow struct {
+	ID           uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	BlobSize     int64
+	BlobMime     string
+	BlobSha256   string
+	Snippet      string
+	SnippetStart int32
+	ContentLen   int32
+	Pos          int32
+	PageStarts   []int32
+}
+
+// 内容搜索(doc/20 三.2):GIN 词项取交集得候选,再按原文子串复核(大小写不敏感);
+// 摘要取第一处命中前 60 字到后 100 字。排序与文件名搜索相同:修改时间倒序、id 决胜。
+func (q *Queries) SearchContent(ctx context.Context, arg SearchContentParams) ([]SearchContentRow, error) {
+	rows, err := q.db.Query(ctx, searchContent,
+		arg.Q,
+		arg.Terms,
+		arg.OwnerID,
+		arg.CUpdated,
+		arg.CID,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchContentRow
+	for rows.Next() {
+		var i SearchContentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParentID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+			&i.Snippet,
+			&i.SnippetStart,
+			&i.ContentLen,
+			&i.Pos,
+			&i.PageStarts,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchContentInSubtree = `-- name: SearchContentInSubtree :many
+WITH RECURSIVE sub AS (
+    SELECT r.id FROM nodes r WHERE r.id = $7 AND r.deleted_at IS NULL
+    UNION ALL
+    SELECT c.id FROM nodes c JOIN sub s ON c.parent_id = s.id
+    WHERE c.deleted_at IS NULL
+)
+SELECT n.id, n.parent_id, n.name, n.created_at, n.updated_at,
+       b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256,
+       substr(bt.content, greatest(h.pos - 60, 1), least(h.pos, 61) - 1 + char_length($1::text) + 100)::text AS snippet,
+       greatest(h.pos - 60, 1)::int AS snippet_start,
+       char_length(bt.content)::int AS content_len,
+       h.pos::int AS pos,
+       bt.page_starts
+FROM blob_texts bt
+JOIN nodes n ON n.blob_id = bt.blob_id
+JOIN blobs b ON b.id = bt.blob_id
+CROSS JOIN LATERAL (SELECT strpos(lower(bt.content), lower($1::text)) AS pos) h
+WHERE bt.terms @> $2::text[]
+  AND n.id IN (SELECT s.id FROM sub s) AND n.owner_id = $3 AND h.pos > 0
+  AND ($4::timestamptz IS NULL
+       OR n.updated_at < $4::timestamptz
+       OR (n.updated_at = $4::timestamptz AND n.id > $5::uuid))
+ORDER BY n.updated_at DESC, n.id
+LIMIT $6
+`
+
+type SearchContentInSubtreeParams struct {
+	Q        string
+	Terms    []string
+	OwnerID  uuid.UUID
+	CUpdated pgtype.Timestamptz
+	CID      *uuid.UUID
+	Lim      int32
+	Root     uuid.UUID
+}
+
+type SearchContentInSubtreeRow struct {
+	ID           uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	BlobSize     int64
+	BlobMime     string
+	BlobSha256   string
+	Snippet      string
+	SnippetStart int32
+	ContentLen   int32
+	Pos          int32
+	PageStarts   []int32
+}
+
+// 同上,范围限定在 root 的子树内(MCP 凭据限定了访问目录时)
+func (q *Queries) SearchContentInSubtree(ctx context.Context, arg SearchContentInSubtreeParams) ([]SearchContentInSubtreeRow, error) {
+	rows, err := q.db.Query(ctx, searchContentInSubtree,
+		arg.Q,
+		arg.Terms,
+		arg.OwnerID,
+		arg.CUpdated,
+		arg.CID,
+		arg.Lim,
+		arg.Root,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchContentInSubtreeRow
+	for rows.Next() {
+		var i SearchContentInSubtreeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParentID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+			&i.Snippet,
+			&i.SnippetStart,
+			&i.ContentLen,
+			&i.Pos,
+			&i.PageStarts,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const upsertBlobText = `-- name: UpsertBlobText :exec

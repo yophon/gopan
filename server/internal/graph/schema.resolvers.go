@@ -970,6 +970,23 @@ func (r *queryResolver) SearchNodes(ctx context.Context, q string, cursor *strin
 	}), nil
 }
 
+// SearchContent is the resolver for the searchContent field.
+func (r *queryResolver) SearchContent(ctx context.Context, q string, cursor *string) (*ContentHitPage, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	page, err := r.Content.Search(ctx, ident.UserID, nil, q, cursor)
+	if err != nil {
+		return nil, err
+	}
+	out := &ContentHitPage{Items: make([]*ContentHit, 0, len(page.Items)), NextCursor: page.NextCursor}
+	for _, h := range page.Items {
+		out.Items = append(out.Items, gqlContentHit(h))
+	}
+	return out, nil
+}
+
 // Trash is the resolver for the trash field.
 func (r *queryResolver) Trash(ctx context.Context, cursor *string) (*NodePage, error) {
 	id, err := httpx.UserFrom(ctx)

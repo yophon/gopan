@@ -61,6 +61,18 @@ type CollectUpload struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+type ContentHit struct {
+	Node       *Node        `json:"node"`
+	Snippet    string       `json:"snippet"`
+	Highlights []*TextRange `json:"highlights"`
+	Page       *int         `json:"page,omitempty"`
+}
+
+type ContentHitPage struct {
+	Items      []*ContentHit `json:"items"`
+	NextCursor *string       `json:"nextCursor,omitempty"`
+}
+
 type ContentIndexStats struct {
 	Enabled     bool  `json:"enabled"`
 	Done        int   `json:"done"`
@@ -291,6 +303,11 @@ type ShareVisitStats struct {
 type TaskCount struct {
 	Status string `json:"status"`
 	Count  int    `json:"count"`
+}
+
+type TextRange struct {
+	Start  int `json:"start"`
+	Length int `json:"length"`
 }
 
 type UploadInit struct {
