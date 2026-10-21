@@ -129,11 +129,14 @@ OAuth 与 API Key 共用以下权限：
 | `list_jobs` | `files:read` | 列后台任务,新的在前 |
 | `list_archive` | `files:read` | 不下载就列压缩包(zip / 7z / rar / tar.*)里某个目录的条目;`PENDING` 表示服务器还在读目录 |
 | `extract_archive` | `files:upload` | 整包或选中路径解压到以包名命名的新文件夹(默认在压缩包所在目录),后台执行、返回任务;不覆盖已有文件,加密 / 链接 / 越界路径的条目跳过 |
+| `create_link` | `shares:write` | 给一个文件生成(或取回已有的)永久公开直链,图片可直接嵌进网页 / Markdown;返回 `url` 与 `markdown`,带拍摄位置的照片标 `has_gps`。每次访问都记账、有每日流量上限,支持幂等键 |
+| `list_links` | `shares:read` | 列出有效直链与访问次数、流量,新的在前,游标分页 |
+| `revoke_link` | `shares:write` | 立即吊销直链(之后返回 404),支持幂等键 |
 | `list_audit` | `audit:read` | 分页读取 MCP 操作记录 |
 | `chat_send` | `chat:write` | 发送文本或已保存的文件节点到「我的设备」会话 |
 | `chat_list` | `chat:read` | 分页读取「我的设备」会话消息（升序） |
 
-文件与会话接口共 38 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
+文件与会话接口共 41 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
 
 ### 我的设备会话
 
