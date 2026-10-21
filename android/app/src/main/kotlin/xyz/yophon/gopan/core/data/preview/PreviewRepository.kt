@@ -11,7 +11,12 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import xyz.yophon.gopan.core.AppConfig
 import xyz.yophon.gopan.core.data.PreviewKind
+import xyz.yophon.gopan.core.data.media.PlayProgress
+import xyz.yophon.gopan.core.data.media.SubtitleTrack
+import xyz.yophon.gopan.core.data.media.subtitleUrl
+import xyz.yophon.gopan.core.data.media.toDomain
 import xyz.yophon.gopan.core.data.previewKindOf
 import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
@@ -50,6 +55,10 @@ data class PreviewInfo(
     val contentUrl: String?,
     val status: DerivativeStatus?,
     val durationSec: Int?,
+    /** 视频的外挂字幕(doc/22 二.2) */
+    val subtitles: List<SubtitleTrack> = emptyList(),
+    /** 播放进度(音视频、PDF);没记过为 null */
+    val progress: PlayProgress? = null,
 ) {
     /** 内容寻址的缓存 key:同内容的文件(不同名字、不同目录)共用 */
     val contentKey: String get() = sha256 ?: "$nodeId@${updatedAt.orEmpty()}"
@@ -81,6 +90,7 @@ class DefaultPreviewRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val apollo: ApolloClient,
     @Named(PartUploader.TRANSFER_CLIENT) private val client: OkHttpClient,
+    private val config: AppConfig,
 ) : PreviewRepository {
 
     private val pdfDir: File get() = File(context.cacheDir, "preview-pdf")
@@ -102,6 +112,10 @@ class DefaultPreviewRepository @Inject constructor(
             contentUrl = p.contentUrl,
             status = p.status.toDomain(),
             durationSec = p.durationSec,
+            subtitles = p.subtitles.map {
+                SubtitleTrack(it.nodeId, it.name, it.label, it.lang, it.default, subtitleUrl(config.baseUrl, it.nodeId))
+            },
+            progress = n.playProgress?.playProgressFields?.toDomain(),
         )
     }
 

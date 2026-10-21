@@ -24,7 +24,15 @@ import xyz.yophon.gopan.core.network.gopanResult
 import xyz.yophon.gopan.core.share.AppNavRequests
 import xyz.yophon.gopan.core.share.NavRequest
 import xyz.yophon.gopan.core.transfer.TransferActions
-import xyz.yophon.gopan.core.transfer.upload.PartUploader
+import xyz.yophon.gopan.core.data.media.MediaModule
+import xyz.yophon.gopan.core.data.media.MediaRepository
+import xyz.yophon.gopan.core.data.media.MediaUrls
+import xyz.yophon.gopan.core.data.media.NowPlaying
+import xyz.yophon.gopan.core.data.media.NowPlayingStore
+import xyz.yophon.gopan.core.data.media.PlayProgressReporter
+import xyz.yophon.gopan.feature.media.QueuePlan
+import xyz.yophon.gopan.feature.media.audioQueue
+import xyz.yophon.gopan.feature.media.nextInPlaylist
 import xyz.yophon.gopan.feature.archive.ExtractEvent
 import xyz.yophon.gopan.feature.archive.ExtractSubmitter
 import xyz.yophon.gopan.feature.drive.UiText
@@ -34,6 +42,10 @@ import javax.inject.Named
 /** 一次预览会话:左右翻的列表与起始页;[generation] 变了表示换了一批(侧栏预览点了别的文件) */
 @Immutable
 data class PreviewSessionState(val items: List<PreviewItem>, val initialPage: Int, val generation: Int = 0)
+
+/** 视频放完后要接着放的下一集,连同它所在的列表(不在当前翻页列表里时换成这个列表) */
+@Immutable
+data class UpNext(val next: Node, val playlist: List<Node>)
 
 sealed interface PreviewEffect {
     data class Message(val text: UiText) : PreviewEffect
@@ -58,10 +70,14 @@ class PreviewViewModel @Inject constructor(
     private val sessions: PreviewSessionStore,
     private val repo: PreviewRepository,
     private val transfers: TransferActions,
-    /** 视频播放用:不带登录凭证的对象存储客户端(预签名地址自带授权) */
-    @Named(PartUploader.TRANSFER_CLIENT) val mediaClient: OkHttpClient,
+    /** 视频播放用:对象存储的预签名地址不带凭证,只有本站的外挂字幕(/sub/)带 Bearer */
+    @Named(MediaModule.MEDIA_CLIENT) val mediaClient: OkHttpClient,
     private val archives: ArchiveRepository,
     private val navRequests: AppNavRequests,
+    private val media: MediaRepository,
+    private val reporter: PlayProgressReporter,
+    private val mediaUrls: MediaUrls,
+    nowPlayingStore: NowPlayingStore,
 ) : ViewModel() {
 
     private val handle = savedStateHandle
@@ -220,6 +236,38 @@ class PreviewViewModel @Inject constructor(
     private fun send(effect: PreviewEffect) {
         _effects.trySend(effect)
     }
+
+    // ---- 影音(doc/22 二) ----
+
+    /** 后台播放服务正在放的:音频页跟着它翻页 */
+    val nowPlaying: StateFlow<NowPlaying?> = nowPlayingStore.state
+
+    /**
+     * 点开一首音频:整个文件夹的音频排进队列(服务端自然顺序),从它开始;查不到列表就只放它自己。
+     * 预览页刚取到的地址先交给播放服务,第一首不用再查一次。
+     */
+    suspend fun loadAudioQueue(nodeId: String, title: String): QueuePlan {
+        pages[nodeId]?.state?.value?.info?.contentUrl?.let { mediaUrls.seed(nodeId, it) }
+        val playlist = gopanResult { media.playlist(nodeId) }.getOrElse { emptyList() }
+        return audioQueue(playlist, nodeId, title)
+    }
+
+    /** 视频放完:同文件夹里的下一集(查不到、已是最后一集为 null) */
+    suspend fun nextVideo(nodeId: String): UpNext? {
+        val playlist = gopanResult { media.playlist(nodeId) }.getOrNull() ?: return null
+        val next = nextInPlaylist(playlist, nodeId) ?: return null
+        return UpNext(next, playlist)
+    }
+
+    /** 下一集不在当前翻页列表里:换成同文件夹的视频列表,从下一集开始 */
+    fun openPlaylist(upNext: UpNext) {
+        sessions.open(upNext.playlist)
+        restart(upNext.next.id)
+    }
+
+    fun reportMedia(nodeId: String, positionMs: Long, durationMs: Long) = reporter.reportMedia(nodeId, positionMs, durationMs)
+
+    fun reportPdf(nodeId: String, page: Int, pageCount: Int) = reporter.reportPdf(nodeId, page, pageCount)
 
     /** 超过上限时释放最久没看、且不在屏幕上的页 */
     private fun trim() {

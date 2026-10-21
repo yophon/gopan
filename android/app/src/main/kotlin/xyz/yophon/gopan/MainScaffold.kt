@@ -44,6 +44,7 @@ import xyz.yophon.gopan.feature.account.accountGraph
 import xyz.yophon.gopan.feature.chat.chatGraph
 import xyz.yophon.gopan.feature.drive.driveGraph
 import xyz.yophon.gopan.feature.shares.sharesGraph
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -61,6 +62,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import xyz.yophon.gopan.feature.notifications.NotificationsEntryViewModel
 import xyz.yophon.gopan.feature.notifications.NotificationsLogic
+import xyz.yophon.gopan.feature.media.MiniPlayerBar
 
 /** 底部 tab 定义;顺序即显示顺序 */
 private class MainTab(
@@ -152,15 +154,19 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
             // 侧边导航栏已经让出了起始侧的系统栏(横屏三键导航在左边时)
             modifier = if (rail) Modifier.consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)) else Modifier,
             bottomBar = {
-                if (!rail && !imeVisible) NavigationBar {
-                    mainTabs.forEach { tab ->
-                        val selected = currentDestination?.hierarchy?.any { tab.matches(it) } == true
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = { selectTab(tab) },
-                            icon = { TabIcon(tab, selected, badge = if (tab.route == Routes.AccountTab) unread else 0) },
-                            label = { Text(stringResource(tab.label)) },
-                        )
+                // 迷你播放条(doc/22 二.4)在导航栏上面,后台在放音频时出现,切 tab 不受影响
+                if (!imeVisible) Column {
+                    MiniPlayerBar(onOpenPreview = onOpenPreview, insetBottom = rail)
+                    if (!rail) NavigationBar {
+                        mainTabs.forEach { tab ->
+                            val selected = currentDestination?.hierarchy?.any { tab.matches(it) } == true
+                            NavigationBarItem(
+                                selected = selected,
+                                onClick = { selectTab(tab) },
+                                icon = { TabIcon(tab, selected, badge = if (tab.route == Routes.AccountTab) unread else 0) },
+                                label = { Text(stringResource(tab.label)) },
+                            )
+                        }
                     }
                 }
             },

@@ -15,6 +15,8 @@ import xyz.yophon.gopan.core.data.NodeKind
 import xyz.yophon.gopan.core.data.PreviewKind
 import xyz.yophon.gopan.core.data.archive.ArchiveRepository
 import xyz.yophon.gopan.core.data.archive.ArchiveStatus
+import xyz.yophon.gopan.core.data.media.PlayProgress
+import xyz.yophon.gopan.core.data.media.SubtitleTrack
 import xyz.yophon.gopan.core.data.preview.DerivativeStatus
 import xyz.yophon.gopan.core.data.preview.PreviewInfo
 import xyz.yophon.gopan.core.data.preview.PreviewRepository
@@ -33,9 +35,15 @@ sealed interface PreviewContent {
     /** [original]:原图(可能很大,解码时限制边长);否则是 2048 的大图派生 */
     data class Image(val url: String, val cacheKey: String, val original: Boolean) : PreviewContent
 
-    data class Video(val url: String, val posterUrl: String?) : PreviewContent
+    /** [subtitles]:外挂字幕;[progress]:上次看到哪(续播用) */
+    data class Video(
+        val url: String,
+        val posterUrl: String?,
+        val subtitles: List<SubtitleTrack> = emptyList(),
+        val progress: PlayProgress? = null,
+    ) : PreviewContent
 
-    data class Audio(val url: String, val durationSec: Int?) : PreviewContent
+    data class Audio(val url: String, val durationSec: Int?, val progress: PlayProgress? = null) : PreviewContent
 
     /** PDF(含 Office 派生)正在下到缓存;[fraction] 未知时为 null */
     data class PdfDownloading(val fraction: Float?) : PreviewContent
@@ -171,8 +179,10 @@ class PreviewPage(
                     else -> PreviewContent.Unsupported
                 },
             )
-            PreviewKind.VIDEO -> set(info.contentUrl?.let { PreviewContent.Video(it, info.largeUrl) } ?: PreviewContent.Unsupported)
-            PreviewKind.AUDIO -> set(info.contentUrl?.let { PreviewContent.Audio(it, info.durationSec) } ?: PreviewContent.Unsupported)
+            PreviewKind.VIDEO -> set(
+                info.contentUrl?.let { PreviewContent.Video(it, info.largeUrl, info.subtitles, info.progress) } ?: PreviewContent.Unsupported,
+            )
+            PreviewKind.AUDIO -> set(info.contentUrl?.let { PreviewContent.Audio(it, info.durationSec, info.progress) } ?: PreviewContent.Unsupported)
             PreviewKind.PDF, PreviewKind.NATIVE_PDF -> {
                 val url = info.contentUrl ?: return set(PreviewContent.Unsupported)
                 downloadPdf(url, info.contentKey)

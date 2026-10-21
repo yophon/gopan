@@ -36,6 +36,7 @@ query Children($parentId: ID, $cursor: String, $order: NodeOrder, $desc: Boolean
 
 # 预览专用单节点查询:列表里的 preview 只有 kind/thumbUrl 可靠,
 # 完整预签名 URL(15 分钟有效)必须打开预览时即查即用。
+# 外挂字幕与播放进度(doc/22 二)只在单个节点上取,列表里不请求。
 query NodePreview($id: ID!) {
   node(id: $id) {
     id
@@ -53,6 +54,16 @@ query NodePreview($id: ID!) {
       contentUrl
       status
       durationSec
+      subtitles {
+        nodeId
+        name
+        label
+        lang
+        default
+      }
+    }
+    playProgress {
+      ...PlayProgressFields
     }
   }
 }

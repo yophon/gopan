@@ -3,7 +3,9 @@ package xyz.yophon.gopan.feature.preview
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
@@ -13,7 +15,15 @@ import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodeKind
 import xyz.yophon.gopan.core.data.PreviewKind
+import xyz.yophon.gopan.core.data.NodePreview
 import xyz.yophon.gopan.core.data.archive.ExtractRequest
+import xyz.yophon.gopan.core.data.media.FakeMediaRepository
+import xyz.yophon.gopan.core.data.media.MediaUrls
+import xyz.yophon.gopan.core.data.media.NowPlaying
+import xyz.yophon.gopan.core.data.media.NowPlayingStore
+import xyz.yophon.gopan.core.data.media.PlayProgressReporter
+import xyz.yophon.gopan.core.data.media.QueueEntry
+import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.share.AppNavRequests
 import xyz.yophon.gopan.core.share.NavRequest
@@ -33,6 +43,11 @@ class PreviewViewModelTest {
     private val transfers = FakeTransferActions()
     private val sessions = PreviewSessionStore()
     private val navRequests = AppNavRequests()
+    private val media = FakeMediaRepository()
+    private val reporter = PlayProgressReporter(media, CoroutineScope(UnconfinedTestDispatcher()))
+    private val urlFetches = mutableListOf<String>()
+    private val mediaUrls = MediaUrls(fetch = { urlFetches += it; "https://s3/$it?fresh" }, now = { 0L })
+    private val nowPlaying = NowPlayingStore()
 
     private fun file(id: String) = Node(id = id, name = "$id.jpg", kind = NodeKind.FILE, size = 10)
 
@@ -41,7 +56,7 @@ class PreviewViewModelTest {
             put(PreviewViewModel.NODE_ID_ARG, start)
             if (current != null) put("preview.current", current)
         }
-        return PreviewViewModel(SavedStateHandle(args), sessions, repo, transfers, OkHttpClient(), archives, navRequests)
+        return PreviewViewModel(SavedStateHandle(args), sessions, repo, transfers, OkHttpClient(), archives, navRequests, media, reporter, mediaUrls, nowPlaying)
     }
 
     @Test
@@ -87,7 +102,7 @@ class PreviewViewModelTest {
     fun `the settled page is remembered for recreation`() {
         sessions.open(listOf(file("a"), file("b")))
         val handle = SavedStateHandle(mapOf(PreviewViewModel.NODE_ID_ARG to "a"))
-        val vm = PreviewViewModel(handle, sessions, repo, transfers, OkHttpClient(), archives, navRequests)
+        val vm = PreviewViewModel(handle, sessions, repo, transfers, OkHttpClient(), archives, navRequests, media, reporter, mediaUrls, nowPlaying)
         vm.onPageSettled(1)
         assertThat(vm.current.value).isEqualTo(1)
         assertThat(handle.get<String>("preview.current")).isEqualTo("b")
@@ -223,5 +238,83 @@ class PreviewViewModelTest {
         }
         vm.showTransfers()
         assertThat(navRequests.request.value).isEqualTo(NavRequest.OPEN_JOBS)
+    }
+
+    // ---- 影音(doc/22 二) ----
+
+    private fun media(id: String, kind: PreviewKind) =
+        Node(id = id, name = "$id.bin", kind = NodeKind.FILE, size = 10, preview = NodePreview(kind = kind))
+
+    @Test
+    fun `an audio file queues the whole folder and hands over the url it already has`() = runTest {
+        sessions.open(listOf(file("b")))
+        repo.respond("b", info("b", PreviewKind.AUDIO, contentUrl = "https://s3/b?sig=1"))
+        media.playlists["b"] = listOf(media("a", PreviewKind.AUDIO), media("b", PreviewKind.AUDIO), media("c", PreviewKind.AUDIO))
+        val vm = viewModel("b")
+        vm.page("b")
+        advanceUntilIdle()
+
+        val plan = vm.loadAudioQueue("b", "b.mp3")
+        assertThat(plan.entries.map { it.nodeId }).containsExactly("a", "b", "c").inOrder()
+        assertThat(plan.startIndex).isEqualTo(1)
+        // 第一首不用再查地址;其它的开播时才查
+        assertThat(mediaUrls.resolve("b")).isEqualTo("https://s3/b?sig=1")
+        assertThat(mediaUrls.resolve("c")).isEqualTo("https://s3/c?fresh")
+        assertThat(urlFetches).containsExactly("c")
+    }
+
+    @Test
+    fun `without a playlist the audio file plays on its own`() = runTest {
+        sessions.open(listOf(file("b")))
+        media.playlistError = GopanException(GopanErrors.NETWORK, "网络连接失败")
+        val vm = viewModel("b")
+        assertThat(vm.loadAudioQueue("b", "b.mp3")).isEqualTo(xyz.yophon.gopan.feature.media.QueuePlan(listOf(QueueEntry("b", "b.mp3")), 0))
+    }
+
+    @Test
+    fun `the next episode comes from the folder playlist`() = runTest {
+        sessions.open(listOf(file("e1")))
+        media.playlists["e1"] = listOf(media("e1", PreviewKind.VIDEO), media("e2", PreviewKind.VIDEO))
+        media.playlists["e2"] = media.playlists.getValue("e1")
+        val vm = viewModel("e1")
+        val next = vm.nextVideo("e1")
+        assertThat(next?.next?.id).isEqualTo("e2")
+        assertThat(vm.nextVideo("e2")).isNull()
+        media.playlistError = GopanException(GopanErrors.NETWORK, "网络连接失败")
+        assertThat(vm.nextVideo("e1")).isNull()
+    }
+
+    @Test
+    fun `an episode outside the session opens the folder playlist from there`() = runTest {
+        sessions.open(listOf(file("e1")))
+        val playlist = listOf(media("e1", PreviewKind.VIDEO), media("e2", PreviewKind.VIDEO), media("e3", PreviewKind.VIDEO))
+        val vm = viewModel("e1")
+        vm.openPlaylist(UpNext(playlist[1], playlist))
+        val session = vm.session.value
+        assertThat(session.items.map { it.nodeId }).containsExactly("e1", "e2", "e3").inOrder()
+        assertThat(session.initialPage).isEqualTo(1)
+        assertThat(session.generation).isEqualTo(1)
+    }
+
+    @Test
+    fun `progress reports go through the reporter`() {
+        sessions.open(listOf(file("v")))
+        val vm = viewModel("v")
+        vm.reportMedia("v", 61_000, 6_000_000)
+        vm.reportPdf("p", 12, 300)
+        vm.reportMedia("song", 61_000, 180_000)
+        assertThat(media.saved).containsExactly(Triple("v", 61.0, 6000.0), Triple("p", 12.0, 300.0)).inOrder()
+    }
+
+    @Test
+    fun `now playing comes from the playback service`() {
+        sessions.open(listOf(file("a")))
+        val vm = viewModel("a")
+        assertThat(vm.nowPlaying.value).isNull()
+        val now = NowPlaying("a", "a.mp3", true, true, 0, 1000, listOf(QueueEntry("a", "a.mp3")))
+        nowPlaying.update(now)
+        assertThat(vm.nowPlaying.value).isEqualTo(now)
+        nowPlaying.requestStop()
+        assertThat(vm.nowPlaying.value).isNull()
     }
 }

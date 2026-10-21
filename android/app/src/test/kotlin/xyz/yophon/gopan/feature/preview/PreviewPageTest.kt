@@ -15,6 +15,8 @@ import org.junit.After
 import org.junit.Test
 import xyz.yophon.gopan.core.data.PreviewKind
 import xyz.yophon.gopan.core.data.archive.ArchiveStatus
+import xyz.yophon.gopan.core.data.media.PlayProgress
+import xyz.yophon.gopan.core.data.media.SubtitleTrack
 import xyz.yophon.gopan.core.data.preview.DerivativeStatus
 import xyz.yophon.gopan.core.data.preview.TextContent
 import xyz.yophon.gopan.core.network.GopanErrors
@@ -296,5 +298,18 @@ class PreviewPageTest {
         val error = page("e")
         advanceUntilIdle()
         assertThat(error.state.value.content).isEqualTo(PreviewContent.Error("网络连接失败"))
+    }
+
+    @Test
+    fun `video and audio pages carry subtitles and the saved progress`() = runTest {
+        val track = SubtitleTrack("s1", "a.zh.srt", "简体中文", "zh-Hans", true, "https://drive/sub/s1")
+        val progress = PlayProgress(1395.0, 6120.0, false)
+        repo.respond("v", info("v", PreviewKind.VIDEO, largeUrl = "https://s3/v-poster").copy(subtitles = listOf(track), progress = progress))
+        repo.respond("m", info("m", PreviewKind.AUDIO).copy(durationSec = 600, progress = progress))
+        val video = page("v")
+        val audio = page("m")
+        advanceUntilIdle()
+        assertThat(video.state.value.content).isEqualTo(PreviewContent.Video("https://s3/v", "https://s3/v-poster", listOf(track), progress))
+        assertThat(audio.state.value.content).isEqualTo(PreviewContent.Audio("https://s3/m", 600, progress))
     }
 }

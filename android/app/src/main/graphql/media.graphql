@@ -1,0 +1,39 @@
+# 影音(doc/22 二):连播队列、最近播放、播放进度。
+# playlist / recentPlays 的节点用 NodeItem 片段(与列表同一个 toNode()):打开预览、图标、缩略图都照常复用。
+
+fragment PlayProgressFields on PlayProgress {
+  position
+  duration
+  finished
+  updatedAt
+}
+
+# 同文件夹里同类(视频或音频)的文件,自然顺序,含 nodeId 本身
+query Playlist($nodeId: ID!) {
+  playlist(nodeId: $nodeId) {
+    ...NodeItem
+  }
+}
+
+# 没看完的,最近的在前
+query RecentPlays($limit: Int) {
+  recentPlays(limit: $limit) {
+    node {
+      ...NodeItem
+    }
+    progress {
+      ...PlayProgressFields
+    }
+  }
+}
+
+# 服务端不记(5 分钟以下的音视频、3 页以下的 PDF)时返回 null
+mutation SaveProgress($nodeId: ID!, $position: Float!, $duration: Float!) {
+  saveProgress(nodeId: $nodeId, position: $position, duration: $duration) {
+    ...PlayProgressFields
+  }
+}
+
+mutation ClearProgress($nodeId: ID!) {
+  clearProgress(nodeId: $nodeId)
+}

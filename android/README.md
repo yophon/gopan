@@ -93,6 +93,9 @@ app/src/main/kotlin/xyz/yophon/gopan/
   core/data/chat/                ChatMessage 模型、ChatRepository(接口)+ ApolloChatRepository(列表 / 翻历史 / 搜索 / 发送 / 删除 / 文件夹)
   core/data/preview/             PreviewRepository:单节点预览信息(预签名地址现取)、Office 转换触发、文本分段拉取(TextFetcher:Range、UTF-8 / GB18030)、
                                  PDF 下到缓存(cacheDir/preview-pdf,内容寻址,300 MB 封顶)
+  core/data/media/               影音(doc/22 二):MediaRepository(连播列表、最近播放、上报 / 清除进度)、PlayProgressReporter(进程级作用域上报,
+                                 5 分钟以下的音视频与 3 页以下的 PDF 不发)、MediaUrls(队列占位地址 gopan-node://<id> → 现取的预签名地址,10 分钟内复用)、
+                                 NowPlayingStore(后台播放服务写的「正在播放」)、SubtitleAuthInterceptor(只给本站 /sub/ 加 Bearer)、MediaModule
   core/data/shares/              SharesRepository:我的分享、新建、取消、访问明细
   core/data/collect/             FileRequestsRepository:收集链接(doc/20)的属主侧——列表、新建、修改、结束、标已读、收件记录
   core/data/security/            SecurityRepository:登录设备、WebDAV 应用密码、MCP API Key / OAuth 授权 / 目录范围 / 操作记录
@@ -149,7 +152,9 @@ app/src/main/kotlin/xyz/yophon/gopan/
   feature/about/                 UpdateDialog(检查 / 下载 / 交给系统安装器)、CrashLogScreen(查看、导出、删除)、LicensesScreen(依赖与许可证全文)
   feature/preview/               全屏预览(PreviewScreen:翻页器、顶栏、沉浸)与平板侧栏(PreviewPane);PreviewViewModel(会话列表、最近 6 页)、
                                  PreviewPage(单页加载与 Office 轮询)、PreviewPages(各类型的页面)、PdfDocument(PdfRenderer 串行封装)、
-                                 PlaybackService(音频后台播放的 Media3 会话服务)
+                                 PlaybackService(音频后台播放的 Media3 会话服务:队列、按需解析地址、进度上报)、MediaControllers
+  feature/media/                 影音的纯逻辑(MediaLogic:续播、进度文案、队列、下一集、跟随翻页)、最近播放(RecentPlaysScreen / ViewModel,
+                                 文件页菜单进)、迷你播放条(MiniPlayer,MainScaffold 底部导航上面)
 app/src/test/kotlin/             JVM 单测;testutil/ 里有假 gopan 服务端(FakeGopanServer:Login/Refresh/Me/Logout/ChangePassword 与票据入口)
                                  与装配好的 TestHarness
 ```
@@ -228,6 +233,11 @@ GraphQL operations 按域各自一个文件(`nodes.graphql` 归文件线,`chat.g
   - 视频:页面内 ExoPlayer,翻到才缓冲并自动播放,翻走暂停,离开即释放;播放控件显隐与顶栏同步。
   - 音频:交给 `PlaybackService`(Media3 会话服务,mediaPlayback 前台服务 + 通知控制),离开预览、锁屏照常播;
     预签名过期时播放器拿到 403 按 mediaId(节点 id)重取地址、从原位置续播(视频同理)。
+  - 影音(doc/22 二):视频挂外挂字幕(`/sub/{id}` 的 WebVTT,Bearer 走请求头),控件里的字幕按钮也能选 mkv 内封轨道;
+    播放进度每 15 秒、暂停、离开时上报,PDF 停在一页 5 秒后上报;打开时没看完(超过 10 秒)自动续上并提示「从头播放」,
+    PDF 停在上次的页(内容搜索的命中页优先)。音频把同文件夹的音频(`playlist`)整个排进队列,地址开播时才取;
+    上一首 / 下一首、列表循环 / 单曲循环、随机;播放器换曲时预览页跟着翻。主界面底部导航上面有迷你播放条。
+    视频放完有下一集时倒计时 5 秒接着放(在当前翻页列表里就翻过去,不在就换成同文件夹的视频列表)。
   - PDF(含 Office 派生):下到缓存后用系统 `PdfRenderer` 逐页渲染(同一时刻只能开一页,全部串行在一个线程上);点一页全屏 2.5 倍清晰度放大。
     加密或损坏的 PDF 引导「用其他应用打开」。
   - 文本:按 512 KB 一段用 Range 读(服务端只把 1 MB 以内的文本归为可预览),第一段识别编码(UTF-8 解不开按 GB18030),

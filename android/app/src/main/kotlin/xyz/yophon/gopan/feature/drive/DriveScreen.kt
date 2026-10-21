@@ -41,6 +41,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material.icons.outlined.Download
@@ -128,6 +129,7 @@ fun DriveScreen(
     onOpenTransfers: () -> Unit,
     onOpenPreview: (nodeId: String) -> Unit,
     onBack: (() -> Unit)?,
+    onOpenRecentPlays: () -> Unit = {},
     viewModel: DriveViewModel = hiltViewModel(),
     fetchViewModel: FetchViewModel = hiltViewModel(),
     // 「复制直链」:与 NodeDialogHost 里的是同一个实例(同一个导航条目),对话框与提示由它画
@@ -213,7 +215,7 @@ fun DriveScreen(
                         },
                     )
                 } else {
-                    DriveTopBar(state, viewModel, onBack, onCrumbClick, onOpenSearch, onOpenTrash, onOpenTransfers)
+                    DriveTopBar(state, viewModel, onBack, onCrumbClick, onOpenSearch, onOpenTrash, onOpenTransfers, onOpenRecentPlays)
                 }
             },
             floatingActionButton = {
@@ -307,6 +309,7 @@ private fun DriveTopBar(
     onOpenSearch: () -> Unit,
     onOpenTrash: () -> Unit,
     onOpenTransfers: () -> Unit,
+    onOpenRecentPlays: () -> Unit,
 ) {
     val rootCrumb = Crumb(null, "")
     val title = when {
@@ -336,7 +339,7 @@ private fun DriveTopBar(
                     }
                 }
                 SortMenu(sort = state.sort, onSelect = viewModel::selectSort)
-                OverflowMenu(onOpenTrash = onOpenTrash, onOpenTransfers = onOpenTransfers, onRefresh = viewModel::refresh)
+                OverflowMenu(onOpenTrash = onOpenTrash, onOpenTransfers = onOpenTransfers, onRefresh = viewModel::refresh, onOpenRecentPlays = onOpenRecentPlays)
             },
         )
         if (!state.isRoot) {
@@ -475,7 +478,7 @@ private val SORT_OPTIONS = listOf(
 )
 
 @Composable
-private fun OverflowMenu(onOpenTrash: () -> Unit, onOpenTransfers: () -> Unit, onRefresh: () -> Unit) {
+private fun OverflowMenu(onOpenTrash: () -> Unit, onOpenTransfers: () -> Unit, onRefresh: () -> Unit, onOpenRecentPlays: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
@@ -496,6 +499,15 @@ private fun OverflowMenu(onOpenTrash: () -> Unit, onOpenTransfers: () -> Unit, o
                     onOpenTransfers()
                 },
                 leadingIcon = { Icon(Icons.Outlined.SwapVert, contentDescription = null) },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.media_recent_title)) },
+                onClick = {
+                    expanded = false
+                    onOpenRecentPlays()
+                },
+                leadingIcon = { Icon(Icons.Outlined.History, contentDescription = null) },
+                modifier = Modifier.testTag("drive_recent_plays"),
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.drive_action_trash)) },

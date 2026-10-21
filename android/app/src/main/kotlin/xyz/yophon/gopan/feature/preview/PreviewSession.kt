@@ -36,6 +36,11 @@ class PreviewSessionStore @Inject constructor() {
         items = nodes.filter { !it.isFolder }.map { it.toPreviewItem(pdfPages[it.id]) }
     }
 
+    /** 直接给出翻页列表(迷你播放条:整个播放队列) */
+    fun openItems(list: List<PreviewItem>) {
+        items = list
+    }
+
     /** 含 [startId] 的会话列表;不含(进程重建后)就只有它自己 */
     fun itemsFor(startId: String): List<PreviewItem> {
         val current = items

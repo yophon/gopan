@@ -84,6 +84,8 @@ import xyz.yophon.gopan.core.ui.nav.Routes
 import xyz.yophon.gopan.feature.archive.ExtractPickerHost
 import xyz.yophon.gopan.feature.archive.showExtractStarted
 import xyz.yophon.gopan.feature.drive.resolve
+import xyz.yophon.gopan.feature.media.followPage
+import xyz.yophon.gopan.feature.media.pdfStartPage
 import xyz.yophon.gopan.feature.shares.ShareCreateDialog
 import xyz.yophon.gopan.core.ui.exposeTestTags
 
@@ -128,6 +130,9 @@ fun PreviewPane(nodeId: String, onClose: () -> Unit, modifier: Modifier = Modifi
 
 /** 全屏预览为 true:顶栏、PDF / 文本列表要让出状态栏与导航栏;侧栏里为 false */
 internal val LocalPreviewFullScreen = staticCompositionLocalOf { true }
+
+/** 预览页底部的 Snackbar(音视频的「从 23:15 继续 · 从头播放」用) */
+internal val LocalPreviewSnackbar = staticCompositionLocalOf { SnackbarHostState() }
 
 @Composable
 private fun PreviewContentHost(onBack: () -> Unit, viewModel: PreviewViewModel, pane: Boolean) {
@@ -180,31 +185,49 @@ private fun PreviewBody(onBack: () -> Unit, viewModel: PreviewViewModel, session
     ExtractPickerHost(viewModel.extract)
     if (!pane) PreviewSystemBars(hidden = !chromeVisible)
 
+    // 音频:播放器换到了翻页列表里的另一首(上一首 / 下一首 / 放完自动接),正看着刚才那首就跟过去
+    val nowPlaying by viewModel.nowPlaying.collectAsStateWithLifecycle()
+    val playingId = nowPlaying?.nodeId
+    var lastPlayingId by remember { mutableStateOf(playingId) }
+    LaunchedEffect(playingId) {
+        val target = followPage(lastPlayingId, playingId, items.getOrNull(pagerState.settledPage)?.nodeId, items.map { it.nodeId })
+        lastPlayingId = playingId
+        if (target != null) pagerState.animateScrollToPage(target)
+    }
+    // 视频的下一集:在这一批里就翻过去,不在就换成同文件夹的视频列表
+    val playNext: (UpNext) -> Unit = { upNext ->
+        val index = items.indexOfFirst { it.nodeId == upNext.next.id }
+        if (index >= 0) scope.launch { pagerState.animateScrollToPage(index) } else viewModel.openPlaylist(upNext)
+    }
+
     val currentIndex = pagerState.currentPage.coerceIn(0, items.lastIndex)
     val currentItem = items[currentIndex]
     val currentPage = remember(currentItem.nodeId) { viewModel.page(currentItem.nodeId) }
     val currentState by currentPage.state.collectAsStateWithLifecycle()
 
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("preview_root")) {
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize().testTag("preview_pager"),
-            beyondViewportPageCount = 1,
-            pageSpacing = 16.dp,
-            userScrollEnabled = !zoomFor(currentItem.nodeId).magnified,
-            key = { items[it].nodeId },
-        ) { index ->
-            val item = items[index]
-            PreviewPageHost(
-                item = item,
-                viewModel = viewModel,
-                isCurrent = index == pagerState.settledPage,
-                zoom = zoomFor(item.nodeId),
-                // 侧栏里顶栏常驻:点图片不收起
-                onToggleChrome = { if (!pane) chromeVisible = !chromeVisible },
-                onChromeVisible = { if (!pane) chromeVisible = it },
-                onOpenPdfPage = { doc, page -> pdfZoom = PdfZoomRequest(doc, page) },
-            )
+        CompositionLocalProvider(LocalPreviewSnackbar provides snackbar) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize().testTag("preview_pager"),
+                beyondViewportPageCount = 1,
+                pageSpacing = 16.dp,
+                userScrollEnabled = !zoomFor(currentItem.nodeId).magnified,
+                key = { items[it].nodeId },
+            ) { index ->
+                val item = items[index]
+                PreviewPageHost(
+                    item = item,
+                    viewModel = viewModel,
+                    isCurrent = index == pagerState.settledPage,
+                    zoom = zoomFor(item.nodeId),
+                    // 侧栏里顶栏常驻:点图片不收起
+                    onToggleChrome = { if (!pane) chromeVisible = !chromeVisible },
+                    onChromeVisible = { if (!pane) chromeVisible = it },
+                    onOpenPdfPage = { doc, page -> pdfZoom = PdfZoomRequest(doc, page) },
+                    onPlayNext = playNext,
+                )
+            }
         }
         AnimatedVisibility(
             visible = chromeVisible,
@@ -250,6 +273,7 @@ private fun PreviewPageHost(
     onToggleChrome: () -> Unit,
     onChromeVisible: (Boolean) -> Unit,
     onOpenPdfPage: (PdfDocument, Int) -> Unit,
+    onPlayNext: (UpNext) -> Unit,
 ) {
     val page = remember(item.nodeId) { viewModel.page(item.nodeId) }
     DisposableEffect(page) {
@@ -262,15 +286,26 @@ private fun PreviewPageHost(
         PreviewContent.Loading -> LoadingPage(item.thumbKey)
         is PreviewContent.Error -> ErrorPage(c.message, onRetry = page::retry)
         is PreviewContent.Image -> ImagePage(c, item, title, zoom, onTap = onToggleChrome, onRetry = page::retry)
-        is PreviewContent.Video -> VideoPage(c, isCurrent, viewModel.mediaClient, page, onControllerVisible = onChromeVisible)
-        is PreviewContent.Audio -> AudioPage(item.nodeId, title, c, isCurrent)
+        is PreviewContent.Video -> VideoPage(
+            c,
+            isCurrent,
+            viewModel.mediaClient,
+            page,
+            onControllerVisible = onChromeVisible,
+            onReportProgress = { position, duration -> viewModel.reportMedia(item.nodeId, position, duration) },
+            onFindNext = { viewModel.nextVideo(item.nodeId) },
+            onPlayNext = onPlayNext,
+        )
+        is PreviewContent.Audio -> AudioPage(item.nodeId, title, c, isCurrent, onLoadQueue = { viewModel.loadAudioQueue(item.nodeId, title) })
         is PreviewContent.PdfDownloading -> PdfDownloadingPage(c.fraction)
         is PreviewContent.Pdf -> PdfPage(
             c.file,
             onOpenPdfPage,
             onOpenWith = viewModel::openWith,
             onDownload = viewModel::download,
-            initialPage = item.pdfPage,
+            // 内容搜索的命中页优先,其次上次看到的页
+            initialPage = pdfStartPage(item.pdfPage, state.info?.progress),
+            onPageSettled = { p, count -> viewModel.reportPdf(item.nodeId, p, count) },
         )
         is PreviewContent.Text -> TextPage(c, onLoadMore = page::loadMoreText)
         PreviewContent.OfficeConverting -> OfficeConvertingPage()
