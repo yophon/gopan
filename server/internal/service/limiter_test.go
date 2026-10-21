@@ -26,3 +26,27 @@ func TestKeyedLimiter(t *testing.T) {
 		t.Fatal("新突发 1 用完应拒绝")
 	}
 }
+
+func TestKeyedLimiterPrunesRefilledBuckets(t *testing.T) {
+	l := newKeyedLimiter(time.Millisecond, 1)
+	for i := range limiterPruneAt {
+		l.Allow(string(rune('a'+i%26)) + time.Duration(i).String())
+	}
+	if l.size() != limiterPruneAt {
+		t.Fatalf("size = %d", l.size())
+	}
+	time.Sleep(5 * time.Millisecond) // 全部回满
+	l.Allow("new")
+	if l.size() != 1 {
+		t.Fatalf("回满的桶应被清掉,剩 %d", l.size())
+	}
+	// 一分钟内不再扫
+	for i := range limiterPruneAt {
+		l.Allow("x" + time.Duration(i).String())
+	}
+	time.Sleep(5 * time.Millisecond)
+	l.Allow("y")
+	if l.size() <= limiterPruneAt {
+		t.Fatalf("一分钟内不该再扫,size = %d", l.size())
+	}
+}

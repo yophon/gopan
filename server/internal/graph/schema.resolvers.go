@@ -8,7 +8,6 @@ package graph
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -784,77 +783,225 @@ func (r *mutationResolver) ClearFinishedJobs(ctx context.Context) (int, error) {
 
 // SaveProgress is the resolver for the saveProgress field.
 func (r *mutationResolver) SaveProgress(ctx context.Context, nodeID string, position float64, duration float64) (*PlayProgress, error) {
-	panic(fmt.Errorf("not implemented: SaveProgress - saveProgress"))
+	ident, err := httpx.IdentityFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if ident.Scope != service.ScopeUser {
+		return nil, nil // 访客不记进度
+	}
+	nid, err := parseID(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	p, err := r.Media.SaveProgress(ctx, ident.UserID, nid, position, duration)
+	if err != nil {
+		return nil, err
+	}
+	return gqlPlayProgress(p), nil
 }
 
 // ClearProgress is the resolver for the clearProgress field.
 func (r *mutationResolver) ClearProgress(ctx context.Context, nodeID string) (bool, error) {
-	panic(fmt.Errorf("not implemented: ClearProgress - clearProgress"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	nid, err := parseID(nodeID)
+	if err != nil {
+		return false, err
+	}
+	return true, r.Media.ClearProgress(ctx, ident.UserID, nid)
 }
 
 // MarkNotificationsRead is the resolver for the markNotificationsRead field.
 func (r *mutationResolver) MarkNotificationsRead(ctx context.Context, ids []string) (int, error) {
-	panic(fmt.Errorf("not implemented: MarkNotificationsRead - markNotificationsRead"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return 0, err
+	}
+	nums := make([]int64, 0, len(ids))
+	for _, s := range ids {
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return 0, &service.Error{Code: "INVALID_INPUT", Message: "非法 ID"}
+		}
+		nums = append(nums, n)
+	}
+	n, err := r.Notify.MarkRead(ctx, ident.UserID, nums)
+	return int(n), err
 }
 
 // ClearNotifications is the resolver for the clearNotifications field.
 func (r *mutationResolver) ClearNotifications(ctx context.Context) (int, error) {
-	panic(fmt.Errorf("not implemented: ClearNotifications - clearNotifications"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n, err := r.Notify.Clear(ctx, ident.UserID)
+	return int(n), err
 }
 
 // CreateNotifyChannel is the resolver for the createNotifyChannel field.
 func (r *mutationResolver) CreateNotifyChannel(ctx context.Context, input NotifyChannelInput) (*NotifyChannel, error) {
-	panic(fmt.Errorf("not implemented: CreateNotifyChannel - createNotifyChannel"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c, err := r.Notify.CreateChannel(ctx, ident.UserID, channelInput(input))
+	if err != nil {
+		return nil, err
+	}
+	return gqlNotifyChannel(c), nil
 }
 
 // UpdateNotifyChannel is the resolver for the updateNotifyChannel field.
 func (r *mutationResolver) UpdateNotifyChannel(ctx context.Context, id string, input NotifyChannelInput) (*NotifyChannel, error) {
-	panic(fmt.Errorf("not implemented: UpdateNotifyChannel - updateNotifyChannel"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	c, err := r.Notify.UpdateChannel(ctx, ident.UserID, cid, channelInput(input))
+	if err != nil {
+		return nil, err
+	}
+	return gqlNotifyChannel(c), nil
 }
 
 // DeleteNotifyChannel is the resolver for the deleteNotifyChannel field.
 func (r *mutationResolver) DeleteNotifyChannel(ctx context.Context, id string) (bool, error) {
-	panic(fmt.Errorf("not implemented: DeleteNotifyChannel - deleteNotifyChannel"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	cid, err := parseID(id)
+	if err != nil {
+		return false, err
+	}
+	return true, r.Notify.DeleteChannel(ctx, ident.UserID, cid)
 }
 
 // TestNotifyChannel is the resolver for the testNotifyChannel field.
 func (r *mutationResolver) TestNotifyChannel(ctx context.Context, id string) (bool, error) {
-	panic(fmt.Errorf("not implemented: TestNotifyChannel - testNotifyChannel"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	cid, err := parseID(id)
+	if err != nil {
+		return false, err
+	}
+	return true, r.Notify.TestChannel(ctx, ident.UserID, cid)
 }
 
 // CreateLinks is the resolver for the createLinks field.
 func (r *mutationResolver) CreateLinks(ctx context.Context, nodeIds []string) ([]*DirectLink, error) {
-	panic(fmt.Errorf("not implemented: CreateLinks - createLinks"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := parseIDs(nodeIds)
+	if err != nil {
+		return nil, err
+	}
+	m := service.ClientMetaFrom(ctx)
+	vs, err := r.Links.CreateLinks(ctx, ident.UserID, ids, service.LinkMeta{Source: jobSource(ctx), IP: m.IP, UA: m.UA})
+	if err != nil {
+		return nil, err
+	}
+	return r.gqlLinks(vs), nil
 }
 
 // UpdateLink is the resolver for the updateLink field.
 func (r *mutationResolver) UpdateLink(ctx context.Context, id string, input DirectLinkInput) (*DirectLink, error) {
-	panic(fmt.Errorf("not implemented: UpdateLink - updateLink"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	lid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	v, err := r.Links.Update(ctx, ident.UserID, lid, linkSettings(input))
+	if err != nil {
+		return nil, err
+	}
+	return r.gqlLink(v), nil
 }
 
 // PauseLink is the resolver for the pauseLink field.
 func (r *mutationResolver) PauseLink(ctx context.Context, id string, paused bool) (*DirectLink, error) {
-	panic(fmt.Errorf("not implemented: PauseLink - pauseLink"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	lid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	v, err := r.Links.Pause(ctx, ident.UserID, lid, paused)
+	if err != nil {
+		return nil, err
+	}
+	return r.gqlLink(v), nil
 }
 
 // RevokeLink is the resolver for the revokeLink field.
 func (r *mutationResolver) RevokeLink(ctx context.Context, id string) (bool, error) {
-	panic(fmt.Errorf("not implemented: RevokeLink - revokeLink"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	lid, err := parseID(id)
+	if err != nil {
+		return false, err
+	}
+	return true, r.Links.Revoke(ctx, ident.UserID, lid)
 }
 
 // SetLinkPrefs is the resolver for the setLinkPrefs field.
 func (r *mutationResolver) SetLinkPrefs(ctx context.Context, input LinkPrefsInput) (*LinkPrefs, error) {
-	panic(fmt.Errorf("not implemented: SetLinkPrefs - setLinkPrefs"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p, err := r.Links.SetPrefs(ctx, ident.UserID, service.LinkPrefs{
+		RefererHosts: input.RefererHosts, AllowNoReferer: input.AllowNoReferer, ImageFolder: input.ImageFolder, StripGPS: input.StripGps,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return r.gqlLinkPrefs(p), nil
 }
 
 // AdminPauseLink is the resolver for the adminPauseLink field.
 func (r *mutationResolver) AdminPauseLink(ctx context.Context, id string, paused bool) (bool, error) {
-	panic(fmt.Errorf("not implemented: AdminPauseLink - adminPauseLink"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	lid, err := parseID(id)
+	if err != nil {
+		return false, err
+	}
+	return true, r.Links.AdminPause(ctx, ident.UserID, lid, paused)
 }
 
 // AdminRevokeLink is the resolver for the adminRevokeLink field.
 func (r *mutationResolver) AdminRevokeLink(ctx context.Context, id string) (bool, error) {
-	panic(fmt.Errorf("not implemented: AdminRevokeLink - adminRevokeLink"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	lid, err := parseID(id)
+	if err != nil {
+		return false, err
+	}
+	return true, r.Links.AdminRevoke(ctx, ident.UserID, lid)
 }
 
 // AdminCreateUser is the resolver for the adminCreateUser field.
@@ -940,7 +1087,15 @@ func (r *nodeResolver) Preview(ctx context.Context, obj *Node) (*PreviewInfo, er
 	if err != nil {
 		return nil, err
 	}
-	return gqlPreview(info), nil
+	out := gqlPreview(info)
+	if info.Kind == service.PvVideo {
+		subs, err := r.subtitlesFor(ctx, obj)
+		if err != nil {
+			return nil, err
+		}
+		out.Subtitles = gqlSubtitles(subs)
+	}
+	return out, nil
 }
 
 // DownloadURL is the resolver for the downloadUrl field.
@@ -973,7 +1128,22 @@ func (r *nodeResolver) DownloadURL(ctx context.Context, obj *Node) (*string, err
 
 // PlayProgress is the resolver for the playProgress field.
 func (r *nodeResolver) PlayProgress(ctx context.Context, obj *Node) (*PlayProgress, error) {
-	panic(fmt.Errorf("not implemented: PlayProgress - playProgress"))
+	if obj.Kind != NodeKindFile || obj.InList {
+		return nil, nil
+	}
+	ident, err := httpx.IdentityFrom(ctx)
+	if err != nil || ident.Scope != service.ScopeUser {
+		return nil, nil // 访客没有进度
+	}
+	nid, err := parseID(obj.ID)
+	if err != nil {
+		return nil, err
+	}
+	p, err := r.Media.Progress(ctx, ident.UserID, nid)
+	if err != nil {
+		return nil, err
+	}
+	return gqlPlayProgress(p), nil
 }
 
 // McpAccessRoots is the resolver for the mcpAccessRoots field.
@@ -1571,72 +1741,264 @@ func (r *queryResolver) FetchEnabled(ctx context.Context) (bool, error) {
 
 // Playlist is the resolver for the playlist field.
 func (r *queryResolver) Playlist(ctx context.Context, nodeID string) ([]*Node, error) {
-	panic(fmt.Errorf("not implemented: Playlist - playlist"))
+	nid, err := parseID(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	ident, err := r.requireNodeAccess(ctx, nid)
+	if err != nil {
+		return nil, err
+	}
+	onlySelf := false
+	if ident.Scope != service.ScopeUser {
+		sh, err := r.Shares.ValidateScope(ctx, ident)
+		if err != nil {
+			return nil, err
+		}
+		onlySelf = sh.NodeID == nid // 分享的就是这个文件本身:兄弟文件不在分享范围里
+	}
+	rows, err := r.Media.Playlist(ctx, ident.UserID, nid, onlySelf)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*Node, 0, len(rows))
+	for _, row := range rows {
+		n := gqlNodeRow(nodeRow{Node: row.Node, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256})
+		n.InList = true
+		out = append(out, n)
+	}
+	return out, nil
 }
 
 // RecentPlays is the resolver for the recentPlays field.
 func (r *queryResolver) RecentPlays(ctx context.Context, limit *int) ([]*RecentPlay, error) {
-	panic(fmt.Errorf("not implemented: RecentPlays - recentPlays"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	n := 20
+	if limit != nil {
+		n = *limit
+	}
+	rows, err := r.Media.RecentPlays(ctx, ident.UserID, n)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*RecentPlay, 0, len(rows))
+	for _, row := range rows {
+		node := gqlNodeRow(nodeRow{Node: row.Node, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256})
+		node.InList = true
+		p := row.PlayProgress
+		out = append(out, &RecentPlay{Node: node, Progress: gqlPlayProgress(&p)})
+	}
+	return out, nil
 }
 
 // Notifications is the resolver for the notifications field.
 func (r *queryResolver) Notifications(ctx context.Context, cursor *string, unreadOnly *bool) (*NotificationPage, error) {
-	panic(fmt.Errorf("not implemented: Notifications - notifications"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, next, err := r.Notify.List(ctx, ident.UserID, cursor, unreadOnly != nil && *unreadOnly)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*Notification, 0, len(rows))
+	for _, n := range rows {
+		items = append(items, gqlNotification(n))
+	}
+	return &NotificationPage{Items: items, NextCursor: next}, nil
 }
 
 // NotifyChannels is the resolver for the notifyChannels field.
 func (r *queryResolver) NotifyChannels(ctx context.Context) ([]*NotifyChannel, error) {
-	panic(fmt.Errorf("not implemented: NotifyChannels - notifyChannels"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.Notify.Channels(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*NotifyChannel, 0, len(rows))
+	for _, c := range rows {
+		out = append(out, gqlNotifyChannel(c))
+	}
+	return out, nil
 }
 
 // NotifyEventKinds is the resolver for the notifyEventKinds field.
 func (r *queryResolver) NotifyEventKinds(ctx context.Context) ([]*NotifyEventKind, error) {
-	panic(fmt.Errorf("not implemented: NotifyEventKinds - notifyEventKinds"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	u, err := r.Auth.GetUser(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	var out []*NotifyEventKind
+	for _, k := range service.EventKindsFor(u.IsAdmin) {
+		out = append(out, &NotifyEventKind{Kind: k.Kind, Label: k.Label, DefaultPush: k.DefaultPush, AdminOnly: k.AdminOnly})
+	}
+	return out, nil
 }
 
 // MyLinks is the resolver for the myLinks field.
 func (r *queryResolver) MyLinks(ctx context.Context, cursor *string) (*DirectLinkPage, error) {
-	panic(fmt.Errorf("not implemented: MyLinks - myLinks"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	vs, next, total, err := r.Links.List(ctx, ident.UserID, cursor)
+	if err != nil {
+		return nil, err
+	}
+	return &DirectLinkPage{Items: r.gqlLinks(vs), NextCursor: next, Total: total}, nil
 }
 
 // Link is the resolver for the link field.
 func (r *queryResolver) Link(ctx context.Context, id string) (*DirectLink, error) {
-	panic(fmt.Errorf("not implemented: Link - link"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	lid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	v, err := r.Links.Get(ctx, ident.UserID, lid)
+	if err != nil {
+		return nil, err
+	}
+	return r.gqlLink(v), nil
 }
 
 // NodeLink is the resolver for the nodeLink field.
 func (r *queryResolver) NodeLink(ctx context.Context, nodeID string) (*DirectLink, error) {
-	panic(fmt.Errorf("not implemented: NodeLink - nodeLink"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nid, err := parseID(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	v, err := r.Links.NodeLink(ctx, ident.UserID, nid)
+	if err != nil || v == nil {
+		return nil, err
+	}
+	return r.gqlLink(*v), nil
 }
 
 // LinkStats is the resolver for the linkStats field.
 func (r *queryResolver) LinkStats(ctx context.Context, id string, hours *int) ([]*LinkHourStat, error) {
-	panic(fmt.Errorf("not implemented: LinkStats - linkStats"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	lid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	h := 168
+	if hours != nil {
+		h = *hours
+	}
+	rows, err := r.Links.Stats(ctx, ident.UserID, lid, h)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*LinkHourStat, 0, len(rows))
+	for _, s := range rows {
+		out = append(out, &LinkHourStat{Hour: s.Hour.Time, Hits: s.Hits, Bytes: s.Bytes, Blocked: s.Blocked, Ips: int(s.Ips)})
+	}
+	return out, nil
 }
 
 // LinkReferers is the resolver for the linkReferers field.
 func (r *queryResolver) LinkReferers(ctx context.Context, id string, days *int) ([]*LinkReferer, error) {
-	panic(fmt.Errorf("not implemented: LinkReferers - linkReferers"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	lid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	d := 30
+	if days != nil {
+		d = *days
+	}
+	rows, err := r.Links.Referers(ctx, ident.UserID, lid, d)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*LinkReferer, 0, len(rows))
+	for _, s := range rows {
+		out = append(out, &LinkReferer{Host: s.Host, Hits: s.Hits, Bytes: s.Bytes})
+	}
+	return out, nil
 }
 
 // LinkHits is the resolver for the linkHits field.
 func (r *queryResolver) LinkHits(ctx context.Context, id string, cursor *string) (*LinkHitPage, error) {
-	panic(fmt.Errorf("not implemented: LinkHits - linkHits"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	lid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	rows, next, err := r.Links.Hits(ctx, ident.UserID, lid, cursor)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*LinkHit, 0, len(rows))
+	for _, h := range rows {
+		items = append(items, &LinkHit{At: h.At.Time, IP: h.Ip, UserAgent: h.UserAgent, Referer: h.Referer, Status: int(h.Status), Bytes: h.Bytes})
+	}
+	return &LinkHitPage{Items: items, NextCursor: next}, nil
 }
 
 // LinkPrefs is the resolver for the linkPrefs field.
 func (r *queryResolver) LinkPrefs(ctx context.Context) (*LinkPrefs, error) {
-	panic(fmt.Errorf("not implemented: LinkPrefs - linkPrefs"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p, err := r.Links.Prefs(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return r.gqlLinkPrefs(p), nil
 }
 
 // LinksEnabled is the resolver for the linksEnabled field.
 func (r *queryResolver) LinksEnabled(ctx context.Context) (bool, error) {
-	panic(fmt.Errorf("not implemented: LinksEnabled - linksEnabled"))
+	return r.Links.Enabled(), nil
 }
 
 // AdminLinkStats is the resolver for the adminLinkStats field.
 func (r *queryResolver) AdminLinkStats(ctx context.Context) (*AdminLinkStats, error) {
-	panic(fmt.Errorf("not implemented: AdminLinkStats - adminLinkStats"))
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	st, err := r.Links.AdminStats(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := &AdminLinkStats{MonthHits: st.MonthHits, MonthBytes: st.MonthBytes, MonthlyBytesCap: r.Links.Config().MonthlyBytes, Top: []*AdminLink{}}
+	for _, t := range st.Top {
+		out.Top = append(out.Top, &AdminLink{
+			ID: t.ID.String(), Owner: t.Username, Name: t.NodeName, Path: r.Links.Path(t.Token, t.NodeName),
+			Status: LinkStatus(r.Links.AdminStatus(t)), MonthHits: t.Hits, MonthBytes: t.Bytes,
+		})
+	}
+	return out, nil
 }
 
 // AdminUsers is the resolver for the adminUsers field.
@@ -1686,7 +2048,11 @@ func (r *queryResolver) AdminOverview(ctx context.Context) (*AdminOverview, erro
 
 // UnreadNotifications is the resolver for the unreadNotifications field.
 func (r *userResolver) UnreadNotifications(ctx context.Context, obj *User) (int, error) {
-	panic(fmt.Errorf("not implemented: UnreadNotifications - unreadNotifications"))
+	id, err := parseID(obj.ID)
+	if err != nil {
+		return 0, err
+	}
+	return r.Notify.Unread(ctx, id)
 }
 
 // ChatMessage returns ChatMessageResolver implementation.

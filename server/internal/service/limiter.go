@@ -8,13 +8,17 @@ import (
 )
 
 // keyedLimiter 按 key(IP、用户、分享)分桶的进程内令牌桶。
-// 单机假设下的统一限速件:登录/验密/打包共用此实现。
+// 单机假设下的统一限速件:登录/验密/打包/直链共用此实现。
+// 桶多了就定期扫掉已经回满的(回满的桶与新建的没有区别,删掉不改变行为):直链面向全网,key 不能只增不减。
 type keyedLimiter struct {
-	mu       sync.Mutex
-	limiters map[string]*rate.Limiter
-	every    time.Duration
-	burst    int
+	mu        sync.Mutex
+	limiters  map[string]*rate.Limiter
+	every     time.Duration
+	burst     int
+	lastPrune time.Time
 }
+
+const limiterPruneAt = 1024
 
 func newKeyedLimiter(every time.Duration, burst int) *keyedLimiter {
 	return &keyedLimiter{limiters: make(map[string]*rate.Limiter), every: every, burst: burst}
@@ -25,10 +29,28 @@ func (l *keyedLimiter) Allow(key string) bool {
 	defer l.mu.Unlock()
 	lim, ok := l.limiters[key]
 	if !ok {
+		if len(l.limiters) >= limiterPruneAt && time.Since(l.lastPrune) > time.Minute {
+			l.prune()
+		}
 		lim = rate.NewLimiter(rate.Every(l.every), l.burst)
 		l.limiters[key] = lim
 	}
 	return lim.Allow()
+}
+
+func (l *keyedLimiter) prune() {
+	l.lastPrune = time.Now()
+	for k, lim := range l.limiters {
+		if lim.Tokens() >= float64(l.burst) {
+			delete(l.limiters, k)
+		}
+	}
+}
+
+func (l *keyedLimiter) size() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.limiters)
 }
 
 // Exhausted 桶里已经没有令牌(不消耗)。用于"只在失败时扣"的计数:先看,失败了再 Allow 扣一个。

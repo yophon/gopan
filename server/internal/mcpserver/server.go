@@ -31,10 +31,11 @@ type Server struct {
 	content           *service.ContentSearch
 	jobs              *service.Jobs
 	archives          *service.Archives
+	links             *service.Links
 }
 
-func NewHandler(nodes *service.Nodes, uploads *service.Uploads, tokens *service.MCPTokens, oauth *service.OAuth, packer *service.Packer, tickets *service.PackTickets, chats *service.Chats, content *service.ContentSearch, jobs *service.Jobs, archives *service.Archives) http.Handler {
-	s := &Server{nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, packer: packer, tickets: tickets, chats: chats, content: content, jobs: jobs, archives: archives}
+func NewHandler(nodes *service.Nodes, uploads *service.Uploads, tokens *service.MCPTokens, oauth *service.OAuth, packer *service.Packer, tickets *service.PackTickets, chats *service.Chats, content *service.ContentSearch, jobs *service.Jobs, archives *service.Archives, links *service.Links) http.Handler {
+	s := &Server{nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, packer: packer, tickets: tickets, chats: chats, content: content, jobs: jobs, archives: archives, links: links}
 	protocol := mcp.NewServer(&mcp.Implementation{Name: "gopan", Version: "2.3.0"}, nil)
 	s.registerTools(protocol)
 	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return protocol }, &mcp.StreamableHTTPOptions{
@@ -763,6 +764,7 @@ func (s *Server) registerTools(server *mcp.Server) {
 	s.registerContentTools(server)
 	s.registerJobTools(server)
 	s.registerArchiveTools(server)
+	s.registerLinkTools(server)
 	addTool(s, server, &mcp.Tool{Name: "wait_upload", Description: "Wait up to 25 seconds for an upload to become ready, failed, or aborted. On timeout returns latest status; repeat if nonterminal."}, s.waitUpload)
 	addTool(s, server, &mcp.Tool{Name: "resolve_path", Description: "Resolve an absolute, case-sensitive Gopan path to a node ID. / is the virtual root."}, s.resolvePath)
 	addTool(s, server, &mcp.Tool{Name: "create_directories", Description: "Atomically create missing parent directories; reuse existing directories. Supports persistent idempotency."}, mutation(s, "create_directories", "files:write", (*Server).createDirectories))

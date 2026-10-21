@@ -133,6 +133,7 @@ func (s *Uploads) ProcessNextBrowserUpload(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	_, err = s.finalizeBrowserUpload(ctx, work, sess)
+	committed := err == nil
 	if err != nil {
 		if rollbackErr := work.Rollback(ctx); rollbackErr != nil {
 			return false, rollbackErr
@@ -153,6 +154,9 @@ func (s *Uploads) ProcessNextBrowserUpload(ctx context.Context) (bool, error) {
 	// Terminal state is durable before removing staging. Cleanup retries removal
 	// after crashes or storage errors; it never deletes the shared blob key.
 	_ = s.cleanUploadObject(ctx, sess)
+	if committed {
+		s.notify.CheckQuota(ctx, sess.OwnerID)
+	}
 	return true, nil
 }
 
@@ -200,6 +204,7 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 	}
 	if u.UsedBytes+sess.Size > u.QuotaBytes {
 		if collect != nil {
+			s.notify.noteCollectFull(ctx, sess.OwnerID, collect.request.ID, collect.request.Title)
 			return nil, errCollectFull // 不向访客透露属主的空间状态
 		}
 		return nil, errf("QUOTA_EXCEEDED", "存储配额不足")
@@ -261,6 +266,11 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 		if err := collect.record(ctx, q, sess, n, size, sum); err != nil {
 			return nil, err
 		}
+		uploader := ""
+		if collect.visitor != nil {
+			uploader = collect.visitor.Name
+		}
+		s.notify.noteCollectUpload(ctx, tx, sess.OwnerID, collect.request, uploader, n.Name, size)
 	}
 	if err := q.FinishUploadSession(ctx, store.FinishUploadSessionParams{ID: sess.ID, NodeID: &n.ID}); err != nil {
 		return nil, err

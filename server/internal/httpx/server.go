@@ -259,6 +259,12 @@ func normalizePath(p string) string {
 		return "/mcp-download/:ticket"
 	case strings.HasPrefix(p, "/arc/"):
 		return "/arc/:node/:idx"
+	case strings.HasPrefix(p, "/x/"):
+		return "/x/:token"
+	case strings.HasPrefix(p, "/sub/"):
+		return "/sub/:node"
+	case p == "/api/img/upload":
+		return p
 	case p == "/dav" || strings.HasPrefix(p, "/dav/"):
 		return "/dav"
 	case strings.HasPrefix(p, AndroidReleasePath):

@@ -4193,7 +4193,7 @@ type PlayProgress {
   position: Float!
   # 音视频是总秒数;PDF 是总页数
   duration: Float!
-  # 看完了(剩余不到 3% 且不到 20 秒,或翻到最后一页):下次从头开始
+  # 看完了(剩余不到 3% 或不到 20 秒,PDF 翻到最后一页):下次从头开始
   finished: Boolean!
   updatedAt: Time!
 }

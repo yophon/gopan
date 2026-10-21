@@ -503,6 +503,7 @@ func (s *Collects) checkInit(ctx context.Context, q *store.Queries, r store.GetF
 		return err
 	}
 	if u.UsedBytes+reserved+size > u.QuotaBytes {
+		s.uploads.notify.noteCollectFull(ctx, r.OwnerID, r.ID, r.Title)
 		return errCollectFull // 不向访客透露属主的空间状态
 	}
 	return nil

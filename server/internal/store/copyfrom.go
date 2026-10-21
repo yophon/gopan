@@ -51,3 +51,41 @@ func (r iteratorForInsertArchiveEntries) Err() error {
 func (q *Queries) InsertArchiveEntries(ctx context.Context, arg []InsertArchiveEntriesParams) (int64, error) {
 	return q.db.CopyFrom(ctx, []string{"archive_entries"}, []string{"blob_id", "idx", "src", "path", "parent", "name", "is_dir", "size", "packed_size", "mtime", "flag", "cost"}, &iteratorForInsertArchiveEntries{rows: arg})
 }
+
+// iteratorForInsertLinkHits implements pgx.CopyFromSource.
+type iteratorForInsertLinkHits struct {
+	rows                 []InsertLinkHitsParams
+	skippedFirstNextCall bool
+}
+
+func (r *iteratorForInsertLinkHits) Next() bool {
+	if len(r.rows) == 0 {
+		return false
+	}
+	if !r.skippedFirstNextCall {
+		r.skippedFirstNextCall = true
+		return true
+	}
+	r.rows = r.rows[1:]
+	return len(r.rows) > 0
+}
+
+func (r iteratorForInsertLinkHits) Values() ([]interface{}, error) {
+	return []interface{}{
+		r.rows[0].LinkID,
+		r.rows[0].At,
+		r.rows[0].Ip,
+		r.rows[0].UserAgent,
+		r.rows[0].Referer,
+		r.rows[0].Status,
+		r.rows[0].Bytes,
+	}, nil
+}
+
+func (r iteratorForInsertLinkHits) Err() error {
+	return nil
+}
+
+func (q *Queries) InsertLinkHits(ctx context.Context, arg []InsertLinkHitsParams) (int64, error) {
+	return q.db.CopyFrom(ctx, []string{"link_hits"}, []string{"link_id", "at", "ip", "user_agent", "referer", "status", "bytes"}, &iteratorForInsertLinkHits{rows: arg})
+}

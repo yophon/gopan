@@ -28,7 +28,8 @@ const (
 var pkceValue = regexp.MustCompile(`^[A-Za-z0-9._~-]{43,128}$`)
 
 type OAuth struct {
-	q *store.Queries
+	q      *store.Queries
+	notify *Notifier
 }
 
 func NewOAuth(q *store.Queries) *OAuth {
@@ -178,6 +179,7 @@ func (o *OAuth) Authorize(ctx context.Context, userID uuid.UUID, in OAuthAuthori
 	if err != nil {
 		return "", err
 	}
+	o.notify.noteCredential(ctx, userID, "oauth", client.ClientName)
 	code, err := randomCredential("gopan_code_", 32)
 	if err != nil {
 		return "", err

@@ -24,7 +24,8 @@ type Nodes struct {
 	pool interface {
 		Begin(context.Context) (pgx.Tx, error)
 	}
-	q *store.Queries
+	q      *store.Queries
+	notify *Notifier
 }
 
 func NewNodes(pool *pgxpool.Pool) *Nodes {
@@ -447,6 +448,7 @@ func (s *Nodes) Copy(ctx context.Context, owner uuid.UUID, ids []uuid.UUID, targ
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
+	s.notify.CheckQuota(ctx, owner)
 	for _, ri := range rootIdx {
 		n, err := s.q.GetNode(ctx, newIDs[ri])
 		if err != nil {

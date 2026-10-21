@@ -38,6 +38,9 @@ type Pool struct {
 	// 内容搜索:是否提取文字、pdftotext 路径(空 = PDF 不提)
 	textIndex bool
 	pdftotext string
+	// 通知与影音的周期维护(doc/22)
+	notify *service.Notifier
+	media  *service.Media
 }
 
 func New(pool *pgxpool.Pool, obj *objstore.Store, nodes *service.Nodes, trashTTL time.Duration, ffmpeg, ffprobe, gotenberg string) *Pool {
@@ -56,6 +59,10 @@ func (w *Pool) SetCollects(collects *service.Collects) {
 // SetArchives 压缩包目录索引(doc/21 四.2):注入后才建索引、才跑回填。
 func (w *Pool) SetArchives(archives *service.Archives) {
 	w.archives = archives
+}
+
+func (w *Pool) SetNotify(n *service.Notifier, m *service.Media) {
+	w.notify, w.media = n, m
 }
 
 // Enqueue 入队并唤醒 worker(注入给 service 用)。
@@ -98,6 +105,13 @@ func (w *Pool) Run(ctx context.Context, n int) {
 	}
 	if w.archives != nil {
 		go w.periodic(ctx, time.Minute, "archive-backfill", w.backfillArchives)
+	}
+	if w.notify != nil {
+		go w.periodic(ctx, 24*time.Hour, "notification-cleanup", func(ctx context.Context) error { w.notify.Cleanup(ctx); return nil })
+		go w.periodic(ctx, time.Hour, "heartbeat-check", func(ctx context.Context) error { w.notify.CheckHeartbeats(ctx); return nil })
+	}
+	if w.media != nil {
+		go w.periodic(ctx, 24*time.Hour, "play-progress-cleanup", w.media.Cleanup)
 	}
 	<-ctx.Done()
 }

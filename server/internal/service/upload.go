@@ -33,6 +33,7 @@ type Uploads struct {
 	partSize int64
 	ttl      time.Duration
 	enqueue  func(ctx context.Context, kind string, blobID uuid.UUID) // worker 注入
+	notify   *Notifier
 }
 
 func NewUploads(pool *pgxpool.Pool, obj *objstore.Store, nodes *Nodes, partSize int64, ttl time.Duration) *Uploads {
@@ -234,7 +235,11 @@ func (s *Uploads) linkBlob(ctx context.Context, owner uuid.UUID, parentID *uuid.
 	if err := attachChatMessage(ctx, qtx, owner, parentID, node.ID); err != nil {
 		return store.Node{}, err
 	}
-	return node, tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return store.Node{}, err
+	}
+	s.notify.CheckQuota(ctx, owner)
+	return node, nil
 }
 
 // CommitStreamed WebDAV 写入定稿:字节已流式转存到 tmpKey,sha/size 是服务端算的。
@@ -369,6 +374,7 @@ func (s *Uploads) CommitStreamed(ctx context.Context, owner uuid.UUID, parentID 
 	if !blob.Verified {
 		s.enqueue(ctx, "verify_hash", blob.ID)
 	}
+	s.notify.CheckQuota(ctx, owner)
 	return &node, nil
 }
 

@@ -31,7 +31,11 @@ var validMCPScopes = map[string]struct{}{
 	"admin:users":    {},
 	"admin:tasks":    {},
 	"admin:purge":    {},
+	ScopeImgUpload:   {},
 }
+
+// ScopeImgUpload 图床密钥(doc/22 四.3):只能往图床文件夹上传并生成直链,不能和别的权限混用。
+const ScopeImgUpload = "img:upload"
 
 var MCPScopes = []string{
 	"files:read",
@@ -71,7 +75,8 @@ func (p *MCPPrincipal) HasScope(scope string) bool {
 }
 
 type MCPTokens struct {
-	q *store.Queries
+	q      *store.Queries
+	notify *Notifier
 }
 
 func NewMCPTokens(q *store.Queries) *MCPTokens {
@@ -109,6 +114,11 @@ func (m *MCPTokens) Create(ctx context.Context, userID uuid.UUID, name string, s
 	if err != nil {
 		return "", store.McpToken{}, err
 	}
+	kind := "mcp"
+	if len(scopes) == 1 && scopes[0] == ScopeImgUpload {
+		kind = "img"
+	}
+	m.notify.noteCredential(ctx, userID, kind, name)
 	return plain, row, nil
 }
 
@@ -136,6 +146,9 @@ func normalizeMCPScopes(scopes []string) ([]string, error) {
 	}
 	if admin && file {
 		return nil, errf("INVALID_INPUT", "管理员权限需使用单独凭据，不能与文件权限混合")
+	}
+	if _, ok := seen[ScopeImgUpload]; ok && len(seen) > 1 {
+		return nil, errf("INVALID_INPUT", "图床密钥要单独建,不能和别的权限混用")
 	}
 	sort.Strings(out)
 	return out, nil

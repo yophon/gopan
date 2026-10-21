@@ -109,6 +109,7 @@ func (s *Uploads) commitStagedOnce(ctx context.Context, f StagedFile) (*store.No
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
+	s.notify.CheckQuota(ctx, f.Owner)
 	return &n, nil
 }
 

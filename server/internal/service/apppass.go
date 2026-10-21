@@ -19,6 +19,7 @@ import (
 type AppPasswords struct {
 	q       *store.Queries
 	limiter *keyedLimiter // 认证失败按 IP 限速,防爆破
+	notify  *Notifier
 }
 
 func NewAppPasswords(q *store.Queries) *AppPasswords {
@@ -56,6 +57,7 @@ func (a *AppPasswords) Create(ctx context.Context, userID uuid.UUID, name string
 	if err != nil {
 		return "", store.AppPassword{}, err
 	}
+	a.notify.noteCredential(ctx, userID, "webdav", name)
 	return plain, row, nil
 }
 

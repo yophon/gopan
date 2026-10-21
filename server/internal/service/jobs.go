@@ -52,6 +52,7 @@ type Jobs struct {
 	client   *http.Client
 	archives *Archives
 	wake     chan struct{}
+	notify   *Notifier
 
 	heartbeat time.Duration
 	fetchIdle time.Duration // 测试缩短
@@ -296,6 +297,9 @@ func (j *Jobs) Reap(ctx context.Context) {
 	}
 	for _, id := range ids {
 		_ = j.obj.Remove(ctx, jobTmpKey(id))
+		if job, err := j.q.GetJobByID(ctx, id); err == nil {
+			j.notify.noteJob(ctx, job, false, "运行中断,重试次数已用完")
+		}
 	}
 }
 
@@ -408,10 +412,16 @@ func (j *Jobs) execute(parent context.Context, job store.UserJob) {
 	var se *Error
 	switch {
 	case err == nil:
-		_, err = j.q.FinishJob(fctx, run.finishParams("done", result, run.warning))
+		var n int64
+		if n, err = j.q.FinishJob(fctx, run.finishParams("done", result, run.warning)); n > 0 {
+			j.notify.noteJob(fctx, run.finished(), true, "")
+		}
 	case errors.As(err, &se):
 		slog.Info("job failed", "id", job.ID, "kind", job.Kind, "code", se.Code)
-		_, err = j.q.FinishJob(fctx, run.finishParams("failed", run.result, se))
+		var n int64
+		if n, err = j.q.FinishJob(fctx, run.finishParams("failed", run.result, se)); n > 0 {
+			j.notify.noteJob(fctx, run.finished(), false, se.Message)
+		}
 	case parent.Err() != nil:
 		// 停机:交还队列,不算一次尝试,重启后接着跑
 		_, err = j.q.ReleaseJob(fctx, store.ReleaseJobParams{ID: job.ID, Refund: 1})
@@ -421,7 +431,10 @@ func (j *Jobs) execute(parent context.Context, job store.UserJob) {
 		if job.Attempts < jobMaxAttempts {
 			_, err = j.q.ReleaseJob(fctx, store.ReleaseJobParams{ID: job.ID, ErrorCode: &e.Code, ErrorMessage: &e.Message})
 		} else {
-			_, err = j.q.FinishJob(fctx, run.finishParams("failed", nil, e))
+			var n int64
+			if n, err = j.q.FinishJob(fctx, run.finishParams("failed", nil, e)); n > 0 {
+				j.notify.noteJob(fctx, run.finished(), false, e.Message)
+			}
 		}
 	}
 	if err != nil {
@@ -475,4 +488,13 @@ func truncateRunes(s string, n int) string {
 		return s
 	}
 	return string(r[:n]) + "…"
+}
+
+// finished 结束时的任务快照(标题可能在执行中改成了真实文件名)。
+func (r *jobRun) finished() store.UserJob {
+	j := r.job
+	r.mu.Lock()
+	j.Title = r.title
+	r.mu.Unlock()
+	return j
 }

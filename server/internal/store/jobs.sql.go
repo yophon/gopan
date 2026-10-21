@@ -296,6 +296,39 @@ func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (UserJob, error)
 	return i, err
 }
 
+const getJobByID = `-- name: GetJobByID :one
+SELECT id, owner_id, kind, status, params, parent_id, result_node_id, title, bytes_done, bytes_total, files_done, files_total, files_skipped, error_code, error_message, attempts, source, heartbeat_at, created_at, started_at, finished_at FROM user_jobs WHERE id = $1
+`
+
+func (q *Queries) GetJobByID(ctx context.Context, id uuid.UUID) (UserJob, error) {
+	row := q.db.QueryRow(ctx, getJobByID, id)
+	var i UserJob
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Kind,
+		&i.Status,
+		&i.Params,
+		&i.ParentID,
+		&i.ResultNodeID,
+		&i.Title,
+		&i.BytesDone,
+		&i.BytesTotal,
+		&i.FilesDone,
+		&i.FilesTotal,
+		&i.FilesSkipped,
+		&i.ErrorCode,
+		&i.ErrorMessage,
+		&i.Attempts,
+		&i.Source,
+		&i.HeartbeatAt,
+		&i.CreatedAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+	)
+	return i, err
+}
+
 const getJobStatus = `-- name: GetJobStatus :one
 SELECT status FROM user_jobs WHERE id = $1
 `

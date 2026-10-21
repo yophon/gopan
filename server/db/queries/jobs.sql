@@ -85,3 +85,6 @@ DELETE FROM user_jobs WHERE owner_id = $1 AND status IN ('done', 'failed', 'canc
 
 -- name: CleanupOldJobs :execrows
 DELETE FROM user_jobs WHERE status IN ('done', 'failed', 'canceled') AND finished_at < now() - interval '7 days';
+
+-- name: GetJobByID :one
+SELECT * FROM user_jobs WHERE id = $1;

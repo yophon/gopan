@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"errors"
+	"flag"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -13,8 +14,10 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
+	_ "time/tzdata" // 运行镜像不一定带时区库,GOPAN_TZ 要能解析
 
 	"github.com/google/uuid"
 
@@ -56,13 +59,22 @@ func main() {
 	}
 }
 
-// adminCmd 处理 admin 子命令。目前只有 promote:把已注册用户提升为管理员。
-// 首个管理员只能从这里产生(不受注册开关与 API 鉴权约束,属主凭服务器权限自举)。
+// adminCmd 处理 admin 子命令(只连库,不起服务):
+//
+//	gopan admin promote <username>   把已注册用户提升为管理员(首个管理员只能从这里产生)
+//	gopan admin notify --title T [--body B] [--level info|warn|alert]   给所有管理员发一条通知(备份脚本失败时用)
+//	gopan admin notify --heartbeat backup   报平安:超过 36 小时没报就提醒管理员(doc/22 三.3)
 func adminCmd(args []string) error {
-	if len(args) != 2 || args[0] != "promote" {
-		return fmt.Errorf("用法:gopan admin promote <username>(需要 GOPAN_DB_URL)")
-	}
 	dbURL := os.Getenv("GOPAN_DB_URL")
+	if len(args) >= 1 && args[0] == "notify" {
+		if dbURL == "" {
+			return fmt.Errorf("需要设置 GOPAN_DB_URL")
+		}
+		return notifyCmd(dbURL, args[1:])
+	}
+	if len(args) != 2 || args[0] != "promote" {
+		return fmt.Errorf("用法:gopan admin promote <username> | gopan admin notify --title T [--body B] [--level warn] | gopan admin notify --heartbeat backup(需要 GOPAN_DB_URL)")
+	}
 	if dbURL == "" {
 		return fmt.Errorf("需要设置 GOPAN_DB_URL")
 	}
@@ -83,6 +95,38 @@ func adminCmd(args []string) error {
 		return fmt.Errorf("用户 %q 不存在(请先注册该账号)", args[1])
 	}
 	fmt.Printf("已将 %s 提升为管理员\n", args[1])
+	return nil
+}
+
+// notifyCmd 只写库:推送由运行中的服务的投递循环发出去(30 秒内)。
+func notifyCmd(dbURL string, args []string) error {
+	fs := flag.NewFlagSet("notify", flag.ContinueOnError)
+	title := fs.String("title", "", "标题")
+	body := fs.String("body", "", "正文")
+	level := fs.String("level", service.LvAlert, "info / warn / alert")
+	heartbeat := fs.String("heartbeat", "", "报平安的名字(目前只有 backup)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dbURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	n := service.NewNotifier(pool, fetcher.Guard{}, strings.TrimRight(os.Getenv("GOPAN_PUBLIC_URL"), "/"))
+	if *heartbeat != "" {
+		return n.Heartbeat(ctx, *heartbeat)
+	}
+	if *title == "" {
+		return fmt.Errorf("要给 --title")
+	}
+	if *level != service.LvInfo && *level != service.LvWarn && *level != service.LvAlert {
+		return fmt.Errorf("--level 只能是 info / warn / alert")
+	}
+	n.NotifyAdmins(ctx, service.Event{
+		Kind: service.EvBackup, Level: *level, Title: *title, Body: *body, Target: &service.Target{Kind: service.TgAdmin},
+	})
 	return nil
 }
 
@@ -150,11 +194,30 @@ func run() error {
 		UserAgent: "Mozilla/5.0 (compatible; gopan-offline-download)",
 	})
 	jobs.SetArchives(archives)
+	// 影音、通知、直链与图床(doc/22)
+	media := service.NewMedia(pool, obj)
+	notifier := service.NewNotifier(pool, fetcher.Guard{AllowPrivate: cfg.NotifyAllowPrivate, Deny: cfg.FetchDeny}, cfg.PublicURL)
+	links := service.NewLinks(pool, obj, uploads, notifier, service.LinkConfig{
+		Enabled: cfg.Links, DailyBytes: cfg.LinkDailyBytes, MonthlyBytes: cfg.LinkMonthlyBytes, ImgMaxSize: cfg.ImgMaxSize,
+		PublicURL: cfg.PublicURL, Loc: cfg.Location,
+	})
+	auth.SetNotifier(notifier)
+	uploads.SetNotifier(notifier)
+	nodes.SetNotifier(notifier)
+	jobs.SetNotifier(notifier)
+	mcpTokens.SetNotifier(notifier)
+	appPass.SetNotifier(notifier)
+	oauth.SetNotifier(notifier)
+	wk.SetNotify(notifier, media)
 	go wk.Run(ctx, cfg.Workers)
 	go jobs.Run(ctx, cfg.JobWorkers)
+	go notifier.Run(ctx)
+	linksDone := make(chan struct{})
+	go func() { links.Run(ctx); close(linksDone) }()
 
 	es := graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
 		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass, MCPTokens: mcpTokens, OAuth: oauth, Chats: chats, Collects: collects, Content: content, Jobs: jobs, Archives: archives,
+		Media: media, Notify: notifier, Links: links,
 	}})
 
 	mux := http.NewServeMux()
@@ -183,11 +246,16 @@ func run() error {
 	mux.HandleFunc("GET /oauth/authorize", oauthHTTP.Authorize)
 	mux.HandleFunc("POST /oauth/token", oauthHTTP.Token)
 	mux.HandleFunc("POST /oauth/register", oauthHTTP.Register)
-	mux.Handle("/mcp", mcpserver.NewHandler(nodes, uploads, mcpTokens, oauth, packer, packTickets, chats, content, jobs, archives))
+	mux.Handle("/mcp", mcpserver.NewHandler(nodes, uploads, mcpTokens, oauth, packer, packTickets, chats, content, jobs, archives, links))
 	mux.Handle("/mcp/admin", mcpserver.NewAdminHandler(nodes, mcpTokens, oauth, cfg.DefaultQuota))
 	mux.Handle("GET /mcp-download/{ticket}", httpx.MCPPackHandler(packTickets, packer))
 	mux.Handle("GET /pack", httpx.PackHandler(auth, packer, shares, cfg.TrustedProxies))
 	mux.Handle("GET /arc/{node}/{idx}", httpx.ArchiveEntryHandler(auth, archives, shares))
+	mux.Handle("GET /sub/{node}", httpx.SubtitleHandler(auth, media, shares))
+	linkHandler := httpx.LinkHandler(links, obj, cfg.TrustedProxies)
+	mux.Handle("GET /x/{token}", linkHandler)
+	mux.Handle("GET /x/{token}/{name...}", linkHandler)
+	mux.Handle("POST /api/img/upload", httpx.ImageUploadHandler(auth, mcpTokens, links, cfg.TrustedProxies))
 	// WebDAV:应用密码 Basic 认证,/dav 与 /dav/ 都接(Finder/资源管理器会裸打前缀)
 	davHandler := dav.Handler(appPass, dav.NewBackend(q, obj, nodes, uploads), cfg.TrustedProxies)
 	mux.Handle("/dav", davHandler)
@@ -247,6 +315,7 @@ func run() error {
 		if err := srv.Shutdown(shutCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
+		<-linksDone // 直链计数冲进库再退
 		return nil
 	}
 }

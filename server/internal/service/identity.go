@@ -256,6 +256,7 @@ func (p *IDProvider) establish(ctx context.Context, t idTokens, nonce, ip string
 		_ = p.auth.q.RevokeRefreshFamily(ctx, claims.FamilyID)
 		return nil, err
 	}
+	p.auth.notify.noteLogin(ctx, u.ID, ip, "Yophon ID ")
 	return result, nil
 }
 func (p *IDProvider) cookie(w http.ResponseWriter, name, value, path string, seconds int) {

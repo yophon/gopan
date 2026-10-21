@@ -23,4 +23,7 @@ type Resolver struct {
 	Content   *service.ContentSearch
 	Jobs      *service.Jobs
 	Archives  *service.Archives
+	Media     *service.Media
+	Notify    *service.Notifier
+	Links     *service.Links
 }

@@ -126,7 +126,7 @@ func setupEnv(t *testing.T) *mcpEnv {
 	jobs := service.NewJobs(pool, obj, uploads, service.FetchConfig{Enabled: true, MaxSize: 1 << 30, Guard: fetcher.Guard{AllowLoopback: true}})
 	archives := service.NewArchives(pool, obj, uploads)
 	jobs.SetArchives(archives)
-	srv := httptest.NewServer(NewHandler(nodes, uploads, tokens, oauth, packer, tickets, chats, service.NewContentSearch(pool, true), jobs, archives))
+	srv := httptest.NewServer(NewHandler(nodes, uploads, tokens, oauth, packer, tickets, chats, service.NewContentSearch(pool, true), jobs, archives, nil))
 	t.Cleanup(srv.Close)
 	return &mcpEnv{
 		pool: pool, q: q, obj: obj, srv: srv,
@@ -280,13 +280,13 @@ func TestMCPEndToEndOverHTTP(t *testing.T) {
 	}
 	sess := e.connect(t, plain)
 
-	// 工具清单:38 个工具全部注册
+	// 工具清单:41 个工具全部注册
 	lt, err := sess.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(lt.Tools) != 38 {
-		t.Fatalf("应注册 38 个工具,got %d", len(lt.Tools))
+	if len(lt.Tools) != 41 {
+		t.Fatalf("应注册 41 个工具,got %d", len(lt.Tools))
 	}
 
 	// create_folder → list_files → search_files → get_file_info → rename → trash → restore

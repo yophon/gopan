@@ -58,6 +58,21 @@ type Config struct {
 	FetchDeny         []netip.Prefix // 额外拒绝的网段(部署时把 VPS 自己的公网 IP 加进来)
 	FetchAllowPrivate bool           // 放开私有网段(从局域网 NAS 拉文件)
 	JobWorkers        int            // 后台任务(离线下载、解压)并发,1–8
+
+	// 站点对外地址(如 https://drive.example.com),直链完整地址与推送里的跳转链接用。
+	// 没配时按 S3 外部地址推断(生产上两者同域),再不行就只给站内路径
+	PublicURL string
+	// 「今天」「本月」按哪个时区算(直链日上限、统计、图床的年-月文件夹)
+	Location *time.Location
+
+	// 通知(doc/22 三):推到内网里的 ntfy / webhook 要显式放开
+	NotifyAllowPrivate bool
+
+	// 直链与图床(doc/22 四)
+	Links            bool
+	LinkDailyBytes   int64 // 每条直链每天默认上限
+	LinkMonthlyBytes int64 // 全站每月上限
+	ImgMaxSize       int64 // 图床接口单张上限
 }
 
 func Load() (*Config, error) {
@@ -98,6 +113,21 @@ func Load() (*Config, error) {
 		FetchRate:         envInt64("FETCH_RATE", 0),
 		FetchAllowPrivate: envBool("FETCH_ALLOW_PRIVATE", false),
 		JobWorkers:        int(envInt64("JOB_WORKERS", 1)),
+
+		PublicURL:          strings.TrimRight(env("PUBLIC_URL", ""), "/"),
+		NotifyAllowPrivate: envBool("NOTIFY_ALLOW_PRIVATE", false),
+		Links:              envBool("LINKS", true),
+		LinkDailyBytes:     envInt64("LINK_DAILY_BYTES", 5<<30),
+		LinkMonthlyBytes:   envInt64("LINK_MONTHLY_BYTES", 200<<30),
+		ImgMaxSize:         envInt64("IMG_MAX_SIZE", 20<<20),
+	}
+	loc, err := time.LoadLocation(env("TZ", "Local"))
+	if err != nil {
+		return nil, fmt.Errorf("GOPAN_TZ: %w", err)
+	}
+	c.Location = loc
+	if c.LinkDailyBytes <= 0 || c.LinkMonthlyBytes <= 0 || c.ImgMaxSize <= 0 {
+		return nil, fmt.Errorf("GOPAN_LINK_DAILY_BYTES、GOPAN_LINK_MONTHLY_BYTES、GOPAN_IMG_MAX_SIZE 必须大于 0")
 	}
 	tp, err := parseCIDRs(env("TRUSTED_PROXIES", ""))
 	if err != nil {
@@ -125,6 +155,13 @@ func Load() (*Config, error) {
 		c.S3PublicEndpoint = c.S3Endpoint // 单机同网默认
 	}
 	c.S3PublicUseSSL = envBool("S3_PUBLIC_USE_SSL", c.S3UseSSL)
+	if c.PublicURL == "" && c.S3PublicEndpoint != c.S3Endpoint {
+		scheme := "http://"
+		if c.S3PublicUseSSL {
+			scheme = "https://"
+		}
+		c.PublicURL = scheme + c.S3PublicEndpoint
+	}
 	if c.Workers < 1 || c.Workers > 16 {
 		return nil, fmt.Errorf("GOPAN_WORKERS 必须在 1 到 16 之间")
 	}

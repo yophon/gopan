@@ -41,6 +41,7 @@ type Auth struct {
 
 	// 限速:每 key(IP)每分钟 10 次
 	limiter *keyedLimiter
+	notify  *Notifier
 
 	// last_seen 的进程内节流:同一个 family 5 分钟内不再打库。
 	// SQL 里还有一层 WHERE 兜底(多实例/重启后也有用),这里是省掉那次必然 no-op 的写。
@@ -212,7 +213,11 @@ func (a *Auth) Login(ctx context.Context, username, password, ip string) (*AuthR
 	if u.DisabledAt.Valid {
 		return nil, errf("ACCOUNT_DISABLED", "账号已被禁用")
 	}
-	return a.issuePair(ctx, u, ip)
+	res, err := a.issuePair(ctx, u, ip)
+	if err == nil {
+		a.notify.noteLogin(ctx, u.ID, ip, "密码")
+	}
+	return res, err
 }
 
 func (a *Auth) issuePair(ctx context.Context, u store.User, ip string) (*AuthResult, error) {

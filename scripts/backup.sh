@@ -33,6 +33,23 @@ if [ "${1:-}" = "--status" ]; then
     exit 0
 fi
 
+# 结果报给 gopan(doc/22 三.3):失败时给管理员发通知(站内 + 推送渠道),成功时报平安,
+# 超过 36 小时没报平安 gopan 也会提醒。gopan 容器没起来时只能看日志。
+gopan_notify() {
+    $COMPOSE exec -T gopan gopan admin notify "$@" > /dev/null 2>&1 \
+        || echo "[$(date '+%F %T')] 警告:没能通知 gopan(容器没起来?)" >&2
+}
+report() {
+    local rc=$?
+    case "$rc" in
+        0) gopan_notify --heartbeat backup ;;
+        9) gopan_notify --heartbeat backup
+           gopan_notify --level warn --title "异地备份失败" --body "本地备份已完成,推到 ${BACKUP_OFFSITE_SSH:-异地} 失败。看 /var/log/gopan-backup.log,或 ./scripts/backup.sh --status。" ;;
+        *) gopan_notify --level alert --title "备份失败" --body "退出码 $rc,$(date '+%F %T')。看 /var/log/gopan-backup.log。" ;;
+    esac
+}
+trap report EXIT
+
 mkdir -p "$BACKUP_DIR"
 
 VOLUME=$(docker volume ls -q | grep miniodata | head -1)

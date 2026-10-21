@@ -127,6 +127,73 @@ type FileRequestVisitor struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type InstanceState struct {
+	Key       string
+	Value     []byte
+	UpdatedAt pgtype.Timestamptz
+}
+
+type Link struct {
+	ID             uuid.UUID
+	OwnerID        uuid.UUID
+	NodeID         uuid.UUID
+	Token          string
+	Source         string
+	CreatedIp      *string
+	CreatedUa      *string
+	ApiKeyID       *uuid.UUID
+	RefererHosts   []string
+	AllowNoReferer *bool
+	DailyBytesCap  *int64
+	AutoPause      bool
+	HasGps         bool
+	ExpiresAt      pgtype.Timestamptz
+	PausedAt       pgtype.Timestamptz
+	PauseReason    *string
+	RevokedAt      pgtype.Timestamptz
+	HitsTotal      int64
+	BytesTotal     int64
+	LastHitAt      pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+}
+
+type LinkHit struct {
+	ID        int64
+	LinkID    uuid.UUID
+	At        pgtype.Timestamptz
+	Ip        string
+	UserAgent string
+	Referer   string
+	Status    int32
+	Bytes     int64
+}
+
+type LinkPref struct {
+	OwnerID        uuid.UUID
+	RefererHosts   []string
+	AllowNoReferer bool
+	ImageFolder    string
+	StripGps       bool
+	UpdatedAt      pgtype.Timestamptz
+}
+
+type LinkReferer struct {
+	LinkID uuid.UUID
+	Day    pgtype.Date
+	Host   string
+	Hits   int64
+	Bytes  int64
+}
+
+type LinkStat struct {
+	LinkID  uuid.UUID
+	Hour    pgtype.Timestamptz
+	Hits    int64
+	Bytes   int64
+	Blocked int64
+	Ips     int32
+}
+
 type McpAccessRoot struct {
 	CredentialID   uuid.UUID
 	CredentialType string
@@ -192,6 +259,49 @@ type Node struct {
 	StatsStale   bool
 }
 
+type Notification struct {
+	ID        int64
+	OwnerID   uuid.UUID
+	Kind      string
+	Level     string
+	Title     string
+	Body      string
+	Target    []byte
+	GroupKey  *string
+	Count     int32
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+	ReadAt    pgtype.Timestamptz
+}
+
+type NotifyChannel struct {
+	ID          uuid.UUID
+	OwnerID     uuid.UUID
+	Kind        string
+	Name        string
+	Url         string
+	Topic       string
+	Secret      string
+	Events      []string
+	Enabled     bool
+	LastOkAt    pgtype.Timestamptz
+	LastError   *string
+	LastErrorAt pgtype.Timestamptz
+	CreatedAt   pgtype.Timestamptz
+}
+
+type NotifyDelivery struct {
+	ID             int64
+	NotificationID int64
+	ChannelID      uuid.UUID
+	Status         string
+	Attempts       int32
+	NextAt         pgtype.Timestamptz
+	Error          *string
+	CreatedAt      pgtype.Timestamptz
+	SentAt         pgtype.Timestamptz
+}
+
 type OauthAccessToken struct {
 	ID         uuid.UUID
 	GrantID    uuid.UUID
@@ -239,6 +349,15 @@ type OauthRefreshToken struct {
 	UsedAt    pgtype.Timestamptz
 	RevokedAt pgtype.Timestamptz
 	CreatedAt pgtype.Timestamptz
+}
+
+type PlayProgress struct {
+	OwnerID   uuid.UUID
+	NodeID    uuid.UUID
+	Position  float64
+	Duration  float64
+	Finished  bool
+	UpdatedAt pgtype.Timestamptz
 }
 
 type RefreshToken struct {

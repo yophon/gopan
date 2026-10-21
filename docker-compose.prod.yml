@@ -103,6 +103,17 @@ services:
       GOPAN_FETCH: ${GOPAN_FETCH:-true}
       GOPAN_FETCH_DENY: ${GOPAN_FETCH_DENY:-}
       GOPAN_FETCH_RATE: ${GOPAN_FETCH_RATE:-0}
+      # 站点对外地址:直链的完整地址、推送里的跳转链接用。留空按上面的 S3 外部地址推断(https://<GOPAN_DOMAIN>)
+      GOPAN_PUBLIC_URL: ${GOPAN_PUBLIC_URL:-}
+      # 「今天」「本月」按哪个时区算(直链日上限与统计、图床的年-月文件夹)
+      GOPAN_TZ: ${GOPAN_TZ:-Asia/Shanghai}
+      # 直链与图床(doc/22 四):每条每天、全站每月的流量上限,超了暂停并提醒;GOPAN_LINKS=false 全站关掉
+      GOPAN_LINKS: ${GOPAN_LINKS:-true}
+      GOPAN_LINK_DAILY_BYTES: ${GOPAN_LINK_DAILY_BYTES:-5368709120}
+      GOPAN_LINK_MONTHLY_BYTES: ${GOPAN_LINK_MONTHLY_BYTES:-214748364800}
+      GOPAN_IMG_MAX_SIZE: ${GOPAN_IMG_MAX_SIZE:-20971520}
+      # 推送(doc/22 三):推到内网里自建的 ntfy / webhook 时打开(同样受 GOPAN_FETCH_DENY 约束)
+      GOPAN_NOTIFY_ALLOW_PRIVATE: ${GOPAN_NOTIFY_ALLOW_PRIVATE:-false}
       # 安卓 App 的「检查更新」与安装包下载:发版时把 apk 与 latest.json 放进宿主 ./android-release(见 doc/09)。
       # 目录为空时 /api/app/android/latest 回 404,App 提示「这个站点没有提供安卓安装包」
       GOPAN_APP_RELEASE_DIR: /data/android-release
