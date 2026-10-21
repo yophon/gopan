@@ -334,6 +334,66 @@ extend type Mutation {
 - `extractArchive` 预检:文件数 ≤ 2 万(`TOO_MANY_FILES`)、解压后总量不超剩余配额(`QUOTA_EXCEEDED`)、选中的里有能解的(`ARCHIVE_NOTHING`)、目录已读完(`ARCHIVE_NOT_READY`)且能打开(`ARCHIVE_UNAVAILABLE`)。`paths` 是包内完整路径、须在 `base` 下;解出的路径相对 `base`。
 - 包里的单个文件不走 GraphQL:`GET /arc/{nodeId}/{idx}?token=<access>[&download=1]`(预览地址带不了 Authorization 头,同 `/pack`),错误回 JSON `{code, message}`:415 `UNSUPPORTED_TYPE`、422 `ARCHIVE_ENTRY_TOO_LARGE` / `ARCHIVE_ENTRY_TOO_DEEP` / `ARCHIVE_ENTRY_UNAVAILABLE` / `ARCHIVE_CORRUPT`、409 `ARCHIVE_NOT_READY`、503 `ARCHIVE_BUSY`。
 
+## 影音、通知、直链与图床(v3.4)
+
+```graphql
+type PreviewInfo { …, subtitles: [SubtitleTrack!]! }   # 只有 VIDEO 在单节点预览里给
+type SubtitleTrack { nodeId, name, label, lang, default }
+type Node { …, playProgress: PlayProgress }            # 单节点取,列表里别请求
+type PlayProgress { position, duration, finished, updatedAt }
+type User { …, unreadNotifications: Int! }             # 随 me 轮询带回
+type Notification { id, kind, level, title, body, count, target: NotificationTarget, createdAt, updatedAt, read }
+type NotificationTarget { kind: NODE|FILE_REQUEST|LINK|JOBS|SESSIONS|CREDENTIALS|ADMIN, id, parentId }
+type NotifyChannel { id, kind: WEBHOOK|NTFY|BARK|TELEGRAM, name, enabled, events, url, topic, hasSecret, secretHint, lastOkAt, lastError, lastErrorAt }
+type DirectLink { id, token, path, url, nodeId, name, mime, size, status: ACTIVE|PAUSED|EXPIRED|UNAVAILABLE, pauseReason,
+                  source, createdAt, expiresAt, refererHosts, allowNoReferer, dailyBytesCap, autoPause, hasGps,
+                  hitsTotal, bytesTotal, lastHitAt, today: LinkUsage!, last30Days: LinkUsage! }
+
+extend type Query {
+  playlist(nodeId: ID!): [Node!]!                     # 同文件夹同类,自然顺序;访客在分享范围内可用
+  recentPlays(limit: Int = 20): [RecentPlay!]!
+  notifications(cursor: String, unreadOnly: Boolean = false): NotificationPage!
+  notifyChannels: [NotifyChannel!]!
+  notifyEventKinds: [NotifyEventKind!]!
+  myLinks(cursor: String): DirectLinkPage!
+  link(id: ID!): DirectLink!
+  nodeLink(nodeId: ID!): DirectLink
+  linkStats(id: ID!, hours: Int = 168): [LinkHourStat!]!
+  linkReferers(id: ID!, days: Int = 30): [LinkReferer!]!
+  linkHits(id: ID!, cursor: String): LinkHitPage!
+  linkPrefs: LinkPrefs!
+  linksEnabled: Boolean!
+  adminLinkStats: AdminLinkStats!
+}
+extend type Mutation {
+  saveProgress(nodeId: ID!, position: Float!, duration: Float!): PlayProgress   # 不记时返回 null
+  clearProgress(nodeId: ID!): Boolean!
+  markNotificationsRead(ids: [ID!]): Int!             # ids 为空 = 全部
+  clearNotifications: Int!
+  createNotifyChannel(input: NotifyChannelInput!): NotifyChannel!
+  updateNotifyChannel(id: ID!, input: NotifyChannelInput!): NotifyChannel!   # secret 不传 = 保持,"" = 清除
+  deleteNotifyChannel(id: ID!): Boolean!
+  testNotifyChannel(id: ID!): Boolean!                # 失败 NOTIFY_FAILED,message 是对方的回应
+  createLinks(nodeIds: [ID!]!): [DirectLink!]!        # 幂等:一个文件同时只有一条有效直链
+  updateLink(id: ID!, input: DirectLinkInput!): DirectLink!
+  pauseLink(id: ID!, paused: Boolean!): DirectLink!
+  revokeLink(id: ID!): Boolean!
+  setLinkPrefs(input: LinkPrefsInput!): LinkPrefs!
+  adminPauseLink(id: ID!, paused: Boolean!): Boolean!
+  adminRevokeLink(id: ID!): Boolean!
+}
+```
+
+- `playlist` 与 `subtitles` 走 `Shares.Authorize`:分享的就是这个视频本身时,访客只拿到它自己、没有字幕(同文件夹的文件不在分享范围里)。`playProgress` 与 `saveProgress` 对访客返回 null。
+- `saveProgress` 只记 5 分钟以上的音视频(秒)和 3 页以上的 PDF / Office(页);剩余不到 3% 或不到 20 秒、或翻到最后一页记为看完。
+- 通知游标是 id;直链游标 `o` 为 `LINKS`。`notifyEventKinds` 对非管理员不含 `backup`;渠道订阅了管理员事件的非管理员被拒(`INVALID_INPUT`)。渠道最多 10 个(`LIMIT_EXCEEDED`)。
+- 直链:只能给文件建(`INVALID_INPUT`);站点关了回 `LINKS_DISABLED`;`dailyBytesCap` 至少 1 MB;`url` 是 `GOPAN_PUBLIC_URL + path`,没配站点地址时等于 `path`。
+- 图床密钥是 scope 为 `img:upload` 的 API Key(`createMCPAPIKey(name, ["img:upload"])`),不能和别的 scope 混用(`INVALID_INPUT`)。
+- 不走 GraphQL 的三条:
+  - `GET /x/{token}/{文件名}`:公开直链,`?s=256|2048` 取图片缩略图;404 不存在或失效、403 来源不允许、429 单 IP 超速、503 暂停 / 超限 / 繁忙(带 `Retry-After`)。
+  - `GET /sub/{nodeId}?token=<access>`(或 Bearer 头):字幕转 WebVTT;错误同 `/arc` 的 JSON。
+  - `POST /api/img/upload`:`Authorization: Bearer <图床密钥或登录凭证>`,multipart(第一个文件)或原始请求体(`?name=`);成功 `{url, markdown, html, bbcode, name, size, node_id, link_id}`,失败 `{error: {code, message}}`:401、403(密钥没有 img:upload)、415 `UNSUPPORTED_TYPE`、413 `TOO_LARGE`、507 `QUOTA_EXCEEDED`、429 `RATE_LIMITED`、503 `BUSY`。
+
 ## 版本策略
 
 v1 不做 schema 版本化;字段只加不删,废弃用 `@deprecated`。前端 codegen 在 CI 里跑,schema 不兼容改动直接编译失败暴露。

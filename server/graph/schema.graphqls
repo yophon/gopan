@@ -186,7 +186,7 @@ type RecentPlay {
 enum NotificationLevel { INFO, WARN, ALERT }
 
 # 点开通知跳到哪。NODE:id 是文件 / 文件夹,parentId 是所在文件夹(null = 根目录);
-# FILE_REQUEST / LINK:id 是收集链接 / 直链;JOBS:后台任务列表;SESSIONS:登录设备;CREDENTIALS:应用密码与 API Key;ADMIN:管理端
+# FILE_REQUEST / LINK:id 是收集链接 / 直链;JOBS:后台任务列表;SESSIONS:登录设备;CREDENTIALS:新建的凭据,id 是 webdav(应用密码)/ mcp(API Key、Agent 授权)/ img(图床密钥);ADMIN:管理端
 enum NotificationTargetKind { NODE, FILE_REQUEST, LINK, JOBS, SESSIONS, CREDENTIALS, ADMIN }
 
 type NotificationTarget {

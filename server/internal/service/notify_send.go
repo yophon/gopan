@@ -38,7 +38,7 @@ func (n *Notifier) send(ctx context.Context, ch store.NotifyChannel, m pushMessa
 	req.Header.Set("User-Agent", "gopan-notify")
 	resp, err := n.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("%s", describeNetErr(err))
+		return fmt.Errorf("%s", strings.ReplaceAll(describeNetErr(err), "源站", "推送地址")) // 文案是离线下载那边的
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode/100 == 2 {
