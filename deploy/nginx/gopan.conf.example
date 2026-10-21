@@ -43,6 +43,10 @@ server {
         add_header Content-Security-Policy "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'" always;
         add_header X-Content-Type-Options nosniff always;
 
+        # Agent 的单 PUT 直传(≤64MB 自动选它,显式指定时更大)整个文件一个请求体;
+        # 预签名由 MinIO 验签,请求体流式转发不落盘,这里不再按分片大小卡
+        client_max_body_size 5g;
+
         # 上传别在 nginx 落盘、下载别攒缓冲:大文件要流式过
         proxy_request_buffering off;
         proxy_buffering off;
