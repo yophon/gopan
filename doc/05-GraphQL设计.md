@@ -248,6 +248,42 @@ extend type Mutation {
 - `ChatMessage.node` resolver 捕获 `service.ErrNotFound` 返回 `(nil,nil)`——文件删除不传染消息读取,前端展示「文件已不存在」态。
 - 附件落点:网盘根目录固定文件夹(数据库里仍叫「我的设备」,界面统称传输助手),`ensureChatFolder` 用 advisory lock 保证并发只建一个;指针在 `users.chat_folder_id`,改名/移动不失效。
 
+## 收集文件(v3.1)
+
+属主对文件夹开收集链接,访客不登录往里传,只写不读。设计与取舍见 doc/20 第二节。
+
+```graphql
+type FileRequest { id, token, folder: Node!, title, note, hasPassword, requireName, groupByUploader,
+                   maxFileSize: Int64, maxTotalBytes: Int64, maxFiles: Int, expiresAt: Time, createdAt,
+                   fileCount, totalBytes, uploaderCount, newCount, lastUploadAt }   # 统计按收件记录
+type FileRequestUpload { id, fileName, size, uploaderName, ip, userAgent, createdAt, node: Node }  # 文件已删则 node 为 null
+input FileRequestInput { title!, note, requireName, groupByUploader, maxFileSize, maxTotalBytes, maxFiles, expiresAt }
+type FileRequestInfo { title, note, needPassword, needName, maxFileSize, expiresAt, closed }      # 公开,不含属主信息
+
+extend type Query {
+  myFileRequests: [FileRequest!]!                                  # 属主
+  fileRequestUploads(id: ID!, cursor: String): FileRequestUploadPage!
+  fileRequestInfo(token: String!): FileRequestInfo!                # 公开
+  collectUploadSession(id: ID!): UploadSession!                    # 访客
+  collectMyUploads: [CollectUpload!]!
+}
+extend type Mutation {
+  createFileRequest(folderId: ID!, input: FileRequestInput!, password: String): FileRequest!
+  updateFileRequest(id: ID!, input: FileRequestInput!): FileRequest!   # 整表单替换;密码与文件夹不能改
+  revokeFileRequest(id: ID!): Boolean!
+  markFileRequestSeen(id: ID!): Boolean!
+  openFileRequest(token: String!, password: String, uploaderName: String): CollectAuth!   # 公开
+  collectInitUpload(name: String!, size: Int64!): UploadSession!                          # 访客
+  collectCompleteUpload(sessionId: ID!, etags: [PartEtag!]!): CollectUpload!
+  collectAbortUpload(sessionId: ID!): Boolean!
+}
+```
+
+- 访客侧是**另一组** mutation,不复用 `initUpload` 等四个:那四个继续只认登录用户(`UserFrom`),访客令牌碰不到。
+- 上传协议与登录用户相同(分片预签名 → PUT → complete 轮询 `UPLOAD_PROCESSING`),差别:不传 sha256、没有 `instant`;complete 只回 `{name, size, createdAt}`,不回 Node。
+- 错误码:`COLLECT_CLOSED`(撤销 / 截止 / 文件夹进回收站 / 属主被禁用)、`COLLECT_FULL`(链接额度或属主配额用完,不区分)、`FILE_TOO_LARGE`、`COLLECT_PASSWORD_REQUIRED`、`BAD_COLLECT_PASSWORD`、`COLLECT_NAME_REQUIRED`、`TOO_MANY_SESSIONS`、`RATE_LIMITED`。
+- `fileRequestUploads` 的 cursor 是上一页最后一条的 id(bigserial),每页 50 条。
+
 ## 版本策略
 
 v1 不做 schema 版本化;字段只加不删,废弃用 `@deprecated`。前端 codegen 在 CI 里跑,schema 不兼容改动直接编译失败暴露。
