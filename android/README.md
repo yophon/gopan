@@ -97,6 +97,8 @@ app/src/main/kotlin/xyz/yophon/gopan/
   core/data/collect/             FileRequestsRepository:收集链接(doc/20)的属主侧——列表、新建、修改、结束、标已读、收件记录
   core/data/security/            SecurityRepository:登录设备、WebDAV 应用密码、MCP API Key / OAuth 授权 / 目录范围 / 操作记录
   core/data/admin/               AdminRepository:用户列表、概览、建号、配额、禁用、重置密码、失败任务重排
+  core/data/archive/             压缩包(doc/21 四):ArchiveRepository(概要、目录分页、提交解压)、ArchiveEntryFetcher(带登录态 GET /arc/{节点}/{序号}
+                                 到缓存 cacheDir/archive-entry,解析 JSON 错误)、ArchiveModels(模型、isArchiveName、按扩展名判断预览类型)
   core/data/jobs/                后台任务(doc/21):JobsRepository(我的任务、离线下载开关(本次登录缓存)、提交链接、取消、重试、清除已结束)、
                                  JobsLogic(链接识别、列表口径、进度与状态文案、速度,与网页端 utils/jobs.ts 一致的纯函数)、JobsModule
   core/documents/                系统「文件」App 里的 gopan,见下文「DocumentsProvider」:GopanDocumentsProvider、DocumentCache(按需下载的读缓存)、
@@ -128,6 +130,9 @@ app/src/main/kotlin/xyz/yophon/gopan/
                                  ChatLogic(按 id 合并、按天分组、网格、链接识别,纯函数)
   feature/transfers/             传输列表(TransfersScreen / TransfersViewModel:上传、下载两栏)与传输设置对话框;
                                  「后台任务」栏(JobsTab / JobsViewModel:可见且有进行中的任务时每 2 秒轮询,取消 / 重试 / 打开所在位置)
+  feature/archive/               压缩包:ArchiveScreen / ArchiveViewModel(逐层浏览、返回键回上一层、分页、长按多选、PENDING 每 2 秒轮询)、
+                                 ArchiveEntryViewer(包里的图片 / 文本 / PDF)、Extract(解压提交与「解压到…」选择器,预览页 / 浏览页 / 长按菜单共用)、
+                                 ArchiveRules(面包屑、标记文案、点按动作等纯函数)、ArchiveFiles(FileProvider 打开 / 分享);预览页的概要卡片在 feature/preview/ArchiveSummaryPage
   feature/fetch/                 离线下载:文件页「+」→「离线下载」对话框与传输助手草稿上方的「离线下载这个链接」提示条(FetchUi / FetchViewModel)
   feature/shares/                「分享」tab(SharesScreen:「分享」「收集」两个标签;我的分享与操作、访问记录)与新建分享对话框(ShareCreate,文件页 / 搜索页 / 预览共用)
   feature/collect/               收集文件:「收集」标签的列表与操作(FileRequestsTab)、新建 / 修改对话框(FileRequestEdit,文件页 / 搜索页文件夹的「收集文件」共用)、
