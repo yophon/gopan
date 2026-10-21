@@ -111,6 +111,8 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.ui.platform.testTag
 import java.time.Instant
+import androidx.compose.material.icons.outlined.Link
+import xyz.yophon.gopan.feature.links.CopyLinkViewModel
 
 /**
  * 文件页:根目录与任意文件夹共用(由路由决定 parentId)。
@@ -128,8 +130,11 @@ fun DriveScreen(
     onBack: (() -> Unit)?,
     viewModel: DriveViewModel = hiltViewModel(),
     fetchViewModel: FetchViewModel = hiltViewModel(),
+    // 「复制直链」:与 NodeDialogHost 里的是同一个实例(同一个导航条目),对话框与提示由它画
+    links: CopyLinkViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val linkState by links.state.collectAsStateWithLifecycle()
     val fetch by fetchViewModel.state.collectAsStateWithLifecycle()
     val currentOnOpenTransfers by rememberUpdatedState(onOpenTransfers)
     val dialog by viewModel.dialog.collectAsStateWithLifecycle()
@@ -194,7 +199,19 @@ fun DriveScreen(
             contentWindowInsets = NestedScreenInsets,
             topBar = {
                 if (state.selectionMode) {
-                    SelectionTopBar(state, viewModel)
+                    SelectionTopBar(
+                        state,
+                        viewModel,
+                        // 多选「复制直链」:一行一条,文件夹跳过
+                        onCopyLinks = if (linkState.enabled) {
+                            {
+                                links.copy(state.selectedNodes)
+                                viewModel.clearSelection()
+                            }
+                        } else {
+                            null
+                        },
+                    )
                 } else {
                     DriveTopBar(state, viewModel, onBack, onCrumbClick, onOpenSearch, onOpenTrash, onOpenTransfers)
                 }
@@ -334,7 +351,7 @@ private fun DriveTopBar(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SelectionTopBar(state: DriveUiState, viewModel: DriveViewModel) {
+private fun SelectionTopBar(state: DriveUiState, viewModel: DriveViewModel, onCopyLinks: (() -> Unit)?) {
     val hasSelection = state.selection.isNotEmpty()
     TopAppBar(
         windowInsets = NestedScreenInsets,
@@ -357,14 +374,14 @@ private fun SelectionTopBar(state: DriveUiState, viewModel: DriveViewModel) {
             IconButton(onClick = viewModel::deleteSelected, enabled = hasSelection) {
                 Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.drive_action_delete))
             }
-            SelectionMoreMenu(state, viewModel)
+            SelectionMoreMenu(state, viewModel, onCopyLinks)
         },
         colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     )
 }
 
 @Composable
-private fun SelectionMoreMenu(state: DriveUiState, viewModel: DriveViewModel) {
+private fun SelectionMoreMenu(state: DriveUiState, viewModel: DriveViewModel, onCopyLinks: (() -> Unit)?) {
     var expanded by remember { mutableStateOf(false) }
     val hasSelection = state.selection.isNotEmpty()
     Box {
@@ -397,6 +414,17 @@ private fun SelectionMoreMenu(state: DriveUiState, viewModel: DriveViewModel) {
                 },
                 leadingIcon = { Icon(Icons.Outlined.FolderZip, contentDescription = null) },
             )
+            if (onCopyLinks != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.drive_action_copy_link)) },
+                    enabled = state.selectedNodes.any { !it.isFolder },
+                    onClick = {
+                        expanded = false
+                        onCopyLinks()
+                    },
+                    leadingIcon = { Icon(Icons.Outlined.Link, contentDescription = null) },
+                )
+            }
         }
     }
 }

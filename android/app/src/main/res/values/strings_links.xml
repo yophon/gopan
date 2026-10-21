@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 直链(feature.links,doc/22 四)的文案 -->
+<resources>
+    <string name="links_tab">直链</string>
+    <string name="drive_action_copy_link">复制直链</string>
+
+    <string name="links_copy_title">复制直链</string>
+    <string name="links_copy_title_many">复制 %1$d 条直链</string>
+    <string name="links_format_url">链接</string>
+    <string name="links_format_markdown">Markdown</string>
+    <string name="links_format_html">HTML</string>
+    <string name="links_action_copy">复制</string>
+    <string name="links_msg_copied">已复制直链</string>
+    <string name="links_msg_copied_many">已复制 %1$d 条直链</string>
+    <string name="links_msg_folder">文件夹不能生成直链</string>
+    <string name="links_msg_skipped_folders">跳过了 %1$d 个文件夹(文件夹不能生成直链)</string>
+    <string name="links_gps_warning">这张照片带拍摄位置,公开后别人能看到</string>
+    <string name="links_gps_warning_many">有 %1$d 张照片带拍摄位置,公开后别人能看到</string>
+
+    <string name="links_empty">还没有直链</string>
+    <string name="links_empty_hint">在文件的「更多」里选「复制直链」,得到一条能贴进博客、Markdown 的永久地址</string>
+    <string name="links_web_hint">共 %1$d 条 · 统计图表与设置在网页上</string>
+    <string name="links_sheet_web_hint">访问明细、来源、流量上限与白名单在网页上看和改</string>
+    <string name="links_usage">今天 %1$d 次 · %2$s · 近 30 天 %3$d 次 · %4$s</string>
+    <string name="links_last_hit">最后访问 %1$s</string>
+    <string name="links_no_hits">还没有访问</string>
+
+    <string name="links_status_active">正常</string>
+    <string name="links_status_paused">已暂停</string>
+    <string name="links_status_paused_cap">今日超限</string>
+    <string name="links_status_paused_anomaly">异常暂停</string>
+    <string name="links_status_expired">已过期</string>
+    <string name="links_status_unavailable">不可用</string>
+    <string name="links_note_cap">超过了今天的流量上限,明天自动恢复</string>
+    <string name="links_note_anomaly">检测到异常访问,已自动暂停</string>
+    <string name="links_note_expired">已于 %1$s 过期</string>
+    <string name="links_note_unavailable">文件在回收站、账号被停用,或本站直链暂停服务</string>
+
+    <string name="links_action_copy_formats">复制(链接 / Markdown / HTML)</string>
+    <string name="links_action_open">在浏览器打开</string>
+    <string name="links_action_pause">暂停</string>
+    <string name="links_action_resume">恢复</string>
+    <string name="links_action_revoke">吊销</string>
+    <string name="links_revoke_title">吊销直链</string>
+    <string name="links_revoke_text">吊销后「%1$s」的直链立即失效,贴出去的地址都打不开了。确定?</string>
+    <string name="links_revoke_confirm">吊销</string>
+    <string name="links_msg_paused">已暂停</string>
+    <string name="links_msg_resumed">已恢复</string>
+    <string name="links_msg_revoked">已吊销</string>
+    <string name="links_msg_gone">这条直链已经不在了</string>
+</resources>

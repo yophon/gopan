@@ -54,6 +54,13 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.ui.platform.testTag
 import xyz.yophon.gopan.core.ui.isMediumWidth
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import xyz.yophon.gopan.feature.notifications.NotificationsEntryViewModel
+import xyz.yophon.gopan.feature.notifications.NotificationsLogic
 
 /** 底部 tab 定义;顺序即显示顺序 */
 private class MainTab(
@@ -94,7 +101,13 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
         }
     }
 
-    // 外部入口:系统分享 → 传输助手;通知点按 → 传输列表
+    // 站内通知的未读数:「我的」上的角标;主界面在前台时每分钟拉一次(doc/22 三.4)
+    val inbox: NotificationsEntryViewModel = hiltViewModel()
+    val unread by inbox.unreadCount.collectAsStateWithLifecycle()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(inbox, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { inbox.pollWhileVisible() } }
+
+    // 外部入口:系统分享 → 传输助手;通知点按 → 传输列表 / 站内通知列表
     val request by viewModel.navRequest.collectAsStateWithLifecycle()
     LaunchedEffect(request) {
         when (val r = request) {
@@ -111,6 +124,10 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
                 navController.navigate(Routes.Transfers) { launchSingleTop = true }
                 viewModel.consume(r)
             }
+            NavRequest.OPEN_NOTIFICATIONS -> {
+                navController.navigate(Routes.Notifications) { launchSingleTop = true }
+                viewModel.consume(r)
+            }
             null -> Unit
         }
     }
@@ -124,7 +141,7 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
                     NavigationRailItem(
                         selected = selected,
                         onClick = { selectTab(tab) },
-                        icon = { Icon(imageVector = if (selected) tab.selectedIcon else tab.icon, contentDescription = null) },
+                        icon = { TabIcon(tab, selected, badge = if (tab.route == Routes.AccountTab) unread else 0) },
                         label = { Text(stringResource(tab.label)) },
                     )
                 }
@@ -141,12 +158,7 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
                         NavigationBarItem(
                             selected = selected,
                             onClick = { selectTab(tab) },
-                            icon = {
-                                Icon(
-                                    imageVector = if (selected) tab.selectedIcon else tab.icon,
-                                    contentDescription = null,
-                                )
-                            },
+                            icon = { TabIcon(tab, selected, badge = if (tab.route == Routes.AccountTab) unread else 0) },
                             label = { Text(stringResource(tab.label)) },
                         )
                     }
@@ -163,7 +175,7 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
                 driveGraph(navController, onOpenPreview)
                 chatGraph(navController, onOpenPreview)
                 sharesGraph(navController)
-                accountGraph(navController)
+                accountGraph(navController, onOpenPreview)
                 // 传输列表:全局页,不属于哪个 tab(文件页菜单、传输助手、「我的」、通知都能进)
                 composable<Routes.Transfers> { entry ->
                     TransfersScreen(
@@ -175,5 +187,18 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
                 }
             }
         }
+    }
+}
+
+/** tab 图标;[badge] > 0 时右上角带未读数(「我的」= 站内通知) */
+@Composable
+private fun TabIcon(tab: MainTab, selected: Boolean, badge: Int) {
+    val icon = if (selected) tab.selectedIcon else tab.icon
+    if (badge > 0) {
+        BadgedBox(badge = { Badge(modifier = Modifier.testTag("main_unread_badge")) { Text(NotificationsLogic.badgeText(badge)) } }) {
+            Icon(imageVector = icon, contentDescription = null)
+        }
+    } else {
+        Icon(imageVector = icon, contentDescription = null)
     }
 }

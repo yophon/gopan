@@ -152,8 +152,11 @@ class IncomingShareStore @Inject constructor(
     }
 }
 
-/** 应用内导航请求(通知点按、系统分享):主界面收集后跳转并清空。OPEN_JOBS = 传输列表并停在「后台任务」栏 */
-enum class NavRequest { OPEN_CHAT, OPEN_TRANSFERS, OPEN_JOBS }
+/**
+ * 应用内导航请求(通知点按、系统分享):主界面收集后跳转并清空。OPEN_JOBS = 传输列表并停在「后台任务」栏;
+ * OPEN_NOTIFICATIONS = 站内通知列表(系统通知栏里的站内通知点按)
+ */
+enum class NavRequest { OPEN_CHAT, OPEN_TRANSFERS, OPEN_JOBS, OPEN_NOTIFICATIONS }
 
 @Singleton
 class AppNavRequests @Inject constructor() {

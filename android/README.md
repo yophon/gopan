@@ -101,9 +101,14 @@ app/src/main/kotlin/xyz/yophon/gopan/
                                  到缓存 cacheDir/archive-entry,解析 JSON 错误)、ArchiveModels(模型、isArchiveName、按扩展名判断预览类型)
   core/data/jobs/                后台任务(doc/21):JobsRepository(我的任务、离线下载开关(本次登录缓存)、提交链接、取消、重试、清除已结束)、
                                  JobsLogic(链接识别、列表口径、进度与状态文案、速度,与网页端 utils/jobs.ts 一致的纯函数)、JobsModule
+  core/data/notifications/       站内通知(doc/22 三):NotificationsRepository(列表 / 未读数 / 标已读 / 清空)、UnreadNotifications(角标计数)、NotificationsModule
+  core/data/links/               直链(doc/22 四):DirectLinksRepository(开关(本次登录缓存)、我的直链、生成、暂停、吊销;站内路径拼服务端地址)、
+                                 LinkFormats(链接 / Markdown / HTML 的写法,纯函数)
   core/documents/                系统「文件」App 里的 gopan,见下文「DocumentsProvider」:GopanDocumentsProvider、DocumentCache(按需下载的读缓存)、
                                  PendingDocuments(别的应用写进来的新文件 → 上传队列)、DocumentsModule(登出时清理、登录态变化时刷新根目录)
   core/app/                      UpdateRepository(站点发布的安装包:检查、下载、校验)、CrashLog(未捕获异常写本地日志)
+  core/notify/                   系统通知栏提醒(doc/22 决策 6):InboxScheduler(登录且开着开关时排每 15 分钟一次的 InboxWorker)、InboxChecker、
+                                 InboxLogic(哪些是新的,纯函数)、InboxPrefs(开关、提醒到哪条;与偏好同一个 DataStore,键以 inbox_ 开头)、InboxNotifier(渠道 inbox / inbox_alert)
   core/prefs/                    UserPreferencesRepository(DataStore:主题、列表视图、排序、传输设置、传输助手草稿)
   core/transfer/                 传输引擎,见下文「传输引擎」:TransferEngine、TransferWorker + TransferScheduler、TransferNotifications、
                                  SourceStore(来源读取、哈希、私有副本)、NetworkMonitor、FileOpener、TransferActions(界面入口);
@@ -137,6 +142,9 @@ app/src/main/kotlin/xyz/yophon/gopan/
   feature/shares/                「分享」tab(SharesScreen:「分享」「收集」两个标签;我的分享与操作、访问记录)与新建分享对话框(ShareCreate,文件页 / 搜索页 / 预览共用)
   feature/collect/               收集文件:「收集」标签的列表与操作(FileRequestsTab)、新建 / 修改对话框(FileRequestEdit,文件页 / 搜索页文件夹的「收集文件」共用)、
                                  收件记录(FileRequestUploads,路由 Routes.FileRequestUploads 挂在「分享」tab 的嵌套图里)
+  feature/notifications/         「我的 → 通知」:NotificationsScreen / NotificationsViewModel(按天分组、只看未读、全部已读、清空、点开跳转)、
+                                 NotificationsLogic(目标 → 页面、分组,纯函数)、NotificationsEntryViewModel(角标轮询、系统通知开关)、NotificationPermission
+  feature/links/                 直链:CopyLink(文件页 / 搜索页「复制直链」与格式对话框)、DirectLinksTab / DirectLinksViewModel(「分享」tab 的「直链」标签)
   feature/admin/                 管理端:AdminScreen(概览卡片、失败任务重排、用户列表与操作对话框)/ AdminViewModel
   feature/about/                 UpdateDialog(检查 / 下载 / 交给系统安装器)、CrashLogScreen(查看、导出、删除)、LicensesScreen(依赖与许可证全文)
   feature/preview/               全屏预览(PreviewScreen:翻页器、顶栏、沉浸)与平板侧栏(PreviewPane);PreviewViewModel(会话列表、最近 6 页)、

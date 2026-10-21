@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 通知(feature.notifications、core.notify,doc/22 三)的文案 -->
+<resources>
+    <string name="notifications_title">通知</string>
+    <string name="notifications_action_read_all">全部已读</string>
+    <string name="notifications_action_clear">清空</string>
+    <string name="notifications_filter_unread">只看未读</string>
+    <string name="notifications_empty">还没有通知</string>
+    <string name="notifications_empty_unread">没有未读通知</string>
+    <string name="notifications_empty_hint">收集链接收到文件、离线下载失败、空间快满、新设备登录这些事会出现在这里</string>
+    <string name="notifications_count">×%1$d</string>
+    <string name="notifications_level_info">提示</string>
+    <string name="notifications_level_warn">警告</string>
+    <string name="notifications_level_alert">严重</string>
+    <string name="notifications_clear_title">清空通知</string>
+    <string name="notifications_clear_text">全部通知都会删除,不能恢复。</string>
+    <string name="notifications_clear_confirm">清空</string>
+    <string name="notifications_msg_all_read">已全部标为已读</string>
+    <string name="notifications_msg_cleared">已清空通知</string>
+    <string name="notifications_msg_gone">这个文件已经不在了</string>
+    <string name="notifications_msg_in_trash">这个文件在回收站里</string>
+
+    <!-- 「我的」页的入口与设置 -->
+    <string name="notifications_section">通知</string>
+    <string name="notifications_entry_hint">收集、离线下载、空间、登录、直链等提醒</string>
+    <string name="notifications_unread_badge">%1$s 条未读</string>
+    <string name="notifications_system_alerts">在系统通知栏提醒</string>
+    <string name="notifications_system_alerts_hint">每 15 分钟查一次新的未读通知</string>
+    <string name="notifications_system_alerts_denied">没有通知权限,点这里去开启</string>
+    <string name="notifications_push_hint">推送渠道在网页上设置</string>
+    <string name="notifications_push_hint_desc">Webhook、ntfy、Bark、Telegram;想要即时推送,装 ntfy App 配一个 ntfy 渠道</string>
+
+    <!-- 系统通知栏 -->
+    <string name="inbox_channel">通知</string>
+    <string name="inbox_channel_desc">收集链接收到文件、离线下载失败、空间快满、新设备登录等站内通知</string>
+    <string name="inbox_channel_alert">严重提醒</string>
+    <string name="inbox_channel_alert_desc">直链被盗刷、备份失败等需要尽快处理的通知</string>
+    <string name="inbox_notif_title_count">%1$s ×%2$d</string>
+    <string name="inbox_notif_more">另有 %1$d 条新通知</string>
+    <string name="inbox_notif_tap_list">点开查看全部通知</string>
+</resources>

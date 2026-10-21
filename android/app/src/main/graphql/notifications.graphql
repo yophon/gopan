@@ -1,0 +1,44 @@
+# 通知(doc/22 三)。推送渠道(notifyChannels 等)只在网页上设,App 不取。
+# 片段起名 InboxNotificationFields:同一 service 里片段名必须唯一。
+
+fragment InboxNotificationFields on Notification {
+  id
+  kind
+  level
+  title
+  body
+  count
+  target {
+    kind
+    id
+    parentId
+  }
+  createdAt
+  updatedAt
+  read
+}
+
+query Notifications($cursor: String, $unreadOnly: Boolean) {
+  notifications(cursor: $cursor, unreadOnly: $unreadOnly) {
+    items {
+      ...InboxNotificationFields
+    }
+    nextCursor
+  }
+}
+
+# 底栏「我的」与「通知」入口的未读角标;单独一条,不放进 UserFields(登录 / 续期不必带它)
+query UnreadNotifications {
+  me {
+    unreadNotifications
+  }
+}
+
+# ids 为 null = 全部标为已读
+mutation MarkNotificationsRead($ids: [ID!]) {
+  markNotificationsRead(ids: $ids)
+}
+
+mutation ClearNotifications {
+  clearNotifications
+}

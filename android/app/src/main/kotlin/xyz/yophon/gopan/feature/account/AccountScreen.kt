@@ -70,6 +70,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -96,6 +98,14 @@ import androidx.compose.material.icons.outlined.BugReport
 import xyz.yophon.gopan.feature.about.CrashLogViewModel
 import xyz.yophon.gopan.feature.about.UpdateDialog
 import xyz.yophon.gopan.feature.about.UpdateViewModel
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.NotificationsActive
+import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material3.Badge
+import xyz.yophon.gopan.feature.notifications.NotificationsEntryViewModel
+import xyz.yophon.gopan.feature.notifications.NotificationsLogic
+import xyz.yophon.gopan.feature.notifications.rememberNotificationPermission
 
 /** 「我的」页入口:导航回调由 AccountGraph 提供,页面本身不认识 NavController */
 @Composable
@@ -108,13 +118,20 @@ fun AccountScreen(
     onOpenAdmin: () -> Unit,
     onOpenCrashLogs: () -> Unit,
     onOpenLicenses: () -> Unit,
+    onOpenNotifications: () -> Unit = {},
     viewModel: AccountViewModel = hiltViewModel(),
     updates: UpdateViewModel = hiltViewModel(),
     crashes: CrashLogViewModel = hiltViewModel(),
+    inbox: NotificationsEntryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val update by updates.state.collectAsStateWithLifecycle()
     val crashState by crashes.state.collectAsStateWithLifecycle()
+    val unread by inbox.unreadCount.collectAsStateWithLifecycle()
+    val systemAlerts by inbox.systemAlerts.collectAsStateWithLifecycle()
+    val permission = rememberNotificationPermission()
+    // 没有通知权限:能弹授权框就弹(Android 13+ 没拒过),否则去系统设置里本 App 的通知
+    val fixPermission = { if (permission.canRequest) permission.request() else permission.openSettings() }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.onResumed()
         updates.checkSilently()
@@ -144,6 +161,17 @@ fun AccountScreen(
         onOpenLicenses = onOpenLicenses,
         onLogout = viewModel::logout,
         onMessageShown = viewModel::consumeMessage,
+        notifications = NotificationsEntry(
+            unread = unread,
+            systemAlerts = systemAlerts,
+            permitted = permission.granted,
+            onOpen = onOpenNotifications,
+            onSetSystemAlerts = { on ->
+                inbox.setSystemAlerts(on)
+                if (on && !permission.granted) fixPermission()
+            },
+            onFixPermission = fixPermission,
+        ),
     )
     update.phase?.let { UpdateDialog(it, updates) }
 }
@@ -174,6 +202,7 @@ internal fun AccountContent(
     onCheckUpdate: () -> Unit = {},
     onOpenCrashLogs: () -> Unit = {},
     onOpenLicenses: () -> Unit = {},
+    notifications: NotificationsEntry? = null,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showThemeDialog by rememberSaveable { mutableStateOf(false) }
@@ -238,6 +267,7 @@ internal fun AccountContent(
                     onOpenCrashLogs = onOpenCrashLogs,
                     onOpenLicenses = onOpenLicenses,
                     onLogoutClick = { showLogoutConfirm = true },
+                    notifications = notifications,
                 )
             }
         }
@@ -316,9 +346,12 @@ private fun AccountList(
     onOpenCrashLogs: () -> Unit,
     onOpenLicenses: () -> Unit,
     onLogoutClick: () -> Unit,
+    notifications: NotificationsEntry? = null,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item("header") { AccountHeader(user = user, usage = usage) }
+
+        if (notifications != null) notificationsSection(notifications)
 
         item("storage") { SectionTitle(stringResource(R.string.account_section_storage)) }
         item("trash") {
@@ -554,6 +587,74 @@ private fun SettingItem(
         modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
+}
+
+// ---- 通知(doc/22 三.4) ----
+
+/** 「我的」页的通知入口:未读数、系统通知栏提醒开关(及权限)、推送渠道在网页上设的提示 */
+internal class NotificationsEntry(
+    val unread: Int,
+    val systemAlerts: Boolean,
+    /** 有发系统通知的权限(Android 13+ 运行时权限,且系统设置里没关本 App 的通知) */
+    val permitted: Boolean,
+    val onOpen: () -> Unit,
+    val onSetSystemAlerts: (Boolean) -> Unit,
+    val onFixPermission: () -> Unit,
+)
+
+private fun LazyListScope.notificationsSection(entry: NotificationsEntry) {
+    item("notify-title") { SectionTitle(stringResource(R.string.notifications_section)) }
+    item("notify-list") {
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.notifications_title)) },
+            supportingContent = { Text(stringResource(R.string.notifications_entry_hint)) },
+            leadingContent = { Icon(Icons.Outlined.Notifications, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+            trailingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (entry.unread > 0) {
+                        val description = stringResource(R.string.notifications_unread_badge, NotificationsLogic.badgeText(entry.unread))
+                        Badge(modifier = Modifier.testTag("account_notifications_badge").semantics { contentDescription = description }) {
+                            Text(NotificationsLogic.badgeText(entry.unread))
+                        }
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            modifier = Modifier.clickable(onClick = entry.onOpen).testTag("account_notifications"),
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        )
+    }
+    item("notify-system") {
+        val denied = entry.systemAlerts && !entry.permitted
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.notifications_system_alerts)) },
+            supportingContent = {
+                Text(
+                    stringResource(if (denied) R.string.notifications_system_alerts_denied else R.string.notifications_system_alerts_hint),
+                    color = if (denied) MaterialTheme.colorScheme.error else Color.Unspecified,
+                )
+            },
+            leadingContent = { Icon(Icons.Outlined.NotificationsActive, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+            trailingContent = {
+                Switch(
+                    checked = entry.systemAlerts,
+                    onCheckedChange = entry.onSetSystemAlerts,
+                    modifier = Modifier.testTag("account_system_alerts"),
+                )
+            },
+            modifier = Modifier.clickable { if (denied) entry.onFixPermission() else entry.onSetSystemAlerts(!entry.systemAlerts) },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        )
+    }
+    item("notify-push") {
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.notifications_push_hint)) },
+            supportingContent = { Text(stringResource(R.string.notifications_push_hint_desc)) },
+            leadingContent = { Icon(Icons.Outlined.Public, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        )
+    }
 }
 
 // ---- 对话框 ----

@@ -81,10 +81,13 @@ import xyz.yophon.gopan.feature.drive.ListStatus
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
 import xyz.yophon.gopan.feature.drive.resolve
 import xyz.yophon.gopan.core.ui.exposeTestTags
+import xyz.yophon.gopan.feature.links.DirectLinksTab
+import xyz.yophon.gopan.feature.links.DirectLinksViewModel
 
 /**
- * 「分享」tab:上面「分享」「收集」两个标签(与网页端一致)。
- * 分享:我的分享,点一行出操作(复制 / 发送 / 打开 / 访问记录 / 取消分享);收集:我开的收集链接(feature.collect)。
+ * 「分享」tab:上面「分享」「收集」「直链」三个标签(与网页端一致;本站关了直链时没有「直链」)。
+ * 分享:我的分享,点一行出操作(复制 / 发送 / 打开 / 访问记录 / 取消分享);收集:我开的收集链接(feature.collect);
+ * 直链:我的直链(feature.links)。通知点进来时按 SharesTabRequest 切标签。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,16 +95,39 @@ fun SharesScreen(
     onOpenVisits: (Share) -> Unit,
     onOpenUploads: (FileRequest) -> Unit,
     viewModel: SharesViewModel = hiltViewModel(),
+    links: DirectLinksViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val linksState by links.state.collectAsStateWithLifecycle()
+    val pendingTab by links.pendingTab.collectAsStateWithLifecycle()
+    val linksEnabled = linksState.enabled
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     val system = rememberSystemActions()
     val scope = rememberCoroutineScope()
     var sheetFor by rememberSaveable { mutableStateOf<String?>(null) }
     var revokeFor by rememberSaveable { mutableStateOf<String?>(null) }
-    // 0 = 分享,1 = 收集;进收件记录再返回时留在原来的标签
+    // 0 = 分享,1 = 收集,2 = 直链;进收件记录再返回时留在原来的标签
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    // 通知点进来:切到「收集」/「直链」(并打开那一条);直链开关还没问到时先等着
+    LaunchedEffect(pendingTab, linksEnabled) {
+        val target = pendingTab ?: return@LaunchedEffect
+        when (target.tab) {
+            SharesTab.SHARES -> tab = 0
+            SharesTab.COLLECT -> tab = 1
+            SharesTab.LINKS -> when (linksEnabled) {
+                null -> return@LaunchedEffect
+                true -> {
+                    tab = 2
+                    target.linkId?.let(links::focus)
+                }
+                false -> Unit
+            }
+        }
+        links.consumeTab(target)
+    }
+    // 本站关了直链(或换了账号 / 站点):「直链」标签消失,回到「分享」
+    LaunchedEffect(linksEnabled) { if (tab == 2 && linksEnabled == false) tab = 0 }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -110,7 +136,11 @@ fun SharesScreen(
             }
         }
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.onResumed()
+        // 进页面时没问到直链开关(断网)的话补问
+        links.checkEnabled()
+    }
     fun toast(res: Int) = scope.launch { snackbar.showSnackbar(context.getString(res)) }
 
     Scaffold(
@@ -119,7 +149,8 @@ fun SharesScreen(
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            PrimaryTabRow(selectedTabIndex = tab) {
+            // 「直链」标签还没出现(开关没问到 / 关了)时下标不能越界
+            PrimaryTabRow(selectedTabIndex = if (tab == 2 && linksEnabled != true) 0 else tab) {
                 Tab(
                     selected = tab == 0,
                     onClick = { tab = 0 },
@@ -132,9 +163,19 @@ fun SharesScreen(
                     text = { Text(stringResource(R.string.collect_tab_collect)) },
                     modifier = Modifier.testTag("shares_tab_collect"),
                 )
+                if (linksEnabled == true) {
+                    Tab(
+                        selected = tab == 2,
+                        onClick = { tab = 2 },
+                        text = { Text(stringResource(R.string.links_tab)) },
+                        modifier = Modifier.testTag("shares_tab_links"),
+                    )
+                }
             }
             if (tab == 1) {
                 FileRequestsTab(snackbar = snackbar, onOpenUploads = onOpenUploads)
+            } else if (tab == 2 && linksEnabled == true) {
+                DirectLinksTab(viewModel = links, snackbar = snackbar)
             } else {
                 PullToRefreshBox(
                     isRefreshing = state.refreshing,

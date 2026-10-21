@@ -96,6 +96,10 @@ object Routes {
     @Serializable
     data object Admin
 
+    /** 站内通知列表(doc/22 三);系统通知点按、底栏角标都进这里 */
+    @Serializable
+    data object Notifications
+
     @Serializable
     data object CrashLogs
 

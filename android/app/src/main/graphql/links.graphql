@@ -1,0 +1,68 @@
+# 直链(doc/22 四)。统计图表、来源、明细、白名单与上限只在网页上看和改,App 不取。
+
+fragment DirectLinkFields on DirectLink {
+  id
+  token
+  path
+  url
+  nodeId
+  name
+  mime
+  size
+  status
+  pauseReason
+  source
+  createdAt
+  expiresAt
+  hasGps
+  hitsTotal
+  bytesTotal
+  lastHitAt
+  today {
+    hits
+    bytes
+    blocked
+  }
+  last30Days {
+    hits
+    bytes
+    blocked
+  }
+}
+
+query LinksEnabled {
+  linksEnabled
+}
+
+query MyLinks($cursor: String) {
+  myLinks(cursor: $cursor) {
+    items {
+      ...DirectLinkFields
+    }
+    nextCursor
+    total
+  }
+}
+
+query DirectLink($id: ID!) {
+  link(id: $id) {
+    ...DirectLinkFields
+  }
+}
+
+# 每个文件同时只有一条有效直链,重复调用拿到的是已有的那条;一次最多 100 个
+mutation CreateLinks($nodeIds: [ID!]!) {
+  createLinks(nodeIds: $nodeIds) {
+    ...DirectLinkFields
+  }
+}
+
+mutation PauseLink($id: ID!, $paused: Boolean!) {
+  pauseLink(id: $id, paused: $paused) {
+    ...DirectLinkFields
+  }
+}
+
+mutation RevokeLink($id: ID!) {
+  revokeLink(id: $id)
+}

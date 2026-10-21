@@ -88,13 +88,17 @@ class MainActivity : ComponentActivity() {
             navRequests.post(NavRequest.OPEN_CHAT)
             return
         }
-        if (intent.getStringExtra(EXTRA_OPEN) == OPEN_TRANSFERS) navRequests.post(NavRequest.OPEN_TRANSFERS)
+        when (intent.getStringExtra(EXTRA_OPEN)) {
+            OPEN_TRANSFERS -> navRequests.post(NavRequest.OPEN_TRANSFERS)
+            OPEN_NOTIFICATIONS -> navRequests.post(NavRequest.OPEN_NOTIFICATIONS)
+        }
     }
 
     companion object {
         /** 通知点按带的跳转目标 */
         const val EXTRA_OPEN = "xyz.yophon.gopan.OPEN"
         const val OPEN_TRANSFERS = "transfers"
+        const val OPEN_NOTIFICATIONS = "notifications"
 
         // 与 androidx.activity 默认值一致
         private val LIGHT_SCRIM = Color.argb(0xe6, 0xFF, 0xFF, 0xFF)

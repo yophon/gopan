@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.RestoreFromTrash
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Unarchive
@@ -43,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +70,8 @@ import xyz.yophon.gopan.feature.archive.ExtractViewModel
 import xyz.yophon.gopan.feature.archive.isArchiveNode
 import xyz.yophon.gopan.feature.collect.FileRequestDialog
 import xyz.yophon.gopan.feature.collect.FileRequestTarget
+import xyz.yophon.gopan.feature.links.CopyLinkHost
+import xyz.yophon.gopan.feature.links.CopyLinkViewModel
 import xyz.yophon.gopan.feature.shares.ShareCreateDialog
 
 /** 长按 / ⋮ 弹出的操作;文件页、搜索页、回收站各挑自己的子集 */
@@ -77,6 +81,8 @@ enum class NodeAction(@StringRes val label: Int, val icon: ImageVector, val dest
     PACK(R.string.drive_action_pack, Icons.Outlined.FolderZip),
     SEND_TO_CHAT(R.string.drive_action_send_to_chat, Icons.AutoMirrored.Outlined.Send),
     SHARE(R.string.drive_action_share, Icons.Outlined.Share),
+    /** 直链(doc/22 四):只对文件,本站关了直链时不出现 */
+    COPY_LINK(R.string.drive_action_copy_link, Icons.Outlined.Link),
     COLLECT(R.string.drive_action_collect, Icons.Outlined.DriveFolderUpload),
     EXTRACT_HERE(R.string.archive_extract_here, Icons.Outlined.Unarchive),
     EXTRACT_TO(R.string.archive_extract_to, Icons.Outlined.CreateNewFolder),
@@ -95,6 +101,7 @@ val DRIVE_ACTIONS = listOf(
     NodeAction.DOWNLOAD,
     NodeAction.PACK,
     NodeAction.SHARE,
+    NodeAction.COPY_LINK,
     NodeAction.COLLECT,
     NodeAction.EXTRACT_HERE,
     NodeAction.EXTRACT_TO,
@@ -106,9 +113,9 @@ val DRIVE_ACTIONS = listOf(
     NodeAction.DETAILS,
 )
 
-/** 这个操作对这个节点有没有意义:打开只对文件,打包、收集文件只对文件夹,解压只对压缩包 */
+/** 这个操作对这个节点有没有意义:打开、复制直链只对文件,打包、收集文件只对文件夹,解压只对压缩包 */
 fun NodeAction.appliesTo(node: Node): Boolean = when (this) {
-    NodeAction.OPEN -> !node.isFolder
+    NodeAction.OPEN, NodeAction.COPY_LINK -> !node.isFolder
     NodeAction.PACK, NodeAction.COLLECT -> node.isFolder
     NodeAction.EXTRACT_HERE, NodeAction.EXTRACT_TO -> isArchiveNode(node)
     else -> true
@@ -302,12 +309,16 @@ fun NodeDialogHost(
         }
     }
     ExtractPickerHost(extractor.extract)
+    // 「复制直链」:选格式的对话框与提示(多选时文件页的选择栏也交给同一个 ViewModel)
+    val links: CopyLinkViewModel = hiltViewModel()
+    val linkState by links.state.collectAsStateWithLifecycle()
+    CopyLinkHost(links, onMessage = viewModel::message)
     when (dialog) {
         null -> Unit
         is NodeDialog.Actions -> NodeActionSheet(
             node = dialog.node,
             secondary = nodeSecondaryText(dialog.node),
-            actions = actions,
+            actions = if (linkState.enabled) actions else actions - NodeAction.COPY_LINK,
             onAction = { action ->
                 val node = dialog.node
                 when (action) {
@@ -316,6 +327,7 @@ fun NodeDialogHost(
                     NodeAction.PACK -> viewModel.pack(listOf(node))
                     NodeAction.SEND_TO_CHAT -> viewModel.sendToChat(node)
                     NodeAction.SHARE -> viewModel.requestShare(node)
+                    NodeAction.COPY_LINK -> links.copy(listOf(node))
                     NodeAction.COLLECT -> viewModel.requestCollect(node)
                     // 解到压缩包所在的文件夹(搜索结果也是压缩包旁边,不是当前页面)
                     NodeAction.EXTRACT_HERE -> extractor.extract.submit(ExtractRequest(nodeId = node.id, parentId = node.parentId))

@@ -13,6 +13,7 @@ import xyz.yophon.gopan.core.transfer.TransferEngine
 import javax.inject.Inject
 import xyz.yophon.gopan.core.app.CrashLog
 import xyz.yophon.gopan.core.documents.DocumentsRootNotifier
+import xyz.yophon.gopan.core.notify.InboxScheduler
 
 @HiltAndroidApp
 class GopanApp : Application(), SingletonImageLoader.Factory {
@@ -32,6 +33,9 @@ class GopanApp : Application(), SingletonImageLoader.Factory {
     @Inject
     lateinit var documentsRoots: DocumentsRootNotifier
 
+    @Inject
+    lateinit var inboxScheduler: InboxScheduler
+
     override fun onCreate() {
         super.onCreate()
         // 最先装:后面任何一步崩了都能留下日志(只写本地,「我的 → 崩溃日志」里导出)
@@ -43,6 +47,8 @@ class GopanApp : Application(), SingletonImageLoader.Factory {
         transferEngine.onAppStart()
         // 登录 / 登出时让「文件」App 里的 gopan 根目录跟着出现 / 消失
         documentsRoots.start()
+        // 系统通知栏提醒(doc/22 决策 6):登录且开着开关时排每 15 分钟一次的检查,登出 / 关掉时撤掉
+        inboxScheduler.start()
     }
 
     /**
