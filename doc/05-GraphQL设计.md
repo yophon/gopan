@@ -284,6 +284,21 @@ extend type Mutation {
 - 错误码:`COLLECT_CLOSED`(撤销 / 截止 / 文件夹进回收站 / 属主被禁用)、`COLLECT_FULL`(链接额度或属主配额用完,不区分)、`FILE_TOO_LARGE`、`COLLECT_PASSWORD_REQUIRED`、`BAD_COLLECT_PASSWORD`、`COLLECT_NAME_REQUIRED`、`TOO_MANY_SESSIONS`、`RATE_LIMITED`。
 - `fileRequestUploads` 的 cursor 是上一页最后一条的 id(bigserial),每页 50 条。
 
+## 内容搜索(v3.2)
+
+```graphql
+type ContentHit { node: Node!, snippet: String!, highlights: [TextRange!]!, page: Int }   # page 仅 PDF
+type TextRange { start: Int!, length: Int! }                                              # 按字符(码点)
+type ContentHitPage { items: [ContentHit!]!, nextCursor: String }                         # 不给 total
+extend type Query { searchContent(q: String!, cursor: String): ContentHitPage! }
+type AdminOverview { …, contentIndex: ContentIndexStats! }   # 已索引 / 无文字 / 截断 / 不支持 / 失败 / 待处理 / 文字量
+```
+
+- 只给登录用户(`UserFrom`),分享访客没有内容搜索。
+- 语义是"文件文字里包含这个关键词":关键词与内容做同一套归一化(NFKC、CJK 之间去掉空白),词项交集取候选,`strpos(lower(content), lower(q))` 复核。关键词切不出词项(单个汉字、一两个字母)回 `QUERY_TOO_SHORT`;`GOPAN_CONTENT_INDEX=false` 回 `CONTENT_SEARCH_DISABLED`。
+- 排序与 `searchNodes` 相同(修改时间倒序、id 决胜),游标同一种编码,`o` 为 `CONTENT`;每页 50 条。
+- 片段:首处命中前 60 字到后 100 字,两头被截加"…";高亮区间在片段里按码点计,前端按区间切段渲染,不用 `v-html`。
+
 ## 版本策略
 
 v1 不做 schema 版本化;字段只加不删,废弃用 `@deprecated`。前端 codegen 在 CI 里跑,schema 不兼容改动直接编译失败暴露。
