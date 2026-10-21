@@ -19,7 +19,7 @@
 | ![预览](doc/assets/preview.png) | ![分享访客页](doc/assets/share.png) |
 -->
 
-当前阶段:**v3.2.0——收集文件(对文件夹开链接,别人不用注册就能往里传、看不到已有内容)与内容搜索(按 PDF、Office、文本里的文字找文件,中文不装数据库扩展)**;安卓原生 App 同步支持。
+当前阶段:**v3.3.0——离线下载(给链接,服务器在后台下进网盘,挡内网地址)与压缩包(zip / 7z / rar / tar 不下载就浏览、预览里面的文件、一键解压,纯 Go 不加系统包)**;安卓原生 App 同步支持。上一版 v3.2 是收集文件与内容搜索。
 
 ## 架构
 
@@ -37,8 +37,9 @@ flowchart LR
     subgraph Gopan["gopan · Go 单二进制"]
         GQL["gqlgen"] --> Service["service 业务层"]
         MCP["Remote MCP · OAuth server"] --> Service
-        REST["HTTP:/dav · /pack · /s/:token · /api/app · /healthz"] --> Service
-        Worker["worker pool<br/>缩略图 · 转 PDF · hash 校验 · 文字提取 · GC"]
+        REST["HTTP:/dav · /pack · /arc · /s/:token · /api/app · /healthz"] --> Service
+        Worker["worker pool<br/>缩略图 · 转 PDF · hash 校验 · 文字提取 · 压缩包目录 · GC"]
+        Jobs["后台任务 runner<br/>离线下载 · 解压"]
         Embed["embed 前端静态资源"]
     end
 
@@ -48,9 +49,11 @@ flowchart LR
     Worker --> GT["Gotenberg<br/>(office → PDF,可关)"]
     Worker --> FF["ffmpeg(exec)"]
     Worker --> PT["pdftotext(exec)"]
+    Jobs --> MinIO
+    Jobs -. "离线下载(挡内网)" .-> Web(("外部网站"))
 ```
 
-要点:**主传输路径字节流不过 Go**——浏览器、安卓 App 和 Agent 都拿预签名 URL 直传/直取 MinIO。显式例外只有流式 zip(`/pack`、`/mcp-download`)、协议决定必须中转的 WebDAV PUT/GET,以及几 MB 的安卓安装包(`/api/app/android/`)。文件按 SHA-256 内容寻址,全站同内容物理只存一份(秒传),配额按逻辑大小各记各的。类型从数据库到组件不断链:sqlc(SQL→Go)、gqlgen(schema→resolver)、GraphQL Code Generator(schema→TS),改一处两端编译报错。
+要点:**主传输路径字节流不过 Go**——浏览器、安卓 App 和 Agent 都拿预签名 URL 直传/直取 MinIO。显式例外只有流式 zip(`/pack`、`/mcp-download`)、协议决定必须中转的 WebDAV PUT/GET、几 MB 的安卓安装包(`/api/app/android/`),以及 v3.3 的离线下载(服务器替你从源站拉)与压缩包(解压、`/arc` 预览包里的单个文件),都有并发闸。文件按 SHA-256 内容寻址,全站同内容物理只存一份(秒传),配额按逻辑大小各记各的。类型从数据库到组件不断链:sqlc(SQL→Go)、gqlgen(schema→resolver)、GraphQL Code Generator(schema→TS),改一处两端编译报错。
 
 ## 快速开始
 
@@ -96,6 +99,7 @@ Agent 接入与远程 MCP 工具见 [docs/MCP.md](./docs/MCP.md)。
 | [18 · 安卓 App](./doc/18-安卓App.md) | 原生客户端的功能、安装升级、权限、系统集成、自部署、发布流程 |
 | [19 · 安卓原生 App 计划](./doc/19-安卓原生App计划.md) | 网页 → 原生功能对照、技术选型、登录协议、P1–P4 里程碑与验收记录 |
 | [20 · 收集文件与内容搜索计划](./doc/20-收集文件与内容搜索计划.md) | 匿名收集链接(访客只写不读)、中文内容搜索(二元切词 + 原生全文索引)、P0 安全前置与里程碑 |
+| [21 · 离线下载与压缩包计划](./doc/21-离线下载与压缩包计划.md) | 后台任务底座、离线下载防 SSRF 与断线续传、压缩包目录索引 / 预览 / 解压的上限与里程碑 |
 
 ## 实现回顾
 
@@ -119,6 +123,7 @@ Agent 接入与远程 MCP 工具见 [docs/MCP.md](./docs/MCP.md)。
 | [v2.5 · 传输助手整改](./doc/milestones/v2.5-传输助手整改.md) | isIdle 修复、服务端自动落消息、乐观上屏/粘贴/拖拽/进度卡/翻历史/删除/搜索、refresh 宽限期 + 多标签互斥;v2.5.0 |
 | [v2.6 · 安卓 App 与分享](./doc/milestones/v2.6-安卓App与分享.md) | Capacitor 安卓壳 + 原生分享接收、PWA POST share_target、搜索定位上下文、CI、错误透传、手机端输入栏越界修复;v2.6.0 |
 | [v3.0 · 安卓原生 App](./doc/milestones/v3.0-安卓原生App.md) | Kotlin + Compose 重写:后台传输引擎、原生预览、管理端、「文件」App 集成、站内更新、R8 包全量 E2E;壳删除;v3.0.0 |
+| [v3.3 · 离线下载与压缩包](./doc/milestones/v3.3-离线下载与压缩包.md) | 后台任务(心跳、取消、退避重试)、离线下载(按真实连接 IP 挡内网、Range 续读)、zip / 7z / rar / tar 纯 Go 读取(GBK 名、字典上限)、包内浏览与解压、MCP 五个工具;v3.3.0 |
 | [v3.2 · 收集文件与内容搜索](./doc/milestones/v3.2-收集文件与内容搜索.md) | 匿名收集链接(只写不读、撞名改名、按人分文件夹)、对象响应同源脚本修复、中文内容搜索(二元组 + 三元组词项、PDF 页码)、MCP 读文档文字;v3.2.0 |
 
 ## 读法
