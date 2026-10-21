@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.DriveFolderUpload
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
@@ -56,6 +57,8 @@ import xyz.yophon.gopan.core.ui.components.ConfirmDialog
 import xyz.yophon.gopan.core.ui.components.TextInputDialog
 import xyz.yophon.gopan.core.ui.format.formatBytes
 import xyz.yophon.gopan.core.ui.format.formatTime
+import xyz.yophon.gopan.feature.collect.FileRequestDialog
+import xyz.yophon.gopan.feature.collect.FileRequestTarget
 import xyz.yophon.gopan.feature.shares.ShareCreateDialog
 
 /** 长按 / ⋮ 弹出的操作;文件页、搜索页、回收站各挑自己的子集 */
@@ -65,6 +68,7 @@ enum class NodeAction(@StringRes val label: Int, val icon: ImageVector, val dest
     PACK(R.string.drive_action_pack, Icons.Outlined.FolderZip),
     SEND_TO_CHAT(R.string.drive_action_send_to_chat, Icons.AutoMirrored.Outlined.Send),
     SHARE(R.string.drive_action_share, Icons.Outlined.Share),
+    COLLECT(R.string.drive_action_collect, Icons.Outlined.DriveFolderUpload),
     RENAME(R.string.drive_action_rename, Icons.Outlined.DriveFileRenameOutline),
     MOVE(R.string.drive_action_move, Icons.AutoMirrored.Outlined.DriveFileMove),
     COPY(R.string.drive_action_copy, Icons.Outlined.ContentCopy),
@@ -80,6 +84,7 @@ val DRIVE_ACTIONS = listOf(
     NodeAction.DOWNLOAD,
     NodeAction.PACK,
     NodeAction.SHARE,
+    NodeAction.COLLECT,
     NodeAction.SEND_TO_CHAT,
     NodeAction.RENAME,
     NodeAction.MOVE,
@@ -88,10 +93,10 @@ val DRIVE_ACTIONS = listOf(
     NodeAction.DETAILS,
 )
 
-/** 这个操作对这个节点有没有意义:打开只对文件,打包只对文件夹 */
+/** 这个操作对这个节点有没有意义:打开只对文件,打包、收集文件只对文件夹 */
 fun NodeAction.appliesTo(node: Node): Boolean = when (this) {
     NodeAction.OPEN -> !node.isFolder
-    NodeAction.PACK -> node.isFolder
+    NodeAction.PACK, NodeAction.COLLECT -> node.isFolder
     else -> true
 }
 
@@ -286,6 +291,7 @@ fun NodeDialogHost(
                     NodeAction.PACK -> viewModel.pack(listOf(node))
                     NodeAction.SEND_TO_CHAT -> viewModel.sendToChat(node)
                     NodeAction.SHARE -> viewModel.requestShare(node)
+                    NodeAction.COLLECT -> viewModel.requestCollect(node)
                     NodeAction.RENAME -> viewModel.requestRename(node)
                     NodeAction.MOVE -> viewModel.requestMove(listOf(node.id))
                     NodeAction.COPY -> viewModel.requestCopy(listOf(node.id))
@@ -325,6 +331,12 @@ fun NodeDialogHost(
         )
         is NodeDialog.Share -> ShareCreateDialog(
             node = dialog.node,
+            instanceKey = dialog.token.toString(),
+            onDismiss = viewModel::dismissDialog,
+            onMessage = { viewModel.message(UiText.Plain(it)) },
+        )
+        is NodeDialog.Collect -> FileRequestDialog(
+            target = FileRequestTarget.Create(folderId = dialog.node.id, folderName = dialog.node.name),
             instanceKey = dialog.token.toString(),
             onDismiss = viewModel::dismissDialog,
             onMessage = { viewModel.message(UiText.Plain(it)) },

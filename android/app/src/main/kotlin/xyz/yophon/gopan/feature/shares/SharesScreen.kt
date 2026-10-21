@@ -32,9 +32,11 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -43,6 +45,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -63,6 +66,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.data.collect.FileRequest
 import xyz.yophon.gopan.core.data.shares.Share
 import xyz.yophon.gopan.core.data.shares.ShareVisit
 import xyz.yophon.gopan.core.ui.components.EmptyState
@@ -71,16 +75,24 @@ import xyz.yophon.gopan.core.ui.components.LoadingState
 import xyz.yophon.gopan.core.ui.format.describeUserAgent
 import xyz.yophon.gopan.core.ui.format.formatTime
 import xyz.yophon.gopan.core.ui.rememberSystemActions
+import xyz.yophon.gopan.feature.collect.FileRequestsTab
 import xyz.yophon.gopan.feature.drive.FullPage
 import xyz.yophon.gopan.feature.drive.ListStatus
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
 import xyz.yophon.gopan.feature.drive.resolve
 import xyz.yophon.gopan.core.ui.exposeTestTags
 
-/** 「分享」tab:我的分享。点一行出操作(复制 / 发送 / 打开 / 访问记录 / 取消分享) */
+/**
+ * 「分享」tab:上面「分享」「收集」两个标签(与网页端一致)。
+ * 分享:我的分享,点一行出操作(复制 / 发送 / 打开 / 访问记录 / 取消分享);收集:我开的收集链接(feature.collect)。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SharesScreen(onOpenVisits: (Share) -> Unit, viewModel: SharesViewModel = hiltViewModel()) {
+fun SharesScreen(
+    onOpenVisits: (Share) -> Unit,
+    onOpenUploads: (FileRequest) -> Unit,
+    viewModel: SharesViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -88,6 +100,8 @@ fun SharesScreen(onOpenVisits: (Share) -> Unit, viewModel: SharesViewModel = hil
     val scope = rememberCoroutineScope()
     var sheetFor by rememberSaveable { mutableStateOf<String?>(null) }
     var revokeFor by rememberSaveable { mutableStateOf<String?>(null) }
+    // 0 = 分享,1 = 收集;进收件记录再返回时留在原来的标签
+    var tab by rememberSaveable { mutableIntStateOf(0) }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -104,26 +118,46 @@ fun SharesScreen(onOpenVisits: (Share) -> Unit, viewModel: SharesViewModel = hil
         topBar = { TopAppBar(windowInsets = NestedScreenInsets, title = { Text(stringResource(R.string.shares_title)) }) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = state.refreshing,
-            onRefresh = viewModel::refresh,
-            modifier = Modifier.padding(padding).fillMaxSize(),
-        ) {
-            when (val status = state.status) {
-                ListStatus.Loading -> LoadingState()
-                is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
-                ListStatus.Content -> if (state.items.isEmpty()) {
-                    FullPage {
-                        EmptyState(
-                            title = stringResource(R.string.shares_empty),
-                            description = stringResource(R.string.shares_empty_hint),
-                            icon = Icons.Outlined.Share,
-                        )
-                    }
-                } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize().testTag("shares_list")) {
-                        items(state.items, key = { it.id }) { share ->
-                            ShareRow(share, revoking = share.id in state.revoking, onClick = { sheetFor = share.id })
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            PrimaryTabRow(selectedTabIndex = tab) {
+                Tab(
+                    selected = tab == 0,
+                    onClick = { tab = 0 },
+                    text = { Text(stringResource(R.string.collect_tab_share)) },
+                    modifier = Modifier.testTag("shares_tab_share"),
+                )
+                Tab(
+                    selected = tab == 1,
+                    onClick = { tab = 1 },
+                    text = { Text(stringResource(R.string.collect_tab_collect)) },
+                    modifier = Modifier.testTag("shares_tab_collect"),
+                )
+            }
+            if (tab == 1) {
+                FileRequestsTab(snackbar = snackbar, onOpenUploads = onOpenUploads)
+            } else {
+                PullToRefreshBox(
+                    isRefreshing = state.refreshing,
+                    onRefresh = viewModel::refresh,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    when (val status = state.status) {
+                        ListStatus.Loading -> LoadingState()
+                        is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
+                        ListStatus.Content -> if (state.items.isEmpty()) {
+                            FullPage {
+                                EmptyState(
+                                    title = stringResource(R.string.shares_empty),
+                                    description = stringResource(R.string.shares_empty_hint),
+                                    icon = Icons.Outlined.Share,
+                                )
+                            }
+                        } else {
+                            LazyColumn(modifier = Modifier.fillMaxSize().testTag("shares_list")) {
+                                items(state.items, key = { it.id }) { share ->
+                                    ShareRow(share, revoking = share.id in state.revoking, onClick = { sheetFor = share.id })
+                                }
+                            }
                         }
                     }
                 }

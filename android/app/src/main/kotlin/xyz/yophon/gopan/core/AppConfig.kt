@@ -34,6 +34,9 @@ data class AppConfig(
     /** 分享链接(访客页),与网页端 `${location.origin}/s/${token}` 一致 */
     fun shareUrl(token: String): String = base.newBuilder().encodedPath("/s/").addPathSegment(token).build().toString()
 
+    /** 收集文件链接(访客上传页),与网页端 `${location.origin}/c/${token}` 一致 */
+    fun collectUrl(token: String): String = base.newBuilder().encodedPath("/c/").addPathSegment(token).build().toString()
+
     /** WebDAV 挂载地址 */
     val davUrl: String get() = base.newBuilder().encodedPath("/dav").build().toString()
 

@@ -69,6 +69,10 @@ object Routes {
     @Serializable
     data class ShareVisits(val shareId: String, val name: String = "")
 
+    /** 收集链接的收件记录;[newCount] > 0 时打开即标为已读 */
+    @Serializable
+    data class FileRequestUploads(val requestId: String, val title: String = "", val newCount: Int = 0)
+
     // ---- 我的 ----
     @Serializable
     data object Account

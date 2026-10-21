@@ -59,6 +59,9 @@ abstract class DataBindsModule {
     abstract fun bindSharesRepository(impl: xyz.yophon.gopan.core.data.shares.ApolloSharesRepository): xyz.yophon.gopan.core.data.shares.SharesRepository
 
     @Binds
+    abstract fun bindFileRequestsRepository(impl: xyz.yophon.gopan.core.data.collect.ApolloFileRequestsRepository): xyz.yophon.gopan.core.data.collect.FileRequestsRepository
+
+    @Binds
     abstract fun bindSecurityRepository(impl: xyz.yophon.gopan.core.data.security.ApolloSecurityRepository): xyz.yophon.gopan.core.data.security.SecurityRepository
 
     @Binds

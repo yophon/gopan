@@ -1,0 +1,75 @@
+# 收集文件(doc/20):只有属主侧。访客不装 App,在浏览器里打开 {base}/c/{token} 上传(与分享访客页一样)。
+# 字段选择与 web/src/api/operations/collect.graphql 一致。
+
+fragment FileRequestFields on FileRequest {
+  id
+  token
+  title
+  note
+  hasPassword
+  requireName
+  groupByUploader
+  maxFileSize
+  maxTotalBytes
+  maxFiles
+  expiresAt
+  createdAt
+  fileCount
+  totalBytes
+  uploaderCount
+  newCount
+  lastUploadAt
+  folder {
+    id
+    name
+    parentId
+  }
+}
+
+query MyFileRequests {
+  myFileRequests {
+    ...FileRequestFields
+  }
+}
+
+mutation CreateFileRequest($folderId: ID!, $input: FileRequestInput!, $password: String) {
+  createFileRequest(folderId: $folderId, input: $input, password: $password) {
+    ...FileRequestFields
+  }
+}
+
+# 整表单提交:没给的上限 = 不限,expiresAt 为 null = 不限时间;密码与目标文件夹不能改
+mutation UpdateFileRequest($id: ID!, $input: FileRequestInput!) {
+  updateFileRequest(id: $id, input: $input) {
+    ...FileRequestFields
+  }
+}
+
+mutation RevokeFileRequest($id: ID!) {
+  revokeFileRequest(id: $id)
+}
+
+mutation MarkFileRequestSeen($id: ID!) {
+  markFileRequestSeen(id: $id)
+}
+
+# 收件记录,新的在前;一页 50 条,nextCursor 为 null 表示到底
+query FileRequestUploads($id: ID!, $cursor: String) {
+  fileRequestUploads(id: $id, cursor: $cursor) {
+    items {
+      id
+      fileName
+      size
+      uploaderName
+      ip
+      userAgent
+      createdAt
+      node {
+        id
+        parentId
+        name
+      }
+    }
+    nextCursor
+  }
+}

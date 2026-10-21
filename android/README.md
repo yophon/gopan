@@ -94,6 +94,7 @@ app/src/main/kotlin/xyz/yophon/gopan/
   core/data/preview/             PreviewRepository:单节点预览信息(预签名地址现取)、Office 转换触发、文本分段拉取(TextFetcher:Range、UTF-8 / GB18030)、
                                  PDF 下到缓存(cacheDir/preview-pdf,内容寻址,300 MB 封顶)
   core/data/shares/              SharesRepository:我的分享、新建、取消、访问明细
+  core/data/collect/             FileRequestsRepository:收集链接(doc/20)的属主侧——列表、新建、修改、结束、标已读、收件记录
   core/data/security/            SecurityRepository:登录设备、WebDAV 应用密码、MCP API Key / OAuth 授权 / 目录范围 / 操作记录
   core/data/admin/               AdminRepository:用户列表、概览、建号、配额、禁用、重置密码、失败任务重排
   core/documents/                系统「文件」App 里的 gopan,见下文「DocumentsProvider」:GopanDocumentsProvider、DocumentCache(按需下载的读缓存)、
@@ -123,7 +124,9 @@ app/src/main/kotlin/xyz/yophon/gopan/
   feature/chat/                  传输助手:ChatScreen / ChatItems(消息、九宫格、上传卡片)/ ChatViewModel(轮询、搜索定位、乐观发送、分享落地)/
                                  ChatLogic(按 id 合并、按天分组、网格、链接识别,纯函数)
   feature/transfers/             传输列表(TransfersScreen / TransfersViewModel)与传输设置对话框
-  feature/shares/                「分享」tab(SharesScreen:我的分享与操作、访问记录)与新建分享对话框(ShareCreate,文件页 / 搜索页 / 预览共用)
+  feature/shares/                「分享」tab(SharesScreen:「分享」「收集」两个标签;我的分享与操作、访问记录)与新建分享对话框(ShareCreate,文件页 / 搜索页 / 预览共用)
+  feature/collect/               收集文件:「收集」标签的列表与操作(FileRequestsTab)、新建 / 修改对话框(FileRequestEdit,文件页 / 搜索页文件夹的「收集文件」共用)、
+                                 收件记录(FileRequestUploads,路由 Routes.FileRequestUploads 挂在「分享」tab 的嵌套图里)
   feature/admin/                 管理端:AdminScreen(概览卡片、失败任务重排、用户列表与操作对话框)/ AdminViewModel
   feature/about/                 UpdateDialog(检查 / 下载 / 交给系统安装器)、CrashLogScreen(查看、导出、删除)、LicensesScreen(依赖与许可证全文)
   feature/preview/               全屏预览(PreviewScreen:翻页器、顶栏、沉浸)与平板侧栏(PreviewPane);PreviewViewModel(会话列表、最近 6 页)、
@@ -221,6 +224,16 @@ GraphQL operations 按域各自一个文件(`nodes.graphql` 归文件线,`chat.g
 - 登录设备:本机标「本机」,吊销其它设备后那台下次 refresh 被登出;App 的请求都带 `gopan-android/<版本> (Android <版本>; <厂商> <型号>)`,
   设备列表与访问记录里显示为「gopan 安卓 App」(网页端同一条规则)。
 - WebDAV 应用密码与 Agent 接入(API Key、OAuth 授权、目录范围、操作记录)与网页端对话框一致;新生成的密码 / Key 明文只在这一页显示一次。
+
+## 收集文件(doc/20 C2)
+
+只做属主侧,行为与网页端一致;访客不装 App,在浏览器里打开 `{base}/c/{token}` 上传。
+
+- 入口:文件页 / 搜索页里文件夹的「更多」→「收集文件」(只对文件夹)。对话框:标题(默认「往「文件夹」传文件」)、说明、截止 1 / 7 / 30 天或不限(默认 7 天)、
+  要求留名、按人分文件夹(开了强制要求留名)、单个文件 / 总量(默认 10 GB)/ 个数上限、密码保护(只在新建时,打开时预填 4 位随机码;建好后不能改)。
+  建好后显示链接与密码,「复制」「发送」连标题、链接、密码一起。修改是整表单提交:截止默认「不变」,已有的上限不在预设里时多出一个选项,不会被悄悄改掉。
+- 「分享」tab 的「收集」标签:标题、文件夹、收件统计、「新 N」、截止(已截止标红);点一行进收件记录,⋮ 里有收件记录 / 复制 / 发送 / 打开链接 / 修改 / 结束收集。
+- 收件记录:新的在前,滑到底按 cursor 续拉,下拉刷新;打开时有新收到的就标为已读。文件还在时点一条跳到它所在的目录,删掉的划掉、灰掉(记录保留)。
 
 ## 外观与平板(P3)
 

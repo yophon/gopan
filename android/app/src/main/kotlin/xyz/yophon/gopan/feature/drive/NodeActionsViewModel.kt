@@ -52,6 +52,9 @@ sealed interface NodeDialog {
     /** 新建分享;token 区分两次打开(每次一个干净的表单) */
     data class Share(val node: Node, val token: Long = System.nanoTime()) : NodeDialog
 
+    /** 对文件夹新建收集链接(doc/20);token 同上 */
+    data class Collect(val node: Node, val token: Long = System.nanoTime()) : NodeDialog
+
     /** token 区分两次打开:选择器 ViewModel 据此决定要不要回到根目录 */
     data class Picker(val mode: PickerMode, val ids: List<String>, val token: Long = System.nanoTime()) : NodeDialog
 }
@@ -121,6 +124,11 @@ abstract class NodeActionsViewModel(
     fun requestRename(node: Node) = showDialog(NodeDialog.Rename(node))
 
     fun requestShare(node: Node) = showDialog(NodeDialog.Share(node))
+
+    /** 收集文件只对文件夹 */
+    fun requestCollect(node: Node) {
+        if (node.isFolder) showDialog(NodeDialog.Collect(node))
+    }
 
     fun requestDelete(nodes: List<Node>) {
         if (nodes.isEmpty()) return

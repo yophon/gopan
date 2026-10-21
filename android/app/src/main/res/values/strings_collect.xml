@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 收集文件(doc/20):「分享」页的「收集」标签、新建 / 修改对话框、收件记录。文案与网页端一致。 -->
+<resources>
+    <string name="collect_tab_share">分享</string>
+    <string name="collect_tab_collect">收集</string>
+
+    <!-- 列表 -->
+    <string name="collect_empty">还没有收集链接</string>
+    <string name="collect_empty_hint">在文件夹的「更多」里选「收集文件」,把链接发给别人:对方不用注册就能往里传,看不到里面已有的内容</string>
+    <string name="collect_received">收到 %1$d 个 · %2$s · %3$d 人</string>
+    <string name="collect_received_none">还没收到</string>
+    <string name="collect_new_badge">新 %1$d</string>
+    <string name="collect_until">截止 %1$s</string>
+    <string name="collect_closed_at">已截止 %1$s</string>
+    <string name="collect_no_deadline">不限时间</string>
+    <string name="collect_has_password">有密码保护</string>
+    <string name="collect_flag_group">按人分文件夹</string>
+    <string name="collect_flag_require_name">要求留名</string>
+    <string name="collect_limit_files">≤%1$d 个</string>
+    <string name="collect_limit_total">共 ≤%1$s</string>
+    <string name="collect_limit_file_size">单个 ≤%1$s</string>
+    <string name="collect_action_uploads">收件记录</string>
+    <string name="collect_action_copy">复制链接</string>
+    <string name="collect_action_send">发送链接</string>
+    <string name="collect_action_open">打开链接</string>
+    <string name="collect_action_edit">修改</string>
+    <string name="collect_action_revoke">结束收集</string>
+    <string name="collect_revoke_title">结束「%1$s」?</string>
+    <string name="collect_revoke_text">结束后链接立即失效,正在传的也会失败。已收到的文件不受影响。</string>
+    <string name="collect_revoke_confirm">结束收集</string>
+    <string name="collect_revoke_keep">再想想</string>
+    <string name="collect_msg_revoked">收集已结束,链接已失效</string>
+    <string name="collect_msg_saved">已保存</string>
+    <string name="collect_msg_copied">链接已复制</string>
+    <string name="collect_msg_copied_all">链接与密码已复制</string>
+    <string name="collect_send_chooser">发送收集链接</string>
+
+    <!-- 新建 / 修改 -->
+    <string name="collect_create_title">收集文件到「%1$s」</string>
+    <string name="collect_edit_title">修改收集链接</string>
+    <string name="collect_created_title">收集链接已创建</string>
+    <string name="collect_field_title">标题</string>
+    <string name="collect_field_title_hint">访客打开链接时看到的标题</string>
+    <string name="collect_field_note">说明(可选)</string>
+    <string name="collect_field_note_hint">要传什么、怎么命名</string>
+    <string name="collect_field_expiry">截止</string>
+    <string name="collect_expiry_keep">不变</string>
+    <string name="collect_expiry_1">1 天</string>
+    <string name="collect_expiry_7">7 天</string>
+    <string name="collect_expiry_30">30 天</string>
+    <string name="collect_expiry_none">不限</string>
+    <string name="collect_field_require_name">要求留名</string>
+    <string name="collect_field_group">按人分文件夹</string>
+    <string name="collect_field_group_hint">每人的文件放进以名字命名的子文件夹</string>
+    <string name="collect_field_file_size">单个文件</string>
+    <string name="collect_field_total">总量上限</string>
+    <string name="collect_field_total_hint">计入你的空间</string>
+    <string name="collect_field_max_files">个数上限</string>
+    <string name="collect_limit_none">不限</string>
+    <string name="collect_field_password">密码保护</string>
+    <string name="collect_field_password_hint">访客需输入此密码</string>
+    <string name="collect_create">创建链接</string>
+    <string name="collect_save">保存</string>
+    <string name="collect_password_line">密码:%1$s</string>
+    <string name="collect_result_hint">拿到链接的人不用注册就能往这个文件夹传文件,但看不到里面已有的内容</string>
+    <string name="collect_copy">复制</string>
+    <string name="collect_send">发送</string>
+    <string name="collect_close">关闭</string>
+
+    <!-- 收件记录 -->
+    <string name="collect_uploads_title">收件记录</string>
+    <string name="collect_uploads_empty">还没有人传文件</string>
+    <string name="collect_uploads_note">名字由上传者自填;文件删除后记录仍保留</string>
+    <string name="collect_uploads_anonymous">未署名</string>
+    <string name="collect_uploads_gone">文件已删除</string>
+</resources>
