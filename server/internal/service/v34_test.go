@@ -4,9 +4,9 @@ package service_test
 
 import (
 	"bytes"
-	"database/sql"
 	"crypto/hmac"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"

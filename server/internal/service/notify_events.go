@@ -15,13 +15,13 @@ import (
 
 // 各处业务触发通知的入口(doc/22 三.3)。都容忍 Notifier 为 nil。
 
-func (s *Uploads) SetNotifier(n *Notifier)       { s.notify = n }
-func (j *Jobs) SetNotifier(n *Notifier)          { j.notify = n }
-func (a *Auth) SetNotifier(n *Notifier)          { a.notify = n }
-func (m *MCPTokens) SetNotifier(n *Notifier)     { m.notify = n }
-func (a *AppPasswords) SetNotifier(n *Notifier)  { a.notify = n }
-func (o *OAuth) SetNotifier(n *Notifier)         { o.notify = n }
-func (s *Nodes) SetNotifier(n *Notifier)         { s.notify = n }
+func (s *Uploads) SetNotifier(n *Notifier)      { s.notify = n }
+func (j *Jobs) SetNotifier(n *Notifier)         { j.notify = n }
+func (a *Auth) SetNotifier(n *Notifier)         { a.notify = n }
+func (m *MCPTokens) SetNotifier(n *Notifier)    { m.notify = n }
+func (a *AppPasswords) SetNotifier(n *Notifier) { a.notify = n }
+func (o *OAuth) SetNotifier(n *Notifier)        { o.notify = n }
+func (s *Nodes) SetNotifier(n *Notifier)        { s.notify = n }
 
 // noteCollectUpload 收集链接收到一个文件:同一链接 30 分钟内合并成一条。随落库的事务一起提交。
 func (n *Notifier) noteCollectUpload(ctx context.Context, tx pgx.Tx, owner uuid.UUID, req store.LockFileRequestRow, uploader, file string, size int64) {

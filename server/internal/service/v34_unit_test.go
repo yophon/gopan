@@ -136,10 +136,10 @@ func TestSniffImageAndName(t *testing.T) {
 	}
 	now := time.Date(2026, 10, 21, 15, 30, 12, 0, time.UTC)
 	for in, want := range map[[2]string]string{
-		{"猫.jpeg", ".jpg"}:            "猫.jpeg",
-		{"猫.PNG", ".png"}:             "猫.PNG",
-		{"猫.png", ".jpg"}:             "猫.jpg", // 扩展名跟着文件头走
-		{`C:\Users\a\图.gif`, ".gif"}:   "图.gif",
+		{"猫.jpeg", ".jpg"}:               "猫.jpeg",
+		{"猫.PNG", ".png"}:                "猫.PNG",
+		{"猫.png", ".jpg"}:                "猫.jpg", // 扩展名跟着文件头走
+		{`C:\Users\a\图.gif`, ".gif"}:     "图.gif",
 		{"../../etc/passwd.png", ".png"}: "passwd.png",
 	} {
 		if got := imageName(in[0], in[1], now); got != want {
@@ -229,7 +229,7 @@ func TestTargetPathAndDeviceLabel(t *testing.T) {
 		}
 	}
 	for ua, want := range map[string]string{
-		"gopan-android/3.4.0 (Android 14; Pixel 8)":                                                                         "安卓 App · Pixel 8",
+		"gopan-android/3.4.0 (Android 14; Pixel 8)": "安卓 App · Pixel 8",
 		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36":      "Chrome · Windows",
 		"Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Edg/130.0":        "Edge · Windows",
 		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605": "Safari · macOS",

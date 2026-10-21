@@ -165,8 +165,8 @@ func (s *Links) alertDailyCap(link, owner uuid.UUID, name string, limit int64) {
 	defer cancel()
 	s.notify.Notify(ctx, owner, Event{
 		Kind: EvLinkAlert, Level: LvWarn, Title: "直链今天的流量用完了:" + name,
-		Body:   fmt.Sprintf("今天已经发出 %s,到了每天的上限,已暂停到明天。要继续用可以在直链设置里调高上限后手动恢复。", humanBytes(limit)),
-		Target: &Target{Kind: TgLink, ID: link.String()},
+		Body:     fmt.Sprintf("今天已经发出 %s,到了每天的上限,已暂停到明天。要继续用可以在直链设置里调高上限后手动恢复。", humanBytes(limit)),
+		Target:   &Target{Kind: TgLink, ID: link.String()},
 		GroupKey: "link_cap:" + link.String() + ":" + s.dayStart(time.Now()).Format("2006-01-02"), Once: 24 * time.Hour,
 	})
 }

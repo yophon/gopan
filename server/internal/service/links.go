@@ -81,7 +81,7 @@ func NewLinks(pool *pgxpool.Pool, obj *objstore.Store, uploads *Uploads, notify 
 		pool: pool, q: store.New(pool), obj: obj, uploads: uploads, notify: notify, cfg: cfg,
 		gate:       make(chan struct{}, linkConcurrency),
 		ipLimiter:  newKeyedLimiter(500*time.Millisecond, 120), // 每 IP 每分钟 120 次
-		imgLimiter: newKeyedLimiter(2*time.Second, 30),        // 图床每人每分钟 30 张
+		imgLimiter: newKeyedLimiter(2*time.Second, 30),         // 图床每人每分钟 30 张
 		imgGate:    make(chan struct{}, 4),
 		cache:      map[string]cachedLink{},
 	}
@@ -89,8 +89,8 @@ func NewLinks(pool *pgxpool.Pool, obj *objstore.Store, uploads *Uploads, notify 
 	return s
 }
 
-func (s *Links) Enabled() bool         { return s.cfg.Enabled }
-func (s *Links) Config() LinkConfig    { return s.cfg }
+func (s *Links) Enabled() bool            { return s.cfg.Enabled }
+func (s *Links) Config() LinkConfig       { return s.cfg }
 func (s *Links) Location() *time.Location { return s.cfg.Loc }
 
 // LinkView 一条直链加上文件与统计,给 GraphQL 用。
