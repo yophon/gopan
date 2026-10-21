@@ -56,7 +56,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.NodeKind
@@ -74,35 +76,60 @@ import xyz.yophon.gopan.feature.drive.fileCategory
 import xyz.yophon.gopan.feature.drive.icon
 import xyz.yophon.gopan.feature.drive.tint
 
-/** 传输列表(上传 / 下载);从文件页菜单、「我的」、传输助手、通知点按进入 */
+/** 传输列表(上传 / 下载 / 后台任务);从文件页菜单、「我的」、传输助手、通知点按进入 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransfersScreen(
     onBack: () -> Unit,
     onOpenFolder: (String?) -> Unit,
     viewModel: TransfersViewModel = hiltViewModel(),
+    jobsViewModel: JobsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val jobs by jobsViewModel.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     val currentOpenFolder by rememberUpdatedState(onOpenFolder)
-    // 第一次有数据时选栏:正在跑的只有下载(或根本没有上传)就停在下载栏
+    // 后台任务只在页面可见时拉取(有进行中的才轮询)
+    LifecycleStartEffect(jobsViewModel) {
+        jobsViewModel.setVisible(true)
+        onStopOrDispose { jobsViewModel.setVisible(false) }
+    }
+    // 第一次有数据时选栏(手动点过就不再自动选):刚提交离线下载点「查看」进来的停在后台任务栏;
+    // 正在跑的只有下载(或根本没有上传)就停在下载栏;只有后台任务在跑(或只有后台任务)停在后台任务栏
     var tabChosen by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(state.loaded) {
-        if (state.loaded && !tabChosen) {
+    LaunchedEffect(state.loaded, jobs.loaded) {
+        if (tabChosen || !state.loaded) return@LaunchedEffect
+        if (jobsViewModel.openJobsFirst) {
             tabChosen = true
-            val preferDownloads = (state.activeDownloads > 0 && state.activeUploads == 0) ||
-                (state.uploads.isEmpty() && state.downloads.isNotEmpty())
-            if (preferDownloads) tab = 1
+            tab = JOBS_TAB
+            return@LaunchedEffect
+        }
+        if (!jobs.loaded) return@LaunchedEffect
+        tabChosen = true
+        val transfersActive = state.activeUploads > 0 || state.activeDownloads > 0
+        val preferJobs = (jobs.hasActive && !transfersActive) ||
+            (state.uploads.isEmpty() && state.downloads.isEmpty() && jobs.rows.isNotEmpty())
+        val preferDownloads = (state.activeDownloads > 0 && state.activeUploads == 0) ||
+            (state.uploads.isEmpty() && state.downloads.isNotEmpty())
+        when {
+            preferJobs -> tab = JOBS_TAB
+            preferDownloads -> tab = 1
         }
     }
-    LaunchedEffect(viewModel) {
-        viewModel.effects.collect { effect ->
+    fun selectTab(index: Int) {
+        tabChosen = true
+        tab = index
+    }
+    LaunchedEffect(viewModel, jobsViewModel) {
+        val effects = merge(viewModel.effects, jobsViewModel.effects)
+        effects.collect { effect ->
             when (effect) {
                 TransfersEffect.NoAppToOpen -> launch { snackbar.showSnackbar(context.getString(R.string.transfer_msg_no_app)) }
                 is TransfersEffect.OpenFolder -> currentOpenFolder(effect.folderId)
+                is TransfersEffect.Message -> launch { snackbar.showSnackbar(effect.text) }
             }
         }
     }
@@ -119,8 +146,12 @@ fun TransfersScreen(
                     }
                 },
                 actions = {
-                    if (state.hasDone) {
-                        IconButton(onClick = viewModel::clearFinished) {
+                    // 一个按钮清本地已完成的上传 / 下载,和服务端已结束的后台任务记录(与网页端一致)
+                    if (state.hasDone || jobs.hasFinished) {
+                        IconButton(onClick = {
+                            viewModel.clearFinished()
+                            jobsViewModel.clearFinished()
+                        }) {
                             Icon(Icons.Outlined.CleaningServices, contentDescription = stringResource(R.string.transfers_clear_done))
                         }
                     }
@@ -136,18 +167,26 @@ fun TransfersScreen(
             PrimaryTabRow(selectedTabIndex = tab) {
                 Tab(
                     selected = tab == 0,
-                    onClick = { tab = 0 },
+                    onClick = { selectTab(0) },
                     text = { Text(tabLabel(stringResource(R.string.transfers_tab_uploads), state.activeUploads)) },
                     modifier = Modifier.testTag("transfers_tab_uploads"),
                 )
                 Tab(
                     selected = tab == 1,
-                    onClick = { tab = 1 },
+                    onClick = { selectTab(1) },
                     text = { Text(tabLabel(stringResource(R.string.transfers_tab_downloads), state.activeDownloads)) },
                     modifier = Modifier.testTag("transfers_tab_downloads"),
                 )
+                Tab(
+                    selected = tab == JOBS_TAB,
+                    onClick = { selectTab(JOBS_TAB) },
+                    text = { Text(tabLabel(stringResource(R.string.jobs_tab), jobs.activeCount), maxLines = 1) },
+                    modifier = Modifier.testTag("transfers_tab_jobs"),
+                )
             }
-            if (tab == 0) {
+            if (tab == JOBS_TAB) {
+                JobsTab(jobs, jobsViewModel)
+            } else if (tab == 0) {
                 if (state.loaded && state.uploads.isEmpty()) {
                     EmptyState(title = stringResource(R.string.transfers_empty_uploads), icon = Icons.Outlined.CloudUpload)
                 } else {
@@ -177,6 +216,9 @@ fun TransfersScreen(
 }
 
 private fun tabLabel(label: String, active: Int) = if (active > 0) "$label ($active)" else label
+
+/** 第三栏:后台任务(离线下载、解压) */
+private const val JOBS_TAB = 2
 
 @Composable
 private fun UploadItem(row: UploadRow, viewModel: TransfersViewModel) {
@@ -365,6 +407,6 @@ private fun TransferRow(
 }
 
 @Composable
-private fun ActionIcon(icon: ImageVector, label: Int, onClick: () -> Unit) {
+internal fun ActionIcon(icon: ImageVector, label: Int, onClick: () -> Unit) {
     IconButton(onClick = onClick) { Icon(icon, contentDescription = stringResource(label)) }
 }

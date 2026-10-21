@@ -103,6 +103,13 @@ import xyz.yophon.gopan.core.ui.components.LoadingState
 import xyz.yophon.gopan.core.ui.format.formatRelativeTime
 import xyz.yophon.gopan.core.ui.transfer.rememberTransferPermissions
 import xyz.yophon.gopan.core.ui.transfer.rememberUploadPickers
+import xyz.yophon.gopan.feature.fetch.FetchDialog
+import xyz.yophon.gopan.feature.fetch.FetchEffect
+import xyz.yophon.gopan.feature.fetch.FetchViewModel
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.ui.platform.testTag
 import java.time.Instant
 
 /**
@@ -120,8 +127,11 @@ fun DriveScreen(
     onOpenPreview: (nodeId: String) -> Unit,
     onBack: (() -> Unit)?,
     viewModel: DriveViewModel = hiltViewModel(),
+    fetchViewModel: FetchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val fetch by fetchViewModel.state.collectAsStateWithLifecycle()
+    val currentOnOpenTransfers by rememberUpdatedState(onOpenTransfers)
     val dialog by viewModel.dialog.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val inputError by viewModel.inputError.collectAsStateWithLifecycle()
@@ -152,6 +162,26 @@ fun DriveScreen(
             }
         }
     }
+    // 离线下载:提交成功提示「已加入后台任务」,点「查看」进传输列表的后台任务栏
+    LaunchedEffect(fetchViewModel) {
+        fetchViewModel.effects.collect { effect ->
+            when (effect) {
+                is FetchEffect.Queued -> launch {
+                    val result = snackbarHostState.showSnackbar(
+                        message = context.getString(R.string.fetch_msg_queued, effect.count),
+                        actionLabel = context.getString(R.string.fetch_action_view),
+                        duration = SnackbarDuration.Long,
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        fetchViewModel.showJobs()
+                        currentOnOpenTransfers()
+                    }
+                }
+                is FetchEffect.QueuedToChat -> Unit
+                is FetchEffect.Error -> launch { snackbarHostState.showSnackbar(effect.message) }
+            }
+        }
+    }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
     BackHandler(enabled = state.selectionMode) { viewModel.clearSelection() }
     // 侧栏开着时返回先收起侧栏
@@ -171,7 +201,11 @@ fun DriveScreen(
             },
             floatingActionButton = {
                 if (!state.selectionMode) {
-                    FloatingActionButton(onClick = viewModel::openFabMenu) {
+                    FloatingActionButton(onClick = {
+                        // 离线下载开关进页面时没问到(断网)的话补问,问到了菜单里就多出「离线下载」
+                        fetchViewModel.checkEnabled()
+                        viewModel.openFabMenu()
+                    }) {
                         Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.drive_fab_add))
                     }
                 }
@@ -207,6 +241,14 @@ fun DriveScreen(
                 viewModel.dismissDialog()
                 pickers.takePhoto()
             },
+            onFetch = if (fetch.enabled) {
+                {
+                    viewModel.dismissDialog()
+                    fetchViewModel.openDialog()
+                }
+            } else {
+                null
+            },
             onDismiss = viewModel::dismissDialog,
         )
         DriveDialog.CreateFolder -> NodeNameDialog(
@@ -220,6 +262,19 @@ fun DriveScreen(
             onDismiss = viewModel::dismissDialog,
         )
         else -> NodeDialogHost(dialog = d, busy = busy, inputError = inputError, viewModel = viewModel)
+    }
+    if (fetch.dialogOpen) {
+        FetchDialog(
+            state = fetch,
+            folderName = if (state.isRoot) {
+                stringResource(R.string.drive_title_root)
+            } else {
+                state.crumbs.lastOrNull()?.name?.ifEmpty { null } ?: stringResource(R.string.drive_crumb_loading)
+            },
+            onTextChange = fetchViewModel::setText,
+            onSubmit = { fetchViewModel.submit(viewModel.parentId) },
+            onDismiss = fetchViewModel::dismissDialog,
+        )
     }
 }
 
@@ -585,6 +640,8 @@ private fun FabMenuSheet(
     onUploadFiles: () -> Unit,
     onUploadMedia: () -> Unit,
     onCamera: () -> Unit,
+    /** 离线下载;本站没开时为 null(不显示) */
+    onFetch: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -613,6 +670,13 @@ private fun FabMenuSheet(
             leadingContent = { Icon(Icons.Outlined.PhotoCamera, contentDescription = null) },
             headlineContent = { Text(stringResource(R.string.drive_fab_camera)) },
         )
+        if (onFetch != null) {
+            ListItem(
+                modifier = Modifier.clickable { pick(onFetch) }.testTag("drive_fab_fetch"),
+                leadingContent = { Icon(Icons.Outlined.CloudDownload, contentDescription = null) },
+                headlineContent = { Text(stringResource(R.string.fetch_fab)) },
+            )
+        }
         Spacer(Modifier.height(16.dp).navigationBarsPadding())
     }
 }

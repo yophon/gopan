@@ -97,6 +97,8 @@ app/src/main/kotlin/xyz/yophon/gopan/
   core/data/collect/             FileRequestsRepository:收集链接(doc/20)的属主侧——列表、新建、修改、结束、标已读、收件记录
   core/data/security/            SecurityRepository:登录设备、WebDAV 应用密码、MCP API Key / OAuth 授权 / 目录范围 / 操作记录
   core/data/admin/               AdminRepository:用户列表、概览、建号、配额、禁用、重置密码、失败任务重排
+  core/data/jobs/                后台任务(doc/21):JobsRepository(我的任务、离线下载开关(本次登录缓存)、提交链接、取消、重试、清除已结束)、
+                                 JobsLogic(链接识别、列表口径、进度与状态文案、速度,与网页端 utils/jobs.ts 一致的纯函数)、JobsModule
   core/documents/                系统「文件」App 里的 gopan,见下文「DocumentsProvider」:GopanDocumentsProvider、DocumentCache(按需下载的读缓存)、
                                  PendingDocuments(别的应用写进来的新文件 → 上传队列)、DocumentsModule(登出时清理、登录态变化时刷新根目录)
   core/app/                      UpdateRepository(站点发布的安装包:检查、下载、校验)、CrashLog(未捕获异常写本地日志)
@@ -124,7 +126,9 @@ app/src/main/kotlin/xyz/yophon/gopan/
   feature/account/security/      登录设备、WebDAV 应用密码、Agent 接入三页(SecurityScreens / SecurityViewModels)与 MCP 权限中文名(McpScopes)
   feature/chat/                  传输助手:ChatScreen / ChatItems(消息、九宫格、上传卡片)/ ChatViewModel(轮询、搜索定位、乐观发送、分享落地)/
                                  ChatLogic(按 id 合并、按天分组、网格、链接识别,纯函数)
-  feature/transfers/             传输列表(TransfersScreen / TransfersViewModel)与传输设置对话框
+  feature/transfers/             传输列表(TransfersScreen / TransfersViewModel:上传、下载两栏)与传输设置对话框;
+                                 「后台任务」栏(JobsTab / JobsViewModel:可见且有进行中的任务时每 2 秒轮询,取消 / 重试 / 打开所在位置)
+  feature/fetch/                 离线下载:文件页「+」→「离线下载」对话框与传输助手草稿上方的「离线下载这个链接」提示条(FetchUi / FetchViewModel)
   feature/shares/                「分享」tab(SharesScreen:「分享」「收集」两个标签;我的分享与操作、访问记录)与新建分享对话框(ShareCreate,文件页 / 搜索页 / 预览共用)
   feature/collect/               收集文件:「收集」标签的列表与操作(FileRequestsTab)、新建 / 修改对话框(FileRequestEdit,文件页 / 搜索页文件夹的「收集文件」共用)、
                                  收件记录(FileRequestUploads,路由 Routes.FileRequestUploads 挂在「分享」tab 的嵌套图里)

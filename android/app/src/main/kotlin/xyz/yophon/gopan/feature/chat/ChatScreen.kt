@@ -109,6 +109,10 @@ import xyz.yophon.gopan.core.ui.components.LoadingState
 import xyz.yophon.gopan.core.ui.transfer.rememberTransferPermissions
 import xyz.yophon.gopan.core.ui.transfer.rememberUploadPickers
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
+import xyz.yophon.gopan.feature.fetch.ChatFetchBanner
+import xyz.yophon.gopan.feature.fetch.FetchEffect
+import xyz.yophon.gopan.feature.fetch.FetchViewModel
+import xyz.yophon.gopan.feature.fetch.chatFetchOffer
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -123,6 +127,7 @@ fun ChatScreen(
     onOpenTransfers: () -> Unit,
     onOpenPreview: (String) -> Unit,
     viewModel: ChatViewModel = hiltViewModel(),
+    fetchViewModel: FetchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val query by viewModel.searchQuery.collectAsStateWithLifecycle()
@@ -205,6 +210,17 @@ fun ChatScreen(
                 is ChatEffect.OpenFolder -> currentOnOpenFolder(effect.folderId)
                 is ChatEffect.OpenPreview -> currentOnOpenPreview(effect.nodeId)
                 ChatEffect.TransferQueued -> permissions.onTransferQueued()
+            }
+        }
+    }
+
+    // 草稿里的链接交给服务器离线下载:存进传输助手文件夹,下完会话里自动出现文件卡片(轮询带回来)
+    LaunchedEffect(fetchViewModel) {
+        fetchViewModel.effects.collect { effect ->
+            when (effect) {
+                is FetchEffect.QueuedToChat -> launch { snackbar.showSnackbar(context.getString(R.string.fetch_chat_queued)) }
+                is FetchEffect.Error -> launch { snackbar.showSnackbar(effect.message) }
+                is FetchEffect.Queued -> Unit
             }
         }
     }
@@ -323,6 +339,7 @@ fun ChatScreen(
                 }
             }
             if (!state.searchOpen) {
+                DraftFetchBanner(viewModel, fetchViewModel)
                 InputBar(
                     viewModel = viewModel,
                     onSend = viewModel::send,
@@ -474,6 +491,26 @@ private fun Banner(text: String, progress: Boolean = false, icon: Boolean = fals
             Text(text, style = MaterialTheme.typography.bodySmall)
         }
     }
+}
+
+/**
+ * 草稿里有 http(s) 链接(多半是别的 App 分享进来的)时,输入框上方的「离线下载这个链接」。
+ * 单独一个组合函数:草稿每改一个字只重组这一条,不带着整个会话列表重组。
+ */
+@Composable
+private fun DraftFetchBanner(viewModel: ChatViewModel, fetchViewModel: FetchViewModel) {
+    val draft by viewModel.draft.collectAsStateWithLifecycle()
+    val fetch by fetchViewModel.state.collectAsStateWithLifecycle()
+    val hasLinks = remember(draft) { chatFetchOffer(draft) != null }
+    // 草稿里出现链接时,开关还没问到(进页面时断网)就补问一次
+    LaunchedEffect(hasLinks) { if (hasLinks) fetchViewModel.checkEnabled() }
+    val offer = remember(draft, fetch.enabled, fetch.chatHandled) { fetch.chatOffer(draft) } ?: return
+    ChatFetchBanner(
+        offer = offer,
+        busy = fetch.submitting,
+        onFetch = { fetchViewModel.submitToChat(draft) },
+        onDismiss = { fetchViewModel.dismissChatOffer(draft) },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

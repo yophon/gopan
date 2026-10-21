@@ -19,6 +19,12 @@ interface NodesRepository {
     val version: StateFlow<Long>
 
     /**
+     * 别处(服务端的后台任务:离线下载、解压)往网盘里加了东西:[version] +1,列表页回到前台时静默刷新。
+     * 默认什么都不做(测试用的假仓库不必实现)。
+     */
+    fun markChanged() {}
+
+    /**
      * 目录首页(无游标)。联网成功 → 写缓存、返回 fresh;
      * 请求失败而本地有这个目录的缓存 → 返回缓存并标记 [Listing.fromCache];
      * 失败且无缓存 → 抛出原错误。UNAUTHENTICATED / NOT_FOUND 这类"内容确实不可用"的错误不回退缓存。

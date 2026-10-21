@@ -128,6 +128,7 @@ class ChatLogicTest {
     fun `source labels`() {
         assertThat(ChatLogic.sourceLabel("mcp")).isEqualTo("Agent")
         assertThat(ChatLogic.sourceLabel("webdav")).isEqualTo("WebDAV")
+        assertThat(ChatLogic.sourceLabel("fetch")).isEqualTo("离线下载")
         assertThat(ChatLogic.sourceLabel("web")).isNull()
         assertThat(ChatLogic.sourceLabel("android")).isNull()
     }

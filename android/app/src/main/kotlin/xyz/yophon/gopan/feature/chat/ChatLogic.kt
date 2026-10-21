@@ -147,10 +147,11 @@ object ChatLogic {
         else -> day.toString()
     }
 
-    /** mcp → Agent,webdav → WebDAV,其余(web、App)不显示 */
+    /** mcp → Agent,webdav → WebDAV,fetch → 离线下载(服务器下完自动发进来的),其余(web、App)不显示 */
     fun sourceLabel(source: String): String? = when (source) {
         "mcp" -> "Agent"
         "webdav" -> "WebDAV"
+        "fetch" -> "离线下载"
         else -> null
     }
 

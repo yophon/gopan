@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 离线下载与后台任务(doc/21):文件页入口、传输助手提示条、传输列表的「后台任务」栏 -->
+<resources>
+    <!-- 文件页「+」→ 离线下载 -->
+    <string name="fetch_fab">离线下载</string>
+    <string name="fetch_dialog_title">离线下载</string>
+    <string name="fetch_dialog_hint">粘贴文件的下载链接(一行一个,最多 %1$d 条),服务器会在后台下载到「%2$s」,关掉 App 也不影响。只支持 http / https 直链,网盘分享页和需要登录的链接下不了。</string>
+    <string name="fetch_dialog_placeholder">https://example.com/file.zip</string>
+    <string name="fetch_count_none">没有识别到链接</string>
+    <string name="fetch_count">识别到 %1$d 条链接</string>
+    <string name="fetch_count_too_many">识别到 %1$d 条,一次最多 %2$d 条</string>
+    <string name="fetch_submit">开始下载</string>
+    <string name="fetch_msg_queued">已加入后台任务:%1$d 个链接</string>
+    <string name="fetch_action_view">查看</string>
+
+    <!-- 传输助手草稿上方的提示条 -->
+    <string name="fetch_chat_one">离线下载这个链接</string>
+    <string name="fetch_chat_many">离线下载这 %1$d 个链接</string>
+    <string name="fetch_chat_capped">离线下载前 %1$d 个链接(一次最多 %1$d 条)</string>
+    <string name="fetch_chat_dismiss">不用离线下载</string>
+    <string name="fetch_chat_queued">已开始离线下载,下完会出现在这里</string>
+
+    <!-- 传输列表「后台任务」栏 -->
+    <string name="jobs_tab">后台任务</string>
+    <string name="jobs_empty">没有后台任务</string>
+    <string name="jobs_empty_desc">离线下载和解压在服务器上进行,关掉 App 也不影响</string>
+    <string name="jobs_kind_fetch">离线下载</string>
+    <string name="jobs_kind_extract">解压</string>
+    <string name="jobs_action_locate">打开所在位置</string>
+</resources>

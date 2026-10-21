@@ -56,6 +56,9 @@ sealed interface TransfersEffect {
     data object NoAppToOpen : TransfersEffect
 
     data class OpenFolder(val folderId: String?) : TransfersEffect
+
+    /** 后台任务的操作失败等提示 */
+    data class Message(val text: String) : TransfersEffect
 }
 
 /** 传输列表:上传 / 下载两栏,新任务在上;实时进度来自引擎内存(约 3 次/秒) */

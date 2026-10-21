@@ -260,6 +260,12 @@ class NodesRepositoryImplTest {
         repo.purgeTrash()
         assertThat(repo.version.value).isEqualTo(8)
 
+        // 后台任务(离线下载、解压)往网盘里加了东西:不请求服务端,只让列表页回到前台时刷新
+        val before = requests.size
+        repo.markChanged()
+        assertThat(repo.version.value).isEqualTo(9)
+        assertThat(requests).hasSize(before)
+
         val move = requests.first { it.first == "MoveNodes" }.second
         assertThat(move["ids"]?.jsonArray?.map { it.jsonPrimitive.content }).containsExactly("x", "y").inOrder()
         assertThat(move.containsKey("targetParentId")).isTrue()

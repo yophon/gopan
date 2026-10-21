@@ -1,0 +1,61 @@
+# 后台任务(doc/21):离线下载、解压。字段与 web/src/api/operations/jobs.graphql 一致(去掉了 App 用不到的 attempts / source / startedAt)。
+# 片段起名 BackgroundJobFields:同一 service 里片段名必须唯一,别的 operations 文件引 Job 时自己挑字段即可。
+
+fragment BackgroundJobFields on Job {
+  id
+  kind
+  status
+  title
+  url
+  parentId
+  bytesDone
+  bytesTotal
+  filesDone
+  filesTotal
+  filesSkipped
+  errorCode
+  errorMessage
+  createdAt
+  finishedAt
+  result {
+    id
+    name
+    kind
+    parentId
+  }
+}
+
+query MyJobs($active: Boolean, $cursor: String) {
+  myJobs(active: $active, cursor: $cursor) {
+    items {
+      ...BackgroundJobFields
+    }
+    nextCursor
+  }
+}
+
+query FetchEnabled {
+  fetchEnabled
+}
+
+mutation FetchUrls($urls: [String!]!, $parentId: ID) {
+  fetchUrls(urls: $urls, parentId: $parentId) {
+    ...BackgroundJobFields
+  }
+}
+
+mutation CancelJob($id: ID!) {
+  cancelJob(id: $id) {
+    ...BackgroundJobFields
+  }
+}
+
+mutation RetryJob($id: ID!) {
+  retryJob(id: $id) {
+    ...BackgroundJobFields
+  }
+}
+
+mutation ClearFinishedJobs {
+  clearFinishedJobs
+}

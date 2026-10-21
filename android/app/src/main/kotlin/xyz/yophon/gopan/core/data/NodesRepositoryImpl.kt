@@ -183,6 +183,8 @@ class NodesRepositoryImpl @Inject constructor(
         bump()
     }
 
+    override fun markChanged() = bump()
+
     /** 登出时清掉内存里记住的节点(Room 缓存由 [ListingCache.clear] 清) */
     fun clearMemory() {
         synchronized(knownFolders) { knownFolders.clear() }
