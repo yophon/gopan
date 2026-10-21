@@ -1,0 +1,38 @@
+name: Image
+
+# 按完整 Dockerfile 构建生产镜像(linux/amd64),导出成 artifact,给小内存服务器 docker load。
+# 小机器上不能跑这个构建(vite + go build 会触发 OOM,见 doc/10);平时上线走 Dockerfile.prebuilt,
+# 它每次在旧镜像上叠一层二进制,攒多了用这里重建一次(doc/09「升级」)。
+#   gh workflow run image.yml && gh run watch
+#   gh run download <run-id> -n gopan-image-<sha>     → gopan-image.tar.gz
+on:
+  workflow_dispatch:
+
+jobs:
+  image:
+    name: build image (Dockerfile, linux/amd64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          docker buildx build --platform linux/amd64 \
+            --label org.opencontainers.image.revision=${{ github.sha }} \
+            -t gopan:latest --load .
+
+      - name: Check runtime tools
+        run: |
+          docker run --rm --entrypoint sh gopan:latest -c \
+            'test -x /usr/local/bin/gopan && command -v pdftotext && ffmpeg -version | head -1 && ffprobe -version | head -1 && id'
+          docker images gopan:latest
+
+      - name: Save
+        run: docker save gopan:latest | gzip -1 > gopan-image.tar.gz && ls -l gopan-image.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gopan-image-${{ github.sha }}
+          path: gopan-image.tar.gz
+          retention-days: 3
+          compression-level: 0
