@@ -42,6 +42,7 @@ var textExts = map[string]bool{
 	".toml": true, ".ini": true, ".csv": true, ".go": true, ".js": true, ".ts": true, ".py": true,
 	".java": true, ".c": true, ".cpp": true, ".h": true, ".rs": true, ".sh": true, ".sql": true,
 	".html": true, ".css": true, ".vue": true, ".dart": true, ".kt": true, ".swift": true,
+	".srt": true, ".ass": true, ".ssa": true, ".vtt": true,
 }
 
 // ClassifyPreview 按 mime + 扩展名归类。

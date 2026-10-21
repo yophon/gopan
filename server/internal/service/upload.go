@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"mime"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -454,9 +453,3 @@ func (s *Uploads) ReadText(ctx context.Context, owner, nodeID uuid.UUID, offset,
 	return string(b), offset+int64(len(b)) >= *row.BlobSize, nil
 }
 
-func mimeByName(name string) string {
-	if t := mime.TypeByExtension(filepath.Ext(name)); t != "" {
-		return t
-	}
-	return "application/octet-stream"
-}

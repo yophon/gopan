@@ -9,6 +9,8 @@ type User {
   quotaBytes: Int64!
   usedBytes: Int64!
   isAdmin: Boolean!
+  # 未读通知数(doc/22 三);网页随 30 秒一次的 me 轮询带回
+  unreadNotifications: Int!
 }
 
 # 一个登录设备(按 refresh token family 分组)。
@@ -131,6 +133,8 @@ type Node {
   subtreeBytes: Int64
   subtreeCount: Int64
   statsStale: Boolean
+  # 播放进度(doc/22 二.3):音视频、PDF;没记过、访客、文件夹为 null。每个节点一次查询,只在单个节点上取,列表里别请求
+  playProgress: PlayProgress
 }
 
 # ARCHIVE:压缩包(zip / 7z / rar / tar.*),用 archiveInfo / archiveEntries 浏览
@@ -143,6 +147,252 @@ type PreviewInfo {
   contentUrl: String
   status: TaskStatus
   durationSec: Int
+  # 外挂字幕(doc/22 二.2):只有 VIDEO 在 node(id) / requestPreview 里给出,列表里恒为空
+  subtitles: [SubtitleTrack!]!
+}
+
+# 同文件夹里与视频同名的字幕文件。内容一律转成 WebVTT:GET /sub/{nodeId}?token=<access>
+# (也接受 Authorization 头;分享访客在分享范围内可用)
+type SubtitleTrack {
+  nodeId: ID!
+  name: String!
+  # 显示名:简体中文 / 繁体中文 / English / 日本語 …;认不出时是文件名里的标记或「字幕」
+  label: String!
+  # BCP 47:zh-Hans / zh-Hant / zh / en / ja / ko …;认不出为空串
+  lang: String!
+  # 默认选中的一条(中文优先,其次第一条)
+  default: Boolean!
+}
+
+# ---------- 影音(doc/22 二) ----------
+
+type PlayProgress {
+  # 音视频是秒;PDF 是页码(从 1 开始)
+  position: Float!
+  # 音视频是总秒数;PDF 是总页数
+  duration: Float!
+  # 看完了(剩余不到 3% 且不到 20 秒,或翻到最后一页):下次从头开始
+  finished: Boolean!
+  updatedAt: Time!
+}
+
+type RecentPlay {
+  node: Node!
+  progress: PlayProgress!
+}
+
+# ---------- 通知(doc/22 三) ----------
+
+enum NotificationLevel { INFO, WARN, ALERT }
+
+# 点开通知跳到哪。NODE:id 是文件 / 文件夹,parentId 是所在文件夹(null = 根目录);
+# FILE_REQUEST / LINK:id 是收集链接 / 直链;JOBS:后台任务列表;SESSIONS:登录设备;CREDENTIALS:应用密码与 API Key;ADMIN:管理端
+enum NotificationTargetKind { NODE, FILE_REQUEST, LINK, JOBS, SESSIONS, CREDENTIALS, ADMIN }
+
+type NotificationTarget {
+  kind: NotificationTargetKind!
+  id: ID
+  parentId: ID
+}
+
+type Notification {
+  id: ID!
+  # 事件类型,见 notifyEventKinds
+  kind: String!
+  level: NotificationLevel!
+  title: String!
+  body: String!
+  # 同一件事 30 分钟内重复发生时合并,这里是合并了几次
+  count: Int!
+  target: NotificationTarget
+  createdAt: Time!
+  # 最后一次合并的时刻;没合并过等于 createdAt
+  updatedAt: Time!
+  read: Boolean!
+}
+
+type NotificationPage {
+  items: [Notification!]!
+  nextCursor: String
+}
+
+# 事件类型:collect_upload / collect_full / job_done / job_failed / quota / login / credential / link_alert / backup
+type NotifyEventKind {
+  kind: String!
+  label: String!
+  # 新建渠道时默认勾上
+  defaultPush: Boolean!
+  # 只发给管理员(备份)
+  adminOnly: Boolean!
+}
+
+enum NotifyChannelKind { WEBHOOK, NTFY, BARK, TELEGRAM }
+
+# 推送渠道。密钥类字段只写不读:webhook 的签名密钥、ntfy 的访问令牌、bark 的 device key、telegram 的 bot token
+type NotifyChannel {
+  id: ID!
+  kind: NotifyChannelKind!
+  name: String!
+  enabled: Boolean!
+  # 推哪些事件(NotifyEventKind.kind)
+  events: [String!]!
+  # webhook:地址;ntfy / bark:服务器;telegram:不用
+  url: String!
+  # ntfy:topic;telegram:chat id;其余不用
+  topic: String!
+  hasSecret: Boolean!
+  # 密钥末 4 位,没有为空串
+  secretHint: String!
+  lastOkAt: Time
+  lastError: String
+  lastErrorAt: Time
+  createdAt: Time!
+}
+
+# 整表单提交。secret 不传 = 保持原值(新建时即没有);传空串 = 清除
+input NotifyChannelInput {
+  kind: NotifyChannelKind!
+  name: String!
+  enabled: Boolean!
+  events: [String!]!
+  url: String
+  topic: String
+  secret: String
+}
+
+# ---------- 直链与图床(doc/22 四) ----------
+
+# PAUSED:手动暂停或超了每天的流量上限(见 pauseReason);EXPIRED:过了有效期;
+# UNAVAILABLE:文件在回收站、属主被禁用,或全站本月流量用完 / 管理员关了直链
+enum LinkStatus { ACTIVE, PAUSED, EXPIRED, UNAVAILABLE }
+
+type LinkUsage {
+  hits: Int64!
+  bytes: Int64!
+  # 被来源白名单、限流、上限拦下的次数
+  blocked: Int64!
+}
+
+type DirectLink {
+  id: ID!
+  token: String!
+  # 站内路径 /x/<token>/<当前文件名>,前面拼上站点地址即直链
+  path: String!
+  # 完整地址(GOPAN_PUBLIC_URL + path);没配站点地址时与 path 相同
+  url: String!
+  nodeId: ID!
+  name: String!
+  mime: String
+  size: Int64
+  status: LinkStatus!
+  # manual(手动)/ daily_cap(超了当天上限,次日自动恢复)/ anomaly(异常时自动暂停)
+  pauseReason: String
+  # web / android / api(图床接口)/ mcp
+  source: String!
+  createdAt: Time!
+  expiresAt: Time
+  # 来源白名单;null = 用默认规则(linkPrefs)
+  refererHosts: [String!]
+  # 允许没有来源的访问(直接打开、App 里看);null = 用默认规则
+  allowNoReferer: Boolean
+  # 每天的流量上限;null = 用全站默认(linkPrefs.dailyBytesCapDefault)
+  dailyBytesCap: Int64
+  # 检测到异常时自动暂停(默认只提醒)
+  autoPause: Boolean!
+  # JPEG 里带拍摄位置(生成直链时检测)
+  hasGps: Boolean!
+  hitsTotal: Int64!
+  bytesTotal: Int64!
+  lastHitAt: Time
+  # 今天(按 GOPAN_TZ)与近 30 天
+  today: LinkUsage!
+  last30Days: LinkUsage!
+}
+
+type DirectLinkPage {
+  items: [DirectLink!]!
+  nextCursor: String
+  total: Int!
+}
+
+type LinkHourStat {
+  hour: Time!
+  hits: Int64!
+  bytes: Int64!
+  blocked: Int64!
+  # 独立 IP 数(按小时)
+  ips: Int!
+}
+
+type LinkReferer {
+  # 来源站点;没有来源为空串,超出的合在「其他」(host = "*")
+  host: String!
+  hits: Int64!
+  bytes: Int64!
+}
+
+# 访问明细(每条直链每小时最多记 200 条,超出只计数)
+type LinkHit {
+  at: Time!
+  ip: String!
+  userAgent: String!
+  referer: String!
+  status: Int!
+  bytes: Int64!
+}
+
+type LinkHitPage {
+  items: [LinkHit!]!
+  nextCursor: String
+}
+
+# 每人一份的默认规则,以及全站的上限与本月用量(只读)
+type LinkPrefs {
+  refererHosts: [String!]!
+  allowNoReferer: Boolean!
+  # 图床接口与网页粘贴上传存到这里(按「年-月」分子文件夹,按需创建)
+  imageFolder: String!
+  # 图床上传时抹掉 JPEG 的 GPS 位置
+  stripGps: Boolean!
+  dailyBytesCapDefault: Int64!
+  monthlyBytesCap: Int64!
+  # 全站本月直链流量
+  monthlyBytesUsed: Int64!
+}
+
+input LinkPrefsInput {
+  refererHosts: [String!]!
+  allowNoReferer: Boolean!
+  # 网盘里的路径,如 /图床
+  imageFolder: String!
+  stripGps: Boolean!
+}
+
+# 整表单提交:refererHosts / allowNoReferer / dailyBytesCap 为 null = 用默认,expiresAt 为 null = 永久
+input DirectLinkInput {
+  refererHosts: [String!]
+  allowNoReferer: Boolean
+  dailyBytesCap: Int64
+  expiresAt: Time
+  autoPause: Boolean!
+}
+
+type AdminLink {
+  id: ID!
+  owner: String!
+  name: String!
+  path: String!
+  status: LinkStatus!
+  monthHits: Int64!
+  monthBytes: Int64!
+}
+
+type AdminLinkStats {
+  monthHits: Int64!
+  monthBytes: Int64!
+  monthlyBytesCap: Int64!
+  # 本月流量前 10
+  top: [AdminLink!]!
 }
 
 # UNAVAILABLE:该派生能力未在本次部署中启用(如未部署 Gotenberg 时的 Office 转换)
@@ -471,6 +721,33 @@ type Query {
   # 本站是否开了离线下载(GOPAN_FETCH)
   fetchEnabled: Boolean!
 
+  # 影音:同文件夹里同类(视频或音频)的文件,按自然顺序(第2集在第10集前),最多 1000 个,含 nodeId 本身。
+  # 分享访客在分享范围内可用
+  playlist(nodeId: ID!): [Node!]!
+  # 没看完的,最近的在前
+  recentPlays(limit: Int = 20): [RecentPlay!]!
+
+  # 通知:新的在前
+  notifications(cursor: String, unreadOnly: Boolean = false): NotificationPage!
+  notifyChannels: [NotifyChannel!]!
+  # 管理员能看到 adminOnly 的事件,其他人看不到
+  notifyEventKinds: [NotifyEventKind!]!
+
+  # 直链:新的在前
+  myLinks(cursor: String): DirectLinkPage!
+  link(id: ID!): DirectLink!
+  # 某个文件当前有效的直链;没有为 null(不创建)
+  nodeLink(nodeId: ID!): DirectLink
+  # 按小时的统计,hours 最多 2160(90 天)
+  linkStats(id: ID!, hours: Int = 168): [LinkHourStat!]!
+  # 来源排行,days 最多 90
+  linkReferers(id: ID!, days: Int = 30): [LinkReferer!]!
+  linkHits(id: ID!, cursor: String): LinkHitPage!
+  linkPrefs: LinkPrefs!
+  # 本站是否开了直链(GOPAN_LINKS)
+  linksEnabled: Boolean!
+  adminLinkStats: AdminLinkStats!
+
   adminUsers: [AdminUser!]!
   adminOverview: AdminOverview!
 }
@@ -561,6 +838,31 @@ type Mutation {
   retryJob(id: ID!): Job!
   # 清掉已结束的任务记录(不动下好的文件),返回清掉的条数
   clearFinishedJobs: Int!
+
+  # 影音:播放中每 15 秒、暂停、关闭时报一次;PDF 翻页后报。
+  # 不记(5 分钟以下的音视频、3 页以下的 PDF、访客)时返回 null
+  saveProgress(nodeId: ID!, position: Float!, duration: Float!): PlayProgress
+  # 从「最近播放」里去掉
+  clearProgress(nodeId: ID!): Boolean!
+
+  # 通知:ids 为空 = 全部标为已读;返回标记的条数
+  markNotificationsRead(ids: [ID!]): Int!
+  # 删除全部通知,返回删除的条数
+  clearNotifications: Int!
+  createNotifyChannel(input: NotifyChannelInput!): NotifyChannel!
+  updateNotifyChannel(id: ID!, input: NotifyChannelInput!): NotifyChannel!
+  deleteNotifyChannel(id: ID!): Boolean!
+  # 立即发一条测试消息;失败时报 NOTIFY_FAILED 并带上对方的回应
+  testNotifyChannel(id: ID!): Boolean!
+
+  # 直链:每个文件同时只有一条有效直链,重复调用返回已有的;一次最多 100 个
+  createLinks(nodeIds: [ID!]!): [DirectLink!]!
+  updateLink(id: ID!, input: DirectLinkInput!): DirectLink!
+  pauseLink(id: ID!, paused: Boolean!): DirectLink!
+  revokeLink(id: ID!): Boolean!
+  setLinkPrefs(input: LinkPrefsInput!): LinkPrefs!
+  adminPauseLink(id: ID!, paused: Boolean!): Boolean!
+  adminRevokeLink(id: ID!): Boolean!
 
   adminCreateUser(username: String!, password: String!, quotaBytes: Int64): AdminUser!
   adminSetQuota(userId: ID!, quotaBytes: Int64!): AdminUser!

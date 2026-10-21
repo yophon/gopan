@@ -10,6 +10,23 @@ import (
 	"time"
 )
 
+type AdminLink struct {
+	ID         string     `json:"id"`
+	Owner      string     `json:"owner"`
+	Name       string     `json:"name"`
+	Path       string     `json:"path"`
+	Status     LinkStatus `json:"status"`
+	MonthHits  int64      `json:"monthHits"`
+	MonthBytes int64      `json:"monthBytes"`
+}
+
+type AdminLinkStats struct {
+	MonthHits       int64        `json:"monthHits"`
+	MonthBytes      int64        `json:"monthBytes"`
+	MonthlyBytesCap int64        `json:"monthlyBytesCap"`
+	Top             []*AdminLink `json:"top"`
+}
+
 type AdminOverview struct {
 	UserCount      int                `json:"userCount"`
 	TotalUsedBytes int64              `json:"totalUsedBytes"`
@@ -113,6 +130,46 @@ type ContentIndexStats struct {
 	TextBytes   int64 `json:"textBytes"`
 }
 
+type DirectLink struct {
+	ID             string     `json:"id"`
+	Token          string     `json:"token"`
+	Path           string     `json:"path"`
+	URL            string     `json:"url"`
+	NodeID         string     `json:"nodeId"`
+	Name           string     `json:"name"`
+	Mime           *string    `json:"mime,omitempty"`
+	Size           *int64     `json:"size,omitempty"`
+	Status         LinkStatus `json:"status"`
+	PauseReason    *string    `json:"pauseReason,omitempty"`
+	Source         string     `json:"source"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	ExpiresAt      *time.Time `json:"expiresAt,omitempty"`
+	RefererHosts   []string   `json:"refererHosts,omitempty"`
+	AllowNoReferer *bool      `json:"allowNoReferer,omitempty"`
+	DailyBytesCap  *int64     `json:"dailyBytesCap,omitempty"`
+	AutoPause      bool       `json:"autoPause"`
+	HasGps         bool       `json:"hasGps"`
+	HitsTotal      int64      `json:"hitsTotal"`
+	BytesTotal     int64      `json:"bytesTotal"`
+	LastHitAt      *time.Time `json:"lastHitAt,omitempty"`
+	Today          *LinkUsage `json:"today"`
+	Last30Days     *LinkUsage `json:"last30Days"`
+}
+
+type DirectLinkInput struct {
+	RefererHosts   []string   `json:"refererHosts,omitempty"`
+	AllowNoReferer *bool      `json:"allowNoReferer,omitempty"`
+	DailyBytesCap  *int64     `json:"dailyBytesCap,omitempty"`
+	ExpiresAt      *time.Time `json:"expiresAt,omitempty"`
+	AutoPause      bool       `json:"autoPause"`
+}
+
+type DirectLinkPage struct {
+	Items      []*DirectLink `json:"items"`
+	NextCursor *string       `json:"nextCursor,omitempty"`
+	Total      int           `json:"total"`
+}
+
 type FileRequest struct {
 	ID              string     `json:"id"`
 	Token           string     `json:"token"`
@@ -202,6 +259,57 @@ type JobPage struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
+type LinkHit struct {
+	At        time.Time `json:"at"`
+	IP        string    `json:"ip"`
+	UserAgent string    `json:"userAgent"`
+	Referer   string    `json:"referer"`
+	Status    int       `json:"status"`
+	Bytes     int64     `json:"bytes"`
+}
+
+type LinkHitPage struct {
+	Items      []*LinkHit `json:"items"`
+	NextCursor *string    `json:"nextCursor,omitempty"`
+}
+
+type LinkHourStat struct {
+	Hour    time.Time `json:"hour"`
+	Hits    int64     `json:"hits"`
+	Bytes   int64     `json:"bytes"`
+	Blocked int64     `json:"blocked"`
+	Ips     int       `json:"ips"`
+}
+
+type LinkPrefs struct {
+	RefererHosts         []string `json:"refererHosts"`
+	AllowNoReferer       bool     `json:"allowNoReferer"`
+	ImageFolder          string   `json:"imageFolder"`
+	StripGps             bool     `json:"stripGps"`
+	DailyBytesCapDefault int64    `json:"dailyBytesCapDefault"`
+	MonthlyBytesCap      int64    `json:"monthlyBytesCap"`
+	MonthlyBytesUsed     int64    `json:"monthlyBytesUsed"`
+}
+
+type LinkPrefsInput struct {
+	RefererHosts   []string `json:"refererHosts"`
+	AllowNoReferer bool     `json:"allowNoReferer"`
+	ImageFolder    string   `json:"imageFolder"`
+	StripGps       bool     `json:"stripGps"`
+}
+
+type LinkReferer struct {
+	Host  string `json:"host"`
+	Hits  int64  `json:"hits"`
+	Bytes int64  `json:"bytes"`
+}
+
+type LinkUsage struct {
+	Hits    int64 `json:"hits"`
+	Bytes   int64 `json:"bytes"`
+	Blocked int64 `json:"blocked"`
+}
+
 type MCPAPIKey struct {
 	ID         string     `json:"id"`
 	Name       string     `json:"name"`
@@ -237,22 +345,23 @@ type Mutation struct {
 }
 
 type Node struct {
-	ID           string       `json:"id"`
-	ParentID     *string      `json:"parentId,omitempty"`
-	Name         string       `json:"name"`
-	Kind         NodeKind     `json:"kind"`
-	Size         *int64       `json:"size,omitempty"`
-	Mime         *string      `json:"mime,omitempty"`
-	Sha256       *string      `json:"sha256,omitempty"`
-	CreatedAt    time.Time    `json:"createdAt"`
-	UpdatedAt    time.Time    `json:"updatedAt"`
-	DeletedAt    *time.Time   `json:"deletedAt,omitempty"`
-	PurgeAt      *time.Time   `json:"purgeAt,omitempty"`
-	Preview      *PreviewInfo `json:"preview"`
-	DownloadURL  *string      `json:"downloadUrl,omitempty"`
-	SubtreeBytes *int64       `json:"subtreeBytes,omitempty"`
-	SubtreeCount *int64       `json:"subtreeCount,omitempty"`
-	StatsStale   *bool        `json:"statsStale,omitempty"`
+	ID           string        `json:"id"`
+	ParentID     *string       `json:"parentId,omitempty"`
+	Name         string        `json:"name"`
+	Kind         NodeKind      `json:"kind"`
+	Size         *int64        `json:"size,omitempty"`
+	Mime         *string       `json:"mime,omitempty"`
+	Sha256       *string       `json:"sha256,omitempty"`
+	CreatedAt    time.Time     `json:"createdAt"`
+	UpdatedAt    time.Time     `json:"updatedAt"`
+	DeletedAt    *time.Time    `json:"deletedAt,omitempty"`
+	PurgeAt      *time.Time    `json:"purgeAt,omitempty"`
+	Preview      *PreviewInfo  `json:"preview"`
+	DownloadURL  *string       `json:"downloadUrl,omitempty"`
+	SubtreeBytes *int64        `json:"subtreeBytes,omitempty"`
+	SubtreeCount *int64        `json:"subtreeCount,omitempty"`
+	StatsStale   *bool         `json:"statsStale,omitempty"`
+	PlayProgress *PlayProgress `json:"playProgress,omitempty"`
 	// 由列表转换器置位:preview 走零查询乐观路径
 	InList bool `json:"-"`
 }
@@ -261,6 +370,63 @@ type NodePage struct {
 	Items      []*Node `json:"items"`
 	NextCursor *string `json:"nextCursor,omitempty"`
 	Total      int     `json:"total"`
+}
+
+type Notification struct {
+	ID        string              `json:"id"`
+	Kind      string              `json:"kind"`
+	Level     NotificationLevel   `json:"level"`
+	Title     string              `json:"title"`
+	Body      string              `json:"body"`
+	Count     int                 `json:"count"`
+	Target    *NotificationTarget `json:"target,omitempty"`
+	CreatedAt time.Time           `json:"createdAt"`
+	UpdatedAt time.Time           `json:"updatedAt"`
+	Read      bool                `json:"read"`
+}
+
+type NotificationPage struct {
+	Items      []*Notification `json:"items"`
+	NextCursor *string         `json:"nextCursor,omitempty"`
+}
+
+type NotificationTarget struct {
+	Kind     NotificationTargetKind `json:"kind"`
+	ID       *string                `json:"id,omitempty"`
+	ParentID *string                `json:"parentId,omitempty"`
+}
+
+type NotifyChannel struct {
+	ID          string            `json:"id"`
+	Kind        NotifyChannelKind `json:"kind"`
+	Name        string            `json:"name"`
+	Enabled     bool              `json:"enabled"`
+	Events      []string          `json:"events"`
+	URL         string            `json:"url"`
+	Topic       string            `json:"topic"`
+	HasSecret   bool              `json:"hasSecret"`
+	SecretHint  string            `json:"secretHint"`
+	LastOkAt    *time.Time        `json:"lastOkAt,omitempty"`
+	LastError   *string           `json:"lastError,omitempty"`
+	LastErrorAt *time.Time        `json:"lastErrorAt,omitempty"`
+	CreatedAt   time.Time         `json:"createdAt"`
+}
+
+type NotifyChannelInput struct {
+	Kind    NotifyChannelKind `json:"kind"`
+	Name    string            `json:"name"`
+	Enabled bool              `json:"enabled"`
+	Events  []string          `json:"events"`
+	URL     *string           `json:"url,omitempty"`
+	Topic   *string           `json:"topic,omitempty"`
+	Secret  *string           `json:"secret,omitempty"`
+}
+
+type NotifyEventKind struct {
+	Kind        string `json:"kind"`
+	Label       string `json:"label"`
+	DefaultPush bool   `json:"defaultPush"`
+	AdminOnly   bool   `json:"adminOnly"`
 }
 
 type OAuthAuthorizationInput struct {
@@ -301,16 +467,29 @@ type PartURL struct {
 	URL        string `json:"url"`
 }
 
+type PlayProgress struct {
+	Position  float64   `json:"position"`
+	Duration  float64   `json:"duration"`
+	Finished  bool      `json:"finished"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 type PreviewInfo struct {
-	Kind        PreviewKind `json:"kind"`
-	ThumbURL    *string     `json:"thumbUrl,omitempty"`
-	LargeURL    *string     `json:"largeUrl,omitempty"`
-	ContentURL  *string     `json:"contentUrl,omitempty"`
-	Status      *TaskStatus `json:"status,omitempty"`
-	DurationSec *int        `json:"durationSec,omitempty"`
+	Kind        PreviewKind      `json:"kind"`
+	ThumbURL    *string          `json:"thumbUrl,omitempty"`
+	LargeURL    *string          `json:"largeUrl,omitempty"`
+	ContentURL  *string          `json:"contentUrl,omitempty"`
+	Status      *TaskStatus      `json:"status,omitempty"`
+	DurationSec *int             `json:"durationSec,omitempty"`
+	Subtitles   []*SubtitleTrack `json:"subtitles"`
 }
 
 type Query struct {
+}
+
+type RecentPlay struct {
+	Node     *Node         `json:"node"`
+	Progress *PlayProgress `json:"progress"`
 }
 
 type Session struct {
@@ -360,6 +539,14 @@ type ShareVisitStats struct {
 	LastVisitKind *string    `json:"lastVisitKind,omitempty"`
 }
 
+type SubtitleTrack struct {
+	NodeID  string `json:"nodeId"`
+	Name    string `json:"name"`
+	Label   string `json:"label"`
+	Lang    string `json:"lang"`
+	Default bool   `json:"default"`
+}
+
 type TaskCount struct {
 	Status string `json:"status"`
 	Count  int    `json:"count"`
@@ -386,11 +573,12 @@ type UploadSession struct {
 }
 
 type User struct {
-	ID         string `json:"id"`
-	Username   string `json:"username"`
-	QuotaBytes int64  `json:"quotaBytes"`
-	UsedBytes  int64  `json:"usedBytes"`
-	IsAdmin    bool   `json:"isAdmin"`
+	ID                  string `json:"id"`
+	Username            string `json:"username"`
+	QuotaBytes          int64  `json:"quotaBytes"`
+	UsedBytes           int64  `json:"usedBytes"`
+	IsAdmin             bool   `json:"isAdmin"`
+	UnreadNotifications int    `json:"unreadNotifications"`
 }
 
 type ArchiveStatus string
@@ -570,6 +758,65 @@ func (e JobStatus) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+type LinkStatus string
+
+const (
+	LinkStatusActive      LinkStatus = "ACTIVE"
+	LinkStatusPaused      LinkStatus = "PAUSED"
+	LinkStatusExpired     LinkStatus = "EXPIRED"
+	LinkStatusUnavailable LinkStatus = "UNAVAILABLE"
+)
+
+var AllLinkStatus = []LinkStatus{
+	LinkStatusActive,
+	LinkStatusPaused,
+	LinkStatusExpired,
+	LinkStatusUnavailable,
+}
+
+func (e LinkStatus) IsValid() bool {
+	switch e {
+	case LinkStatusActive, LinkStatusPaused, LinkStatusExpired, LinkStatusUnavailable:
+		return true
+	}
+	return false
+}
+
+func (e LinkStatus) String() string {
+	return string(e)
+}
+
+func (e *LinkStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = LinkStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid LinkStatus", str)
+	}
+	return nil
+}
+
+func (e LinkStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *LinkStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e LinkStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 type NodeKind string
 
 const (
@@ -677,6 +924,187 @@ func (e *NodeOrder) UnmarshalJSON(b []byte) error {
 }
 
 func (e NodeOrder) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type NotificationLevel string
+
+const (
+	NotificationLevelInfo  NotificationLevel = "INFO"
+	NotificationLevelWarn  NotificationLevel = "WARN"
+	NotificationLevelAlert NotificationLevel = "ALERT"
+)
+
+var AllNotificationLevel = []NotificationLevel{
+	NotificationLevelInfo,
+	NotificationLevelWarn,
+	NotificationLevelAlert,
+}
+
+func (e NotificationLevel) IsValid() bool {
+	switch e {
+	case NotificationLevelInfo, NotificationLevelWarn, NotificationLevelAlert:
+		return true
+	}
+	return false
+}
+
+func (e NotificationLevel) String() string {
+	return string(e)
+}
+
+func (e *NotificationLevel) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = NotificationLevel(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid NotificationLevel", str)
+	}
+	return nil
+}
+
+func (e NotificationLevel) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *NotificationLevel) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e NotificationLevel) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type NotificationTargetKind string
+
+const (
+	NotificationTargetKindNode        NotificationTargetKind = "NODE"
+	NotificationTargetKindFileRequest NotificationTargetKind = "FILE_REQUEST"
+	NotificationTargetKindLink        NotificationTargetKind = "LINK"
+	NotificationTargetKindJobs        NotificationTargetKind = "JOBS"
+	NotificationTargetKindSessions    NotificationTargetKind = "SESSIONS"
+	NotificationTargetKindCredentials NotificationTargetKind = "CREDENTIALS"
+	NotificationTargetKindAdmin       NotificationTargetKind = "ADMIN"
+)
+
+var AllNotificationTargetKind = []NotificationTargetKind{
+	NotificationTargetKindNode,
+	NotificationTargetKindFileRequest,
+	NotificationTargetKindLink,
+	NotificationTargetKindJobs,
+	NotificationTargetKindSessions,
+	NotificationTargetKindCredentials,
+	NotificationTargetKindAdmin,
+}
+
+func (e NotificationTargetKind) IsValid() bool {
+	switch e {
+	case NotificationTargetKindNode, NotificationTargetKindFileRequest, NotificationTargetKindLink, NotificationTargetKindJobs, NotificationTargetKindSessions, NotificationTargetKindCredentials, NotificationTargetKindAdmin:
+		return true
+	}
+	return false
+}
+
+func (e NotificationTargetKind) String() string {
+	return string(e)
+}
+
+func (e *NotificationTargetKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = NotificationTargetKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid NotificationTargetKind", str)
+	}
+	return nil
+}
+
+func (e NotificationTargetKind) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *NotificationTargetKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e NotificationTargetKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type NotifyChannelKind string
+
+const (
+	NotifyChannelKindWebhook  NotifyChannelKind = "WEBHOOK"
+	NotifyChannelKindNtfy     NotifyChannelKind = "NTFY"
+	NotifyChannelKindBark     NotifyChannelKind = "BARK"
+	NotifyChannelKindTelegram NotifyChannelKind = "TELEGRAM"
+)
+
+var AllNotifyChannelKind = []NotifyChannelKind{
+	NotifyChannelKindWebhook,
+	NotifyChannelKindNtfy,
+	NotifyChannelKindBark,
+	NotifyChannelKindTelegram,
+}
+
+func (e NotifyChannelKind) IsValid() bool {
+	switch e {
+	case NotifyChannelKindWebhook, NotifyChannelKindNtfy, NotifyChannelKindBark, NotifyChannelKindTelegram:
+		return true
+	}
+	return false
+}
+
+func (e NotifyChannelKind) String() string {
+	return string(e)
+}
+
+func (e *NotifyChannelKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = NotifyChannelKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid NotifyChannelKind", str)
+	}
+	return nil
+}
+
+func (e NotifyChannelKind) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *NotifyChannelKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e NotifyChannelKind) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

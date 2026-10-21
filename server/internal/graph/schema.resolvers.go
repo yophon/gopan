@@ -8,6 +8,7 @@ package graph
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -781,6 +782,81 @@ func (r *mutationResolver) ClearFinishedJobs(ctx context.Context) (int, error) {
 	return int(n), err
 }
 
+// SaveProgress is the resolver for the saveProgress field.
+func (r *mutationResolver) SaveProgress(ctx context.Context, nodeID string, position float64, duration float64) (*PlayProgress, error) {
+	panic(fmt.Errorf("not implemented: SaveProgress - saveProgress"))
+}
+
+// ClearProgress is the resolver for the clearProgress field.
+func (r *mutationResolver) ClearProgress(ctx context.Context, nodeID string) (bool, error) {
+	panic(fmt.Errorf("not implemented: ClearProgress - clearProgress"))
+}
+
+// MarkNotificationsRead is the resolver for the markNotificationsRead field.
+func (r *mutationResolver) MarkNotificationsRead(ctx context.Context, ids []string) (int, error) {
+	panic(fmt.Errorf("not implemented: MarkNotificationsRead - markNotificationsRead"))
+}
+
+// ClearNotifications is the resolver for the clearNotifications field.
+func (r *mutationResolver) ClearNotifications(ctx context.Context) (int, error) {
+	panic(fmt.Errorf("not implemented: ClearNotifications - clearNotifications"))
+}
+
+// CreateNotifyChannel is the resolver for the createNotifyChannel field.
+func (r *mutationResolver) CreateNotifyChannel(ctx context.Context, input NotifyChannelInput) (*NotifyChannel, error) {
+	panic(fmt.Errorf("not implemented: CreateNotifyChannel - createNotifyChannel"))
+}
+
+// UpdateNotifyChannel is the resolver for the updateNotifyChannel field.
+func (r *mutationResolver) UpdateNotifyChannel(ctx context.Context, id string, input NotifyChannelInput) (*NotifyChannel, error) {
+	panic(fmt.Errorf("not implemented: UpdateNotifyChannel - updateNotifyChannel"))
+}
+
+// DeleteNotifyChannel is the resolver for the deleteNotifyChannel field.
+func (r *mutationResolver) DeleteNotifyChannel(ctx context.Context, id string) (bool, error) {
+	panic(fmt.Errorf("not implemented: DeleteNotifyChannel - deleteNotifyChannel"))
+}
+
+// TestNotifyChannel is the resolver for the testNotifyChannel field.
+func (r *mutationResolver) TestNotifyChannel(ctx context.Context, id string) (bool, error) {
+	panic(fmt.Errorf("not implemented: TestNotifyChannel - testNotifyChannel"))
+}
+
+// CreateLinks is the resolver for the createLinks field.
+func (r *mutationResolver) CreateLinks(ctx context.Context, nodeIds []string) ([]*DirectLink, error) {
+	panic(fmt.Errorf("not implemented: CreateLinks - createLinks"))
+}
+
+// UpdateLink is the resolver for the updateLink field.
+func (r *mutationResolver) UpdateLink(ctx context.Context, id string, input DirectLinkInput) (*DirectLink, error) {
+	panic(fmt.Errorf("not implemented: UpdateLink - updateLink"))
+}
+
+// PauseLink is the resolver for the pauseLink field.
+func (r *mutationResolver) PauseLink(ctx context.Context, id string, paused bool) (*DirectLink, error) {
+	panic(fmt.Errorf("not implemented: PauseLink - pauseLink"))
+}
+
+// RevokeLink is the resolver for the revokeLink field.
+func (r *mutationResolver) RevokeLink(ctx context.Context, id string) (bool, error) {
+	panic(fmt.Errorf("not implemented: RevokeLink - revokeLink"))
+}
+
+// SetLinkPrefs is the resolver for the setLinkPrefs field.
+func (r *mutationResolver) SetLinkPrefs(ctx context.Context, input LinkPrefsInput) (*LinkPrefs, error) {
+	panic(fmt.Errorf("not implemented: SetLinkPrefs - setLinkPrefs"))
+}
+
+// AdminPauseLink is the resolver for the adminPauseLink field.
+func (r *mutationResolver) AdminPauseLink(ctx context.Context, id string, paused bool) (bool, error) {
+	panic(fmt.Errorf("not implemented: AdminPauseLink - adminPauseLink"))
+}
+
+// AdminRevokeLink is the resolver for the adminRevokeLink field.
+func (r *mutationResolver) AdminRevokeLink(ctx context.Context, id string) (bool, error) {
+	panic(fmt.Errorf("not implemented: AdminRevokeLink - adminRevokeLink"))
+}
+
 // AdminCreateUser is the resolver for the adminCreateUser field.
 func (r *mutationResolver) AdminCreateUser(ctx context.Context, username string, password string, quotaBytes *int64) (*AdminUser, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -893,6 +969,11 @@ func (r *nodeResolver) DownloadURL(ctx context.Context, obj *Node) (*string, err
 		}
 	}
 	return &u, nil
+}
+
+// PlayProgress is the resolver for the playProgress field.
+func (r *nodeResolver) PlayProgress(ctx context.Context, obj *Node) (*PlayProgress, error) {
+	panic(fmt.Errorf("not implemented: PlayProgress - playProgress"))
 }
 
 // McpAccessRoots is the resolver for the mcpAccessRoots field.
@@ -1488,6 +1569,76 @@ func (r *queryResolver) FetchEnabled(ctx context.Context) (bool, error) {
 	return r.Jobs.FetchEnabled(), nil
 }
 
+// Playlist is the resolver for the playlist field.
+func (r *queryResolver) Playlist(ctx context.Context, nodeID string) ([]*Node, error) {
+	panic(fmt.Errorf("not implemented: Playlist - playlist"))
+}
+
+// RecentPlays is the resolver for the recentPlays field.
+func (r *queryResolver) RecentPlays(ctx context.Context, limit *int) ([]*RecentPlay, error) {
+	panic(fmt.Errorf("not implemented: RecentPlays - recentPlays"))
+}
+
+// Notifications is the resolver for the notifications field.
+func (r *queryResolver) Notifications(ctx context.Context, cursor *string, unreadOnly *bool) (*NotificationPage, error) {
+	panic(fmt.Errorf("not implemented: Notifications - notifications"))
+}
+
+// NotifyChannels is the resolver for the notifyChannels field.
+func (r *queryResolver) NotifyChannels(ctx context.Context) ([]*NotifyChannel, error) {
+	panic(fmt.Errorf("not implemented: NotifyChannels - notifyChannels"))
+}
+
+// NotifyEventKinds is the resolver for the notifyEventKinds field.
+func (r *queryResolver) NotifyEventKinds(ctx context.Context) ([]*NotifyEventKind, error) {
+	panic(fmt.Errorf("not implemented: NotifyEventKinds - notifyEventKinds"))
+}
+
+// MyLinks is the resolver for the myLinks field.
+func (r *queryResolver) MyLinks(ctx context.Context, cursor *string) (*DirectLinkPage, error) {
+	panic(fmt.Errorf("not implemented: MyLinks - myLinks"))
+}
+
+// Link is the resolver for the link field.
+func (r *queryResolver) Link(ctx context.Context, id string) (*DirectLink, error) {
+	panic(fmt.Errorf("not implemented: Link - link"))
+}
+
+// NodeLink is the resolver for the nodeLink field.
+func (r *queryResolver) NodeLink(ctx context.Context, nodeID string) (*DirectLink, error) {
+	panic(fmt.Errorf("not implemented: NodeLink - nodeLink"))
+}
+
+// LinkStats is the resolver for the linkStats field.
+func (r *queryResolver) LinkStats(ctx context.Context, id string, hours *int) ([]*LinkHourStat, error) {
+	panic(fmt.Errorf("not implemented: LinkStats - linkStats"))
+}
+
+// LinkReferers is the resolver for the linkReferers field.
+func (r *queryResolver) LinkReferers(ctx context.Context, id string, days *int) ([]*LinkReferer, error) {
+	panic(fmt.Errorf("not implemented: LinkReferers - linkReferers"))
+}
+
+// LinkHits is the resolver for the linkHits field.
+func (r *queryResolver) LinkHits(ctx context.Context, id string, cursor *string) (*LinkHitPage, error) {
+	panic(fmt.Errorf("not implemented: LinkHits - linkHits"))
+}
+
+// LinkPrefs is the resolver for the linkPrefs field.
+func (r *queryResolver) LinkPrefs(ctx context.Context) (*LinkPrefs, error) {
+	panic(fmt.Errorf("not implemented: LinkPrefs - linkPrefs"))
+}
+
+// LinksEnabled is the resolver for the linksEnabled field.
+func (r *queryResolver) LinksEnabled(ctx context.Context) (bool, error) {
+	panic(fmt.Errorf("not implemented: LinksEnabled - linksEnabled"))
+}
+
+// AdminLinkStats is the resolver for the adminLinkStats field.
+func (r *queryResolver) AdminLinkStats(ctx context.Context) (*AdminLinkStats, error) {
+	panic(fmt.Errorf("not implemented: AdminLinkStats - adminLinkStats"))
+}
+
 // AdminUsers is the resolver for the adminUsers field.
 func (r *queryResolver) AdminUsers(ctx context.Context) ([]*AdminUser, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -1533,6 +1684,11 @@ func (r *queryResolver) AdminOverview(ctx context.Context) (*AdminOverview, erro
 	}, nil
 }
 
+// UnreadNotifications is the resolver for the unreadNotifications field.
+func (r *userResolver) UnreadNotifications(ctx context.Context, obj *User) (int, error) {
+	panic(fmt.Errorf("not implemented: UnreadNotifications - unreadNotifications"))
+}
+
 // ChatMessage returns ChatMessageResolver implementation.
 func (r *Resolver) ChatMessage() ChatMessageResolver { return &chatMessageResolver{r} }
 
@@ -1548,10 +1704,14 @@ func (r *Resolver) Node() NodeResolver { return &nodeResolver{r} }
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
+// User returns UserResolver implementation.
+func (r *Resolver) User() UserResolver { return &userResolver{r} }
+
 type (
 	chatMessageResolver struct{ *Resolver }
 	jobResolver         struct{ *Resolver }
 	mutationResolver    struct{ *Resolver }
 	nodeResolver        struct{ *Resolver }
 	queryResolver       struct{ *Resolver }
+	userResolver        struct{ *Resolver }
 )

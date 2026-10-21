@@ -33,12 +33,30 @@ type ResolverRoot interface {
 	Mutation() MutationResolver
 	Node() NodeResolver
 	Query() QueryResolver
+	User() UserResolver
 }
 
 type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
+	AdminLink struct {
+		ID         func(childComplexity int) int
+		MonthBytes func(childComplexity int) int
+		MonthHits  func(childComplexity int) int
+		Name       func(childComplexity int) int
+		Owner      func(childComplexity int) int
+		Path       func(childComplexity int) int
+		Status     func(childComplexity int) int
+	}
+
+	AdminLinkStats struct {
+		MonthBytes      func(childComplexity int) int
+		MonthHits       func(childComplexity int) int
+		MonthlyBytesCap func(childComplexity int) int
+		Top             func(childComplexity int) int
+	}
+
 	AdminOverview struct {
 		BlobBytes      func(childComplexity int) int
 		BlobCount      func(childComplexity int) int
@@ -140,6 +158,38 @@ type ComplexityRoot struct {
 		Unsupported func(childComplexity int) int
 	}
 
+	DirectLink struct {
+		AllowNoReferer func(childComplexity int) int
+		AutoPause      func(childComplexity int) int
+		BytesTotal     func(childComplexity int) int
+		CreatedAt      func(childComplexity int) int
+		DailyBytesCap  func(childComplexity int) int
+		ExpiresAt      func(childComplexity int) int
+		HasGps         func(childComplexity int) int
+		HitsTotal      func(childComplexity int) int
+		ID             func(childComplexity int) int
+		Last30Days     func(childComplexity int) int
+		LastHitAt      func(childComplexity int) int
+		Mime           func(childComplexity int) int
+		Name           func(childComplexity int) int
+		NodeID         func(childComplexity int) int
+		Path           func(childComplexity int) int
+		PauseReason    func(childComplexity int) int
+		RefererHosts   func(childComplexity int) int
+		Size           func(childComplexity int) int
+		Source         func(childComplexity int) int
+		Status         func(childComplexity int) int
+		Today          func(childComplexity int) int
+		Token          func(childComplexity int) int
+		URL            func(childComplexity int) int
+	}
+
+	DirectLinkPage struct {
+		Items      func(childComplexity int) int
+		NextCursor func(childComplexity int) int
+		Total      func(childComplexity int) int
+	}
+
 	FileRequest struct {
 		CreatedAt       func(childComplexity int) int
 		ExpiresAt       func(childComplexity int) int
@@ -214,6 +264,50 @@ type ComplexityRoot struct {
 		NextCursor func(childComplexity int) int
 	}
 
+	LinkHit struct {
+		At        func(childComplexity int) int
+		Bytes     func(childComplexity int) int
+		IP        func(childComplexity int) int
+		Referer   func(childComplexity int) int
+		Status    func(childComplexity int) int
+		UserAgent func(childComplexity int) int
+	}
+
+	LinkHitPage struct {
+		Items      func(childComplexity int) int
+		NextCursor func(childComplexity int) int
+	}
+
+	LinkHourStat struct {
+		Blocked func(childComplexity int) int
+		Bytes   func(childComplexity int) int
+		Hits    func(childComplexity int) int
+		Hour    func(childComplexity int) int
+		Ips     func(childComplexity int) int
+	}
+
+	LinkPrefs struct {
+		AllowNoReferer       func(childComplexity int) int
+		DailyBytesCapDefault func(childComplexity int) int
+		ImageFolder          func(childComplexity int) int
+		MonthlyBytesCap      func(childComplexity int) int
+		MonthlyBytesUsed     func(childComplexity int) int
+		RefererHosts         func(childComplexity int) int
+		StripGps             func(childComplexity int) int
+	}
+
+	LinkReferer struct {
+		Bytes func(childComplexity int) int
+		Hits  func(childComplexity int) int
+		Host  func(childComplexity int) int
+	}
+
+	LinkUsage struct {
+		Blocked func(childComplexity int) int
+		Bytes   func(childComplexity int) int
+		Hits    func(childComplexity int) int
+	}
+
 	MCPAPIKey struct {
 		CreatedAt  func(childComplexity int) int
 		ID         func(childComplexity int) int
@@ -248,13 +342,17 @@ type ComplexityRoot struct {
 	Mutation struct {
 		AbortUpload              func(childComplexity int, sessionID string) int
 		AdminCreateUser          func(childComplexity int, username string, password string, quotaBytes *int64) int
+		AdminPauseLink           func(childComplexity int, id string, paused bool) int
 		AdminResetPassword       func(childComplexity int, userID string) int
 		AdminRetryFailedTasks    func(childComplexity int) int
+		AdminRevokeLink          func(childComplexity int, id string) int
 		AdminSetDisabled         func(childComplexity int, userID string, disabled bool) int
 		AdminSetQuota            func(childComplexity int, userID string, quotaBytes int64) int
 		CancelJob                func(childComplexity int, id string) int
 		ChangePassword           func(childComplexity int, oldPassword string, newPassword string) int
 		ClearFinishedJobs        func(childComplexity int) int
+		ClearNotifications       func(childComplexity int) int
+		ClearProgress            func(childComplexity int, nodeID string) int
 		CollectAbortUpload       func(childComplexity int, sessionID string) int
 		CollectCompleteUpload    func(childComplexity int, sessionID string, etags []*PartEtag) int
 		CollectInitUpload        func(childComplexity int, name string, size int64) int
@@ -263,11 +361,14 @@ type ComplexityRoot struct {
 		CreateAppPassword        func(childComplexity int, name string) int
 		CreateFileRequest        func(childComplexity int, folderID string, input FileRequestInput, password *string) int
 		CreateFolder             func(childComplexity int, parentID *string, name string) int
+		CreateLinks              func(childComplexity int, nodeIds []string) int
 		CreateMCPAPIKey          func(childComplexity int, name string, scopes []string) int
+		CreateNotifyChannel      func(childComplexity int, input NotifyChannelInput) int
 		CreateShare              func(childComplexity int, nodeID string, password *string, expiresAt *time.Time) int
 		DecideOAuthAuthorization func(childComplexity int, input OAuthAuthorizationInput, approved bool) int
 		DeleteChatMessage        func(childComplexity int, id string) int
 		DeleteNodes              func(childComplexity int, ids []string) int
+		DeleteNotifyChannel      func(childComplexity int, id string) int
 		EnsureChatFolder         func(childComplexity int) int
 		ExtractArchive           func(childComplexity int, nodeID string, base *string, paths []string, parentID *string) int
 		FetchUrls                func(childComplexity int, urls []string, parentID *string) int
@@ -275,8 +376,10 @@ type ComplexityRoot struct {
 		Login                    func(childComplexity int, username string, password string) int
 		Logout                   func(childComplexity int) int
 		MarkFileRequestSeen      func(childComplexity int, id string) int
+		MarkNotificationsRead    func(childComplexity int, ids []string) int
 		MoveNodes                func(childComplexity int, ids []string, targetParentID *string) int
 		OpenFileRequest          func(childComplexity int, token string, password *string, uploaderName *string) int
+		PauseLink                func(childComplexity int, id string, paused bool) int
 		PurgeNodes               func(childComplexity int, ids []string) int
 		PurgeTrash               func(childComplexity int) int
 		Refresh                  func(childComplexity int) int
@@ -287,13 +390,19 @@ type ComplexityRoot struct {
 		RetryJob                 func(childComplexity int, id string) int
 		RevokeAppPassword        func(childComplexity int, id string) int
 		RevokeFileRequest        func(childComplexity int, id string) int
+		RevokeLink               func(childComplexity int, id string) int
 		RevokeMCPAPIKey          func(childComplexity int, id string) int
 		RevokeOAuthGrant         func(childComplexity int, id string) int
 		RevokeSession            func(childComplexity int, familyID string) int
 		RevokeShare              func(childComplexity int, id string) int
+		SaveProgress             func(childComplexity int, nodeID string, position float64, duration float64) int
 		SendChatMessage          func(childComplexity int, body *string, nodeID *string) int
+		SetLinkPrefs             func(childComplexity int, input LinkPrefsInput) int
 		SetMCPAccessRoot         func(childComplexity int, credentialID string, credentialType string, rootPath *string) int
+		TestNotifyChannel        func(childComplexity int, id string) int
 		UpdateFileRequest        func(childComplexity int, id string, input FileRequestInput) int
+		UpdateLink               func(childComplexity int, id string, input DirectLinkInput) int
+		UpdateNotifyChannel      func(childComplexity int, id string, input NotifyChannelInput) int
 		VerifySharePassword      func(childComplexity int, token string, password string) int
 	}
 
@@ -306,6 +415,7 @@ type ComplexityRoot struct {
 		Mime         func(childComplexity int) int
 		Name         func(childComplexity int) int
 		ParentID     func(childComplexity int) int
+		PlayProgress func(childComplexity int) int
 		Preview      func(childComplexity int) int
 		PurgeAt      func(childComplexity int) int
 		Sha256       func(childComplexity int) int
@@ -320,6 +430,53 @@ type ComplexityRoot struct {
 		Items      func(childComplexity int) int
 		NextCursor func(childComplexity int) int
 		Total      func(childComplexity int) int
+	}
+
+	Notification struct {
+		Body      func(childComplexity int) int
+		Count     func(childComplexity int) int
+		CreatedAt func(childComplexity int) int
+		ID        func(childComplexity int) int
+		Kind      func(childComplexity int) int
+		Level     func(childComplexity int) int
+		Read      func(childComplexity int) int
+		Target    func(childComplexity int) int
+		Title     func(childComplexity int) int
+		UpdatedAt func(childComplexity int) int
+	}
+
+	NotificationPage struct {
+		Items      func(childComplexity int) int
+		NextCursor func(childComplexity int) int
+	}
+
+	NotificationTarget struct {
+		ID       func(childComplexity int) int
+		Kind     func(childComplexity int) int
+		ParentID func(childComplexity int) int
+	}
+
+	NotifyChannel struct {
+		CreatedAt   func(childComplexity int) int
+		Enabled     func(childComplexity int) int
+		Events      func(childComplexity int) int
+		HasSecret   func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Kind        func(childComplexity int) int
+		LastError   func(childComplexity int) int
+		LastErrorAt func(childComplexity int) int
+		LastOkAt    func(childComplexity int) int
+		Name        func(childComplexity int) int
+		SecretHint  func(childComplexity int) int
+		Topic       func(childComplexity int) int
+		URL         func(childComplexity int) int
+	}
+
+	NotifyEventKind struct {
+		AdminOnly   func(childComplexity int) int
+		DefaultPush func(childComplexity int) int
+		Kind        func(childComplexity int) int
+		Label       func(childComplexity int) int
 	}
 
 	OAuthAuthorizationRequest struct {
@@ -345,16 +502,25 @@ type ComplexityRoot struct {
 		URL        func(childComplexity int) int
 	}
 
+	PlayProgress struct {
+		Duration  func(childComplexity int) int
+		Finished  func(childComplexity int) int
+		Position  func(childComplexity int) int
+		UpdatedAt func(childComplexity int) int
+	}
+
 	PreviewInfo struct {
 		ContentURL  func(childComplexity int) int
 		DurationSec func(childComplexity int) int
 		Kind        func(childComplexity int) int
 		LargeURL    func(childComplexity int) int
 		Status      func(childComplexity int) int
+		Subtitles   func(childComplexity int) int
 		ThumbURL    func(childComplexity int) int
 	}
 
 	Query struct {
+		AdminLinkStats            func(childComplexity int) int
 		AdminOverview             func(childComplexity int) int
 		AdminUsers                func(childComplexity int) int
 		AppPasswords              func(childComplexity int) int
@@ -369,16 +535,29 @@ type ComplexityRoot struct {
 		FileRequestInfo           func(childComplexity int, token string) int
 		FileRequestUploads        func(childComplexity int, id string, cursor *string) int
 		Job                       func(childComplexity int, id string) int
+		Link                      func(childComplexity int, id string) int
+		LinkHits                  func(childComplexity int, id string, cursor *string) int
+		LinkPrefs                 func(childComplexity int) int
+		LinkReferers              func(childComplexity int, id string, days *int) int
+		LinkStats                 func(childComplexity int, id string, hours *int) int
+		LinksEnabled              func(childComplexity int) int
 		McpAPIKeys                func(childComplexity int) int
 		McpAccessRoots            func(childComplexity int) int
 		McpAudit                  func(childComplexity int, beforeID *int64, limit *int) int
 		Me                        func(childComplexity int) int
 		MyFileRequests            func(childComplexity int) int
 		MyJobs                    func(childComplexity int, active *bool, cursor *string) int
+		MyLinks                   func(childComplexity int, cursor *string) int
 		MyShares                  func(childComplexity int) int
 		Node                      func(childComplexity int, id string) int
+		NodeLink                  func(childComplexity int, nodeID string) int
+		Notifications             func(childComplexity int, cursor *string, unreadOnly *bool) int
+		NotifyChannels            func(childComplexity int) int
+		NotifyEventKinds          func(childComplexity int) int
 		OauthAuthorizationRequest func(childComplexity int, input OAuthAuthorizationInput) int
 		OauthGrants               func(childComplexity int) int
+		Playlist                  func(childComplexity int, nodeID string) int
+		RecentPlays               func(childComplexity int, limit *int) int
 		SearchContent             func(childComplexity int, q string, cursor *string) int
 		SearchNodes               func(childComplexity int, q string, cursor *string) int
 		Sessions                  func(childComplexity int) int
@@ -387,6 +566,11 @@ type ComplexityRoot struct {
 		ShareVisits               func(childComplexity int, shareID string, limit *int) int
 		Trash                     func(childComplexity int, cursor *string) int
 		UploadSession             func(childComplexity int, id string) int
+	}
+
+	RecentPlay struct {
+		Node     func(childComplexity int) int
+		Progress func(childComplexity int) int
 	}
 
 	Session struct {
@@ -436,6 +620,14 @@ type ComplexityRoot struct {
 		VerifyCount   func(childComplexity int) int
 	}
 
+	SubtitleTrack struct {
+		Default func(childComplexity int) int
+		Label   func(childComplexity int) int
+		Lang    func(childComplexity int) int
+		Name    func(childComplexity int) int
+		NodeID  func(childComplexity int) int
+	}
+
 	TaskCount struct {
 		Count  func(childComplexity int) int
 		Status func(childComplexity int) int
@@ -462,11 +654,12 @@ type ComplexityRoot struct {
 	}
 
 	User struct {
-		ID         func(childComplexity int) int
-		IsAdmin    func(childComplexity int) int
-		QuotaBytes func(childComplexity int) int
-		UsedBytes  func(childComplexity int) int
-		Username   func(childComplexity int) int
+		ID                  func(childComplexity int) int
+		IsAdmin             func(childComplexity int) int
+		QuotaBytes          func(childComplexity int) int
+		UnreadNotifications func(childComplexity int) int
+		UsedBytes           func(childComplexity int) int
+		Username            func(childComplexity int) int
 	}
 }
 
@@ -525,6 +718,21 @@ type MutationResolver interface {
 	CancelJob(ctx context.Context, id string) (*Job, error)
 	RetryJob(ctx context.Context, id string) (*Job, error)
 	ClearFinishedJobs(ctx context.Context) (int, error)
+	SaveProgress(ctx context.Context, nodeID string, position float64, duration float64) (*PlayProgress, error)
+	ClearProgress(ctx context.Context, nodeID string) (bool, error)
+	MarkNotificationsRead(ctx context.Context, ids []string) (int, error)
+	ClearNotifications(ctx context.Context) (int, error)
+	CreateNotifyChannel(ctx context.Context, input NotifyChannelInput) (*NotifyChannel, error)
+	UpdateNotifyChannel(ctx context.Context, id string, input NotifyChannelInput) (*NotifyChannel, error)
+	DeleteNotifyChannel(ctx context.Context, id string) (bool, error)
+	TestNotifyChannel(ctx context.Context, id string) (bool, error)
+	CreateLinks(ctx context.Context, nodeIds []string) ([]*DirectLink, error)
+	UpdateLink(ctx context.Context, id string, input DirectLinkInput) (*DirectLink, error)
+	PauseLink(ctx context.Context, id string, paused bool) (*DirectLink, error)
+	RevokeLink(ctx context.Context, id string) (bool, error)
+	SetLinkPrefs(ctx context.Context, input LinkPrefsInput) (*LinkPrefs, error)
+	AdminPauseLink(ctx context.Context, id string, paused bool) (bool, error)
+	AdminRevokeLink(ctx context.Context, id string) (bool, error)
 	AdminCreateUser(ctx context.Context, username string, password string, quotaBytes *int64) (*AdminUser, error)
 	AdminSetQuota(ctx context.Context, userID string, quotaBytes int64) (*AdminUser, error)
 	AdminSetDisabled(ctx context.Context, userID string, disabled bool) (*AdminUser, error)
@@ -534,6 +742,8 @@ type MutationResolver interface {
 type NodeResolver interface {
 	Preview(ctx context.Context, obj *Node) (*PreviewInfo, error)
 	DownloadURL(ctx context.Context, obj *Node) (*string, error)
+
+	PlayProgress(ctx context.Context, obj *Node) (*PlayProgress, error)
 }
 type QueryResolver interface {
 	McpAccessRoots(ctx context.Context) ([]*MCPAccessRoot, error)
@@ -566,8 +776,25 @@ type QueryResolver interface {
 	MyJobs(ctx context.Context, active *bool, cursor *string) (*JobPage, error)
 	Job(ctx context.Context, id string) (*Job, error)
 	FetchEnabled(ctx context.Context) (bool, error)
+	Playlist(ctx context.Context, nodeID string) ([]*Node, error)
+	RecentPlays(ctx context.Context, limit *int) ([]*RecentPlay, error)
+	Notifications(ctx context.Context, cursor *string, unreadOnly *bool) (*NotificationPage, error)
+	NotifyChannels(ctx context.Context) ([]*NotifyChannel, error)
+	NotifyEventKinds(ctx context.Context) ([]*NotifyEventKind, error)
+	MyLinks(ctx context.Context, cursor *string) (*DirectLinkPage, error)
+	Link(ctx context.Context, id string) (*DirectLink, error)
+	NodeLink(ctx context.Context, nodeID string) (*DirectLink, error)
+	LinkStats(ctx context.Context, id string, hours *int) ([]*LinkHourStat, error)
+	LinkReferers(ctx context.Context, id string, days *int) ([]*LinkReferer, error)
+	LinkHits(ctx context.Context, id string, cursor *string) (*LinkHitPage, error)
+	LinkPrefs(ctx context.Context) (*LinkPrefs, error)
+	LinksEnabled(ctx context.Context) (bool, error)
+	AdminLinkStats(ctx context.Context) (*AdminLinkStats, error)
 	AdminUsers(ctx context.Context) ([]*AdminUser, error)
 	AdminOverview(ctx context.Context) (*AdminOverview, error)
+}
+type UserResolver interface {
+	UnreadNotifications(ctx context.Context, obj *User) (int, error)
 }
 
 // endregion ************************** generated!.gotpl **************************
@@ -587,6 +814,74 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	ec := newExecutionContext(nil, e, nil)
 	_ = ec
 	switch typeName + "." + field {
+
+	case "AdminLink.id":
+		if e.ComplexityRoot.AdminLink.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminLink.ID(childComplexity), true
+	case "AdminLink.monthBytes":
+		if e.ComplexityRoot.AdminLink.MonthBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminLink.MonthBytes(childComplexity), true
+	case "AdminLink.monthHits":
+		if e.ComplexityRoot.AdminLink.MonthHits == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminLink.MonthHits(childComplexity), true
+	case "AdminLink.name":
+		if e.ComplexityRoot.AdminLink.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminLink.Name(childComplexity), true
+	case "AdminLink.owner":
+		if e.ComplexityRoot.AdminLink.Owner == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminLink.Owner(childComplexity), true
+	case "AdminLink.path":
+		if e.ComplexityRoot.AdminLink.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminLink.Path(childComplexity), true
+	case "AdminLink.status":
+		if e.ComplexityRoot.AdminLink.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminLink.Status(childComplexity), true
+
+	case "AdminLinkStats.monthBytes":
+		if e.ComplexityRoot.AdminLinkStats.MonthBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminLinkStats.MonthBytes(childComplexity), true
+	case "AdminLinkStats.monthHits":
+		if e.ComplexityRoot.AdminLinkStats.MonthHits == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminLinkStats.MonthHits(childComplexity), true
+	case "AdminLinkStats.monthlyBytesCap":
+		if e.ComplexityRoot.AdminLinkStats.MonthlyBytesCap == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminLinkStats.MonthlyBytesCap(childComplexity), true
+	case "AdminLinkStats.top":
+		if e.ComplexityRoot.AdminLinkStats.Top == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminLinkStats.Top(childComplexity), true
 
 	case "AdminOverview.blobBytes":
 		if e.ComplexityRoot.AdminOverview.BlobBytes == nil {
@@ -973,6 +1268,164 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ContentIndexStats.Unsupported(childComplexity), true
 
+	case "DirectLink.allowNoReferer":
+		if e.ComplexityRoot.DirectLink.AllowNoReferer == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.AllowNoReferer(childComplexity), true
+	case "DirectLink.autoPause":
+		if e.ComplexityRoot.DirectLink.AutoPause == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.AutoPause(childComplexity), true
+	case "DirectLink.bytesTotal":
+		if e.ComplexityRoot.DirectLink.BytesTotal == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.BytesTotal(childComplexity), true
+	case "DirectLink.createdAt":
+		if e.ComplexityRoot.DirectLink.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.CreatedAt(childComplexity), true
+	case "DirectLink.dailyBytesCap":
+		if e.ComplexityRoot.DirectLink.DailyBytesCap == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.DailyBytesCap(childComplexity), true
+	case "DirectLink.expiresAt":
+		if e.ComplexityRoot.DirectLink.ExpiresAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.ExpiresAt(childComplexity), true
+	case "DirectLink.hasGps":
+		if e.ComplexityRoot.DirectLink.HasGps == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.HasGps(childComplexity), true
+	case "DirectLink.hitsTotal":
+		if e.ComplexityRoot.DirectLink.HitsTotal == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.HitsTotal(childComplexity), true
+	case "DirectLink.id":
+		if e.ComplexityRoot.DirectLink.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.ID(childComplexity), true
+	case "DirectLink.last30Days":
+		if e.ComplexityRoot.DirectLink.Last30Days == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.Last30Days(childComplexity), true
+	case "DirectLink.lastHitAt":
+		if e.ComplexityRoot.DirectLink.LastHitAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.LastHitAt(childComplexity), true
+	case "DirectLink.mime":
+		if e.ComplexityRoot.DirectLink.Mime == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.Mime(childComplexity), true
+	case "DirectLink.name":
+		if e.ComplexityRoot.DirectLink.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.Name(childComplexity), true
+	case "DirectLink.nodeId":
+		if e.ComplexityRoot.DirectLink.NodeID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.NodeID(childComplexity), true
+	case "DirectLink.path":
+		if e.ComplexityRoot.DirectLink.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.Path(childComplexity), true
+	case "DirectLink.pauseReason":
+		if e.ComplexityRoot.DirectLink.PauseReason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.PauseReason(childComplexity), true
+	case "DirectLink.refererHosts":
+		if e.ComplexityRoot.DirectLink.RefererHosts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.RefererHosts(childComplexity), true
+	case "DirectLink.size":
+		if e.ComplexityRoot.DirectLink.Size == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.Size(childComplexity), true
+	case "DirectLink.source":
+		if e.ComplexityRoot.DirectLink.Source == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.Source(childComplexity), true
+	case "DirectLink.status":
+		if e.ComplexityRoot.DirectLink.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.Status(childComplexity), true
+	case "DirectLink.today":
+		if e.ComplexityRoot.DirectLink.Today == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.Today(childComplexity), true
+	case "DirectLink.token":
+		if e.ComplexityRoot.DirectLink.Token == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.Token(childComplexity), true
+	case "DirectLink.url":
+		if e.ComplexityRoot.DirectLink.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLink.URL(childComplexity), true
+
+	case "DirectLinkPage.items":
+		if e.ComplexityRoot.DirectLinkPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLinkPage.Items(childComplexity), true
+	case "DirectLinkPage.nextCursor":
+		if e.ComplexityRoot.DirectLinkPage.NextCursor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLinkPage.NextCursor(childComplexity), true
+	case "DirectLinkPage.total":
+		if e.ComplexityRoot.DirectLinkPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DirectLinkPage.Total(childComplexity), true
+
 	case "FileRequest.createdAt":
 		if e.ComplexityRoot.FileRequest.CreatedAt == nil {
 			break
@@ -1315,6 +1768,168 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.JobPage.NextCursor(childComplexity), true
 
+	case "LinkHit.at":
+		if e.ComplexityRoot.LinkHit.At == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkHit.At(childComplexity), true
+	case "LinkHit.bytes":
+		if e.ComplexityRoot.LinkHit.Bytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkHit.Bytes(childComplexity), true
+	case "LinkHit.ip":
+		if e.ComplexityRoot.LinkHit.IP == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkHit.IP(childComplexity), true
+	case "LinkHit.referer":
+		if e.ComplexityRoot.LinkHit.Referer == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkHit.Referer(childComplexity), true
+	case "LinkHit.status":
+		if e.ComplexityRoot.LinkHit.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkHit.Status(childComplexity), true
+	case "LinkHit.userAgent":
+		if e.ComplexityRoot.LinkHit.UserAgent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkHit.UserAgent(childComplexity), true
+
+	case "LinkHitPage.items":
+		if e.ComplexityRoot.LinkHitPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkHitPage.Items(childComplexity), true
+	case "LinkHitPage.nextCursor":
+		if e.ComplexityRoot.LinkHitPage.NextCursor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkHitPage.NextCursor(childComplexity), true
+
+	case "LinkHourStat.blocked":
+		if e.ComplexityRoot.LinkHourStat.Blocked == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkHourStat.Blocked(childComplexity), true
+	case "LinkHourStat.bytes":
+		if e.ComplexityRoot.LinkHourStat.Bytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkHourStat.Bytes(childComplexity), true
+	case "LinkHourStat.hits":
+		if e.ComplexityRoot.LinkHourStat.Hits == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkHourStat.Hits(childComplexity), true
+	case "LinkHourStat.hour":
+		if e.ComplexityRoot.LinkHourStat.Hour == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkHourStat.Hour(childComplexity), true
+	case "LinkHourStat.ips":
+		if e.ComplexityRoot.LinkHourStat.Ips == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkHourStat.Ips(childComplexity), true
+
+	case "LinkPrefs.allowNoReferer":
+		if e.ComplexityRoot.LinkPrefs.AllowNoReferer == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkPrefs.AllowNoReferer(childComplexity), true
+	case "LinkPrefs.dailyBytesCapDefault":
+		if e.ComplexityRoot.LinkPrefs.DailyBytesCapDefault == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkPrefs.DailyBytesCapDefault(childComplexity), true
+	case "LinkPrefs.imageFolder":
+		if e.ComplexityRoot.LinkPrefs.ImageFolder == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkPrefs.ImageFolder(childComplexity), true
+	case "LinkPrefs.monthlyBytesCap":
+		if e.ComplexityRoot.LinkPrefs.MonthlyBytesCap == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkPrefs.MonthlyBytesCap(childComplexity), true
+	case "LinkPrefs.monthlyBytesUsed":
+		if e.ComplexityRoot.LinkPrefs.MonthlyBytesUsed == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkPrefs.MonthlyBytesUsed(childComplexity), true
+	case "LinkPrefs.refererHosts":
+		if e.ComplexityRoot.LinkPrefs.RefererHosts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkPrefs.RefererHosts(childComplexity), true
+	case "LinkPrefs.stripGps":
+		if e.ComplexityRoot.LinkPrefs.StripGps == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkPrefs.StripGps(childComplexity), true
+
+	case "LinkReferer.bytes":
+		if e.ComplexityRoot.LinkReferer.Bytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkReferer.Bytes(childComplexity), true
+	case "LinkReferer.hits":
+		if e.ComplexityRoot.LinkReferer.Hits == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkReferer.Hits(childComplexity), true
+	case "LinkReferer.host":
+		if e.ComplexityRoot.LinkReferer.Host == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkReferer.Host(childComplexity), true
+
+	case "LinkUsage.blocked":
+		if e.ComplexityRoot.LinkUsage.Blocked == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkUsage.Blocked(childComplexity), true
+	case "LinkUsage.bytes":
+		if e.ComplexityRoot.LinkUsage.Bytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkUsage.Bytes(childComplexity), true
+	case "LinkUsage.hits":
+		if e.ComplexityRoot.LinkUsage.Hits == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LinkUsage.Hits(childComplexity), true
+
 	case "MCPAPIKey.createdAt":
 		if e.ComplexityRoot.MCPAPIKey.CreatedAt == nil {
 			break
@@ -1455,6 +2070,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AdminCreateUser(childComplexity, args["username"].(string), args["password"].(string), args["quotaBytes"].(*int64)), true
+	case "Mutation.adminPauseLink":
+		if e.ComplexityRoot.Mutation.AdminPauseLink == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_adminPauseLink_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AdminPauseLink(childComplexity, args["id"].(string), args["paused"].(bool)), true
 	case "Mutation.adminResetPassword":
 		if e.ComplexityRoot.Mutation.AdminResetPassword == nil {
 			break
@@ -1472,6 +2098,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AdminRetryFailedTasks(childComplexity), true
+	case "Mutation.adminRevokeLink":
+		if e.ComplexityRoot.Mutation.AdminRevokeLink == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_adminRevokeLink_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AdminRevokeLink(childComplexity, args["id"].(string)), true
 	case "Mutation.adminSetDisabled":
 		if e.ComplexityRoot.Mutation.AdminSetDisabled == nil {
 			break
@@ -1522,6 +2159,23 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ClearFinishedJobs(childComplexity), true
+	case "Mutation.clearNotifications":
+		if e.ComplexityRoot.Mutation.ClearNotifications == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Mutation.ClearNotifications(childComplexity), true
+	case "Mutation.clearProgress":
+		if e.ComplexityRoot.Mutation.ClearProgress == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_clearProgress_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ClearProgress(childComplexity, args["nodeId"].(string)), true
 	case "Mutation.collectAbortUpload":
 		if e.ComplexityRoot.Mutation.CollectAbortUpload == nil {
 			break
@@ -1610,6 +2264,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateFolder(childComplexity, args["parentId"].(*string), args["name"].(string)), true
+	case "Mutation.createLinks":
+		if e.ComplexityRoot.Mutation.CreateLinks == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createLinks_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateLinks(childComplexity, args["nodeIds"].([]string)), true
 	case "Mutation.createMCPAPIKey":
 		if e.ComplexityRoot.Mutation.CreateMCPAPIKey == nil {
 			break
@@ -1621,6 +2286,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateMCPAPIKey(childComplexity, args["name"].(string), args["scopes"].([]string)), true
+	case "Mutation.createNotifyChannel":
+		if e.ComplexityRoot.Mutation.CreateNotifyChannel == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createNotifyChannel_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateNotifyChannel(childComplexity, args["input"].(NotifyChannelInput)), true
 	case "Mutation.createShare":
 		if e.ComplexityRoot.Mutation.CreateShare == nil {
 			break
@@ -1665,6 +2341,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteNodes(childComplexity, args["ids"].([]string)), true
+	case "Mutation.deleteNotifyChannel":
+		if e.ComplexityRoot.Mutation.DeleteNotifyChannel == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteNotifyChannel_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteNotifyChannel(childComplexity, args["id"].(string)), true
 	case "Mutation.ensureChatFolder":
 		if e.ComplexityRoot.Mutation.EnsureChatFolder == nil {
 			break
@@ -1732,6 +2419,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.MarkFileRequestSeen(childComplexity, args["id"].(string)), true
+	case "Mutation.markNotificationsRead":
+		if e.ComplexityRoot.Mutation.MarkNotificationsRead == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_markNotificationsRead_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.MarkNotificationsRead(childComplexity, args["ids"].([]string)), true
 	case "Mutation.moveNodes":
 		if e.ComplexityRoot.Mutation.MoveNodes == nil {
 			break
@@ -1754,6 +2452,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.OpenFileRequest(childComplexity, args["token"].(string), args["password"].(*string), args["uploaderName"].(*string)), true
+	case "Mutation.pauseLink":
+		if e.ComplexityRoot.Mutation.PauseLink == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_pauseLink_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.PauseLink(childComplexity, args["id"].(string), args["paused"].(bool)), true
 	case "Mutation.purgeNodes":
 		if e.ComplexityRoot.Mutation.PurgeNodes == nil {
 			break
@@ -1854,6 +2563,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RevokeFileRequest(childComplexity, args["id"].(string)), true
+	case "Mutation.revokeLink":
+		if e.ComplexityRoot.Mutation.RevokeLink == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_revokeLink_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RevokeLink(childComplexity, args["id"].(string)), true
 	case "Mutation.revokeMCPAPIKey":
 		if e.ComplexityRoot.Mutation.RevokeMCPAPIKey == nil {
 			break
@@ -1898,6 +2618,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RevokeShare(childComplexity, args["id"].(string)), true
+	case "Mutation.saveProgress":
+		if e.ComplexityRoot.Mutation.SaveProgress == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_saveProgress_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SaveProgress(childComplexity, args["nodeId"].(string), args["position"].(float64), args["duration"].(float64)), true
 	case "Mutation.sendChatMessage":
 		if e.ComplexityRoot.Mutation.SendChatMessage == nil {
 			break
@@ -1909,6 +2640,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SendChatMessage(childComplexity, args["body"].(*string), args["nodeId"].(*string)), true
+	case "Mutation.setLinkPrefs":
+		if e.ComplexityRoot.Mutation.SetLinkPrefs == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setLinkPrefs_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetLinkPrefs(childComplexity, args["input"].(LinkPrefsInput)), true
 	case "Mutation.setMCPAccessRoot":
 		if e.ComplexityRoot.Mutation.SetMCPAccessRoot == nil {
 			break
@@ -1920,6 +2662,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetMCPAccessRoot(childComplexity, args["credentialId"].(string), args["credentialType"].(string), args["rootPath"].(*string)), true
+	case "Mutation.testNotifyChannel":
+		if e.ComplexityRoot.Mutation.TestNotifyChannel == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_testNotifyChannel_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.TestNotifyChannel(childComplexity, args["id"].(string)), true
 	case "Mutation.updateFileRequest":
 		if e.ComplexityRoot.Mutation.UpdateFileRequest == nil {
 			break
@@ -1931,6 +2684,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateFileRequest(childComplexity, args["id"].(string), args["input"].(FileRequestInput)), true
+	case "Mutation.updateLink":
+		if e.ComplexityRoot.Mutation.UpdateLink == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateLink_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateLink(childComplexity, args["id"].(string), args["input"].(DirectLinkInput)), true
+	case "Mutation.updateNotifyChannel":
+		if e.ComplexityRoot.Mutation.UpdateNotifyChannel == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateNotifyChannel_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateNotifyChannel(childComplexity, args["id"].(string), args["input"].(NotifyChannelInput)), true
 	case "Mutation.verifySharePassword":
 		if e.ComplexityRoot.Mutation.VerifySharePassword == nil {
 			break
@@ -1991,6 +2766,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Node.ParentID(childComplexity), true
+	case "Node.playProgress":
+		if e.ComplexityRoot.Node.PlayProgress == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Node.PlayProgress(childComplexity), true
 	case "Node.preview":
 		if e.ComplexityRoot.Node.Preview == nil {
 			break
@@ -2058,6 +2839,203 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.NodePage.Total(childComplexity), true
+
+	case "Notification.body":
+		if e.ComplexityRoot.Notification.Body == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Notification.Body(childComplexity), true
+	case "Notification.count":
+		if e.ComplexityRoot.Notification.Count == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Notification.Count(childComplexity), true
+	case "Notification.createdAt":
+		if e.ComplexityRoot.Notification.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Notification.CreatedAt(childComplexity), true
+	case "Notification.id":
+		if e.ComplexityRoot.Notification.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Notification.ID(childComplexity), true
+	case "Notification.kind":
+		if e.ComplexityRoot.Notification.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Notification.Kind(childComplexity), true
+	case "Notification.level":
+		if e.ComplexityRoot.Notification.Level == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Notification.Level(childComplexity), true
+	case "Notification.read":
+		if e.ComplexityRoot.Notification.Read == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Notification.Read(childComplexity), true
+	case "Notification.target":
+		if e.ComplexityRoot.Notification.Target == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Notification.Target(childComplexity), true
+	case "Notification.title":
+		if e.ComplexityRoot.Notification.Title == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Notification.Title(childComplexity), true
+	case "Notification.updatedAt":
+		if e.ComplexityRoot.Notification.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Notification.UpdatedAt(childComplexity), true
+
+	case "NotificationPage.items":
+		if e.ComplexityRoot.NotificationPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationPage.Items(childComplexity), true
+	case "NotificationPage.nextCursor":
+		if e.ComplexityRoot.NotificationPage.NextCursor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationPage.NextCursor(childComplexity), true
+
+	case "NotificationTarget.id":
+		if e.ComplexityRoot.NotificationTarget.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationTarget.ID(childComplexity), true
+	case "NotificationTarget.kind":
+		if e.ComplexityRoot.NotificationTarget.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationTarget.Kind(childComplexity), true
+	case "NotificationTarget.parentId":
+		if e.ComplexityRoot.NotificationTarget.ParentID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationTarget.ParentID(childComplexity), true
+
+	case "NotifyChannel.createdAt":
+		if e.ComplexityRoot.NotifyChannel.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyChannel.CreatedAt(childComplexity), true
+	case "NotifyChannel.enabled":
+		if e.ComplexityRoot.NotifyChannel.Enabled == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyChannel.Enabled(childComplexity), true
+	case "NotifyChannel.events":
+		if e.ComplexityRoot.NotifyChannel.Events == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyChannel.Events(childComplexity), true
+	case "NotifyChannel.hasSecret":
+		if e.ComplexityRoot.NotifyChannel.HasSecret == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyChannel.HasSecret(childComplexity), true
+	case "NotifyChannel.id":
+		if e.ComplexityRoot.NotifyChannel.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyChannel.ID(childComplexity), true
+	case "NotifyChannel.kind":
+		if e.ComplexityRoot.NotifyChannel.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyChannel.Kind(childComplexity), true
+	case "NotifyChannel.lastError":
+		if e.ComplexityRoot.NotifyChannel.LastError == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyChannel.LastError(childComplexity), true
+	case "NotifyChannel.lastErrorAt":
+		if e.ComplexityRoot.NotifyChannel.LastErrorAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyChannel.LastErrorAt(childComplexity), true
+	case "NotifyChannel.lastOkAt":
+		if e.ComplexityRoot.NotifyChannel.LastOkAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyChannel.LastOkAt(childComplexity), true
+	case "NotifyChannel.name":
+		if e.ComplexityRoot.NotifyChannel.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyChannel.Name(childComplexity), true
+	case "NotifyChannel.secretHint":
+		if e.ComplexityRoot.NotifyChannel.SecretHint == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyChannel.SecretHint(childComplexity), true
+	case "NotifyChannel.topic":
+		if e.ComplexityRoot.NotifyChannel.Topic == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyChannel.Topic(childComplexity), true
+	case "NotifyChannel.url":
+		if e.ComplexityRoot.NotifyChannel.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyChannel.URL(childComplexity), true
+
+	case "NotifyEventKind.adminOnly":
+		if e.ComplexityRoot.NotifyEventKind.AdminOnly == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyEventKind.AdminOnly(childComplexity), true
+	case "NotifyEventKind.defaultPush":
+		if e.ComplexityRoot.NotifyEventKind.DefaultPush == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyEventKind.DefaultPush(childComplexity), true
+	case "NotifyEventKind.kind":
+		if e.ComplexityRoot.NotifyEventKind.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyEventKind.Kind(childComplexity), true
+	case "NotifyEventKind.label":
+		if e.ComplexityRoot.NotifyEventKind.Label == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotifyEventKind.Label(childComplexity), true
 
 	case "OAuthAuthorizationRequest.clientName":
 		if e.ComplexityRoot.OAuthAuthorizationRequest.ClientName == nil {
@@ -2129,6 +3107,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.PartUrl.URL(childComplexity), true
 
+	case "PlayProgress.duration":
+		if e.ComplexityRoot.PlayProgress.Duration == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PlayProgress.Duration(childComplexity), true
+	case "PlayProgress.finished":
+		if e.ComplexityRoot.PlayProgress.Finished == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PlayProgress.Finished(childComplexity), true
+	case "PlayProgress.position":
+		if e.ComplexityRoot.PlayProgress.Position == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PlayProgress.Position(childComplexity), true
+	case "PlayProgress.updatedAt":
+		if e.ComplexityRoot.PlayProgress.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PlayProgress.UpdatedAt(childComplexity), true
+
 	case "PreviewInfo.contentUrl":
 		if e.ComplexityRoot.PreviewInfo.ContentURL == nil {
 			break
@@ -2159,6 +3162,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.PreviewInfo.Status(childComplexity), true
+	case "PreviewInfo.subtitles":
+		if e.ComplexityRoot.PreviewInfo.Subtitles == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PreviewInfo.Subtitles(childComplexity), true
 	case "PreviewInfo.thumbUrl":
 		if e.ComplexityRoot.PreviewInfo.ThumbURL == nil {
 			break
@@ -2166,6 +3175,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.PreviewInfo.ThumbURL(childComplexity), true
 
+	case "Query.adminLinkStats":
+		if e.ComplexityRoot.Query.AdminLinkStats == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AdminLinkStats(childComplexity), true
 	case "Query.adminOverview":
 		if e.ComplexityRoot.Query.AdminOverview == nil {
 			break
@@ -2291,6 +3306,62 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Job(childComplexity, args["id"].(string)), true
+	case "Query.link":
+		if e.ComplexityRoot.Query.Link == nil {
+			break
+		}
+
+		args, err := ec.field_Query_link_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.Link(childComplexity, args["id"].(string)), true
+	case "Query.linkHits":
+		if e.ComplexityRoot.Query.LinkHits == nil {
+			break
+		}
+
+		args, err := ec.field_Query_linkHits_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.LinkHits(childComplexity, args["id"].(string), args["cursor"].(*string)), true
+	case "Query.linkPrefs":
+		if e.ComplexityRoot.Query.LinkPrefs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.LinkPrefs(childComplexity), true
+	case "Query.linkReferers":
+		if e.ComplexityRoot.Query.LinkReferers == nil {
+			break
+		}
+
+		args, err := ec.field_Query_linkReferers_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.LinkReferers(childComplexity, args["id"].(string), args["days"].(*int)), true
+	case "Query.linkStats":
+		if e.ComplexityRoot.Query.LinkStats == nil {
+			break
+		}
+
+		args, err := ec.field_Query_linkStats_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.LinkStats(childComplexity, args["id"].(string), args["hours"].(*int)), true
+	case "Query.linksEnabled":
+		if e.ComplexityRoot.Query.LinksEnabled == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.LinksEnabled(childComplexity), true
 	case "Query.mcpAPIKeys":
 		if e.ComplexityRoot.Query.McpAPIKeys == nil {
 			break
@@ -2337,6 +3408,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.MyJobs(childComplexity, args["active"].(*bool), args["cursor"].(*string)), true
+	case "Query.myLinks":
+		if e.ComplexityRoot.Query.MyLinks == nil {
+			break
+		}
+
+		args, err := ec.field_Query_myLinks_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.MyLinks(childComplexity, args["cursor"].(*string)), true
 	case "Query.myShares":
 		if e.ComplexityRoot.Query.MyShares == nil {
 			break
@@ -2354,6 +3436,40 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Node(childComplexity, args["id"].(string)), true
+	case "Query.nodeLink":
+		if e.ComplexityRoot.Query.NodeLink == nil {
+			break
+		}
+
+		args, err := ec.field_Query_nodeLink_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.NodeLink(childComplexity, args["nodeId"].(string)), true
+	case "Query.notifications":
+		if e.ComplexityRoot.Query.Notifications == nil {
+			break
+		}
+
+		args, err := ec.field_Query_notifications_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.Notifications(childComplexity, args["cursor"].(*string), args["unreadOnly"].(*bool)), true
+	case "Query.notifyChannels":
+		if e.ComplexityRoot.Query.NotifyChannels == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.NotifyChannels(childComplexity), true
+	case "Query.notifyEventKinds":
+		if e.ComplexityRoot.Query.NotifyEventKinds == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.NotifyEventKinds(childComplexity), true
 	case "Query.oauthAuthorizationRequest":
 		if e.ComplexityRoot.Query.OauthAuthorizationRequest == nil {
 			break
@@ -2371,6 +3487,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.OauthGrants(childComplexity), true
+	case "Query.playlist":
+		if e.ComplexityRoot.Query.Playlist == nil {
+			break
+		}
+
+		args, err := ec.field_Query_playlist_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.Playlist(childComplexity, args["nodeId"].(string)), true
+	case "Query.recentPlays":
+		if e.ComplexityRoot.Query.RecentPlays == nil {
+			break
+		}
+
+		args, err := ec.field_Query_recentPlays_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.RecentPlays(childComplexity, args["limit"].(*int)), true
 	case "Query.searchContent":
 		if e.ComplexityRoot.Query.SearchContent == nil {
 			break
@@ -2449,6 +3587,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.UploadSession(childComplexity, args["id"].(string)), true
+
+	case "RecentPlay.node":
+		if e.ComplexityRoot.RecentPlay.Node == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RecentPlay.Node(childComplexity), true
+	case "RecentPlay.progress":
+		if e.ComplexityRoot.RecentPlay.Progress == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RecentPlay.Progress(childComplexity), true
 
 	case "Session.active":
 		if e.ComplexityRoot.Session.Active == nil {
@@ -2630,6 +3781,37 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ShareVisitStats.VerifyCount(childComplexity), true
 
+	case "SubtitleTrack.default":
+		if e.ComplexityRoot.SubtitleTrack.Default == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SubtitleTrack.Default(childComplexity), true
+	case "SubtitleTrack.label":
+		if e.ComplexityRoot.SubtitleTrack.Label == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SubtitleTrack.Label(childComplexity), true
+	case "SubtitleTrack.lang":
+		if e.ComplexityRoot.SubtitleTrack.Lang == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SubtitleTrack.Lang(childComplexity), true
+	case "SubtitleTrack.name":
+		if e.ComplexityRoot.SubtitleTrack.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SubtitleTrack.Name(childComplexity), true
+	case "SubtitleTrack.nodeId":
+		if e.ComplexityRoot.SubtitleTrack.NodeID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SubtitleTrack.NodeID(childComplexity), true
+
 	case "TaskCount.count":
 		if e.ComplexityRoot.TaskCount.Count == nil {
 			break
@@ -2730,6 +3912,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.User.QuotaBytes(childComplexity), true
+	case "User.unreadNotifications":
+		if e.ComplexityRoot.User.UnreadNotifications == nil {
+			break
+		}
+
+		return e.ComplexityRoot.User.UnreadNotifications(childComplexity), true
 	case "User.usedBytes":
 		if e.ComplexityRoot.User.UsedBytes == nil {
 			break
@@ -2751,7 +3939,10 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	opCtx := graphql.GetOperationContext(ctx)
 	ec := newExecutionContext(opCtx, e, make(chan graphql.DeferredResult))
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
+		ec.unmarshalInputDirectLinkInput,
 		ec.unmarshalInputFileRequestInput,
+		ec.unmarshalInputLinkPrefsInput,
+		ec.unmarshalInputNotifyChannelInput,
 		ec.unmarshalInputOAuthAuthorizationInput,
 		ec.unmarshalInputPartEtag,
 	)
@@ -2840,6 +4031,8 @@ type User {
   quotaBytes: Int64!
   usedBytes: Int64!
   isAdmin: Boolean!
+  # 未读通知数(doc/22 三);网页随 30 秒一次的 me 轮询带回
+  unreadNotifications: Int!
 }
 
 # 一个登录设备(按 refresh token family 分组)。
@@ -2962,6 +4155,8 @@ type Node {
   subtreeBytes: Int64
   subtreeCount: Int64
   statsStale: Boolean
+  # 播放进度(doc/22 二.3):音视频、PDF;没记过、访客、文件夹为 null。每个节点一次查询,只在单个节点上取,列表里别请求
+  playProgress: PlayProgress
 }
 
 # ARCHIVE:压缩包(zip / 7z / rar / tar.*),用 archiveInfo / archiveEntries 浏览
@@ -2974,6 +4169,252 @@ type PreviewInfo {
   contentUrl: String
   status: TaskStatus
   durationSec: Int
+  # 外挂字幕(doc/22 二.2):只有 VIDEO 在 node(id) / requestPreview 里给出,列表里恒为空
+  subtitles: [SubtitleTrack!]!
+}
+
+# 同文件夹里与视频同名的字幕文件。内容一律转成 WebVTT:GET /sub/{nodeId}?token=<access>
+# (也接受 Authorization 头;分享访客在分享范围内可用)
+type SubtitleTrack {
+  nodeId: ID!
+  name: String!
+  # 显示名:简体中文 / 繁体中文 / English / 日本語 …;认不出时是文件名里的标记或「字幕」
+  label: String!
+  # BCP 47:zh-Hans / zh-Hant / zh / en / ja / ko …;认不出为空串
+  lang: String!
+  # 默认选中的一条(中文优先,其次第一条)
+  default: Boolean!
+}
+
+# ---------- 影音(doc/22 二) ----------
+
+type PlayProgress {
+  # 音视频是秒;PDF 是页码(从 1 开始)
+  position: Float!
+  # 音视频是总秒数;PDF 是总页数
+  duration: Float!
+  # 看完了(剩余不到 3% 且不到 20 秒,或翻到最后一页):下次从头开始
+  finished: Boolean!
+  updatedAt: Time!
+}
+
+type RecentPlay {
+  node: Node!
+  progress: PlayProgress!
+}
+
+# ---------- 通知(doc/22 三) ----------
+
+enum NotificationLevel { INFO, WARN, ALERT }
+
+# 点开通知跳到哪。NODE:id 是文件 / 文件夹,parentId 是所在文件夹(null = 根目录);
+# FILE_REQUEST / LINK:id 是收集链接 / 直链;JOBS:后台任务列表;SESSIONS:登录设备;CREDENTIALS:应用密码与 API Key;ADMIN:管理端
+enum NotificationTargetKind { NODE, FILE_REQUEST, LINK, JOBS, SESSIONS, CREDENTIALS, ADMIN }
+
+type NotificationTarget {
+  kind: NotificationTargetKind!
+  id: ID
+  parentId: ID
+}
+
+type Notification {
+  id: ID!
+  # 事件类型,见 notifyEventKinds
+  kind: String!
+  level: NotificationLevel!
+  title: String!
+  body: String!
+  # 同一件事 30 分钟内重复发生时合并,这里是合并了几次
+  count: Int!
+  target: NotificationTarget
+  createdAt: Time!
+  # 最后一次合并的时刻;没合并过等于 createdAt
+  updatedAt: Time!
+  read: Boolean!
+}
+
+type NotificationPage {
+  items: [Notification!]!
+  nextCursor: String
+}
+
+# 事件类型:collect_upload / collect_full / job_done / job_failed / quota / login / credential / link_alert / backup
+type NotifyEventKind {
+  kind: String!
+  label: String!
+  # 新建渠道时默认勾上
+  defaultPush: Boolean!
+  # 只发给管理员(备份)
+  adminOnly: Boolean!
+}
+
+enum NotifyChannelKind { WEBHOOK, NTFY, BARK, TELEGRAM }
+
+# 推送渠道。密钥类字段只写不读:webhook 的签名密钥、ntfy 的访问令牌、bark 的 device key、telegram 的 bot token
+type NotifyChannel {
+  id: ID!
+  kind: NotifyChannelKind!
+  name: String!
+  enabled: Boolean!
+  # 推哪些事件(NotifyEventKind.kind)
+  events: [String!]!
+  # webhook:地址;ntfy / bark:服务器;telegram:不用
+  url: String!
+  # ntfy:topic;telegram:chat id;其余不用
+  topic: String!
+  hasSecret: Boolean!
+  # 密钥末 4 位,没有为空串
+  secretHint: String!
+  lastOkAt: Time
+  lastError: String
+  lastErrorAt: Time
+  createdAt: Time!
+}
+
+# 整表单提交。secret 不传 = 保持原值(新建时即没有);传空串 = 清除
+input NotifyChannelInput {
+  kind: NotifyChannelKind!
+  name: String!
+  enabled: Boolean!
+  events: [String!]!
+  url: String
+  topic: String
+  secret: String
+}
+
+# ---------- 直链与图床(doc/22 四) ----------
+
+# PAUSED:手动暂停或超了每天的流量上限(见 pauseReason);EXPIRED:过了有效期;
+# UNAVAILABLE:文件在回收站、属主被禁用,或全站本月流量用完 / 管理员关了直链
+enum LinkStatus { ACTIVE, PAUSED, EXPIRED, UNAVAILABLE }
+
+type LinkUsage {
+  hits: Int64!
+  bytes: Int64!
+  # 被来源白名单、限流、上限拦下的次数
+  blocked: Int64!
+}
+
+type DirectLink {
+  id: ID!
+  token: String!
+  # 站内路径 /x/<token>/<当前文件名>,前面拼上站点地址即直链
+  path: String!
+  # 完整地址(GOPAN_PUBLIC_URL + path);没配站点地址时与 path 相同
+  url: String!
+  nodeId: ID!
+  name: String!
+  mime: String
+  size: Int64
+  status: LinkStatus!
+  # manual(手动)/ daily_cap(超了当天上限,次日自动恢复)/ anomaly(异常时自动暂停)
+  pauseReason: String
+  # web / android / api(图床接口)/ mcp
+  source: String!
+  createdAt: Time!
+  expiresAt: Time
+  # 来源白名单;null = 用默认规则(linkPrefs)
+  refererHosts: [String!]
+  # 允许没有来源的访问(直接打开、App 里看);null = 用默认规则
+  allowNoReferer: Boolean
+  # 每天的流量上限;null = 用全站默认(linkPrefs.dailyBytesCapDefault)
+  dailyBytesCap: Int64
+  # 检测到异常时自动暂停(默认只提醒)
+  autoPause: Boolean!
+  # JPEG 里带拍摄位置(生成直链时检测)
+  hasGps: Boolean!
+  hitsTotal: Int64!
+  bytesTotal: Int64!
+  lastHitAt: Time
+  # 今天(按 GOPAN_TZ)与近 30 天
+  today: LinkUsage!
+  last30Days: LinkUsage!
+}
+
+type DirectLinkPage {
+  items: [DirectLink!]!
+  nextCursor: String
+  total: Int!
+}
+
+type LinkHourStat {
+  hour: Time!
+  hits: Int64!
+  bytes: Int64!
+  blocked: Int64!
+  # 独立 IP 数(按小时)
+  ips: Int!
+}
+
+type LinkReferer {
+  # 来源站点;没有来源为空串,超出的合在「其他」(host = "*")
+  host: String!
+  hits: Int64!
+  bytes: Int64!
+}
+
+# 访问明细(每条直链每小时最多记 200 条,超出只计数)
+type LinkHit {
+  at: Time!
+  ip: String!
+  userAgent: String!
+  referer: String!
+  status: Int!
+  bytes: Int64!
+}
+
+type LinkHitPage {
+  items: [LinkHit!]!
+  nextCursor: String
+}
+
+# 每人一份的默认规则,以及全站的上限与本月用量(只读)
+type LinkPrefs {
+  refererHosts: [String!]!
+  allowNoReferer: Boolean!
+  # 图床接口与网页粘贴上传存到这里(按「年-月」分子文件夹,按需创建)
+  imageFolder: String!
+  # 图床上传时抹掉 JPEG 的 GPS 位置
+  stripGps: Boolean!
+  dailyBytesCapDefault: Int64!
+  monthlyBytesCap: Int64!
+  # 全站本月直链流量
+  monthlyBytesUsed: Int64!
+}
+
+input LinkPrefsInput {
+  refererHosts: [String!]!
+  allowNoReferer: Boolean!
+  # 网盘里的路径,如 /图床
+  imageFolder: String!
+  stripGps: Boolean!
+}
+
+# 整表单提交:refererHosts / allowNoReferer / dailyBytesCap 为 null = 用默认,expiresAt 为 null = 永久
+input DirectLinkInput {
+  refererHosts: [String!]
+  allowNoReferer: Boolean
+  dailyBytesCap: Int64
+  expiresAt: Time
+  autoPause: Boolean!
+}
+
+type AdminLink {
+  id: ID!
+  owner: String!
+  name: String!
+  path: String!
+  status: LinkStatus!
+  monthHits: Int64!
+  monthBytes: Int64!
+}
+
+type AdminLinkStats {
+  monthHits: Int64!
+  monthBytes: Int64!
+  monthlyBytesCap: Int64!
+  # 本月流量前 10
+  top: [AdminLink!]!
 }
 
 # UNAVAILABLE:该派生能力未在本次部署中启用(如未部署 Gotenberg 时的 Office 转换)
@@ -3302,6 +4743,33 @@ type Query {
   # 本站是否开了离线下载(GOPAN_FETCH)
   fetchEnabled: Boolean!
 
+  # 影音:同文件夹里同类(视频或音频)的文件,按自然顺序(第2集在第10集前),最多 1000 个,含 nodeId 本身。
+  # 分享访客在分享范围内可用
+  playlist(nodeId: ID!): [Node!]!
+  # 没看完的,最近的在前
+  recentPlays(limit: Int = 20): [RecentPlay!]!
+
+  # 通知:新的在前
+  notifications(cursor: String, unreadOnly: Boolean = false): NotificationPage!
+  notifyChannels: [NotifyChannel!]!
+  # 管理员能看到 adminOnly 的事件,其他人看不到
+  notifyEventKinds: [NotifyEventKind!]!
+
+  # 直链:新的在前
+  myLinks(cursor: String): DirectLinkPage!
+  link(id: ID!): DirectLink!
+  # 某个文件当前有效的直链;没有为 null(不创建)
+  nodeLink(nodeId: ID!): DirectLink
+  # 按小时的统计,hours 最多 2160(90 天)
+  linkStats(id: ID!, hours: Int = 168): [LinkHourStat!]!
+  # 来源排行,days 最多 90
+  linkReferers(id: ID!, days: Int = 30): [LinkReferer!]!
+  linkHits(id: ID!, cursor: String): LinkHitPage!
+  linkPrefs: LinkPrefs!
+  # 本站是否开了直链(GOPAN_LINKS)
+  linksEnabled: Boolean!
+  adminLinkStats: AdminLinkStats!
+
   adminUsers: [AdminUser!]!
   adminOverview: AdminOverview!
 }
@@ -3393,6 +4861,31 @@ type Mutation {
   # 清掉已结束的任务记录(不动下好的文件),返回清掉的条数
   clearFinishedJobs: Int!
 
+  # 影音:播放中每 15 秒、暂停、关闭时报一次;PDF 翻页后报。
+  # 不记(5 分钟以下的音视频、3 页以下的 PDF、访客)时返回 null
+  saveProgress(nodeId: ID!, position: Float!, duration: Float!): PlayProgress
+  # 从「最近播放」里去掉
+  clearProgress(nodeId: ID!): Boolean!
+
+  # 通知:ids 为空 = 全部标为已读;返回标记的条数
+  markNotificationsRead(ids: [ID!]): Int!
+  # 删除全部通知,返回删除的条数
+  clearNotifications: Int!
+  createNotifyChannel(input: NotifyChannelInput!): NotifyChannel!
+  updateNotifyChannel(id: ID!, input: NotifyChannelInput!): NotifyChannel!
+  deleteNotifyChannel(id: ID!): Boolean!
+  # 立即发一条测试消息;失败时报 NOTIFY_FAILED 并带上对方的回应
+  testNotifyChannel(id: ID!): Boolean!
+
+  # 直链:每个文件同时只有一条有效直链,重复调用返回已有的;一次最多 100 个
+  createLinks(nodeIds: [ID!]!): [DirectLink!]!
+  updateLink(id: ID!, input: DirectLinkInput!): DirectLink!
+  pauseLink(id: ID!, paused: Boolean!): DirectLink!
+  revokeLink(id: ID!): Boolean!
+  setLinkPrefs(input: LinkPrefsInput!): LinkPrefs!
+  adminPauseLink(id: ID!, paused: Boolean!): Boolean!
+  adminRevokeLink(id: ID!): Boolean!
+
   adminCreateUser(username: String!, password: String!, quotaBytes: Int64): AdminUser!
   adminSetQuota(userId: ID!, quotaBytes: Int64!): AdminUser!
   adminSetDisabled(userId: ID!, disabled: Boolean!): AdminUser!
@@ -3410,6 +4903,40 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // childFields_* functions provide shared child field context lookups.
 // Each function is generated once per unique object type, deduplicating the
 // switch statements that were previously inlined in every fieldContext_* function.
+
+func (ec *executionContext) childFields_AdminLink(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_AdminLink_id(ctx, field)
+	case "owner":
+		return ec.fieldContext_AdminLink_owner(ctx, field)
+	case "name":
+		return ec.fieldContext_AdminLink_name(ctx, field)
+	case "path":
+		return ec.fieldContext_AdminLink_path(ctx, field)
+	case "status":
+		return ec.fieldContext_AdminLink_status(ctx, field)
+	case "monthHits":
+		return ec.fieldContext_AdminLink_monthHits(ctx, field)
+	case "monthBytes":
+		return ec.fieldContext_AdminLink_monthBytes(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AdminLink", field.Name)
+}
+
+func (ec *executionContext) childFields_AdminLinkStats(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "monthHits":
+		return ec.fieldContext_AdminLinkStats_monthHits(ctx, field)
+	case "monthBytes":
+		return ec.fieldContext_AdminLinkStats_monthBytes(ctx, field)
+	case "monthlyBytesCap":
+		return ec.fieldContext_AdminLinkStats_monthlyBytesCap(ctx, field)
+	case "top":
+		return ec.fieldContext_AdminLinkStats_top(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AdminLinkStats", field.Name)
+}
 
 func (ec *executionContext) childFields_AdminOverview(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
@@ -3613,6 +5140,70 @@ func (ec *executionContext) childFields_ContentIndexStats(ctx context.Context, f
 	return nil, fmt.Errorf("no field named %q was found under type ContentIndexStats", field.Name)
 }
 
+func (ec *executionContext) childFields_DirectLink(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_DirectLink_id(ctx, field)
+	case "token":
+		return ec.fieldContext_DirectLink_token(ctx, field)
+	case "path":
+		return ec.fieldContext_DirectLink_path(ctx, field)
+	case "url":
+		return ec.fieldContext_DirectLink_url(ctx, field)
+	case "nodeId":
+		return ec.fieldContext_DirectLink_nodeId(ctx, field)
+	case "name":
+		return ec.fieldContext_DirectLink_name(ctx, field)
+	case "mime":
+		return ec.fieldContext_DirectLink_mime(ctx, field)
+	case "size":
+		return ec.fieldContext_DirectLink_size(ctx, field)
+	case "status":
+		return ec.fieldContext_DirectLink_status(ctx, field)
+	case "pauseReason":
+		return ec.fieldContext_DirectLink_pauseReason(ctx, field)
+	case "source":
+		return ec.fieldContext_DirectLink_source(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_DirectLink_createdAt(ctx, field)
+	case "expiresAt":
+		return ec.fieldContext_DirectLink_expiresAt(ctx, field)
+	case "refererHosts":
+		return ec.fieldContext_DirectLink_refererHosts(ctx, field)
+	case "allowNoReferer":
+		return ec.fieldContext_DirectLink_allowNoReferer(ctx, field)
+	case "dailyBytesCap":
+		return ec.fieldContext_DirectLink_dailyBytesCap(ctx, field)
+	case "autoPause":
+		return ec.fieldContext_DirectLink_autoPause(ctx, field)
+	case "hasGps":
+		return ec.fieldContext_DirectLink_hasGps(ctx, field)
+	case "hitsTotal":
+		return ec.fieldContext_DirectLink_hitsTotal(ctx, field)
+	case "bytesTotal":
+		return ec.fieldContext_DirectLink_bytesTotal(ctx, field)
+	case "lastHitAt":
+		return ec.fieldContext_DirectLink_lastHitAt(ctx, field)
+	case "today":
+		return ec.fieldContext_DirectLink_today(ctx, field)
+	case "last30Days":
+		return ec.fieldContext_DirectLink_last30Days(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type DirectLink", field.Name)
+}
+
+func (ec *executionContext) childFields_DirectLinkPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_DirectLinkPage_items(ctx, field)
+	case "nextCursor":
+		return ec.fieldContext_DirectLinkPage_nextCursor(ctx, field)
+	case "total":
+		return ec.fieldContext_DirectLinkPage_total(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type DirectLinkPage", field.Name)
+}
+
 func (ec *executionContext) childFields_FileRequest(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -3761,6 +5352,94 @@ func (ec *executionContext) childFields_JobPage(ctx context.Context, field graph
 	return nil, fmt.Errorf("no field named %q was found under type JobPage", field.Name)
 }
 
+func (ec *executionContext) childFields_LinkHit(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "at":
+		return ec.fieldContext_LinkHit_at(ctx, field)
+	case "ip":
+		return ec.fieldContext_LinkHit_ip(ctx, field)
+	case "userAgent":
+		return ec.fieldContext_LinkHit_userAgent(ctx, field)
+	case "referer":
+		return ec.fieldContext_LinkHit_referer(ctx, field)
+	case "status":
+		return ec.fieldContext_LinkHit_status(ctx, field)
+	case "bytes":
+		return ec.fieldContext_LinkHit_bytes(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type LinkHit", field.Name)
+}
+
+func (ec *executionContext) childFields_LinkHitPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_LinkHitPage_items(ctx, field)
+	case "nextCursor":
+		return ec.fieldContext_LinkHitPage_nextCursor(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type LinkHitPage", field.Name)
+}
+
+func (ec *executionContext) childFields_LinkHourStat(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "hour":
+		return ec.fieldContext_LinkHourStat_hour(ctx, field)
+	case "hits":
+		return ec.fieldContext_LinkHourStat_hits(ctx, field)
+	case "bytes":
+		return ec.fieldContext_LinkHourStat_bytes(ctx, field)
+	case "blocked":
+		return ec.fieldContext_LinkHourStat_blocked(ctx, field)
+	case "ips":
+		return ec.fieldContext_LinkHourStat_ips(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type LinkHourStat", field.Name)
+}
+
+func (ec *executionContext) childFields_LinkPrefs(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "refererHosts":
+		return ec.fieldContext_LinkPrefs_refererHosts(ctx, field)
+	case "allowNoReferer":
+		return ec.fieldContext_LinkPrefs_allowNoReferer(ctx, field)
+	case "imageFolder":
+		return ec.fieldContext_LinkPrefs_imageFolder(ctx, field)
+	case "stripGps":
+		return ec.fieldContext_LinkPrefs_stripGps(ctx, field)
+	case "dailyBytesCapDefault":
+		return ec.fieldContext_LinkPrefs_dailyBytesCapDefault(ctx, field)
+	case "monthlyBytesCap":
+		return ec.fieldContext_LinkPrefs_monthlyBytesCap(ctx, field)
+	case "monthlyBytesUsed":
+		return ec.fieldContext_LinkPrefs_monthlyBytesUsed(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type LinkPrefs", field.Name)
+}
+
+func (ec *executionContext) childFields_LinkReferer(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "host":
+		return ec.fieldContext_LinkReferer_host(ctx, field)
+	case "hits":
+		return ec.fieldContext_LinkReferer_hits(ctx, field)
+	case "bytes":
+		return ec.fieldContext_LinkReferer_bytes(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type LinkReferer", field.Name)
+}
+
+func (ec *executionContext) childFields_LinkUsage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "hits":
+		return ec.fieldContext_LinkUsage_hits(ctx, field)
+	case "bytes":
+		return ec.fieldContext_LinkUsage_bytes(ctx, field)
+	case "blocked":
+		return ec.fieldContext_LinkUsage_blocked(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type LinkUsage", field.Name)
+}
+
 func (ec *executionContext) childFields_MCPAPIKey(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -3857,6 +5536,8 @@ func (ec *executionContext) childFields_Node(ctx context.Context, field graphql.
 		return ec.fieldContext_Node_subtreeCount(ctx, field)
 	case "statsStale":
 		return ec.fieldContext_Node_statsStale(ctx, field)
+	case "playProgress":
+		return ec.fieldContext_Node_playProgress(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Node", field.Name)
 }
@@ -3871,6 +5552,100 @@ func (ec *executionContext) childFields_NodePage(ctx context.Context, field grap
 		return ec.fieldContext_NodePage_total(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type NodePage", field.Name)
+}
+
+func (ec *executionContext) childFields_Notification(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_Notification_id(ctx, field)
+	case "kind":
+		return ec.fieldContext_Notification_kind(ctx, field)
+	case "level":
+		return ec.fieldContext_Notification_level(ctx, field)
+	case "title":
+		return ec.fieldContext_Notification_title(ctx, field)
+	case "body":
+		return ec.fieldContext_Notification_body(ctx, field)
+	case "count":
+		return ec.fieldContext_Notification_count(ctx, field)
+	case "target":
+		return ec.fieldContext_Notification_target(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Notification_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_Notification_updatedAt(ctx, field)
+	case "read":
+		return ec.fieldContext_Notification_read(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Notification", field.Name)
+}
+
+func (ec *executionContext) childFields_NotificationPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_NotificationPage_items(ctx, field)
+	case "nextCursor":
+		return ec.fieldContext_NotificationPage_nextCursor(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type NotificationPage", field.Name)
+}
+
+func (ec *executionContext) childFields_NotificationTarget(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "kind":
+		return ec.fieldContext_NotificationTarget_kind(ctx, field)
+	case "id":
+		return ec.fieldContext_NotificationTarget_id(ctx, field)
+	case "parentId":
+		return ec.fieldContext_NotificationTarget_parentId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type NotificationTarget", field.Name)
+}
+
+func (ec *executionContext) childFields_NotifyChannel(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_NotifyChannel_id(ctx, field)
+	case "kind":
+		return ec.fieldContext_NotifyChannel_kind(ctx, field)
+	case "name":
+		return ec.fieldContext_NotifyChannel_name(ctx, field)
+	case "enabled":
+		return ec.fieldContext_NotifyChannel_enabled(ctx, field)
+	case "events":
+		return ec.fieldContext_NotifyChannel_events(ctx, field)
+	case "url":
+		return ec.fieldContext_NotifyChannel_url(ctx, field)
+	case "topic":
+		return ec.fieldContext_NotifyChannel_topic(ctx, field)
+	case "hasSecret":
+		return ec.fieldContext_NotifyChannel_hasSecret(ctx, field)
+	case "secretHint":
+		return ec.fieldContext_NotifyChannel_secretHint(ctx, field)
+	case "lastOkAt":
+		return ec.fieldContext_NotifyChannel_lastOkAt(ctx, field)
+	case "lastError":
+		return ec.fieldContext_NotifyChannel_lastError(ctx, field)
+	case "lastErrorAt":
+		return ec.fieldContext_NotifyChannel_lastErrorAt(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_NotifyChannel_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type NotifyChannel", field.Name)
+}
+
+func (ec *executionContext) childFields_NotifyEventKind(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "kind":
+		return ec.fieldContext_NotifyEventKind_kind(ctx, field)
+	case "label":
+		return ec.fieldContext_NotifyEventKind_label(ctx, field)
+	case "defaultPush":
+		return ec.fieldContext_NotifyEventKind_defaultPush(ctx, field)
+	case "adminOnly":
+		return ec.fieldContext_NotifyEventKind_adminOnly(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type NotifyEventKind", field.Name)
 }
 
 func (ec *executionContext) childFields_OAuthAuthorizationRequest(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3919,6 +5694,20 @@ func (ec *executionContext) childFields_PartUrl(ctx context.Context, field graph
 	return nil, fmt.Errorf("no field named %q was found under type PartUrl", field.Name)
 }
 
+func (ec *executionContext) childFields_PlayProgress(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "position":
+		return ec.fieldContext_PlayProgress_position(ctx, field)
+	case "duration":
+		return ec.fieldContext_PlayProgress_duration(ctx, field)
+	case "finished":
+		return ec.fieldContext_PlayProgress_finished(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_PlayProgress_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type PlayProgress", field.Name)
+}
+
 func (ec *executionContext) childFields_PreviewInfo(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "kind":
@@ -3933,8 +5722,20 @@ func (ec *executionContext) childFields_PreviewInfo(ctx context.Context, field g
 		return ec.fieldContext_PreviewInfo_status(ctx, field)
 	case "durationSec":
 		return ec.fieldContext_PreviewInfo_durationSec(ctx, field)
+	case "subtitles":
+		return ec.fieldContext_PreviewInfo_subtitles(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type PreviewInfo", field.Name)
+}
+
+func (ec *executionContext) childFields_RecentPlay(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "node":
+		return ec.fieldContext_RecentPlay_node(ctx, field)
+	case "progress":
+		return ec.fieldContext_RecentPlay_progress(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type RecentPlay", field.Name)
 }
 
 func (ec *executionContext) childFields_Session(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -4031,6 +5832,22 @@ func (ec *executionContext) childFields_ShareVisitStats(ctx context.Context, fie
 	return nil, fmt.Errorf("no field named %q was found under type ShareVisitStats", field.Name)
 }
 
+func (ec *executionContext) childFields_SubtitleTrack(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "nodeId":
+		return ec.fieldContext_SubtitleTrack_nodeId(ctx, field)
+	case "name":
+		return ec.fieldContext_SubtitleTrack_name(ctx, field)
+	case "label":
+		return ec.fieldContext_SubtitleTrack_label(ctx, field)
+	case "lang":
+		return ec.fieldContext_SubtitleTrack_lang(ctx, field)
+	case "default":
+		return ec.fieldContext_SubtitleTrack_default(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type SubtitleTrack", field.Name)
+}
+
 func (ec *executionContext) childFields_TaskCount(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "status":
@@ -4093,6 +5910,8 @@ func (ec *executionContext) childFields_User(ctx context.Context, field graphql.
 		return ec.fieldContext_User_usedBytes(ctx, field)
 	case "isAdmin":
 		return ec.fieldContext_User_isAdmin(ctx, field)
+	case "unreadNotifications":
+		return ec.fieldContext_User_unreadNotifications(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 }
@@ -4257,6 +6076,28 @@ func (ec *executionContext) field_Mutation_adminCreateUser_args(ctx context.Cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_adminPauseLink_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "paused",
+		func(ctx context.Context, v any) (bool, error) {
+			return ec.unmarshalNBoolean2bool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["paused"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_adminResetPassword_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4268,6 +6109,20 @@ func (ec *executionContext) field_Mutation_adminResetPassword_args(ctx context.C
 		return nil, err
 	}
 	args["userId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_adminRevokeLink_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -4348,6 +6203,20 @@ func (ec *executionContext) field_Mutation_changePassword_args(ctx context.Conte
 		return nil, err
 	}
 	args["newPassword"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_clearProgress_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "nodeId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["nodeId"] = arg0
 	return args, nil
 }
 
@@ -4519,6 +6388,20 @@ func (ec *executionContext) field_Mutation_createFolder_args(ctx context.Context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_createLinks_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "nodeIds",
+		func(ctx context.Context, v any) ([]string, error) {
+			return ec.unmarshalNID2ᚕstringᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["nodeIds"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createMCPAPIKey_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4538,6 +6421,20 @@ func (ec *executionContext) field_Mutation_createMCPAPIKey_args(ctx context.Cont
 		return nil, err
 	}
 	args["scopes"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_createNotifyChannel_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (NotifyChannelInput, error) {
+			return ec.unmarshalNNotifyChannelInput2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyChannelInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
 	return args, nil
 }
 
@@ -4618,6 +6515,20 @@ func (ec *executionContext) field_Mutation_deleteNodes_args(ctx context.Context,
 		return nil, err
 	}
 	args["ids"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteNotifyChannel_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -4755,6 +6666,20 @@ func (ec *executionContext) field_Mutation_markFileRequestSeen_args(ctx context.
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_markNotificationsRead_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "ids",
+		func(ctx context.Context, v any) ([]string, error) {
+			return ec.unmarshalOID2ᚕstringᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["ids"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_moveNodes_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4804,6 +6729,28 @@ func (ec *executionContext) field_Mutation_openFileRequest_args(ctx context.Cont
 		return nil, err
 	}
 	args["uploaderName"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_pauseLink_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "paused",
+		func(ctx context.Context, v any) (bool, error) {
+			return ec.unmarshalNBoolean2bool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["paused"] = arg1
 	return args, nil
 }
 
@@ -4935,6 +6882,20 @@ func (ec *executionContext) field_Mutation_revokeFileRequest_args(ctx context.Co
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_revokeLink_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_revokeMCPAPIKey_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4991,6 +6952,36 @@ func (ec *executionContext) field_Mutation_revokeShare_args(ctx context.Context,
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_saveProgress_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "nodeId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["nodeId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "position",
+		func(ctx context.Context, v any) (float64, error) {
+			return ec.unmarshalNFloat2float64(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["position"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "duration",
+		func(ctx context.Context, v any) (float64, error) {
+			return ec.unmarshalNFloat2float64(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["duration"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_sendChatMessage_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -5010,6 +7001,20 @@ func (ec *executionContext) field_Mutation_sendChatMessage_args(ctx context.Cont
 		return nil, err
 	}
 	args["nodeId"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_setLinkPrefs_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (LinkPrefsInput, error) {
+			return ec.unmarshalNLinkPrefsInput2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkPrefsInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
 	return args, nil
 }
 
@@ -5043,6 +7048,20 @@ func (ec *executionContext) field_Mutation_setMCPAccessRoot_args(ctx context.Con
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_testNotifyChannel_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_updateFileRequest_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -5057,6 +7076,50 @@ func (ec *executionContext) field_Mutation_updateFileRequest_args(ctx context.Co
 	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (FileRequestInput, error) {
 			return ec.unmarshalNFileRequestInput2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐFileRequestInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_updateLink_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (DirectLinkInput, error) {
+			return ec.unmarshalNDirectLinkInput2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLinkInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_updateNotifyChannel_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (NotifyChannelInput, error) {
+			return ec.unmarshalNNotifyChannelInput2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyChannelInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -5285,6 +7348,86 @@ func (ec *executionContext) field_Query_job_args(ctx context.Context, rawArgs ma
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_linkHits_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "cursor",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["cursor"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_linkReferers_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "days",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["days"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_linkStats_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "hours",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["hours"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_link_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_mcpAudit_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -5329,6 +7472,34 @@ func (ec *executionContext) field_Query_myJobs_args(ctx context.Context, rawArgs
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_myLinks_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "cursor",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["cursor"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_nodeLink_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "nodeId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["nodeId"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_node_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -5343,6 +7514,28 @@ func (ec *executionContext) field_Query_node_args(ctx context.Context, rawArgs m
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_notifications_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "cursor",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["cursor"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "unreadOnly",
+		func(ctx context.Context, v any) (*bool, error) {
+			return ec.unmarshalOBoolean2ᚖbool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["unreadOnly"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_oauthAuthorizationRequest_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -5354,6 +7547,34 @@ func (ec *executionContext) field_Query_oauthAuthorizationRequest_args(ctx conte
 		return nil, err
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_playlist_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "nodeId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["nodeId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_recentPlays_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
 	return args, nil
 }
 
@@ -5524,6 +7745,268 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 // endregion ***************************** args.gotpl *****************************
 
 // region    **************************** field.gotpl *****************************
+
+func (ec *executionContext) _AdminLink_id(ctx context.Context, field graphql.CollectedField, obj *AdminLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminLink_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminLink_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminLink", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AdminLink_owner(ctx context.Context, field graphql.CollectedField, obj *AdminLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminLink_owner(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Owner, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminLink_owner(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminLink", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AdminLink_name(ctx context.Context, field graphql.CollectedField, obj *AdminLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminLink_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminLink_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminLink", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AdminLink_path(ctx context.Context, field graphql.CollectedField, obj *AdminLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminLink_path(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminLink_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminLink", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AdminLink_status(ctx context.Context, field graphql.CollectedField, obj *AdminLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminLink_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v LinkStatus) graphql.Marshaler {
+			return ec.marshalNLinkStatus2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkStatus(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminLink_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminLink", field, false, false, errors.New("field of type LinkStatus does not have child fields"))
+}
+
+func (ec *executionContext) _AdminLink_monthHits(ctx context.Context, field graphql.CollectedField, obj *AdminLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminLink_monthHits(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MonthHits, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminLink_monthHits(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminLink", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _AdminLink_monthBytes(ctx context.Context, field graphql.CollectedField, obj *AdminLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminLink_monthBytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MonthBytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminLink_monthBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminLink", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _AdminLinkStats_monthHits(ctx context.Context, field graphql.CollectedField, obj *AdminLinkStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminLinkStats_monthHits(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MonthHits, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminLinkStats_monthHits(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminLinkStats", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _AdminLinkStats_monthBytes(ctx context.Context, field graphql.CollectedField, obj *AdminLinkStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminLinkStats_monthBytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MonthBytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminLinkStats_monthBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminLinkStats", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _AdminLinkStats_monthlyBytesCap(ctx context.Context, field graphql.CollectedField, obj *AdminLinkStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminLinkStats_monthlyBytesCap(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MonthlyBytesCap, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminLinkStats_monthlyBytesCap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminLinkStats", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _AdminLinkStats_top(ctx context.Context, field graphql.CollectedField, obj *AdminLinkStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminLinkStats_top(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Top, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*AdminLink) graphql.Marshaler {
+			return ec.marshalNAdminLink2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAdminLinkᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminLinkStats_top(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AdminLinkStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AdminLink(ctx, field)
+		},
+	}
+	return fc, nil
+}
 
 func (ec *executionContext) _AdminOverview_userCount(ctx context.Context, field graphql.CollectedField, obj *AdminOverview) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
@@ -7023,6 +9506,631 @@ func (ec *executionContext) fieldContext_ContentIndexStats_textBytes(_ context.C
 	return graphql.NewScalarFieldContext("ContentIndexStats", field, false, false, errors.New("field of type Int64 does not have child fields"))
 }
 
+func (ec *executionContext) _DirectLink_id(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_token(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_token(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Token, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_token(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_path(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_path(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_url(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_nodeId(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_nodeId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NodeID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_nodeId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_name(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_mime(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_mime(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Mime, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_mime(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_size(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_size(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Size, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int64) graphql.Marshaler {
+			return ec.marshalOInt642ᚖint64(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_status(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v LinkStatus) graphql.Marshaler {
+			return ec.marshalNLinkStatus2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkStatus(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type LinkStatus does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_pauseReason(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_pauseReason(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PauseReason, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_pauseReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_source(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_source(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Source, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_source(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_createdAt(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_expiresAt(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_expiresAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ExpiresAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_expiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_refererHosts(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_refererHosts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RefererHosts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalOString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_refererHosts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_allowNoReferer(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_allowNoReferer(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AllowNoReferer, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *bool) graphql.Marshaler {
+			return ec.marshalOBoolean2ᚖbool(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_allowNoReferer(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_dailyBytesCap(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_dailyBytesCap(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DailyBytesCap, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int64) graphql.Marshaler {
+			return ec.marshalOInt642ᚖint64(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_dailyBytesCap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_autoPause(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_autoPause(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AutoPause, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_autoPause(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_hasGps(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_hasGps(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HasGps, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_hasGps(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_hitsTotal(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_hitsTotal(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HitsTotal, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_hitsTotal(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_bytesTotal(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_bytesTotal(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.BytesTotal, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_bytesTotal(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_lastHitAt(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_lastHitAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LastHitAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_lastHitAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLink", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLink_today(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_today(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Today, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *LinkUsage) graphql.Marshaler {
+			return ec.marshalNLinkUsage2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkUsage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_today(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DirectLink",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_LinkUsage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DirectLink_last30Days(ctx context.Context, field graphql.CollectedField, obj *DirectLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLink_last30Days(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Last30Days, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *LinkUsage) graphql.Marshaler {
+			return ec.marshalNLinkUsage2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkUsage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLink_last30Days(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DirectLink",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_LinkUsage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DirectLinkPage_items(ctx context.Context, field graphql.CollectedField, obj *DirectLinkPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLinkPage_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*DirectLink) graphql.Marshaler {
+			return ec.marshalNDirectLink2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLinkᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLinkPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DirectLinkPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_DirectLink(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DirectLinkPage_nextCursor(ctx context.Context, field graphql.CollectedField, obj *DirectLinkPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLinkPage_nextCursor(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NextCursor, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLinkPage_nextCursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLinkPage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _DirectLinkPage_total(ctx context.Context, field graphql.CollectedField, obj *DirectLinkPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DirectLinkPage_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DirectLinkPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DirectLinkPage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _FileRequest_id(ctx context.Context, field graphql.CollectedField, obj *FileRequest) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -8354,6 +11462,613 @@ func (ec *executionContext) _JobPage_nextCursor(ctx context.Context, field graph
 }
 func (ec *executionContext) fieldContext_JobPage_nextCursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("JobPage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _LinkHit_at(ctx context.Context, field graphql.CollectedField, obj *LinkHit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkHit_at(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.At, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkHit_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkHit", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _LinkHit_ip(ctx context.Context, field graphql.CollectedField, obj *LinkHit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkHit_ip(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IP, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkHit_ip(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkHit", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _LinkHit_userAgent(ctx context.Context, field graphql.CollectedField, obj *LinkHit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkHit_userAgent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserAgent, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkHit_userAgent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkHit", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _LinkHit_referer(ctx context.Context, field graphql.CollectedField, obj *LinkHit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkHit_referer(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Referer, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkHit_referer(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkHit", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _LinkHit_status(ctx context.Context, field graphql.CollectedField, obj *LinkHit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkHit_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkHit_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkHit", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LinkHit_bytes(ctx context.Context, field graphql.CollectedField, obj *LinkHit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkHit_bytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Bytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkHit_bytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkHit", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _LinkHitPage_items(ctx context.Context, field graphql.CollectedField, obj *LinkHitPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkHitPage_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*LinkHit) graphql.Marshaler {
+			return ec.marshalNLinkHit2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkHitᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkHitPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "LinkHitPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_LinkHit(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _LinkHitPage_nextCursor(ctx context.Context, field graphql.CollectedField, obj *LinkHitPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkHitPage_nextCursor(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NextCursor, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_LinkHitPage_nextCursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkHitPage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _LinkHourStat_hour(ctx context.Context, field graphql.CollectedField, obj *LinkHourStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkHourStat_hour(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Hour, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkHourStat_hour(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkHourStat", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _LinkHourStat_hits(ctx context.Context, field graphql.CollectedField, obj *LinkHourStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkHourStat_hits(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Hits, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkHourStat_hits(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkHourStat", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _LinkHourStat_bytes(ctx context.Context, field graphql.CollectedField, obj *LinkHourStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkHourStat_bytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Bytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkHourStat_bytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkHourStat", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _LinkHourStat_blocked(ctx context.Context, field graphql.CollectedField, obj *LinkHourStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkHourStat_blocked(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Blocked, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkHourStat_blocked(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkHourStat", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _LinkHourStat_ips(ctx context.Context, field graphql.CollectedField, obj *LinkHourStat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkHourStat_ips(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Ips, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkHourStat_ips(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkHourStat", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LinkPrefs_refererHosts(ctx context.Context, field graphql.CollectedField, obj *LinkPrefs) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkPrefs_refererHosts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RefererHosts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkPrefs_refererHosts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkPrefs", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _LinkPrefs_allowNoReferer(ctx context.Context, field graphql.CollectedField, obj *LinkPrefs) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkPrefs_allowNoReferer(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AllowNoReferer, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkPrefs_allowNoReferer(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkPrefs", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _LinkPrefs_imageFolder(ctx context.Context, field graphql.CollectedField, obj *LinkPrefs) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkPrefs_imageFolder(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ImageFolder, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkPrefs_imageFolder(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkPrefs", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _LinkPrefs_stripGps(ctx context.Context, field graphql.CollectedField, obj *LinkPrefs) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkPrefs_stripGps(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.StripGps, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkPrefs_stripGps(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkPrefs", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _LinkPrefs_dailyBytesCapDefault(ctx context.Context, field graphql.CollectedField, obj *LinkPrefs) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkPrefs_dailyBytesCapDefault(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DailyBytesCapDefault, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkPrefs_dailyBytesCapDefault(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkPrefs", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _LinkPrefs_monthlyBytesCap(ctx context.Context, field graphql.CollectedField, obj *LinkPrefs) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkPrefs_monthlyBytesCap(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MonthlyBytesCap, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkPrefs_monthlyBytesCap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkPrefs", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _LinkPrefs_monthlyBytesUsed(ctx context.Context, field graphql.CollectedField, obj *LinkPrefs) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkPrefs_monthlyBytesUsed(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MonthlyBytesUsed, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkPrefs_monthlyBytesUsed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkPrefs", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _LinkReferer_host(ctx context.Context, field graphql.CollectedField, obj *LinkReferer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkReferer_host(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Host, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkReferer_host(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkReferer", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _LinkReferer_hits(ctx context.Context, field graphql.CollectedField, obj *LinkReferer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkReferer_hits(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Hits, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkReferer_hits(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkReferer", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _LinkReferer_bytes(ctx context.Context, field graphql.CollectedField, obj *LinkReferer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkReferer_bytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Bytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkReferer_bytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkReferer", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _LinkUsage_hits(ctx context.Context, field graphql.CollectedField, obj *LinkUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkUsage_hits(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Hits, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkUsage_hits(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkUsage", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _LinkUsage_bytes(ctx context.Context, field graphql.CollectedField, obj *LinkUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkUsage_bytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Bytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkUsage_bytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkUsage", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _LinkUsage_blocked(ctx context.Context, field graphql.CollectedField, obj *LinkUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LinkUsage_blocked(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Blocked, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LinkUsage_blocked(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LinkUsage", field, false, false, errors.New("field of type Int64 does not have child fields"))
 }
 
 func (ec *executionContext) _MCPAPIKey_id(ctx context.Context, field graphql.CollectedField, obj *MCPAPIKey) (ret graphql.Marshaler) {
@@ -10651,6 +14366,645 @@ func (ec *executionContext) fieldContext_Mutation_clearFinishedJobs(_ context.Co
 	return graphql.NewScalarFieldContext("Mutation", field, true, true, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _Mutation_saveProgress(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_saveProgress(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SaveProgress(ctx, fc.Args["nodeId"].(string), fc.Args["position"].(float64), fc.Args["duration"].(float64))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PlayProgress) graphql.Marshaler {
+			return ec.marshalOPlayProgress2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐPlayProgress(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_saveProgress(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PlayProgress(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_saveProgress_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_clearProgress(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_clearProgress(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ClearProgress(ctx, fc.Args["nodeId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_clearProgress(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_clearProgress_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_markNotificationsRead(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_markNotificationsRead(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().MarkNotificationsRead(ctx, fc.Args["ids"].([]string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_markNotificationsRead(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_markNotificationsRead_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_clearNotifications(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_clearNotifications(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Mutation().ClearNotifications(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_clearNotifications(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Mutation", field, true, true, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Mutation_createNotifyChannel(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createNotifyChannel(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateNotifyChannel(ctx, fc.Args["input"].(NotifyChannelInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *NotifyChannel) graphql.Marshaler {
+			return ec.marshalNNotifyChannel2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyChannel(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createNotifyChannel(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_NotifyChannel(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createNotifyChannel_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateNotifyChannel(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_updateNotifyChannel(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateNotifyChannel(ctx, fc.Args["id"].(string), fc.Args["input"].(NotifyChannelInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *NotifyChannel) graphql.Marshaler {
+			return ec.marshalNNotifyChannel2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyChannel(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_updateNotifyChannel(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_NotifyChannel(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateNotifyChannel_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteNotifyChannel(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteNotifyChannel(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteNotifyChannel(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteNotifyChannel(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteNotifyChannel_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_testNotifyChannel(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_testNotifyChannel(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().TestNotifyChannel(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_testNotifyChannel(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_testNotifyChannel_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createLinks(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createLinks(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateLinks(ctx, fc.Args["nodeIds"].([]string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*DirectLink) graphql.Marshaler {
+			return ec.marshalNDirectLink2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLinkᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createLinks(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_DirectLink(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createLinks_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateLink(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_updateLink(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateLink(ctx, fc.Args["id"].(string), fc.Args["input"].(DirectLinkInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *DirectLink) graphql.Marshaler {
+			return ec.marshalNDirectLink2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLink(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_updateLink(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_DirectLink(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateLink_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_pauseLink(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_pauseLink(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().PauseLink(ctx, fc.Args["id"].(string), fc.Args["paused"].(bool))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *DirectLink) graphql.Marshaler {
+			return ec.marshalNDirectLink2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLink(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_pauseLink(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_DirectLink(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_pauseLink_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_revokeLink(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_revokeLink(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RevokeLink(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_revokeLink(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_revokeLink_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setLinkPrefs(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_setLinkPrefs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetLinkPrefs(ctx, fc.Args["input"].(LinkPrefsInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *LinkPrefs) graphql.Marshaler {
+			return ec.marshalNLinkPrefs2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkPrefs(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_setLinkPrefs(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_LinkPrefs(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setLinkPrefs_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_adminPauseLink(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_adminPauseLink(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AdminPauseLink(ctx, fc.Args["id"].(string), fc.Args["paused"].(bool))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_adminPauseLink(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_adminPauseLink_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_adminRevokeLink(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_adminRevokeLink(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AdminRevokeLink(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_adminRevokeLink(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_adminRevokeLink_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_adminCreateUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -11227,6 +15581,38 @@ func (ec *executionContext) fieldContext_Node_statsStale(_ context.Context, fiel
 	return graphql.NewScalarFieldContext("Node", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
+func (ec *executionContext) _Node_playProgress(ctx context.Context, field graphql.CollectedField, obj *Node) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Node_playProgress(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Node().PlayProgress(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PlayProgress) graphql.Marshaler {
+			return ec.marshalOPlayProgress2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐPlayProgress(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Node_playProgress(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Node",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PlayProgress(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _NodePage_items(ctx context.Context, field graphql.CollectedField, obj *NodePage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -11303,6 +15689,760 @@ func (ec *executionContext) _NodePage_total(ctx context.Context, field graphql.C
 }
 func (ec *executionContext) fieldContext_NodePage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("NodePage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Notification_id(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Notification_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Notification_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Notification", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _Notification_kind(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Notification_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Notification_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Notification", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Notification_level(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Notification_level(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Level, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v NotificationLevel) graphql.Marshaler {
+			return ec.marshalNNotificationLevel2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotificationLevel(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Notification_level(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Notification", field, false, false, errors.New("field of type NotificationLevel does not have child fields"))
+}
+
+func (ec *executionContext) _Notification_title(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Notification_title(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Title, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Notification_title(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Notification", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Notification_body(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Notification_body(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Body, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Notification_body(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Notification", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Notification_count(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Notification_count(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Count, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Notification_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Notification", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Notification_target(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Notification_target(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Target, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *NotificationTarget) graphql.Marshaler {
+			return ec.marshalONotificationTarget2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotificationTarget(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Notification_target(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_NotificationTarget(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Notification_createdAt(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Notification_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Notification_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Notification", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _Notification_updatedAt(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Notification_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Notification_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Notification", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _Notification_read(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Notification_read(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Read, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Notification_read(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Notification", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationPage_items(ctx context.Context, field graphql.CollectedField, obj *NotificationPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationPage_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Notification) graphql.Marshaler {
+			return ec.marshalNNotification2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotificationᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "NotificationPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Notification(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _NotificationPage_nextCursor(ctx context.Context, field graphql.CollectedField, obj *NotificationPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationPage_nextCursor(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NextCursor, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationPage_nextCursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationPage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationTarget_kind(ctx context.Context, field graphql.CollectedField, obj *NotificationTarget) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationTarget_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v NotificationTargetKind) graphql.Marshaler {
+			return ec.marshalNNotificationTargetKind2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotificationTargetKind(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationTarget_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationTarget", field, false, false, errors.New("field of type NotificationTargetKind does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationTarget_id(ctx context.Context, field graphql.CollectedField, obj *NotificationTarget) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationTarget_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationTarget_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationTarget", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationTarget_parentId(ctx context.Context, field graphql.CollectedField, obj *NotificationTarget) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationTarget_parentId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ParentID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationTarget_parentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationTarget", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyChannel_id(ctx context.Context, field graphql.CollectedField, obj *NotifyChannel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyChannel_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyChannel_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyChannel", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyChannel_kind(ctx context.Context, field graphql.CollectedField, obj *NotifyChannel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyChannel_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v NotifyChannelKind) graphql.Marshaler {
+			return ec.marshalNNotifyChannelKind2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyChannelKind(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyChannel_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyChannel", field, false, false, errors.New("field of type NotifyChannelKind does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyChannel_name(ctx context.Context, field graphql.CollectedField, obj *NotifyChannel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyChannel_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyChannel_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyChannel", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyChannel_enabled(ctx context.Context, field graphql.CollectedField, obj *NotifyChannel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyChannel_enabled(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Enabled, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyChannel_enabled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyChannel", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyChannel_events(ctx context.Context, field graphql.CollectedField, obj *NotifyChannel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyChannel_events(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Events, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyChannel_events(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyChannel", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyChannel_url(ctx context.Context, field graphql.CollectedField, obj *NotifyChannel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyChannel_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyChannel_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyChannel", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyChannel_topic(ctx context.Context, field graphql.CollectedField, obj *NotifyChannel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyChannel_topic(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Topic, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyChannel_topic(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyChannel", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyChannel_hasSecret(ctx context.Context, field graphql.CollectedField, obj *NotifyChannel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyChannel_hasSecret(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HasSecret, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyChannel_hasSecret(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyChannel", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyChannel_secretHint(ctx context.Context, field graphql.CollectedField, obj *NotifyChannel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyChannel_secretHint(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SecretHint, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyChannel_secretHint(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyChannel", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyChannel_lastOkAt(ctx context.Context, field graphql.CollectedField, obj *NotifyChannel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyChannel_lastOkAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LastOkAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyChannel_lastOkAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyChannel", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyChannel_lastError(ctx context.Context, field graphql.CollectedField, obj *NotifyChannel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyChannel_lastError(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LastError, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyChannel_lastError(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyChannel", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyChannel_lastErrorAt(ctx context.Context, field graphql.CollectedField, obj *NotifyChannel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyChannel_lastErrorAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LastErrorAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyChannel_lastErrorAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyChannel", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyChannel_createdAt(ctx context.Context, field graphql.CollectedField, obj *NotifyChannel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyChannel_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyChannel_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyChannel", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyEventKind_kind(ctx context.Context, field graphql.CollectedField, obj *NotifyEventKind) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyEventKind_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyEventKind_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyEventKind", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyEventKind_label(ctx context.Context, field graphql.CollectedField, obj *NotifyEventKind) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyEventKind_label(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Label, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyEventKind_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyEventKind", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyEventKind_defaultPush(ctx context.Context, field graphql.CollectedField, obj *NotifyEventKind) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyEventKind_defaultPush(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DefaultPush, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyEventKind_defaultPush(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyEventKind", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _NotifyEventKind_adminOnly(ctx context.Context, field graphql.CollectedField, obj *NotifyEventKind) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotifyEventKind_adminOnly(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AdminOnly, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotifyEventKind_adminOnly(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotifyEventKind", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _OAuthAuthorizationRequest_clientName(ctx context.Context, field graphql.CollectedField, obj *OAuthAuthorizationRequest) (ret graphql.Marshaler) {
@@ -11558,6 +16698,98 @@ func (ec *executionContext) fieldContext_PartUrl_url(_ context.Context, field gr
 	return graphql.NewScalarFieldContext("PartUrl", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _PlayProgress_position(ctx context.Context, field graphql.CollectedField, obj *PlayProgress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PlayProgress_position(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Position, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PlayProgress_position(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PlayProgress", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _PlayProgress_duration(ctx context.Context, field graphql.CollectedField, obj *PlayProgress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PlayProgress_duration(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Duration, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PlayProgress_duration(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PlayProgress", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _PlayProgress_finished(ctx context.Context, field graphql.CollectedField, obj *PlayProgress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PlayProgress_finished(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Finished, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PlayProgress_finished(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PlayProgress", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _PlayProgress_updatedAt(ctx context.Context, field graphql.CollectedField, obj *PlayProgress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PlayProgress_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PlayProgress_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PlayProgress", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
 func (ec *executionContext) _PreviewInfo_kind(ctx context.Context, field graphql.CollectedField, obj *PreviewInfo) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -11694,6 +16926,38 @@ func (ec *executionContext) _PreviewInfo_durationSec(ctx context.Context, field 
 }
 func (ec *executionContext) fieldContext_PreviewInfo_durationSec(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("PreviewInfo", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _PreviewInfo_subtitles(ctx context.Context, field graphql.CollectedField, obj *PreviewInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PreviewInfo_subtitles(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Subtitles, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*SubtitleTrack) graphql.Marshaler {
+			return ec.marshalNSubtitleTrack2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSubtitleTrackᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PreviewInfo_subtitles(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PreviewInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_SubtitleTrack(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Query_mcpAccessRoots(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -12863,6 +18127,553 @@ func (ec *executionContext) fieldContext_Query_fetchEnabled(_ context.Context, f
 	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Boolean does not have child fields"))
 }
 
+func (ec *executionContext) _Query_playlist(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_playlist(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().Playlist(ctx, fc.Args["nodeId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Node) graphql.Marshaler {
+			return ec.marshalNNode2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNodeᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_playlist(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Node(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_playlist_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_recentPlays(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_recentPlays(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().RecentPlays(ctx, fc.Args["limit"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*RecentPlay) graphql.Marshaler {
+			return ec.marshalNRecentPlay2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRecentPlayᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_recentPlays(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_RecentPlay(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_recentPlays_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_notifications(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_notifications(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().Notifications(ctx, fc.Args["cursor"].(*string), fc.Args["unreadOnly"].(*bool))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *NotificationPage) graphql.Marshaler {
+			return ec.marshalNNotificationPage2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotificationPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_notifications(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_NotificationPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_notifications_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_notifyChannels(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_notifyChannels(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().NotifyChannels(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*NotifyChannel) graphql.Marshaler {
+			return ec.marshalNNotifyChannel2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyChannelᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_notifyChannels(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_NotifyChannel(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_notifyEventKinds(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_notifyEventKinds(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().NotifyEventKinds(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*NotifyEventKind) graphql.Marshaler {
+			return ec.marshalNNotifyEventKind2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyEventKindᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_notifyEventKinds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_NotifyEventKind(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_myLinks(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_myLinks(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().MyLinks(ctx, fc.Args["cursor"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *DirectLinkPage) graphql.Marshaler {
+			return ec.marshalNDirectLinkPage2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLinkPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_myLinks(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_DirectLinkPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_myLinks_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_link(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_link(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().Link(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *DirectLink) graphql.Marshaler {
+			return ec.marshalNDirectLink2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLink(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_link(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_DirectLink(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_link_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_nodeLink(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_nodeLink(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().NodeLink(ctx, fc.Args["nodeId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *DirectLink) graphql.Marshaler {
+			return ec.marshalODirectLink2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLink(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_nodeLink(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_DirectLink(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_nodeLink_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_linkStats(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_linkStats(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().LinkStats(ctx, fc.Args["id"].(string), fc.Args["hours"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*LinkHourStat) graphql.Marshaler {
+			return ec.marshalNLinkHourStat2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkHourStatᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_linkStats(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_LinkHourStat(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_linkStats_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_linkReferers(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_linkReferers(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().LinkReferers(ctx, fc.Args["id"].(string), fc.Args["days"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*LinkReferer) graphql.Marshaler {
+			return ec.marshalNLinkReferer2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkRefererᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_linkReferers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_LinkReferer(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_linkReferers_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_linkHits(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_linkHits(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().LinkHits(ctx, fc.Args["id"].(string), fc.Args["cursor"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *LinkHitPage) graphql.Marshaler {
+			return ec.marshalNLinkHitPage2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkHitPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_linkHits(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_LinkHitPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_linkHits_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_linkPrefs(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_linkPrefs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().LinkPrefs(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *LinkPrefs) graphql.Marshaler {
+			return ec.marshalNLinkPrefs2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkPrefs(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_linkPrefs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_LinkPrefs(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_linksEnabled(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_linksEnabled(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().LinksEnabled(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_linksEnabled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _Query_adminLinkStats(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminLinkStats(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AdminLinkStats(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AdminLinkStats) graphql.Marshaler {
+			return ec.marshalNAdminLinkStats2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAdminLinkStats(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminLinkStats(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AdminLinkStats(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_adminUsers(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -12998,6 +18809,70 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields___Schema(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RecentPlay_node(ctx context.Context, field graphql.CollectedField, obj *RecentPlay) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RecentPlay_node(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Node, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Node) graphql.Marshaler {
+			return ec.marshalNNode2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNode(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RecentPlay_node(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RecentPlay",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Node(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RecentPlay_progress(ctx context.Context, field graphql.CollectedField, obj *RecentPlay) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RecentPlay_progress(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Progress, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PlayProgress) graphql.Marshaler {
+			return ec.marshalNPlayProgress2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐPlayProgress(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RecentPlay_progress(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RecentPlay",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PlayProgress(ctx, field)
 		},
 	}
 	return fc, nil
@@ -13688,6 +19563,121 @@ func (ec *executionContext) fieldContext_ShareVisitStats_lastVisitKind(_ context
 	return graphql.NewScalarFieldContext("ShareVisitStats", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _SubtitleTrack_nodeId(ctx context.Context, field graphql.CollectedField, obj *SubtitleTrack) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SubtitleTrack_nodeId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NodeID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SubtitleTrack_nodeId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SubtitleTrack", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _SubtitleTrack_name(ctx context.Context, field graphql.CollectedField, obj *SubtitleTrack) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SubtitleTrack_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SubtitleTrack_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SubtitleTrack", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _SubtitleTrack_label(ctx context.Context, field graphql.CollectedField, obj *SubtitleTrack) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SubtitleTrack_label(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Label, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SubtitleTrack_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SubtitleTrack", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _SubtitleTrack_lang(ctx context.Context, field graphql.CollectedField, obj *SubtitleTrack) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SubtitleTrack_lang(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Lang, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SubtitleTrack_lang(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SubtitleTrack", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _SubtitleTrack_default(ctx context.Context, field graphql.CollectedField, obj *SubtitleTrack) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SubtitleTrack_default(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Default, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SubtitleTrack_default(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SubtitleTrack", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _TaskCount_status(ctx context.Context, field graphql.CollectedField, obj *TaskCount) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -14127,6 +20117,29 @@ func (ec *executionContext) _User_isAdmin(ctx context.Context, field graphql.Col
 }
 func (ec *executionContext) fieldContext_User_isAdmin(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("User", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _User_unreadNotifications(ctx context.Context, field graphql.CollectedField, obj *User) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_User_unreadNotifications(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.User().UnreadNotifications(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_User_unreadNotifications(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("User", field, true, true, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql.CollectedField, obj *introspection.Directive) (ret graphql.Marshaler) {
@@ -15188,6 +21201,64 @@ func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputDirectLinkInput(ctx context.Context, obj any) (DirectLinkInput, error) {
+	var it DirectLinkInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"refererHosts", "allowNoReferer", "dailyBytesCap", "expiresAt", "autoPause"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "refererHosts":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("refererHosts"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RefererHosts = data
+		case "allowNoReferer":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("allowNoReferer"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AllowNoReferer = data
+		case "dailyBytesCap":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("dailyBytesCap"))
+			data, err := ec.unmarshalOInt642ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DailyBytesCap = data
+		case "expiresAt":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expiresAt"))
+			data, err := ec.unmarshalOTime2ᚖtimeᚐTime(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpiresAt = data
+		case "autoPause":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("autoPause"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AutoPause = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputFileRequestInput(ctx context.Context, obj any) (FileRequestInput, error) {
 	var it FileRequestInput
 	if obj == nil {
@@ -15262,6 +21333,129 @@ func (ec *executionContext) unmarshalInputFileRequestInput(ctx context.Context, 
 				return it, err
 			}
 			it.ExpiresAt = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputLinkPrefsInput(ctx context.Context, obj any) (LinkPrefsInput, error) {
+	var it LinkPrefsInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"refererHosts", "allowNoReferer", "imageFolder", "stripGps"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "refererHosts":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("refererHosts"))
+			data, err := ec.unmarshalNString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RefererHosts = data
+		case "allowNoReferer":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("allowNoReferer"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AllowNoReferer = data
+		case "imageFolder":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("imageFolder"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ImageFolder = data
+		case "stripGps":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("stripGps"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.StripGps = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputNotifyChannelInput(ctx context.Context, obj any) (NotifyChannelInput, error) {
+	var it NotifyChannelInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"kind", "name", "enabled", "events", "url", "topic", "secret"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "kind":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("kind"))
+			data, err := ec.unmarshalNNotifyChannelKind2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyChannelKind(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Kind = data
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "enabled":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("enabled"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Enabled = data
+		case "events":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("events"))
+			data, err := ec.unmarshalNString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Events = data
+		case "url":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("url"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.URL = data
+		case "topic":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("topic"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Topic = data
+		case "secret":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("secret"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Secret = data
 		}
 	}
 	return it, nil
@@ -15383,6 +21577,127 @@ func (ec *executionContext) unmarshalInputPartEtag(ctx context.Context, obj any)
 // endregion ************************** interface.gotpl ***************************
 
 // region    **************************** object.gotpl ****************************
+
+var adminLinkImplementors = []string{"AdminLink"}
+
+func (ec *executionContext) _AdminLink(ctx context.Context, sel ast.SelectionSet, obj *AdminLink) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, adminLinkImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AdminLink")
+		case "id":
+			out.Values[i] = ec._AdminLink_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "owner":
+			out.Values[i] = ec._AdminLink_owner(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._AdminLink_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._AdminLink_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._AdminLink_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "monthHits":
+			out.Values[i] = ec._AdminLink_monthHits(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "monthBytes":
+			out.Values[i] = ec._AdminLink_monthBytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var adminLinkStatsImplementors = []string{"AdminLinkStats"}
+
+func (ec *executionContext) _AdminLinkStats(ctx context.Context, sel ast.SelectionSet, obj *AdminLinkStats) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, adminLinkStatsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AdminLinkStats")
+		case "monthHits":
+			out.Values[i] = ec._AdminLinkStats_monthHits(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "monthBytes":
+			out.Values[i] = ec._AdminLinkStats_monthBytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "monthlyBytesCap":
+			out.Values[i] = ec._AdminLinkStats_monthlyBytesCap(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "top":
+			out.Values[i] = ec._AdminLinkStats_top(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
 
 var adminOverviewImplementors = []string{"AdminOverview"}
 
@@ -16156,6 +22471,202 @@ func (ec *executionContext) _ContentIndexStats(ctx context.Context, sel ast.Sele
 	return out
 }
 
+var directLinkImplementors = []string{"DirectLink"}
+
+func (ec *executionContext) _DirectLink(ctx context.Context, sel ast.SelectionSet, obj *DirectLink) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, directLinkImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("DirectLink")
+		case "id":
+			out.Values[i] = ec._DirectLink_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "token":
+			out.Values[i] = ec._DirectLink_token(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._DirectLink_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "url":
+			out.Values[i] = ec._DirectLink_url(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "nodeId":
+			out.Values[i] = ec._DirectLink_nodeId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._DirectLink_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mime":
+			out.Values[i] = ec._DirectLink_mime(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "size":
+			out.Values[i] = ec._DirectLink_size(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._DirectLink_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pauseReason":
+			out.Values[i] = ec._DirectLink_pauseReason(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "source":
+			out.Values[i] = ec._DirectLink_source(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._DirectLink_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expiresAt":
+			out.Values[i] = ec._DirectLink_expiresAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "refererHosts":
+			out.Values[i] = ec._DirectLink_refererHosts(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "allowNoReferer":
+			out.Values[i] = ec._DirectLink_allowNoReferer(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "dailyBytesCap":
+			out.Values[i] = ec._DirectLink_dailyBytesCap(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "autoPause":
+			out.Values[i] = ec._DirectLink_autoPause(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hasGps":
+			out.Values[i] = ec._DirectLink_hasGps(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hitsTotal":
+			out.Values[i] = ec._DirectLink_hitsTotal(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "bytesTotal":
+			out.Values[i] = ec._DirectLink_bytesTotal(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastHitAt":
+			out.Values[i] = ec._DirectLink_lastHitAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "today":
+			out.Values[i] = ec._DirectLink_today(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "last30Days":
+			out.Values[i] = ec._DirectLink_last30Days(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var directLinkPageImplementors = []string{"DirectLinkPage"}
+
+func (ec *executionContext) _DirectLinkPage(ctx context.Context, sel ast.SelectionSet, obj *DirectLinkPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, directLinkPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("DirectLinkPage")
+		case "items":
+			out.Values[i] = ec._DirectLinkPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "nextCursor":
+			out.Values[i] = ec._DirectLinkPage_nextCursor(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._DirectLinkPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var fileRequestImplementors = []string{"FileRequest"}
 
 func (ec *executionContext) _FileRequest(ctx context.Context, sel ast.SelectionSet, obj *FileRequest) graphql.Marshaler {
@@ -16644,6 +23155,334 @@ func (ec *executionContext) _JobPage(ctx context.Context, sel ast.SelectionSet, 
 		case "nextCursor":
 			out.Values[i] = ec._JobPage_nextCursor(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var linkHitImplementors = []string{"LinkHit"}
+
+func (ec *executionContext) _LinkHit(ctx context.Context, sel ast.SelectionSet, obj *LinkHit) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, linkHitImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("LinkHit")
+		case "at":
+			out.Values[i] = ec._LinkHit_at(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "ip":
+			out.Values[i] = ec._LinkHit_ip(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "userAgent":
+			out.Values[i] = ec._LinkHit_userAgent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "referer":
+			out.Values[i] = ec._LinkHit_referer(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._LinkHit_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "bytes":
+			out.Values[i] = ec._LinkHit_bytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var linkHitPageImplementors = []string{"LinkHitPage"}
+
+func (ec *executionContext) _LinkHitPage(ctx context.Context, sel ast.SelectionSet, obj *LinkHitPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, linkHitPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("LinkHitPage")
+		case "items":
+			out.Values[i] = ec._LinkHitPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "nextCursor":
+			out.Values[i] = ec._LinkHitPage_nextCursor(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var linkHourStatImplementors = []string{"LinkHourStat"}
+
+func (ec *executionContext) _LinkHourStat(ctx context.Context, sel ast.SelectionSet, obj *LinkHourStat) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, linkHourStatImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("LinkHourStat")
+		case "hour":
+			out.Values[i] = ec._LinkHourStat_hour(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hits":
+			out.Values[i] = ec._LinkHourStat_hits(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "bytes":
+			out.Values[i] = ec._LinkHourStat_bytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "blocked":
+			out.Values[i] = ec._LinkHourStat_blocked(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "ips":
+			out.Values[i] = ec._LinkHourStat_ips(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var linkPrefsImplementors = []string{"LinkPrefs"}
+
+func (ec *executionContext) _LinkPrefs(ctx context.Context, sel ast.SelectionSet, obj *LinkPrefs) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, linkPrefsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("LinkPrefs")
+		case "refererHosts":
+			out.Values[i] = ec._LinkPrefs_refererHosts(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "allowNoReferer":
+			out.Values[i] = ec._LinkPrefs_allowNoReferer(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "imageFolder":
+			out.Values[i] = ec._LinkPrefs_imageFolder(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "stripGps":
+			out.Values[i] = ec._LinkPrefs_stripGps(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "dailyBytesCapDefault":
+			out.Values[i] = ec._LinkPrefs_dailyBytesCapDefault(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "monthlyBytesCap":
+			out.Values[i] = ec._LinkPrefs_monthlyBytesCap(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "monthlyBytesUsed":
+			out.Values[i] = ec._LinkPrefs_monthlyBytesUsed(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var linkRefererImplementors = []string{"LinkReferer"}
+
+func (ec *executionContext) _LinkReferer(ctx context.Context, sel ast.SelectionSet, obj *LinkReferer) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, linkRefererImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("LinkReferer")
+		case "host":
+			out.Values[i] = ec._LinkReferer_host(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hits":
+			out.Values[i] = ec._LinkReferer_hits(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "bytes":
+			out.Values[i] = ec._LinkReferer_bytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var linkUsageImplementors = []string{"LinkUsage"}
+
+func (ec *executionContext) _LinkUsage(ctx context.Context, sel ast.SelectionSet, obj *LinkUsage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, linkUsageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("LinkUsage")
+		case "hits":
+			out.Values[i] = ec._LinkUsage_hits(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "bytes":
+			out.Values[i] = ec._LinkUsage_bytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "blocked":
+			out.Values[i] = ec._LinkUsage_blocked(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		default:
@@ -17222,6 +24061,111 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "saveProgress":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_saveProgress(ctx, field)
+			})
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "clearProgress":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_clearProgress(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "markNotificationsRead":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_markNotificationsRead(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clearNotifications":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_clearNotifications(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createNotifyChannel":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createNotifyChannel(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateNotifyChannel":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateNotifyChannel(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteNotifyChannel":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteNotifyChannel(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "testNotifyChannel":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_testNotifyChannel(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createLinks":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createLinks(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateLink":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateLink(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pauseLink":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_pauseLink(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "revokeLink":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_revokeLink(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "setLinkPrefs":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setLinkPrefs(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adminPauseLink":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_adminPauseLink(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adminRevokeLink":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_adminRevokeLink(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "adminCreateUser":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_adminCreateUser(ctx, field)
@@ -17436,6 +24380,44 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "playProgress":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Node_playProgress(ctx, field, obj)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -17481,6 +24463,331 @@ func (ec *executionContext) _NodePage(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "total":
 			out.Values[i] = ec._NodePage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var notificationImplementors = []string{"Notification"}
+
+func (ec *executionContext) _Notification(ctx context.Context, sel ast.SelectionSet, obj *Notification) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, notificationImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Notification")
+		case "id":
+			out.Values[i] = ec._Notification_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._Notification_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "level":
+			out.Values[i] = ec._Notification_level(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "title":
+			out.Values[i] = ec._Notification_title(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "body":
+			out.Values[i] = ec._Notification_body(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "count":
+			out.Values[i] = ec._Notification_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "target":
+			out.Values[i] = ec._Notification_target(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._Notification_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._Notification_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "read":
+			out.Values[i] = ec._Notification_read(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var notificationPageImplementors = []string{"NotificationPage"}
+
+func (ec *executionContext) _NotificationPage(ctx context.Context, sel ast.SelectionSet, obj *NotificationPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, notificationPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("NotificationPage")
+		case "items":
+			out.Values[i] = ec._NotificationPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "nextCursor":
+			out.Values[i] = ec._NotificationPage_nextCursor(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var notificationTargetImplementors = []string{"NotificationTarget"}
+
+func (ec *executionContext) _NotificationTarget(ctx context.Context, sel ast.SelectionSet, obj *NotificationTarget) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, notificationTargetImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("NotificationTarget")
+		case "kind":
+			out.Values[i] = ec._NotificationTarget_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "id":
+			out.Values[i] = ec._NotificationTarget_id(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "parentId":
+			out.Values[i] = ec._NotificationTarget_parentId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var notifyChannelImplementors = []string{"NotifyChannel"}
+
+func (ec *executionContext) _NotifyChannel(ctx context.Context, sel ast.SelectionSet, obj *NotifyChannel) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, notifyChannelImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("NotifyChannel")
+		case "id":
+			out.Values[i] = ec._NotifyChannel_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._NotifyChannel_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._NotifyChannel_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "enabled":
+			out.Values[i] = ec._NotifyChannel_enabled(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "events":
+			out.Values[i] = ec._NotifyChannel_events(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "url":
+			out.Values[i] = ec._NotifyChannel_url(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "topic":
+			out.Values[i] = ec._NotifyChannel_topic(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hasSecret":
+			out.Values[i] = ec._NotifyChannel_hasSecret(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "secretHint":
+			out.Values[i] = ec._NotifyChannel_secretHint(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastOkAt":
+			out.Values[i] = ec._NotifyChannel_lastOkAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "lastError":
+			out.Values[i] = ec._NotifyChannel_lastError(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "lastErrorAt":
+			out.Values[i] = ec._NotifyChannel_lastErrorAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._NotifyChannel_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var notifyEventKindImplementors = []string{"NotifyEventKind"}
+
+func (ec *executionContext) _NotifyEventKind(ctx context.Context, sel ast.SelectionSet, obj *NotifyEventKind) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, notifyEventKindImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("NotifyEventKind")
+		case "kind":
+			out.Values[i] = ec._NotifyEventKind_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "label":
+			out.Values[i] = ec._NotifyEventKind_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "defaultPush":
+			out.Values[i] = ec._NotifyEventKind_defaultPush(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adminOnly":
+			out.Values[i] = ec._NotifyEventKind_adminOnly(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -17692,6 +24999,59 @@ func (ec *executionContext) _PartUrl(ctx context.Context, sel ast.SelectionSet, 
 	return out
 }
 
+var playProgressImplementors = []string{"PlayProgress"}
+
+func (ec *executionContext) _PlayProgress(ctx context.Context, sel ast.SelectionSet, obj *PlayProgress) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, playProgressImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PlayProgress")
+		case "position":
+			out.Values[i] = ec._PlayProgress_position(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "duration":
+			out.Values[i] = ec._PlayProgress_duration(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "finished":
+			out.Values[i] = ec._PlayProgress_finished(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._PlayProgress_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var previewInfoImplementors = []string{"PreviewInfo"}
 
 func (ec *executionContext) _PreviewInfo(ctx context.Context, sel ast.SelectionSet, obj *PreviewInfo) graphql.Marshaler {
@@ -17732,6 +25092,11 @@ func (ec *executionContext) _PreviewInfo(ctx context.Context, sel ast.SelectionS
 		case "durationSec":
 			out.Values[i] = ec._PreviewInfo_durationSec(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "subtitles":
+			out.Values[i] = ec._PreviewInfo_subtitles(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		default:
@@ -18435,6 +25800,314 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "playlist":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_playlist(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "recentPlays":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_recentPlays(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "notifications":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_notifications(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "notifyChannels":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_notifyChannels(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "notifyEventKinds":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_notifyEventKinds(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myLinks":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myLinks(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "link":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_link(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "nodeLink":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_nodeLink(ctx, field)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "linkStats":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_linkStats(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "linkReferers":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_linkReferers(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "linkHits":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_linkHits(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "linkPrefs":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_linkPrefs(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "linksEnabled":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_linksEnabled(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminLinkStats":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminLinkStats(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "adminUsers":
 			field := field
 
@@ -18492,6 +26165,49 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			})
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var recentPlayImplementors = []string{"RecentPlay"}
+
+func (ec *executionContext) _RecentPlay(ctx context.Context, sel ast.SelectionSet, obj *RecentPlay) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, recentPlayImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("RecentPlay")
+		case "node":
+			out.Values[i] = ec._RecentPlay_node(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "progress":
+			out.Values[i] = ec._RecentPlay_progress(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -18857,6 +26573,64 @@ func (ec *executionContext) _ShareVisitStats(ctx context.Context, sel ast.Select
 	return out
 }
 
+var subtitleTrackImplementors = []string{"SubtitleTrack"}
+
+func (ec *executionContext) _SubtitleTrack(ctx context.Context, sel ast.SelectionSet, obj *SubtitleTrack) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, subtitleTrackImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("SubtitleTrack")
+		case "nodeId":
+			out.Values[i] = ec._SubtitleTrack_nodeId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._SubtitleTrack_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "label":
+			out.Values[i] = ec._SubtitleTrack_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lang":
+			out.Values[i] = ec._SubtitleTrack_lang(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "default":
+			out.Values[i] = ec._SubtitleTrack_default(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var taskCountImplementors = []string{"TaskCount"}
 
 func (ec *executionContext) _TaskCount(ctx context.Context, sel ast.SelectionSet, obj *TaskCount) graphql.Marshaler {
@@ -19069,28 +26843,66 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 		case "id":
 			out.Values[i] = ec._User_id(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "username":
 			out.Values[i] = ec._User_username(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "quotaBytes":
 			out.Values[i] = ec._User_quotaBytes(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "usedBytes":
 			out.Values[i] = ec._User_usedBytes(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "isAdmin":
 			out.Values[i] = ec._User_isAdmin(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "unreadNotifications":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._User_unreadNotifications(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -19504,6 +27316,46 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 
 // region    ***************************** type.gotpl *****************************
 
+func (ec *executionContext) marshalNAdminLink2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAdminLinkᚄ(ctx context.Context, sel ast.SelectionSet, v []*AdminLink) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAdminLink2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAdminLink(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAdminLink2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAdminLink(ctx context.Context, sel ast.SelectionSet, v *AdminLink) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AdminLink(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAdminLinkStats2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAdminLinkStats(ctx context.Context, sel ast.SelectionSet, v AdminLinkStats) graphql.Marshaler {
+	return ec._AdminLinkStats(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAdminLinkStats2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAdminLinkStats(ctx context.Context, sel ast.SelectionSet, v *AdminLinkStats) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AdminLinkStats(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNAdminOverview2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAdminOverview(ctx context.Context, sel ast.SelectionSet, v AdminOverview) graphql.Marshaler {
 	return ec._AdminOverview(ctx, sel, &v)
 }
@@ -19792,6 +27644,55 @@ func (ec *executionContext) marshalNContentIndexStats2ᚖgithubᚗcomᚋyophon�
 	return ec._ContentIndexStats(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNDirectLink2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLink(ctx context.Context, sel ast.SelectionSet, v DirectLink) graphql.Marshaler {
+	return ec._DirectLink(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNDirectLink2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLinkᚄ(ctx context.Context, sel ast.SelectionSet, v []*DirectLink) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNDirectLink2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLink(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNDirectLink2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLink(ctx context.Context, sel ast.SelectionSet, v *DirectLink) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._DirectLink(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNDirectLinkInput2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLinkInput(ctx context.Context, v any) (DirectLinkInput, error) {
+	res, err := ec.unmarshalInputDirectLinkInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNDirectLinkPage2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLinkPage(ctx context.Context, sel ast.SelectionSet, v DirectLinkPage) graphql.Marshaler {
+	return ec._DirectLinkPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNDirectLinkPage2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLinkPage(ctx context.Context, sel ast.SelectionSet, v *DirectLinkPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._DirectLinkPage(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNFileRequest2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐFileRequest(ctx context.Context, sel ast.SelectionSet, v FileRequest) graphql.Marshaler {
 	return ec._FileRequest(ctx, sel, &v)
 }
@@ -19879,6 +27780,22 @@ func (ec *executionContext) marshalNFileRequestUploadPage2ᚖgithubᚗcomᚋyoph
 		return graphql.Null
 	}
 	return ec._FileRequestUploadPage(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNFloat2float64(ctx context.Context, v any) (float64, error) {
+	res, err := graphql.UnmarshalFloatContext(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNFloat2float64(ctx context.Context, sel ast.SelectionSet, v float64) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalFloatContext(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return graphql.WrapContextMarshaler(ctx, res)
 }
 
 func (ec *executionContext) unmarshalNID2string(ctx context.Context, v any) (string, error) {
@@ -20051,6 +27968,137 @@ func (ec *executionContext) marshalNJobStatus2githubᚗcomᚋyophonᚋgopanᚋse
 	return v
 }
 
+func (ec *executionContext) marshalNLinkHit2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkHitᚄ(ctx context.Context, sel ast.SelectionSet, v []*LinkHit) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNLinkHit2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkHit(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNLinkHit2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkHit(ctx context.Context, sel ast.SelectionSet, v *LinkHit) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._LinkHit(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNLinkHitPage2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkHitPage(ctx context.Context, sel ast.SelectionSet, v LinkHitPage) graphql.Marshaler {
+	return ec._LinkHitPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNLinkHitPage2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkHitPage(ctx context.Context, sel ast.SelectionSet, v *LinkHitPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._LinkHitPage(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNLinkHourStat2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkHourStatᚄ(ctx context.Context, sel ast.SelectionSet, v []*LinkHourStat) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNLinkHourStat2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkHourStat(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNLinkHourStat2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkHourStat(ctx context.Context, sel ast.SelectionSet, v *LinkHourStat) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._LinkHourStat(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNLinkPrefs2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkPrefs(ctx context.Context, sel ast.SelectionSet, v LinkPrefs) graphql.Marshaler {
+	return ec._LinkPrefs(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNLinkPrefs2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkPrefs(ctx context.Context, sel ast.SelectionSet, v *LinkPrefs) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._LinkPrefs(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNLinkPrefsInput2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkPrefsInput(ctx context.Context, v any) (LinkPrefsInput, error) {
+	res, err := ec.unmarshalInputLinkPrefsInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNLinkReferer2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkRefererᚄ(ctx context.Context, sel ast.SelectionSet, v []*LinkReferer) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNLinkReferer2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkReferer(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNLinkReferer2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkReferer(ctx context.Context, sel ast.SelectionSet, v *LinkReferer) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._LinkReferer(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNLinkStatus2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkStatus(ctx context.Context, v any) (LinkStatus, error) {
+	var res LinkStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNLinkStatus2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkStatus(ctx context.Context, sel ast.SelectionSet, v LinkStatus) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNLinkUsage2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐLinkUsage(ctx context.Context, sel ast.SelectionSet, v *LinkUsage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._LinkUsage(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNMCPAPIKey2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐMCPAPIKeyᚄ(ctx context.Context, sel ast.SelectionSet, v []*MCPAPIKey) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -20197,6 +28245,137 @@ func (ec *executionContext) marshalNNodePage2ᚖgithubᚗcomᚋyophonᚋgopanᚋ
 	return ec._NodePage(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNNotification2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotificationᚄ(ctx context.Context, sel ast.SelectionSet, v []*Notification) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNNotification2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotification(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNNotification2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotification(ctx context.Context, sel ast.SelectionSet, v *Notification) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Notification(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNNotificationLevel2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotificationLevel(ctx context.Context, v any) (NotificationLevel, error) {
+	var res NotificationLevel
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNNotificationLevel2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotificationLevel(ctx context.Context, sel ast.SelectionSet, v NotificationLevel) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNNotificationPage2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotificationPage(ctx context.Context, sel ast.SelectionSet, v NotificationPage) graphql.Marshaler {
+	return ec._NotificationPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNNotificationPage2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotificationPage(ctx context.Context, sel ast.SelectionSet, v *NotificationPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._NotificationPage(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNNotificationTargetKind2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotificationTargetKind(ctx context.Context, v any) (NotificationTargetKind, error) {
+	var res NotificationTargetKind
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNNotificationTargetKind2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotificationTargetKind(ctx context.Context, sel ast.SelectionSet, v NotificationTargetKind) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNNotifyChannel2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyChannel(ctx context.Context, sel ast.SelectionSet, v NotifyChannel) graphql.Marshaler {
+	return ec._NotifyChannel(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNNotifyChannel2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyChannelᚄ(ctx context.Context, sel ast.SelectionSet, v []*NotifyChannel) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNNotifyChannel2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyChannel(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNNotifyChannel2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyChannel(ctx context.Context, sel ast.SelectionSet, v *NotifyChannel) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._NotifyChannel(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNNotifyChannelInput2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyChannelInput(ctx context.Context, v any) (NotifyChannelInput, error) {
+	res, err := ec.unmarshalInputNotifyChannelInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNNotifyChannelKind2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyChannelKind(ctx context.Context, v any) (NotifyChannelKind, error) {
+	var res NotifyChannelKind
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNNotifyChannelKind2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyChannelKind(ctx context.Context, sel ast.SelectionSet, v NotifyChannelKind) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNNotifyEventKind2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyEventKindᚄ(ctx context.Context, sel ast.SelectionSet, v []*NotifyEventKind) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNNotifyEventKind2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyEventKind(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNNotifyEventKind2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotifyEventKind(ctx context.Context, sel ast.SelectionSet, v *NotifyEventKind) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._NotifyEventKind(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNOAuthAuthorizationInput2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐOAuthAuthorizationInput(ctx context.Context, v any) (OAuthAuthorizationInput, error) {
 	res, err := ec.unmarshalInputOAuthAuthorizationInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -20301,6 +28480,16 @@ func (ec *executionContext) marshalNPartUrl2ᚖgithubᚗcomᚋyophonᚋgopanᚋs
 	return ec._PartUrl(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNPlayProgress2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐPlayProgress(ctx context.Context, sel ast.SelectionSet, v *PlayProgress) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PlayProgress(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNPreviewInfo2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐPreviewInfo(ctx context.Context, sel ast.SelectionSet, v PreviewInfo) graphql.Marshaler {
 	return ec._PreviewInfo(ctx, sel, &v)
 }
@@ -20323,6 +28512,32 @@ func (ec *executionContext) unmarshalNPreviewKind2githubᚗcomᚋyophonᚋgopan�
 
 func (ec *executionContext) marshalNPreviewKind2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐPreviewKind(ctx context.Context, sel ast.SelectionSet, v PreviewKind) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNRecentPlay2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRecentPlayᚄ(ctx context.Context, sel ast.SelectionSet, v []*RecentPlay) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNRecentPlay2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRecentPlay(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNRecentPlay2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRecentPlay(ctx context.Context, sel ast.SelectionSet, v *RecentPlay) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._RecentPlay(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNSession2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSessionᚄ(ctx context.Context, sel ast.SelectionSet, v []*Session) graphql.Marshaler {
@@ -20488,6 +28703,32 @@ func (ec *executionContext) marshalNString2ᚕstringᚄ(ctx context.Context, sel
 	}
 
 	return ret
+}
+
+func (ec *executionContext) marshalNSubtitleTrack2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSubtitleTrackᚄ(ctx context.Context, sel ast.SelectionSet, v []*SubtitleTrack) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNSubtitleTrack2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSubtitleTrack(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNSubtitleTrack2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSubtitleTrack(ctx context.Context, sel ast.SelectionSet, v *SubtitleTrack) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._SubtitleTrack(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNTaskCount2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐTaskCountᚄ(ctx context.Context, sel ast.SelectionSet, v []*TaskCount) graphql.Marshaler {
@@ -20770,6 +29011,48 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	return res
 }
 
+func (ec *executionContext) marshalODirectLink2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐDirectLink(ctx context.Context, sel ast.SelectionSet, v *DirectLink) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._DirectLink(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOID2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNID2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOID2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNID2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalOID2ᚖstring(ctx context.Context, v any) (*string, error) {
 	if v == nil {
 		return nil, nil
@@ -20845,6 +29128,20 @@ func (ec *executionContext) marshalONodeOrder2ᚖgithubᚗcomᚋyophonᚋgopan�
 		return graphql.Null
 	}
 	return v
+}
+
+func (ec *executionContext) marshalONotificationTarget2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNotificationTarget(ctx context.Context, sel ast.SelectionSet, v *NotificationTarget) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._NotificationTarget(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOPlayProgress2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐPlayProgress(ctx context.Context, sel ast.SelectionSet, v *PlayProgress) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._PlayProgress(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {

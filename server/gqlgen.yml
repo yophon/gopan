@@ -29,6 +29,12 @@ models:
         resolver: true
       preview:
         resolver: true
+      playProgress:
+        resolver: true
+  User:
+    fields:
+      unreadNotifications:
+        resolver: true
   ChatMessage:
     extraFields:
       NodeID:
