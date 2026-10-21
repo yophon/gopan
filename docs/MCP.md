@@ -124,11 +124,16 @@ OAuth 与 API Key 共用以下权限：
 | `list_file_requests` | `shares:read` | 查看当前账号范围内的收集链接与已收个数 |
 | `create_file_request` | `shares:write` | 对文件夹开收集链接：访客不登录即可往里传、看不到已有内容；可设密码、截止时间、留名、按上传者分子文件夹、单文件 / 总量 / 个数上限，支持幂等键 |
 | `revoke_file_request` | `shares:write` | 立即关闭收集链接，进行中的上传不再落库，支持幂等键 |
+| `fetch_url` | `files:upload` | 离线下载:服务器在后台把 http(s) 链接下进目录,字节不经过 Agent;返回任务,用 `get_job` 等结果。内网地址被拒,非幂等 |
+| `get_job` | `files:read` | 查后台任务(离线下载、解压)的状态与进度,`wait=true` 最多等 25 秒 |
+| `list_jobs` | `files:read` | 列后台任务,新的在前 |
+| `list_archive` | `files:read` | 不下载就列压缩包(zip / 7z / rar / tar.*)里某个目录的条目;`PENDING` 表示服务器还在读目录 |
+| `extract_archive` | `files:upload` | 整包或选中路径解压到以包名命名的新文件夹(默认在压缩包所在目录),后台执行、返回任务;不覆盖已有文件,加密 / 链接 / 越界路径的条目跳过 |
 | `list_audit` | `audit:read` | 分页读取 MCP 操作记录 |
 | `chat_send` | `chat:write` | 发送文本或已保存的文件节点到「我的设备」会话 |
 | `chat_list` | `chat:read` | 分页读取「我的设备」会话消息（升序） |
 
-文件与会话接口共 33 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
+文件与会话接口共 38 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
 
 ### 我的设备会话
 

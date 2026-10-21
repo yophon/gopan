@@ -98,6 +98,11 @@ services:
       # 登录限速会退化成"全站共用一个桶"。这个容器唯一的入网口是 127.0.0.1 的端口发布,
       # 只有宿主本地进程能连到,信任私有网段是安全的。
       GOPAN_TRUSTED_PROXIES: ${GOPAN_TRUSTED_PROXIES:-172.16.0.0/12,10.0.0.0/8}
+      # 离线下载(doc/21):服务器替用户从链接拉文件,内网地址一律拒绝。GOPAN_FETCH_DENY 填这台
+      # 机器自己的公网 IP:从容器访问宿主机公网地址可能绕过只防外部的防火墙。GOPAN_FETCH=false 全站关掉
+      GOPAN_FETCH: ${GOPAN_FETCH:-true}
+      GOPAN_FETCH_DENY: ${GOPAN_FETCH_DENY:-}
+      GOPAN_FETCH_RATE: ${GOPAN_FETCH_RATE:-0}
       # 安卓 App 的「检查更新」与安装包下载:发版时把 apk 与 latest.json 放进宿主 ./android-release(见 doc/09)。
       # 目录为空时 /api/app/android/latest 回 404,App 提示「这个站点没有提供安卓安装包」
       GOPAN_APP_RELEASE_DIR: /data/android-release

@@ -299,6 +299,41 @@ type AdminOverview { …, contentIndex: ContentIndexStats! }   # 已索引 / 无
 - 排序与 `searchNodes` 相同(修改时间倒序、id 决胜),游标同一种编码,`o` 为 `CONTENT`;每页 50 条。
 - 片段:首处命中前 60 字到后 100 字,两头被截加"…";高亮区间在片段里按码点计,前端按区间切段渲染,不用 `v-html`。
 
+## 后台任务、离线下载与压缩包(v3.3)
+
+```graphql
+enum JobKind { FETCH_URL, EXTRACT_ARCHIVE }
+enum JobStatus { QUEUED, RUNNING, DONE, FAILED, CANCELED }
+type Job { id, kind, status, title, url, parentId, result: Node, bytesDone, bytesTotal, filesDone, filesTotal,
+           filesSkipped, errorCode, errorMessage, attempts, source, createdAt, startedAt, finishedAt }
+enum ArchiveStatus { PENDING, DONE, TRUNCATED, UNSUPPORTED, FAILED }
+type ArchiveInfo { status, format, entryCount, fileCount, totalSize, solid, encrypted, error }
+type ArchiveEntry { idx, path, name, isDir, size, modifiedAt, flag, previewable, downloadable }
+enum PreviewKind { …, ARCHIVE }
+
+extend type Query {
+  myJobs(active: Boolean = false, cursor: String): JobPage!
+  job(id: ID!): Job!
+  fetchEnabled: Boolean!
+  archiveInfo(nodeId: ID!): ArchiveInfo!                                     # 属主,或分享子树内的访客
+  archiveEntries(nodeId: ID!, path: String, cursor: String): ArchiveEntryPage!
+}
+extend type Mutation {
+  fetchUrls(urls: [String!]!, parentId: ID): [Job!]!          # 每条链接一个任务
+  extractArchive(nodeId: ID!, base: String, paths: [String!], parentId: ID): Job!
+  cancelJob(id: ID!): Job!
+  retryJob(id: ID!): Job!
+  clearFinishedJobs: Int!
+}
+```
+
+- 除 `archiveInfo` / `archiveEntries` 外都只给登录用户(`UserFrom`);这两个走 `Shares.Authorize`,分享访客在分享子树内能看,收集令牌被拒。
+- `fetchUrls` 一次最多 10 条、每人排队 + 进行中最多 10 个(`TOO_MANY_JOBS`);链接不是 http / https 回 `INVALID_URL`;站点关了回 `FETCH_DISABLED`。`source` 按 UA 记 web / android,MCP 记 mcp。
+- 任务执行中的错误记在 `errorCode` / `errorMessage`:`FETCH_BLOCKED`(内网、本机、保留地址)、`FETCH_HTTP_STATUS`(4xx)、`FETCH_DNS`、`FETCH_REDIRECTS`、`QUOTA_EXCEEDED`、`FILE_TOO_LARGE`、`ARCHIVE_CORRUPT`、`INTERRUPTED`;网络抖动和源站 5xx 交还队列退避重试(`JOB_ERROR`,30 秒 × 次数,最多 3 次);解压不自动重试(重试会再建一个文件夹)。`DONE` 也可能带 `GOT_HTML`:拿到的是网页,不是文件。
+- `myJobs` 新的在前,每页 50,游标 `o` 为 `JOBS`。`archiveEntries` 每页 200,目录在前、按名字,游标 `o` 为 `ARCHIVE`;`previewable` / `downloadable` 由服务端按大小与 `cost` 算。
+- `extractArchive` 预检:文件数 ≤ 2 万(`TOO_MANY_FILES`)、解压后总量不超剩余配额(`QUOTA_EXCEEDED`)、选中的里有能解的(`ARCHIVE_NOTHING`)、目录已读完(`ARCHIVE_NOT_READY`)且能打开(`ARCHIVE_UNAVAILABLE`)。`paths` 是包内完整路径、须在 `base` 下;解出的路径相对 `base`。
+- 包里的单个文件不走 GraphQL:`GET /arc/{nodeId}/{idx}?token=<access>[&download=1]`(预览地址带不了 Authorization 头,同 `/pack`),错误回 JSON `{code, message}`:415 `UNSUPPORTED_TYPE`、422 `ARCHIVE_ENTRY_TOO_LARGE` / `ARCHIVE_ENTRY_TOO_DEEP` / `ARCHIVE_ENTRY_UNAVAILABLE` / `ARCHIVE_CORRUPT`、409 `ARCHIVE_NOT_READY`、503 `ARCHIVE_BUSY`。
+
 ## 版本策略
 
 v1 不做 schema 版本化;字段只加不删,废弃用 `@deprecated`。前端 codegen 在 CI 里跑,schema 不兼容改动直接编译失败暴露。

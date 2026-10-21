@@ -41,20 +41,21 @@ import (
 const testBaseURL = "http://mcp.test"
 
 type mcpEnv struct {
-	pool    *pgxpool.Pool
-	q       *store.Queries
-	obj     *objstore.Store
-	srv     *httptest.Server
-	s       *Server
-	nodes   *service.Nodes
-	uploads *service.Uploads
-	tokens  *service.MCPTokens
-	oauth   *service.OAuth
-	tickets *service.PackTickets
-	chats   *service.Chats
-	jobs    *service.Jobs
-	alice   uuid.UUID // 主角
-	bob     uuid.UUID // 用于越权测试的第二个用户
+	pool     *pgxpool.Pool
+	q        *store.Queries
+	obj      *objstore.Store
+	srv      *httptest.Server
+	s        *Server
+	nodes    *service.Nodes
+	uploads  *service.Uploads
+	tokens   *service.MCPTokens
+	oauth    *service.OAuth
+	tickets  *service.PackTickets
+	chats    *service.Chats
+	jobs     *service.Jobs
+	archives *service.Archives
+	alice    uuid.UUID // 主角
+	bob      uuid.UUID // 用于越权测试的第二个用户
 }
 
 func setupEnv(t *testing.T) *mcpEnv {
@@ -123,12 +124,14 @@ func setupEnv(t *testing.T) *mcpEnv {
 
 	// 离线下载的源站是本机 httptest:测试里放开回环
 	jobs := service.NewJobs(pool, obj, uploads, service.FetchConfig{Enabled: true, MaxSize: 1 << 30, Guard: fetcher.Guard{AllowLoopback: true}})
-	srv := httptest.NewServer(NewHandler(nodes, uploads, tokens, oauth, packer, tickets, chats, service.NewContentSearch(pool, true), jobs, nil))
+	archives := service.NewArchives(pool, obj, uploads)
+	jobs.SetArchives(archives)
+	srv := httptest.NewServer(NewHandler(nodes, uploads, tokens, oauth, packer, tickets, chats, service.NewContentSearch(pool, true), jobs, archives))
 	t.Cleanup(srv.Close)
 	return &mcpEnv{
 		pool: pool, q: q, obj: obj, srv: srv,
 		s:     &Server{nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, packer: packer, tickets: tickets, chats: chats},
-		nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, tickets: tickets, chats: chats, jobs: jobs,
+		nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, tickets: tickets, chats: chats, jobs: jobs, archives: archives,
 		alice: resA.User.ID, bob: resB.User.ID,
 	}
 }
