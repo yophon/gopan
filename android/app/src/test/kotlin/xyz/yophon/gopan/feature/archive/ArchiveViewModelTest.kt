@@ -238,7 +238,7 @@ class ArchiveViewModelTest {
 
         // 「查看」:请主界面打开传输列表
         vm.showTransfers()
-        assertThat(navRequests.request.value).isEqualTo(NavRequest.OPEN_TRANSFERS)
+        assertThat(navRequests.request.value).isEqualTo(NavRequest.OPEN_JOBS)
     }
 
     @Test

@@ -362,7 +362,7 @@ class ArchiveViewModel @Inject constructor(
     fun extractTo() = extract.pick(extractRequest())
 
     /** Snackbar 的「查看」:请主界面打开传输列表(界面随后退回主界面) */
-    fun showTransfers() = navRequests.post(NavRequest.OPEN_TRANSFERS)
+    fun showTransfers() = navRequests.post(NavRequest.OPEN_JOBS)
 
     // ---- 包里的单个文件 ----
 

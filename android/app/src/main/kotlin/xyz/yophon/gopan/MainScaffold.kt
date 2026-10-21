@@ -106,7 +106,8 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
                 }
                 viewModel.consume(r)
             }
-            NavRequest.OPEN_TRANSFERS -> {
+            NavRequest.OPEN_TRANSFERS, NavRequest.OPEN_JOBS -> {
+                if (r == NavRequest.OPEN_JOBS) viewModel.requestJobsTab()
                 navController.navigate(Routes.Transfers) { launchSingleTop = true }
                 viewModel.consume(r)
             }

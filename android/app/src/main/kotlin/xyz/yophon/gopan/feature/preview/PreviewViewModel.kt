@@ -207,7 +207,7 @@ class PreviewViewModel @Inject constructor(
     fun extractTo(info: PreviewInfo) = extract.pick(ExtractRequest(nodeId = info.nodeId))
 
     /** Snackbar 的「查看」:请主界面打开传输列表 */
-    fun showTransfers() = navRequests.post(NavRequest.OPEN_TRANSFERS)
+    fun showTransfers() = navRequests.post(NavRequest.OPEN_JOBS)
 
     /** 预览里「分享」:当前文件(没加载出信息时给出提示并返回 null) */
     fun shareTarget(): Node? = currentNode() ?: run {

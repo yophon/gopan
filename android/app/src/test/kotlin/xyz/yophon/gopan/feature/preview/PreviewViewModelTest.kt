@@ -222,6 +222,6 @@ class PreviewViewModelTest {
             assertThat((awaitItem() as PreviewEffect.Message).text).isEqualTo(UiText.Plain("进行中的任务太多,稍后再试"))
         }
         vm.showTransfers()
-        assertThat(navRequests.request.value).isEqualTo(NavRequest.OPEN_TRANSFERS)
+        assertThat(navRequests.request.value).isEqualTo(NavRequest.OPEN_JOBS)
     }
 }

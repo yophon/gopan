@@ -15,6 +15,7 @@ import xyz.yophon.gopan.core.transfer.FileOpener
 import xyz.yophon.gopan.core.transfer.OpenRequests
 import xyz.yophon.gopan.core.transfer.TransferEngine
 import xyz.yophon.gopan.core.transfer.TransferEvent
+import xyz.yophon.gopan.feature.transfers.TransfersTabRequest
 import javax.inject.Inject
 
 /**
@@ -28,11 +29,15 @@ class MainScaffoldViewModel @Inject constructor(
     engine: TransferEngine,
     private val openRequests: OpenRequests,
     private val opener: FileOpener,
+    private val tabRequest: TransfersTabRequest,
 ) : ViewModel() {
 
     val navRequest: StateFlow<NavRequest?> = navRequests.request
 
     fun consume(request: NavRequest) = navRequests.consume(request)
+
+    /** 下次打开传输列表停在「后台任务」栏(解压、离线下载提交后点「查看」) */
+    fun requestJobsTab() = tabRequest.requestJobs()
 
     init {
         viewModelScope.launch {
