@@ -230,3 +230,61 @@ func TestSeparateAdminMCP(t *testing.T) {
 	}
 	_ = mcp.Implementation{}
 }
+
+// 收集链接的三个工具:访问目录受限的凭据只能对目录内的文件夹开链接、只看得到目录内的链接;
+// 密码不进审计;幂等键重放返回同一条链接。
+func TestMCPFileRequests(t *testing.T) {
+	e := setupEnv(t)
+	ctx := context.Background()
+	root, err := e.nodes.CreateFolder(ctx, e.alice, nil, "workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inbox, _ := e.nodes.CreateFolder(ctx, e.alice, &root.ID, "inbox")
+	outside, _ := e.nodes.CreateFolder(ctx, e.alice, nil, "outside")
+	token, key, err := e.tokens.Create(ctx, e.alice, "restricted", service.MCPScopes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/workspace"
+	if err = e.nodes.SetMCPAccessRoot(ctx, e.alice, key.ID, "api_key", &path); err != nil {
+		t.Fatal(err)
+	}
+	// 目录外开一条(网页端开的),受限凭据看不到也撤不掉
+	foreign, err := e.nodes.MCPCollects().Create(ctx, e.alice, outside.ID, service.FileRequestInput{Title: "outside"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := e.connect(t, token)
+	callToolErr(t, sess, "create_file_request", map[string]any{"folder_id": outside.ID.String(), "title": "escape"})
+	callToolErr(t, sess, "create_file_request", map[string]any{"path": "/outside", "title": "escape"})
+
+	args := map[string]any{"folder_id": inbox.ID.String(), "title": "交作业", "password": "collect-secret-password",
+		"group_by_uploader": true, "max_files": 30, "idempotency_key": "fr-one"}
+	var fr FileRequestOutput
+	callTool(t, sess, "create_file_request", args, &fr)
+	first := fr.ID
+	callTool(t, sess, "create_file_request", args, &fr)
+	if fr.ID != first || !fr.HasPassword || !fr.RequireName || fr.MaxFiles == nil || *fr.MaxFiles != 30 ||
+		!strings.Contains(fr.URL, "/c/") || fr.FolderName != "inbox" {
+		t.Fatalf("create_file_request: %+v", fr)
+	}
+	var list FileRequestsOutput
+	callTool(t, sess, "list_file_requests", map[string]any{}, &list)
+	if len(list.Items) != 1 || list.Items[0].ID != first {
+		t.Fatalf("目录外的链接不应出现: %+v", list)
+	}
+	callToolErr(t, sess, "revoke_file_request", map[string]any{"request_id": foreign.ID.String()})
+	var ok SuccessOutput
+	callTool(t, sess, "revoke_file_request", map[string]any{"request_id": first, "idempotency_key": "fr-revoke"}, &ok)
+	callTool(t, sess, "list_file_requests", map[string]any{}, &list)
+	if !ok.Success || len(list.Items) != 0 {
+		t.Fatalf("撤销后不应再列出: %+v", list)
+	}
+	var audit AuditOutput
+	callTool(t, sess, "list_audit", map[string]any{"limit": 100}, &audit)
+	data, _ := json.Marshal(audit)
+	if strings.Contains(string(data), "collect-secret-password") {
+		t.Fatal("audit leaked password")
+	}
+}

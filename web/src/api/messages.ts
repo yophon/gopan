@@ -20,6 +20,13 @@ export const errorMessages: Record<string, string> = {
   PACK_TOO_LARGE: '打包内容超过 2GB 上限,请分批下载',
   PACK_BUSY: '打包通道繁忙,稍后再试',
   QUERY_TOO_DEEP: '请求异常,请刷新重试',
+  COLLECT_CLOSED: '收集已结束',
+  COLLECT_FULL: '收件已满,请联系对方',
+  COLLECT_PASSWORD_REQUIRED: '需要密码',
+  BAD_COLLECT_PASSWORD: '密码错误',
+  COLLECT_NAME_REQUIRED: '请填写你的名字',
+  FILE_TOO_LARGE: '文件超过单个上限',
+  NOT_A_FOLDER: '目标不是文件夹',
   FORBIDDEN: '没有权限执行该操作',
   NOT_FOUND: '对象不存在或已被删除',
 }

@@ -224,7 +224,7 @@ CREATE TRIGGER browser_test_fault BEFORE UPDATE OF used_bytes ON users FOR EACH 
 	if err != nil || again.ID != n.ID {
 		t.Fatal("completion must be idempotent")
 	}
-	requireObject(t, obj, objstore.BlobKey(sess.Sha256), data)
+	requireObject(t, obj, objstore.BlobKey(*sess.Sha256), data)
 	requireStageGone(t, obj, *sess.ObjectKey)
 	user, err := store.New(pool).GetUserByID(t.Context(), owner)
 	if err != nil || user.UsedBytes != int64(len(data)) {

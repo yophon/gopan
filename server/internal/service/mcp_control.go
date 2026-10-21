@@ -16,6 +16,9 @@ func (s *Nodes) db() store.DBTX              { return s.pool.(store.DBTX) }
 func (s *Nodes) MCPAdmin(quota int64) *Admin { return NewAdmin(s.q, quota) }
 func (s *Nodes) MCPShares() *Shares          { return NewShares(s.q, nil) }
 
+// MCPCollects 只给 MCP 的属主操作用(建 / 列 / 撤销收集链接):不签访客令牌、不开上传会话。
+func (s *Nodes) MCPCollects() *Collects { return newCollects(s.pool, s.q, nil, nil) }
+
 type MCPAccessRoot struct {
 	CredentialID   string    `json:"credential_id"`
 	CredentialType string    `json:"credential_type"`

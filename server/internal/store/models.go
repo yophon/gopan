@@ -47,6 +47,47 @@ type Derivative struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type FileRequest struct {
+	ID              uuid.UUID
+	Token           string
+	OwnerID         uuid.UUID
+	FolderID        uuid.UUID
+	Title           string
+	Note            string
+	PasswordHash    *string
+	RequireName     bool
+	GroupByUploader bool
+	MaxFileSize     *int64
+	MaxTotalBytes   *int64
+	MaxFiles        *int32
+	ExpiresAt       pgtype.Timestamptz
+	RevokedAt       pgtype.Timestamptz
+	SeenAt          pgtype.Timestamptz
+	CreatedAt       pgtype.Timestamptz
+}
+
+type FileRequestUpload struct {
+	ID           int64
+	RequestID    uuid.UUID
+	VisitorID    *uuid.UUID
+	NodeID       *uuid.UUID
+	FileName     string
+	Size         int64
+	UploaderName string
+	Ip           *string
+	UserAgent    *string
+	CreatedAt    pgtype.Timestamptz
+}
+
+type FileRequestVisitor struct {
+	ID        uuid.UUID
+	RequestID uuid.UUID
+	Name      string
+	Ip        *string
+	UserAgent *string
+	CreatedAt pgtype.Timestamptz
+}
+
 type McpAccessRoot struct {
 	CredentialID   uuid.UUID
 	CredentialType string
@@ -237,7 +278,7 @@ type TransferSession struct {
 type UploadSession struct {
 	ID            uuid.UUID
 	OwnerID       uuid.UUID
-	Sha256        string
+	Sha256        *string
 	Size          int64
 	TargetParent  *uuid.UUID
 	TargetName    string
@@ -250,6 +291,8 @@ type UploadSession struct {
 	ObjectKey     *string
 	NodeID        *uuid.UUID
 	FailCode      *string
+	RequestID     *uuid.UUID
+	VisitorID     *uuid.UUID
 }
 
 type User struct {

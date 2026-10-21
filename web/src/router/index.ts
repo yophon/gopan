@@ -18,6 +18,12 @@ const router = createRouter({
       component: () => import('@/views/ShareVisitorView.vue'),
     },
     {
+      // 收集文件访客页:公开访问,不要求登录(doc/20)
+      path: '/c/:token',
+      name: 'collect-visitor',
+      component: () => import('@/views/CollectView.vue'),
+    },
+    {
       path: '/oauth/consent',
       name: 'oauth-consent',
       component: () => import('@/views/OAuthConsentView.vue'),
@@ -71,8 +77,8 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
-  // 分享访客页公开,不做登录校验
-  if (to.name === 'share-visitor') return true
+  // 分享 / 收集访客页公开,不做登录校验
+  if (to.name === 'share-visitor' || to.name === 'collect-visitor') return true
 
   if (to.path === '/login') {
     // 已登录还访问登录页 → 直接回主界面

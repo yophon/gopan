@@ -46,6 +46,30 @@ func ShareLanding(dist fs.FS, shares *service.Shares) http.Handler {
 	})
 }
 
+// CollectLanding 对 /c/{token}(收集文件链接)同样直出 og 标签:卡片上是属主写的标题。
+func CollectLanding(dist fs.FS, collects *service.Collects) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		idx, err := fs.ReadFile(dist, "index.html")
+		if err != nil {
+			http.Error(w, "gopan: 前端未构建,先跑 make build", http.StatusNotFound)
+			return
+		}
+		page := string(idx)
+		if info, err := collects.Info(r.Context(), r.PathValue("token")); err == nil {
+			title, desc := info.Title, "点开链接即可上传文件,无需注册"
+			if info.Closed {
+				title, desc = "收集已结束", "该收集链接已截止或被取消"
+			}
+			meta := fmt.Sprintf(
+				`<meta property="og:title" content="%s"><meta property="og:description" content="%s"><meta property="og:type" content="website">`,
+				html.EscapeString(title), html.EscapeString(desc))
+			page = strings.Replace(page, "<head>", "<head>"+meta, 1)
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(page))
+	})
+}
+
 // PackHandler 文件夹/多选打包下载:流式 zip,唯一经过 Go 的字节流。
 // GET /pack?nodes=id1,id2&token=<access>(下载链接没法带 Authorization 头,token 走查询串)。
 func PackHandler(auth *service.Auth, packer *service.Packer, shares *service.Shares, trustedProxies []*net.IPNet) http.Handler {

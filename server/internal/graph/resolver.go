@@ -19,4 +19,5 @@ type Resolver struct {
 	MCPTokens *service.MCPTokens
 	OAuth     *service.OAuth
 	Chats     *service.Chats
+	Collects  *service.Collects
 }

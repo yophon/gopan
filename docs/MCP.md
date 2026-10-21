@@ -119,11 +119,14 @@ OAuth 与 API Key 共用以下权限：
 | `list_shares` | `shares:read` | 查看当前账号范围内的有效分享 |
 | `create_share` | `shares:write` | 创建分享，可设置密码、未来到期时间和幂等键 |
 | `revoke_share` | `shares:write` | 按分享 ID 撤销分享，支持幂等键 |
+| `list_file_requests` | `shares:read` | 查看当前账号范围内的收集链接与已收个数 |
+| `create_file_request` | `shares:write` | 对文件夹开收集链接：访客不登录即可往里传、看不到已有内容；可设密码、截止时间、留名、按上传者分子文件夹、单文件 / 总量 / 个数上限，支持幂等键 |
+| `revoke_file_request` | `shares:write` | 立即关闭收集链接，进行中的上传不再落库，支持幂等键 |
 | `list_audit` | `audit:read` | 分页读取 MCP 操作记录 |
 | `chat_send` | `chat:write` | 发送文本或已保存的文件节点到「我的设备」会话 |
 | `chat_list` | `chat:read` | 分页读取「我的设备」会话消息（升序） |
 
-文件与会话接口共 28 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
+文件与会话接口共 31 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
 
 ### 我的设备会话
 

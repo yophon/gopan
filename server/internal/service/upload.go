@@ -117,7 +117,7 @@ func (s *Uploads) Init(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID
 	}
 	sess, err := s.q.CreateUploadSession(ctx, store.CreateUploadSessionParams{
 		ID: id, OwnerID: owner, ObjectKey: &key,
-		Sha256: sha, Size: size,
+		Sha256: &sha, Size: size,
 		TargetParent: parentID, TargetName: name,
 		MinioUploadID: uploadID, PartSize: int32(s.partSize),
 		ExpiresAt: tstz(time.Now().Add(s.ttl)),
@@ -174,13 +174,28 @@ func (s *Uploads) sessionView(ctx context.Context, sess store.UploadSession) (*S
 		if _, ok := done[n]; ok {
 			continue
 		}
-		u, err := s.obj.PresignPart(ctx, key, sess.MinioUploadID, n)
+		var u string
+		if sess.RequestID != nil {
+			// 匿名访客:把这一片的长度签进去,拿到地址也只能传这么大
+			u, err = s.obj.PresignPartSized(ctx, key, sess.MinioUploadID, n, partLen(sess, n))
+		} else {
+			u, err = s.obj.PresignPart(ctx, key, sess.MinioUploadID, n)
+		}
 		if err != nil {
 			return nil, err
 		}
 		urls[n] = u
 	}
 	return &SessionView{Session: sess, PartURLs: urls, Uploaded: uploaded}, nil
+}
+
+// partLen 第 n 片(从 1 起)的字节数:末片是余数。
+func partLen(sess store.UploadSession, n int) int64 {
+	ps := int64(sess.PartSize)
+	if rest := sess.Size - int64(n-1)*ps; rest < ps {
+		return rest
+	}
+	return ps
 }
 
 // linkBlob 秒传:只建引用。

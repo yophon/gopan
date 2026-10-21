@@ -14,12 +14,13 @@ import type { UploadTask } from '@/stores/uploads'
 import { randomId } from '@/utils/id'
 
 import { HashAbortedError, hashFile } from './hash'
+import { InterruptedError, uploadParts, uploadedBytes } from './parts'
 
 /**
  * 上传管理器(模块级单例)。
  *
  * - 全局并发:同时 2 个文件在跑,每个文件 3 个分片并行 PUT。
- * - 分片 PUT 用 XMLHttpRequest(upload.onprogress 拿字节级进度),暂停/取消 = xhr.abort()。
+ * - 分片 PUT 见 parts.ts(XHR 拿字节级进度,暂停/取消 = xhr.abort())。
  * - 自动重试:任务级 3 次指数退避;分片级 3 次,403(预签名过期)时经
  *   uploadSession(id) 拿新签名重试该片。
  * - 断点续传:sessionId + 文件指纹存 localStorage(见 stores/uploads.ts),
@@ -27,9 +28,7 @@ import { HashAbortedError, hashFile } from './hash'
  */
 
 const MAX_ACTIVE_FILES = 2
-const MAX_PARTS_PER_FILE = 3
 const MAX_TASK_ATTEMPTS = 3
-const MAX_PART_ATTEMPTS = 3
 const SPEED_WINDOW_MS = 3000
 
 /** 这些错误码重试也没用,直接判 failed */
@@ -47,21 +46,6 @@ const FATAL_CODES = new Set([
 ])
 
 type Session = UploadSessionQuery['uploadSession']
-
-/** 用户暂停/取消导致的中断,与真实失败区分 */
-class InterruptedError extends Error {
-  constructor() {
-    super('interrupted')
-    this.name = 'InterruptedError'
-  }
-}
-
-class PartHttpError extends Error {
-  constructor(readonly status: number) {
-    super(`分片上传失败(HTTP ${status})`)
-    this.name = 'PartHttpError'
-  }
-}
 
 /** 任务的非响应式运行时(File 句柄、xhr、进度簿记),不进 store */
 interface Runtime {
@@ -348,84 +332,29 @@ function handleTaskError(task: UploadTask, rt: Runtime, err: unknown) {
 
 async function uploadMissingParts(task: UploadTask, rt: Runtime) {
   const session = rt.session!
-  const partSize = session.partSize
 
   // 已有分片按字节计入基线进度
-  rt.completedBytes = 0
-  for (const n of session.uploadedParts) {
-    rt.completedBytes += partByteLength(n, partSize, task.size)
-  }
+  rt.completedBytes = uploadedBytes(session, task.size)
   rt.partLoaded.clear()
   rt.samples = []
   updateProgress(task, rt)
   ensureTicker()
 
-  const queue = [...session.partUrls]
-  if (queue.length === 0) return
-
-  const workers: Promise<void>[] = []
-  for (let i = 0; i < MAX_PARTS_PER_FILE; i++) {
-    workers.push(
-      (async () => {
-        for (;;) {
-          const part = queue.shift()
-          if (!part) return
-          throwIfInterrupted(rt)
-          await uploadOnePart(task, rt, part.partNumber, part.url, partSize)
-          rt.partLoaded.delete(part.partNumber)
-          rt.completedBytes += partByteLength(part.partNumber, partSize, task.size)
-          updateProgress(task, rt)
-        }
-      })(),
-    )
-  }
-  try {
-    await Promise.all(workers)
-  } catch (err) {
-    // 某片彻底失败:停掉队列和其余在飞分片,交给任务级重试
-    queue.length = 0
-    for (const xhr of rt.xhrs) xhr.abort()
-    throw err
-  }
-}
-
-async function uploadOnePart(
-  task: UploadTask,
-  rt: Runtime,
-  partNumber: number,
-  url: string,
-  partSize: number,
-) {
-  const start = (partNumber - 1) * partSize
-  const end = Math.min(start + partSize, task.size)
-  const blob = rt.file.slice(start, end)
-
-  let currentUrl = url
-  for (let attempt = 0; ; attempt++) {
-    throwIfInterrupted(rt)
-    try {
-      await putPart(rt, currentUrl, blob, (loaded) => {
-        rt.partLoaded.set(partNumber, Math.min(loaded, blob.size))
-        updateProgress(task, rt)
-      })
-      return
-    } catch (err) {
-      rt.partLoaded.delete(partNumber)
-      updateProgress(task, rt)
-      if (err instanceof InterruptedError) throw err
-      if (attempt >= MAX_PART_ATTEMPTS - 1) throw err
-      if (err instanceof PartHttpError && err.status === 403) {
-        // 预签名过期 → 单飞刷新会话拿新签名,重试该片
-        const session = await refreshSession(task, rt)
-        if (session.uploadedParts.includes(partNumber)) return // 服务端已有该片
-        const fresh = session.partUrls.find((p) => p.partNumber === partNumber)
-        if (fresh) currentUrl = fresh.url
-        else await sleep(1000 * 2 ** attempt) // 没拿到新签名:照常退避,别拿过期 URL 连打
-      } else {
-        await sleep(1000 * 2 ** attempt)
-      }
-    }
-  }
+  await uploadParts(
+    {
+      file: rt.file,
+      size: task.size,
+      xhrs: rt.xhrs,
+      partLoaded: rt.partLoaded,
+      isInterrupted: () => rt.interrupt !== null,
+      onPartDone: (bytes) => {
+        rt.completedBytes += bytes
+      },
+      onProgress: () => updateProgress(task, rt),
+      refresh: () => refreshSession(task, rt),
+    },
+    session,
+  )
 }
 
 function refreshSession(task: UploadTask, rt: Runtime): Promise<Session> {
@@ -440,41 +369,6 @@ function refreshSession(task: UploadTask, rt: Runtime): Promise<Session> {
       })
   }
   return rt.refreshing
-}
-
-/** 分片 PUT。全项目唯一一处 XHR:为了 upload.onprogress 和可 abort。不读响应 ETag。 */
-function putPart(
-  rt: Runtime,
-  url: string,
-  blob: Blob,
-  onProgress: (loaded: number) => void,
-): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    rt.xhrs.add(xhr)
-    const settle = () => rt.xhrs.delete(xhr)
-    xhr.open('PUT', url)
-    xhr.upload.onprogress = (e) => onProgress(e.loaded)
-    xhr.onload = () => {
-      settle()
-      if (xhr.status >= 200 && xhr.status < 300) resolve()
-      else reject(new PartHttpError(xhr.status))
-    }
-    xhr.onerror = () => {
-      settle()
-      reject(new Error('网络错误'))
-    }
-    xhr.onabort = () => {
-      settle()
-      reject(new InterruptedError())
-    }
-    xhr.send(blob)
-  })
-}
-
-function partByteLength(partNumber: number, partSize: number, total: number): number {
-  const start = (partNumber - 1) * partSize
-  return Math.max(0, Math.min(partSize, total - start))
 }
 
 // ---------- 进度与速度 ----------
@@ -622,8 +516,4 @@ function queueDoneToast(task: UploadTask) {
 
 function throwIfInterrupted(rt: Runtime) {
   if (rt.interrupt) throw new InterruptedError()
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms))
 }

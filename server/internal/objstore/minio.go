@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -81,6 +82,21 @@ func (s *Store) PresignPart(ctx context.Context, key, uploadID string, partNumbe
 	v.Set("uploadId", uploadID)
 	v.Set("partNumber", strconv.Itoa(partNumber))
 	u, err := s.public.Presign(ctx, "PUT", s.bucket, key, s.putTTL, v)
+	if err != nil {
+		return "", err
+	}
+	return u.String(), nil
+}
+
+// PresignPartSized 同 PresignPart,但把 Content-Length 签进去:地址只接受恰好 length 字节的请求体。
+// 给收集链接的匿名访客用,免得一片声称 16MB 的分片被塞进几个 G。
+func (s *Store) PresignPartSized(ctx context.Context, key, uploadID string, partNumber int, length int64) (string, error) {
+	v := url.Values{}
+	v.Set("uploadId", uploadID)
+	v.Set("partNumber", strconv.Itoa(partNumber))
+	h := http.Header{}
+	h.Set("Content-Length", strconv.FormatInt(length, 10))
+	u, err := s.public.PresignHeader(ctx, "PUT", s.bucket, key, s.putTTL, v, h)
 	if err != nil {
 		return "", err
 	}

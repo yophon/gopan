@@ -28,6 +28,7 @@ type Pool struct {
 	obj       *objstore.Store
 	nodes     *service.Nodes
 	uploads   *service.Uploads
+	collects  *service.Collects
 	trashTTL  time.Duration
 	wake      chan struct{}
 	ffmpeg    string
@@ -42,6 +43,10 @@ func New(pool *pgxpool.Pool, obj *objstore.Store, nodes *service.Nodes, trashTTL
 
 func (w *Pool) SetUploads(uploads *service.Uploads) {
 	w.uploads = uploads
+}
+
+func (w *Pool) SetCollects(collects *service.Collects) {
+	w.collects = collects
 }
 
 // Enqueue 入队并唤醒 worker(注入给 service 用)。
@@ -74,6 +79,9 @@ func (w *Pool) Run(ctx context.Context, n int) {
 	go w.periodic(ctx, 24*time.Hour, "refresh-cleanup", w.cleanupRefreshTokens)
 	go w.periodic(ctx, 24*time.Hour, "auth-session-cleanup", w.cleanupAuthSessions)
 	go w.periodic(ctx, 24*time.Hour, "share-visit-cleanup", w.cleanupShareVisits)
+	if w.collects != nil {
+		go w.periodic(ctx, 24*time.Hour, "collect-visitor-cleanup", w.collects.CleanupVisitors)
+	}
 	go w.periodic(ctx, time.Minute, "subtree-stats", w.recomputeStats)
 	go w.periodic(ctx, 5*time.Minute, "task-reap", w.reapTasks)
 	<-ctx.Done()
@@ -146,7 +154,7 @@ func (w *Pool) verifyHash(ctx context.Context, blobID uuid.UUID) error {
 	if blob.Verified {
 		// Browser staging is verified before publication. Still deliver the
 		// durable derivative trigger, and finish late legacy/Agent references.
-		if err := w.q.MarkSessionsVerifyResult(ctx, store.MarkSessionsVerifyResultParams{Sha256: blob.Sha256, Status: "done"}); err != nil {
+		if err := w.q.MarkSessionsVerifyResult(ctx, store.MarkSessionsVerifyResultParams{Sha256: &blob.Sha256, Status: "done"}); err != nil {
 			return err
 		}
 		if err := w.q.MarkTransferReadyBySha(ctx, &blob.Sha256); err != nil {
@@ -174,7 +182,7 @@ func (w *Pool) verifyHash(ctx context.Context, blobID uuid.UUID) error {
 		}
 		reason := ""
 		_ = w.q.MarkSessionsVerifyResult(ctx, store.MarkSessionsVerifyResultParams{
-			Sha256: blob.Sha256, Status: "done", FailReason: &reason,
+			Sha256: &blob.Sha256, Status: "done", FailReason: &reason,
 		})
 		_ = w.q.MarkTransferReadyBySha(ctx, &blob.Sha256)
 		slog.Info("blob verified", "sha256", blob.Sha256, "size", size)
@@ -210,7 +218,7 @@ func (w *Pool) verifyHash(ctx context.Context, blobID uuid.UUID) error {
 	}
 	reason := "服务端 hash 校验失败"
 	if err := qtx.MarkSessionsVerifyResult(ctx, store.MarkSessionsVerifyResultParams{
-		Sha256: blob.Sha256, Status: "failed", FailReason: &reason,
+		Sha256: &blob.Sha256, Status: "failed", FailReason: &reason,
 	}); err != nil {
 		return err
 	}

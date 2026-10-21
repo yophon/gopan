@@ -15,6 +15,7 @@ import {
   List,
   Rank,
   Share,
+  Tickets,
   Upload,
 } from '@element-plus/icons-vue'
 
@@ -38,6 +39,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import MoveDialog from '@/components/MoveDialog.vue'
 import ShareDialog from '@/components/ShareDialog.vue'
+import FileRequestDialog from '@/components/FileRequestDialog.vue'
 import NodeTable from '@/components/nodes/NodeTable.vue'
 import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
@@ -445,6 +447,16 @@ function openShare(row: { id: string; name: string }) {
   shareDialogVisible.value = true
 }
 
+// ---------- 收集文件(doc/20):只对文件夹 ----------
+
+const collectDialogVisible = ref(false)
+const collectTarget = ref<{ id: string; name: string } | null>(null)
+
+function openCollect(row: { id: string; name: string }) {
+  collectTarget.value = { id: row.id, name: row.name }
+  collectDialogVisible.value = true
+}
+
 // ---------- 打开 ----------
 // 桌面:双击表格行;手机:轻点卡片。语义一致,只是触发方式不同。
 
@@ -484,6 +496,7 @@ const sheetItems = computed<SheetItem[]>(() => {
     { key: 'open', label: node.kind === 'FOLDER' ? '打开' : '预览' },
     { key: 'download', label: node.kind === 'FOLDER' ? '打包下载' : '下载', icon: Download },
     { key: 'share', label: '分享', icon: Share },
+    ...(node.kind === 'FOLDER' ? [{ key: 'collect', label: '收集文件', icon: Tickets }] : []),
     { key: 'rename', label: '重命名', icon: EditPen },
     { key: 'move', label: '移动', icon: Rank },
     { key: 'copy', label: '复制', icon: CopyDocument },
@@ -504,6 +517,9 @@ function onSheetSelect(key: string) {
       break
     case 'share':
       openShare(node)
+      break
+    case 'collect':
+      openCollect(node)
       break
     case 'rename':
       void onRename(node)
@@ -559,6 +575,12 @@ function onContextShare() {
   const row = contextMenu.value.row
   closeContextMenu()
   if (row) openShare(row)
+}
+
+function onContextCollect() {
+  const row = contextMenu.value.row
+  closeContextMenu()
+  if (row) openCollect(row)
 }
 </script>
 
@@ -722,9 +744,14 @@ function onContextShare() {
         <el-icon><Share /></el-icon>
         分享
       </li>
+      <li v-if="contextMenu.row?.kind === 'FOLDER'" class="context-menu-item" @click="onContextCollect">
+        <el-icon><Tickets /></el-icon>
+        收集文件
+      </li>
     </ul>
 
     <ShareDialog v-model="shareDialogVisible" :node="shareTarget" />
+    <FileRequestDialog v-model="collectDialogVisible" :folder="collectTarget" />
   </div>
 </template>
 

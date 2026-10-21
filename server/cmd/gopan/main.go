@@ -123,6 +123,7 @@ func run() error {
 	previews := service.NewPreviews(pool, obj)
 	previews.SetOfficeEnabled(cfg.GotenbergURL != "") // 未配 Gotenberg = 本次部署不提供 Office 预览
 	shares := service.NewShares(q, auth)
+	collects := service.NewCollects(pool, auth, uploads)
 	admin := service.NewAdmin(q, cfg.DefaultQuota)
 	appPass := service.NewAppPasswords(q)
 	mcpTokens := service.NewMCPTokens(q)
@@ -131,12 +132,13 @@ func run() error {
 	packTickets := service.NewPackTickets(cfg.JWTSecret, 10*time.Minute)
 	wk := worker.New(pool, obj, nodes, cfg.TrashTTL, cfg.FFmpegPath, cfg.FFprobePath, cfg.GotenbergURL)
 	wk.SetUploads(uploads)
+	wk.SetCollects(collects)
 	uploads.SetEnqueue(wk.Enqueue)
 	previews.SetEnqueue(wk.Enqueue)
 	go wk.Run(ctx, cfg.Workers)
 
 	es := graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
-		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass, MCPTokens: mcpTokens, OAuth: oauth, Chats: chats,
+		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass, MCPTokens: mcpTokens, OAuth: oauth, Chats: chats, Collects: collects,
 	}})
 
 	mux := http.NewServeMux()
@@ -191,6 +193,7 @@ func run() error {
 		return err
 	}
 	mux.Handle("GET /s/{token}", httpx.ShareLanding(dist, shares))
+	mux.Handle("GET /c/{token}", httpx.CollectLanding(dist, collects))
 	mux.Handle("/", httpx.SPAHandler(dist))
 
 	// pprof + /metrics 同挂内网端口(反代永不转发,与 pprof 同一安全边界)

@@ -1,0 +1,138 @@
+# ---------- 收集文件(doc/20):属主侧 ----------
+
+fragment FileRequestFields on FileRequest {
+  id
+  token
+  title
+  note
+  hasPassword
+  requireName
+  groupByUploader
+  maxFileSize
+  maxTotalBytes
+  maxFiles
+  expiresAt
+  createdAt
+  fileCount
+  totalBytes
+  uploaderCount
+  newCount
+  lastUploadAt
+  folder {
+    id
+    name
+    parentId
+  }
+}
+
+query MyFileRequests {
+  myFileRequests {
+    ...FileRequestFields
+  }
+}
+
+mutation CreateFileRequest($folderId: ID!, $input: FileRequestInput!, $password: String) {
+  createFileRequest(folderId: $folderId, input: $input, password: $password) {
+    ...FileRequestFields
+  }
+}
+
+mutation UpdateFileRequest($id: ID!, $input: FileRequestInput!) {
+  updateFileRequest(id: $id, input: $input) {
+    ...FileRequestFields
+  }
+}
+
+mutation RevokeFileRequest($id: ID!) {
+  revokeFileRequest(id: $id)
+}
+
+mutation MarkFileRequestSeen($id: ID!) {
+  markFileRequestSeen(id: $id)
+}
+
+# 收件记录,新的在前
+query FileRequestUploads($id: ID!, $cursor: String) {
+  fileRequestUploads(id: $id, cursor: $cursor) {
+    items {
+      id
+      fileName
+      size
+      uploaderName
+      ip
+      userAgent
+      createdAt
+      node {
+        id
+        parentId
+        name
+      }
+    }
+    nextCursor
+  }
+}
+
+# ---------- 收集文件:访客侧 ----------
+
+# 公开查询,打开链接前的最小信息
+query FileRequestInfo($token: String!) {
+  fileRequestInfo(token: $token) {
+    title
+    note
+    needPassword
+    needName
+    maxFileSize
+    expiresAt
+    closed
+  }
+}
+
+mutation OpenFileRequest($token: String!, $password: String, $uploaderName: String) {
+  openFileRequest(token: $token, password: $password, uploaderName: $uploaderName) {
+    accessToken
+  }
+}
+
+fragment CollectSessionFields on UploadSession {
+  id
+  partSize
+  partUrls {
+    partNumber
+    url
+  }
+  uploadedParts
+  expiresAt
+  status
+}
+
+mutation CollectInitUpload($name: String!, $size: Int64!) {
+  collectInitUpload(name: $name, size: $size) {
+    ...CollectSessionFields
+  }
+}
+
+query CollectUploadSession($id: ID!) {
+  collectUploadSession(id: $id) {
+    ...CollectSessionFields
+  }
+}
+
+mutation CollectCompleteUpload($sessionId: ID!, $etags: [PartEtag!]!) {
+  collectCompleteUpload(sessionId: $sessionId, etags: $etags) {
+    name
+    size
+    createdAt
+  }
+}
+
+mutation CollectAbortUpload($sessionId: ID!) {
+  collectAbortUpload(sessionId: $sessionId)
+}
+
+query CollectMyUploads {
+  collectMyUploads {
+    name
+    size
+    createdAt
+  }
+}

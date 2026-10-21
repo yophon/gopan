@@ -206,6 +206,86 @@ type ShareAuth {
   accessToken: String!
 }
 
+# ---------- 收集文件(doc/20):对文件夹开链接,访客不登录往里传,只写不读 ----------
+
+type FileRequest {
+  id: ID!
+  token: String!
+  folder: Node!
+  title: String!
+  note: String!
+  hasPassword: Boolean!
+  requireName: Boolean!
+  groupByUploader: Boolean!
+  # 上限,null = 不限
+  maxFileSize: Int64
+  maxTotalBytes: Int64
+  maxFiles: Int
+  expiresAt: Time
+  createdAt: Time!
+  # 收件统计(按收件记录算,文件删了也算)
+  fileCount: Int!
+  totalBytes: Int64!
+  uploaderCount: Int!
+  # 属主上次查看收件记录之后新收到的个数
+  newCount: Int!
+  lastUploadAt: Time
+}
+
+type FileRequestUpload {
+  id: ID!
+  fileName: String!
+  size: Int64!
+  # 访客自填,可能为空
+  uploaderName: String!
+  ip: String
+  userAgent: String
+  createdAt: Time!
+  # 文件还在时给出节点;进了回收站或彻删后为 null
+  node: Node
+}
+
+type FileRequestUploadPage {
+  items: [FileRequestUpload!]!
+  nextCursor: String
+}
+
+# 整表单提交:没给的上限 = 不限。密码与目标文件夹创建后不能改。
+input FileRequestInput {
+  title: String!
+  note: String
+  requireName: Boolean
+  groupByUploader: Boolean
+  maxFileSize: Int64
+  maxTotalBytes: Int64
+  maxFiles: Int
+  expiresAt: Time
+}
+
+# 访客打开链接看到的信息。不含属主信息,也不含属主剩余空间。
+type FileRequestInfo {
+  title: String!
+  note: String!
+  needPassword: Boolean!
+  needName: Boolean!
+  maxFileSize: Int64
+  expiresAt: Time
+  # 已撤销、已截止或暂不可用
+  closed: Boolean!
+}
+
+# 访客凭证:scope 只够往这条链接里传文件
+type CollectAuth {
+  accessToken: String!
+}
+
+# 访客视角的一个已送达文件
+type CollectUpload {
+  name: String!
+  size: Int64!
+  createdAt: Time!
+}
+
 # ---------- 文件传输助手(我的设备) ----------
 
 type ChatMessage {
@@ -238,6 +318,14 @@ type Query {
   uploadSession(id: ID!): UploadSession!
   shareInfo(token: String!): ShareInfo!
   shareRoot: Node!
+
+  # 收集文件:属主侧
+  myFileRequests: [FileRequest!]!
+  fileRequestUploads(id: ID!, cursor: String): FileRequestUploadPage!
+  # 收集文件:公开 / 访客侧
+  fileRequestInfo(token: String!): FileRequestInfo!
+  collectUploadSession(id: ID!): UploadSession!
+  collectMyUploads: [CollectUpload!]!
 
   appPasswords: [AppPassword!]!
   mcpAPIKeys: [MCPAPIKey!]!
@@ -301,6 +389,18 @@ type Mutation {
   createShare(nodeId: ID!, password: String, expiresAt: Time): Share!
   revokeShare(id: ID!): Boolean!
   verifySharePassword(token: String!, password: String!): ShareAuth!
+
+  # 收集文件:属主侧
+  createFileRequest(folderId: ID!, input: FileRequestInput!, password: String): FileRequest!
+  updateFileRequest(id: ID!, input: FileRequestInput!): FileRequest!
+  revokeFileRequest(id: ID!): Boolean!
+  markFileRequestSeen(id: ID!): Boolean!
+  # 收集文件:访客侧。openFileRequest 公开;其余要 openFileRequest 发的令牌。
+  # 上传协议与 initUpload / completeUpload 相同,只是不传 sha256、没有秒传,complete 不返回节点。
+  openFileRequest(token: String!, password: String, uploaderName: String): CollectAuth!
+  collectInitUpload(name: String!, size: Int64!): UploadSession!
+  collectCompleteUpload(sessionId: ID!, etags: [PartEtag!]!): CollectUpload!
+  collectAbortUpload(sessionId: ID!): Boolean!
 
   # WebDAV 应用密码:明文只在返回值出现一次
   createAppPassword(name: String!): String!

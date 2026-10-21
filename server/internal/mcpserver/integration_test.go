@@ -273,13 +273,13 @@ func TestMCPEndToEndOverHTTP(t *testing.T) {
 	}
 	sess := e.connect(t, plain)
 
-	// 工具清单:26 个工具全部注册
+	// 工具清单:31 个工具全部注册
 	lt, err := sess.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(lt.Tools) != 28 {
-		t.Fatalf("应注册 28 个工具,got %d", len(lt.Tools))
+	if len(lt.Tools) != 31 {
+		t.Fatalf("应注册 31 个工具,got %d", len(lt.Tools))
 	}
 
 	// create_folder → list_files → search_files → get_file_info → rename → trash → restore

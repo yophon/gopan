@@ -50,6 +50,74 @@ type ChatMessage struct {
 	NodeID string `json:"-"`
 }
 
+type CollectAuth struct {
+	AccessToken string `json:"accessToken"`
+}
+
+type CollectUpload struct {
+	Name      string    `json:"name"`
+	Size      int64     `json:"size"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type FileRequest struct {
+	ID              string     `json:"id"`
+	Token           string     `json:"token"`
+	Folder          *Node      `json:"folder"`
+	Title           string     `json:"title"`
+	Note            string     `json:"note"`
+	HasPassword     bool       `json:"hasPassword"`
+	RequireName     bool       `json:"requireName"`
+	GroupByUploader bool       `json:"groupByUploader"`
+	MaxFileSize     *int64     `json:"maxFileSize,omitempty"`
+	MaxTotalBytes   *int64     `json:"maxTotalBytes,omitempty"`
+	MaxFiles        *int       `json:"maxFiles,omitempty"`
+	ExpiresAt       *time.Time `json:"expiresAt,omitempty"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	FileCount       int        `json:"fileCount"`
+	TotalBytes      int64      `json:"totalBytes"`
+	UploaderCount   int        `json:"uploaderCount"`
+	NewCount        int        `json:"newCount"`
+	LastUploadAt    *time.Time `json:"lastUploadAt,omitempty"`
+}
+
+type FileRequestInfo struct {
+	Title        string     `json:"title"`
+	Note         string     `json:"note"`
+	NeedPassword bool       `json:"needPassword"`
+	NeedName     bool       `json:"needName"`
+	MaxFileSize  *int64     `json:"maxFileSize,omitempty"`
+	ExpiresAt    *time.Time `json:"expiresAt,omitempty"`
+	Closed       bool       `json:"closed"`
+}
+
+type FileRequestInput struct {
+	Title           string     `json:"title"`
+	Note            *string    `json:"note,omitempty"`
+	RequireName     *bool      `json:"requireName,omitempty"`
+	GroupByUploader *bool      `json:"groupByUploader,omitempty"`
+	MaxFileSize     *int64     `json:"maxFileSize,omitempty"`
+	MaxTotalBytes   *int64     `json:"maxTotalBytes,omitempty"`
+	MaxFiles        *int       `json:"maxFiles,omitempty"`
+	ExpiresAt       *time.Time `json:"expiresAt,omitempty"`
+}
+
+type FileRequestUpload struct {
+	ID           string    `json:"id"`
+	FileName     string    `json:"fileName"`
+	Size         int64     `json:"size"`
+	UploaderName string    `json:"uploaderName"`
+	IP           *string   `json:"ip,omitempty"`
+	UserAgent    *string   `json:"userAgent,omitempty"`
+	CreatedAt    time.Time `json:"createdAt"`
+	Node         *Node     `json:"node,omitempty"`
+}
+
+type FileRequestUploadPage struct {
+	Items      []*FileRequestUpload `json:"items"`
+	NextCursor *string              `json:"nextCursor,omitempty"`
+}
+
 type MCPAPIKey struct {
 	ID         string     `json:"id"`
 	Name       string     `json:"name"`

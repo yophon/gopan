@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -172,22 +173,39 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 	if size != sess.Size {
 		return nil, errf("SIZE_MISMATCH", "上传内容大小与声明不一致")
 	}
-	if hex.EncodeToString(h.Sum(nil)) != sess.Sha256 {
+	// 收集链接的访客不传 sha256(没有秒传),以这里算出的为准
+	sum := hex.EncodeToString(h.Sum(nil))
+	if sess.Sha256 != nil && sum != *sess.Sha256 {
 		return nil, errf("HASH_MISMATCH", "上传内容与声明的 SHA-256 不一致")
 	}
 	q := s.q.WithTx(tx)
+	parent, name := sess.TargetParent, sess.TargetName
+	var collect *collectTarget
+	if sess.RequestID != nil {
+		// 先锁链接行再锁用户行,与 Collects.InitUpload 同序
+		if collect, err = resolveCollectTarget(ctx, q, sess, size); err != nil {
+			return nil, err
+		}
+		parent, name = &collect.parent, collect.name
+	}
 	u, err := q.GetUserByIDForUpdate(ctx, sess.OwnerID)
 	if err != nil {
 		return nil, err
 	}
 	if u.DisabledAt.Valid {
+		if collect != nil {
+			return nil, errCollectClosed
+		}
 		return nil, errf("UNAUTHENTICATED", "账号已停用")
 	}
 	if u.UsedBytes+sess.Size > u.QuotaBytes {
+		if collect != nil {
+			return nil, errCollectFull // 不向访客透露属主的空间状态
+		}
 		return nil, errf("QUOTA_EXCEEDED", "存储配额不足")
 	}
-	if sess.TargetParent != nil {
-		n, err := q.GetNode(ctx, *sess.TargetParent)
+	if parent != nil {
+		n, err := q.GetNode(ctx, *parent)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -200,22 +218,27 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 	}
 	// Upsert locks the shared hash row before publication. Only verified bytes
 	// can reach this step; an existing verified object is never overwritten.
-	blob, err := q.UpsertBlob(ctx, store.UpsertBlobParams{ID: uuid.Must(uuid.NewV7()), Sha256: sess.Sha256, Size: size, Mime: mimeByName(sess.TargetName)})
+	blob, err := q.UpsertBlob(ctx, store.UpsertBlobParams{ID: uuid.Must(uuid.NewV7()), Sha256: sum, Size: size, Mime: mimeByName(sess.TargetName)})
 	if err != nil {
 		return nil, err
 	}
 	if blob.Size != size {
 		return nil, errf("SIZE_MISMATCH", "已有文件的大小与上传内容不一致")
 	}
-	n, err := q.CreateNode(ctx, store.CreateNodeParams{ID: uuid.Must(uuid.NewV7()), OwnerID: sess.OwnerID, ParentID: sess.TargetParent, Name: sess.TargetName, Kind: "file", BlobID: &blob.ID})
+	n, err := q.CreateNode(ctx, store.CreateNodeParams{ID: uuid.Must(uuid.NewV7()), OwnerID: sess.OwnerID, ParentID: parent, Name: name, Kind: "file", BlobID: &blob.ID})
 	if isUniqueViolation(err) {
+		if collect != nil {
+			// 名字是锁住链接行之后挑的,还撞名只可能是属主同时在这个目录里建了同名文件:
+			// 不算终态失败,整笔回滚,下一轮重新挑名字
+			return nil, fmt.Errorf("collect upload %s: name %q taken concurrently", sess.ID, name)
+		}
 		return nil, errf("NAME_CONFLICT", "目标位置已有同名文件,请重新上传")
 	}
 	if err != nil {
 		return nil, err
 	}
 	if !blob.Verified {
-		if err := s.obj.Promote(ctx, objstore.BlobKey(sess.Sha256), *sess.ObjectKey, size, mimeByName(sess.TargetName)); err != nil {
+		if err := s.obj.Promote(ctx, objstore.BlobKey(sum), *sess.ObjectKey, size, mimeByName(sess.TargetName)); err != nil {
 			return nil, err
 		}
 		if err := q.MarkBlobVerified(ctx, blob.ID); err != nil {
@@ -231,8 +254,13 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 	if err := q.MarkAncestorsStale(ctx, n.ID); err != nil {
 		return nil, err
 	}
-	if err := attachChatMessage(ctx, q, sess.OwnerID, sess.TargetParent, n.ID); err != nil {
+	if err := attachChatMessage(ctx, q, sess.OwnerID, parent, n.ID); err != nil {
 		return nil, err
+	}
+	if collect != nil {
+		if err := collect.record(ctx, q, sess, n, size, sum); err != nil {
+			return nil, err
+		}
 	}
 	if err := q.FinishUploadSession(ctx, store.FinishUploadSessionParams{ID: sess.ID, NodeID: &n.ID}); err != nil {
 		return nil, err
@@ -276,12 +304,17 @@ func (s *Uploads) abortBrowserUpload(ctx context.Context, owner, id uuid.UUID, e
 		return nil
 	}
 	if sess.Status == "uploading" || sess.Status == "completing" {
-		key := objstore.BlobKey(sess.Sha256)
-		if sess.ObjectKey != nil {
+		var key string
+		switch {
+		case sess.ObjectKey != nil:
 			key = *sess.ObjectKey
+		case sess.Sha256 != nil: // staging 之前的老会话
+			key = objstore.BlobKey(*sess.Sha256)
 		}
-		if err := s.obj.AbortMultipart(ctx, key, sess.MinioUploadID); err != nil && minio.ToErrorResponse(err).Code != "NoSuchUpload" {
-			return err
+		if key != "" {
+			if err := s.obj.AbortMultipart(ctx, key, sess.MinioUploadID); err != nil && minio.ToErrorResponse(err).Code != "NoSuchUpload" {
+				return err
+			}
 		}
 		if err := q.SetUploadSessionStatus(ctx, store.SetUploadSessionStatusParams{ID: id, OwnerID: owner, Status: "aborted"}); err != nil {
 			return err

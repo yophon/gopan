@@ -8,6 +8,7 @@ package graph
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -407,6 +408,145 @@ func (r *mutationResolver) VerifySharePassword(ctx context.Context, token string
 		return nil, err
 	}
 	return &ShareAuth{AccessToken: access}, nil
+}
+
+// CreateFileRequest is the resolver for the createFileRequest field.
+func (r *mutationResolver) CreateFileRequest(ctx context.Context, folderID string, input FileRequestInput, password *string) (*FileRequest, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	fid, err := parseID(folderID)
+	if err != nil {
+		return nil, err
+	}
+	fr, err := r.Collects.Create(ctx, ident.UserID, fid, fileRequestInput(input), password)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.Collects.Get(ctx, ident.UserID, fr.ID)
+	if err != nil {
+		return nil, err
+	}
+	return gqlFileRequest(row), nil
+}
+
+// UpdateFileRequest is the resolver for the updateFileRequest field.
+func (r *mutationResolver) UpdateFileRequest(ctx context.Context, id string, input FileRequestInput) (*FileRequest, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := r.Collects.Update(ctx, ident.UserID, rid, fileRequestInput(input)); err != nil {
+		return nil, err
+	}
+	row, err := r.Collects.Get(ctx, ident.UserID, rid)
+	if err != nil {
+		return nil, err
+	}
+	return gqlFileRequest(row), nil
+}
+
+// RevokeFileRequest is the resolver for the revokeFileRequest field.
+func (r *mutationResolver) RevokeFileRequest(ctx context.Context, id string) (bool, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	rid, err := parseID(id)
+	if err != nil {
+		return false, err
+	}
+	if err := r.Collects.Revoke(ctx, ident.UserID, rid); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// MarkFileRequestSeen is the resolver for the markFileRequestSeen field.
+func (r *mutationResolver) MarkFileRequestSeen(ctx context.Context, id string) (bool, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	rid, err := parseID(id)
+	if err != nil {
+		return false, err
+	}
+	if err := r.Collects.MarkSeen(ctx, ident.UserID, rid); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// OpenFileRequest is the resolver for the openFileRequest field.
+func (r *mutationResolver) OpenFileRequest(ctx context.Context, token string, password *string, uploaderName *string) (*CollectAuth, error) {
+	var pw, name string
+	if password != nil {
+		pw = *password
+	}
+	if uploaderName != nil {
+		name = *uploaderName
+	}
+	access, err := r.Collects.Open(ctx, token, pw, name, httpx.ClientIP(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return &CollectAuth{AccessToken: access}, nil
+}
+
+// CollectInitUpload is the resolver for the collectInitUpload field.
+func (r *mutationResolver) CollectInitUpload(ctx context.Context, name string, size int64) (*UploadSession, error) {
+	g, err := r.collectGuest(ctx)
+	if err != nil {
+		return nil, err
+	}
+	v, err := r.Collects.InitUpload(ctx, g, name, size)
+	if err != nil {
+		return nil, err
+	}
+	return gqlSession(v), nil
+}
+
+// CollectCompleteUpload is the resolver for the collectCompleteUpload field.
+func (r *mutationResolver) CollectCompleteUpload(ctx context.Context, sessionID string, etags []*PartEtag) (*CollectUpload, error) {
+	g, err := r.collectGuest(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sid, err := parseID(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	tags := make(map[int]string, len(etags))
+	for _, e := range etags {
+		tags[e.PartNumber] = e.Etag
+	}
+	v, err := r.Collects.CompleteUpload(ctx, g, sid, tags)
+	if err != nil {
+		return nil, err
+	}
+	return gqlCollectUpload(v.Name, v.Size, v.CreatedAt), nil
+}
+
+// CollectAbortUpload is the resolver for the collectAbortUpload field.
+func (r *mutationResolver) CollectAbortUpload(ctx context.Context, sessionID string) (bool, error) {
+	g, err := r.collectGuest(ctx)
+	if err != nil {
+		return false, err
+	}
+	sid, err := parseID(sessionID)
+	if err != nil {
+		return false, err
+	}
+	if err := r.Collects.AbortUpload(ctx, g, sid); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // CreateAppPassword is the resolver for the createAppPassword field.
@@ -948,6 +1088,103 @@ func (r *queryResolver) ShareRoot(ctx context.Context) (*Node, error) {
 	}
 	node.ParentID = nil // 分享根之上的结构不暴露给访客
 	return node, nil
+}
+
+// MyFileRequests is the resolver for the myFileRequests field.
+func (r *queryResolver) MyFileRequests(ctx context.Context) ([]*FileRequest, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.Collects.List(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*FileRequest, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, gqlFileRequest(row))
+	}
+	return out, nil
+}
+
+// FileRequestUploads is the resolver for the fileRequestUploads field.
+func (r *queryResolver) FileRequestUploads(ctx context.Context, id string, cursor *string) (*FileRequestUploadPage, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	var before *int64
+	if cursor != nil && *cursor != "" {
+		n, err := strconv.ParseInt(*cursor, 10, 64)
+		if err != nil {
+			return nil, &service.Error{Code: "INVALID_INPUT", Message: "非法游标"}
+		}
+		before = &n
+	}
+	rows, err := r.Collects.Uploads(ctx, ident.UserID, rid, before, fileRequestUploadsPage+1)
+	if err != nil {
+		return nil, err
+	}
+	page := &FileRequestUploadPage{Items: make([]*FileRequestUpload, 0, len(rows))}
+	if len(rows) > fileRequestUploadsPage {
+		rows = rows[:fileRequestUploadsPage]
+		next := strconv.FormatInt(rows[len(rows)-1].ID, 10)
+		page.NextCursor = &next
+	}
+	for _, row := range rows {
+		page.Items = append(page.Items, gqlFileRequestUpload(row))
+	}
+	return page, nil
+}
+
+// FileRequestInfo is the resolver for the fileRequestInfo field.
+func (r *queryResolver) FileRequestInfo(ctx context.Context, token string) (*FileRequestInfo, error) {
+	v, err := r.Collects.Info(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	return &FileRequestInfo{
+		Title: v.Title, Note: v.Note, NeedPassword: v.NeedPassword, NeedName: v.NeedName,
+		MaxFileSize: v.MaxFileSize, ExpiresAt: v.ExpiresAt, Closed: v.Closed,
+	}, nil
+}
+
+// CollectUploadSession is the resolver for the collectUploadSession field.
+func (r *queryResolver) CollectUploadSession(ctx context.Context, id string) (*UploadSession, error) {
+	g, err := r.collectGuest(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	v, err := r.Collects.UploadSession(ctx, g, sid)
+	if err != nil {
+		return nil, err
+	}
+	return gqlSession(v), nil
+}
+
+// CollectMyUploads is the resolver for the collectMyUploads field.
+func (r *queryResolver) CollectMyUploads(ctx context.Context) ([]*CollectUpload, error) {
+	g, err := r.collectGuest(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.Collects.MyUploads(ctx, g)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*CollectUpload, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, gqlCollectUpload(row.FileName, row.Size, row.CreatedAt.Time))
+	}
+	return out, nil
 }
 
 // AppPasswords is the resolver for the appPasswords field.

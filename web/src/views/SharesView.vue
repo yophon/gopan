@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
 import { CopyDocument, DataLine, Delete, Document, Folder, Lock, View } from '@element-plus/icons-vue'
@@ -13,12 +14,21 @@ import { useBreakpoints } from '@/composables/breakpoints'
 import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
 import ShareVisitsDialog from '@/components/ShareVisitsDialog.vue'
+import FileRequestsPanel from '@/components/FileRequestsPanel.vue'
 import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 
 type ShareItem = MySharesQuery['myShares'][number]
 
 const queryClient = useQueryClient()
 const { isMobile, isCompact } = useBreakpoints()
+
+// 「分享」「收集」两个标签;?tab=collect 直达收集(收件提醒点进来)
+const route = useRoute()
+const router = useRouter()
+const tab = computed({
+  get: () => (route.query.tab === 'collect' ? 'collect' : 'share'),
+  set: (v: string) => void router.replace({ query: v === 'collect' ? { tab: 'collect' } : {} }),
+})
 
 const { data, isFetching } = useQuery({
   queryKey: ['myShares'],
@@ -138,80 +148,89 @@ function onSheetSelect(key: string) {
   <div class="shares">
     <h3 class="page-title">我的分享</h3>
 
-    <el-table
-      v-if="!isMobile"
-      v-loading="isFetching"
-      :data="items"
-      row-key="id"
-      empty-text="还没有创建过分享"
-    >
-      <el-table-column label="内容" min-width="280">
-        <template #default="{ row }">
-          <span class="name-cell">
-            <el-icon class="name-icon">
-              <component :is="asShare(row).node.kind === 'FOLDER' ? Folder : Document" />
-            </el-icon>
-            <a class="share-link" :href="shareUrl(asShare(row))" target="_blank" rel="noopener">
-              {{ asShare(row).node.name }}
-            </a>
-            <el-icon v-if="asShare(row).hasPassword" class="lock-icon" title="有密码保护">
-              <Lock />
-            </el-icon>
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="创建时间" width="180">
-        <template #default="{ row }">{{ formatTime(asShare(row).createdAt) }}</template>
-      </el-table-column>
-      <el-table-column label="有效期" width="200">
-        <template #default="{ row }">
-          <span :class="{ expired: isExpired(asShare(row)) }">{{ expireText(asShare(row)) }}</span>
-        </template>
-      </el-table-column>
-      <!-- 1024 以下收起:这张表列已经不少了 -->
-      <el-table-column v-if="!isCompact" label="访问" width="170">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openVisits(asShare(row))">
-            {{ visitText(asShare(row)) }}
-          </el-button>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="180" align="center">
-        <template #default="{ row }">
-          <el-button link type="primary" :icon="CopyDocument" @click="onCopy(asShare(row))">
-            复制链接
-          </el-button>
-          <el-popconfirm
-            title="取消后链接立即失效,确定?"
-            confirm-button-text="取消分享"
-            cancel-button-text="再想想"
-            @confirm="revokeMutation.mutate({ id: asShare(row).id })"
-          >
-            <template #reference>
-              <el-button link type="danger">取消分享</el-button>
-            </template>
-          </el-popconfirm>
-        </template>
-      </el-table-column>
-    </el-table>
+    <el-tabs v-model="tab" class="share-tabs">
+      <el-tab-pane label="分享" name="share" />
+      <el-tab-pane label="收集" name="collect" />
+    </el-tabs>
 
-    <NodeCardList
-      v-else
-      :items="cardItems"
-      mode="list"
-      :selection-mode="false"
-      :selected-ids="[]"
-      :loading="isFetching"
-      :secondary="cardSecondary"
-      @menu="(node) => (sheet = { visible: true, node })"
-    />
+    <FileRequestsPanel v-if="tab === 'collect'" />
 
-    <NodeActionSheet
-      v-model:visible="sheet.visible"
-      :title="sheet.node?.name"
-      :items="sheetItems"
-      @select="onSheetSelect"
-    />
+    <template v-else>
+      <el-table
+        v-if="!isMobile"
+        v-loading="isFetching"
+        :data="items"
+        row-key="id"
+        empty-text="还没有创建过分享"
+      >
+        <el-table-column label="内容" min-width="280">
+          <template #default="{ row }">
+            <span class="name-cell">
+              <el-icon class="name-icon">
+                <component :is="asShare(row).node.kind === 'FOLDER' ? Folder : Document" />
+              </el-icon>
+              <a class="share-link" :href="shareUrl(asShare(row))" target="_blank" rel="noopener">
+                {{ asShare(row).node.name }}
+              </a>
+              <el-icon v-if="asShare(row).hasPassword" class="lock-icon" title="有密码保护">
+                <Lock />
+              </el-icon>
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="创建时间" width="180">
+          <template #default="{ row }">{{ formatTime(asShare(row).createdAt) }}</template>
+        </el-table-column>
+        <el-table-column label="有效期" width="200">
+          <template #default="{ row }">
+            <span :class="{ expired: isExpired(asShare(row)) }">{{ expireText(asShare(row)) }}</span>
+          </template>
+        </el-table-column>
+        <!-- 1024 以下收起:这张表列已经不少了 -->
+        <el-table-column v-if="!isCompact" label="访问" width="170">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openVisits(asShare(row))">
+              {{ visitText(asShare(row)) }}
+            </el-button>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="180" align="center">
+          <template #default="{ row }">
+            <el-button link type="primary" :icon="CopyDocument" @click="onCopy(asShare(row))">
+              复制链接
+            </el-button>
+            <el-popconfirm
+              title="取消后链接立即失效,确定?"
+              confirm-button-text="取消分享"
+              cancel-button-text="再想想"
+              @confirm="revokeMutation.mutate({ id: asShare(row).id })"
+            >
+              <template #reference>
+                <el-button link type="danger">取消分享</el-button>
+              </template>
+            </el-popconfirm>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <NodeCardList
+        v-else
+        :items="cardItems"
+        mode="list"
+        :selection-mode="false"
+        :selected-ids="[]"
+        :loading="isFetching"
+        :secondary="cardSecondary"
+        @menu="(node) => (sheet = { visible: true, node })"
+      />
+
+      <NodeActionSheet
+        v-model:visible="sheet.visible"
+        :title="sheet.node?.name"
+        :items="sheetItems"
+        @select="onSheetSelect"
+      />
+    </template>
 
     <ShareVisitsDialog
       v-model:visible="visitsDialog.visible"
@@ -223,7 +242,10 @@ function onSheetSelect(key: string) {
 
 <style scoped>
 .page-title {
-  margin: 0 0 16px;
+  margin: 0 0 8px;
+}
+.share-tabs {
+  margin-bottom: 4px;
 }
 .name-cell {
   display: inline-flex;

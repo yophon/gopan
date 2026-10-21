@@ -31,6 +31,14 @@ func (l *keyedLimiter) Allow(key string) bool {
 	return lim.Allow()
 }
 
+// Exhausted 桶里已经没有令牌(不消耗)。用于"只在失败时扣"的计数:先看,失败了再 Allow 扣一个。
+func (l *keyedLimiter) Exhausted(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	lim, ok := l.limiters[key]
+	return ok && lim.Tokens() < 1
+}
+
 // SetRate 调整参数并清空已有桶,测试注入用。
 func (l *keyedLimiter) SetRate(every time.Duration, burst int) {
 	l.mu.Lock()

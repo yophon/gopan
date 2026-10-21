@@ -253,6 +253,8 @@ func normalizePath(p string) string {
 		return "/.well-known/oauth-*"
 	case strings.HasPrefix(p, "/s/"):
 		return "/s/:token"
+	case strings.HasPrefix(p, "/c/"):
+		return "/c/:token"
 	case strings.HasPrefix(p, "/mcp-download/"):
 		return "/mcp-download/:ticket"
 	case p == "/dav" || strings.HasPrefix(p, "/dav/"):
