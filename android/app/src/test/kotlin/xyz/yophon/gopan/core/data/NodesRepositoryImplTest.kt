@@ -192,6 +192,49 @@ class NodesRepositoryImplTest {
     }
 
     @Test
+    fun `searchContent maps hits with snippet, highlights and page and forwards the cursor`() = runBlocking {
+        handlers["SearchContent"] = {
+            """{"data":{"searchContent":{"__typename":"ContentHitPage","items":[""" +
+                """{"__typename":"ContentHit","node":${nodeJson("p1", "合同.pdf", parentId = "dir", mime = "application/pdf", previewKind = "PDF")},""" +
+                """"snippet":"…签订的租房合同,合同期","highlights":[{"__typename":"TextRange","start":6,"length":2},{"__typename":"TextRange","start":9,"length":2}],"page":3},""" +
+                """{"__typename":"ContentHit","node":${nodeJson("t1", "笔记.txt")},"snippet":"合同","highlights":[{"__typename":"TextRange","start":0,"length":2}],"page":null}""" +
+                """],"nextCursor":"n2"}}}"""
+        }
+
+        val page = repo.searchContent("合同", "c1")
+
+        val (op, vars) = requests.single()
+        assertThat(op).isEqualTo("SearchContent")
+        assertThat(vars["q"]?.jsonPrimitive?.content).isEqualTo("合同")
+        assertThat(vars["cursor"]?.jsonPrimitive?.content).isEqualTo("c1")
+        assertThat(page.nextCursor).isEqualTo("n2")
+        val (pdf, txt) = page.items
+        assertThat(pdf.node.id).isEqualTo("p1")
+        assertThat(pdf.node.parentId).isEqualTo("dir")
+        assertThat(pdf.node.preview.kind).isEqualTo(PreviewKind.PDF)
+        assertThat(pdf.snippet).isEqualTo("…签订的租房合同,合同期")
+        assertThat(pdf.highlights).containsExactly(TextRange(6, 2), TextRange(9, 2)).inOrder()
+        assertThat(pdf.page).isEqualTo(3)
+        assertThat(txt.page).isNull()
+    }
+
+    @Test
+    fun `searchContent errors keep the server code`() = runBlocking {
+        handlers["SearchContent"] = {
+            """{"errors":[{"message":"关键词太短:至少两个汉字或三个字母","path":["searchContent"],"extensions":{"code":"QUERY_TOO_SHORT"}}],"data":null}"""
+        }
+        val error = runCatching { repo.searchContent("合", null) }.exceptionOrNull() as GopanException
+        assertThat(error.code).isEqualTo(GopanErrors.QUERY_TOO_SHORT)
+
+        handlers["SearchContent"] = {
+            """{"errors":[{"message":"本站没有开启内容搜索","path":["searchContent"],"extensions":{"code":"CONTENT_SEARCH_DISABLED"}}],"data":null}"""
+        }
+        val disabled = runCatching { repo.searchContent("合同", null) }.exceptionOrNull() as GopanException
+        assertThat(disabled.code).isEqualTo(GopanErrors.CONTENT_SEARCH_DISABLED)
+        assertThat(disabled.message).isEqualTo("本站没有开启内容搜索")
+    }
+
+    @Test
     fun `mutations forward ids and targets and bump the version`() = runBlocking {
         handlers["CreateFolder"] = { vars -> """{"data":{"createFolder":${nodeJson("nf", vars["name"]!!.jsonPrimitive.content, kind = "FOLDER", parentId = "p")}}}""" }
         handlers["RenameNode"] = { vars -> """{"data":{"renameNode":${nodeJson("nf", vars["name"]!!.jsonPrimitive.content, kind = "FOLDER", parentId = "p")}}}""" }

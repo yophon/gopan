@@ -66,6 +66,13 @@ class PdfDocument private constructor(
             return width.toInt().coerceAtLeast(1) to height.toInt().coerceAtLeast(1)
         }
 
+        /**
+         * 页列表一打开就停在哪一项(从 0 起):[page] 是从 1 起的页码(内容搜索命中页),null 为第一页;
+         * 超出页数的(派生 PDF 与提取时的分页对不上)停在最后一页。
+         */
+        fun startIndex(page: Int?, pageCount: Int): Int =
+            if (page == null || pageCount <= 0) 0 else (page - 1).coerceIn(0, pageCount - 1)
+
         @OptIn(ExperimentalCoroutinesApi::class)
         private val dispatcher = Dispatchers.IO.limitedParallelism(1)
         private val closer = CoroutineScope(SupervisorJob())

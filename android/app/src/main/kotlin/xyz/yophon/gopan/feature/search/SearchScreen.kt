@@ -1,5 +1,6 @@
 package xyz.yophon.gopan.feature.search
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,9 +21,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -41,6 +44,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -50,6 +54,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.ui.transfer.rememberTransferPermissions
 import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.components.ErrorState
@@ -67,7 +72,8 @@ import xyz.yophon.gopan.feature.drive.nodeSecondaryText
 import xyz.yophon.gopan.feature.drive.resolve
 
 /**
- * 搜索页:顶栏就是输入框(自动聚焦,300ms 防抖),结果复用文件页的行与操作。
+ * 搜索页:顶栏就是输入框(自动聚焦,300ms 防抖),下面「文件名」「内容」两个标签。
+ * 文件名结果复用文件页的行与操作;内容结果见 [ContentHitList]。
  * 输入框文本放在界面的 rememberSaveable 里(StateFlow 回灌 TextField 会丢字),ViewModel 只收 trim 后的关键词。
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,46 +119,53 @@ fun SearchScreen(
         }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
+    // 「所在目录」:跳到结果的父文件夹(根目录下的直接回网盘首页);内容结果的按钮与操作菜单共用
+    val locate: (Node) -> Unit = { node -> node.parentId?.let(onOpenFolder) ?: onOpenRoot() }
 
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
         topBar = {
-            TopAppBar(
-                windowInsets = NestedScreenInsets,
-                title = {
-                    TextField(
-                        value = text,
-                        onValueChange = { text = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester),
-                        placeholder = { Text(stringResource(R.string.search_hint)) },
-                        singleLine = true,
-                        trailingIcon = if (text.isNotEmpty()) {
-                            {
-                                IconButton(onClick = { text = "" }) {
-                                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.search_clear))
+            Column {
+                TopAppBar(
+                    windowInsets = NestedScreenInsets,
+                    title = {
+                        TextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester),
+                            placeholder = {
+                                Text(stringResource(if (state.tab == SearchTab.CONTENT) R.string.search_hint_content else R.string.search_hint))
+                            },
+                            singleLine = true,
+                            trailingIcon = if (text.isNotEmpty()) {
+                                {
+                                    IconButton(onClick = { text = "" }) {
+                                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.search_clear))
+                                    }
                                 }
-                            }
-                        } else {
-                            null
-                        },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                        ),
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.drive_nav_back))
-                    }
-                },
-            )
+                            } else {
+                                null
+                            },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                            ),
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.drive_nav_back))
+                        }
+                    },
+                )
+                SearchTabs(selected = state.tab, onSelect = viewModel::onTabSelected)
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
@@ -162,24 +175,9 @@ fun SearchScreen(
             .consumeWindowInsets(padding)
             .imePadding()
             .fillMaxSize()
-        when {
-            state.isIdle -> EmptyState(
-                title = stringResource(R.string.search_idle),
-                icon = Icons.Filled.Search,
-                modifier = contentModifier,
-            )
-            state.status == ListStatus.Loading -> LoadingState(modifier = contentModifier)
-            state.status is ListStatus.Error -> ErrorState(
-                (state.status as ListStatus.Error).message,
-                modifier = contentModifier,
-                onRetry = viewModel::retry,
-            )
-            state.isEmpty -> EmptyState(
-                title = stringResource(R.string.search_empty, state.query),
-                icon = Icons.Outlined.SearchOff,
-                modifier = contentModifier,
-            )
-            else -> SearchResults(state, viewModel, contentModifier)
+        when (state.tab) {
+            SearchTab.NAME -> NameTab(state, viewModel, contentModifier)
+            SearchTab.CONTENT -> ContentTab(state, viewModel, locate, contentModifier)
         }
     }
 
@@ -189,9 +187,91 @@ fun SearchScreen(
         inputError = inputError,
         viewModel = viewModel,
         actions = SEARCH_ACTIONS,
-        // 「所在目录」:跳到结果的父文件夹(根目录下的直接回网盘首页)
-        onLocate = { node -> node.parentId?.let(onOpenFolder) ?: onOpenRoot() },
+        onLocate = locate,
     )
+}
+
+@Composable
+private fun SearchTabs(selected: SearchTab, onSelect: (SearchTab) -> Unit) {
+    PrimaryTabRow(selectedTabIndex = selected.ordinal) {
+        SearchTab.entries.forEach { tab ->
+            Tab(
+                selected = selected == tab,
+                onClick = { onSelect(tab) },
+                text = {
+                    Text(
+                        stringResource(
+                            when (tab) {
+                                SearchTab.NAME -> R.string.search_tab_name
+                                SearchTab.CONTENT -> R.string.search_tab_content
+                            },
+                        ),
+                    )
+                },
+                modifier = Modifier.testTag("search_tab_${tab.name}"),
+            )
+        }
+    }
+}
+
+/** 「文件名」标签:原来的搜索页 */
+@Composable
+private fun NameTab(state: SearchUiState, viewModel: SearchViewModel, modifier: Modifier) {
+    when {
+        state.isIdle -> EmptyState(
+            title = stringResource(R.string.search_idle),
+            icon = Icons.Filled.Search,
+            modifier = modifier,
+        )
+        state.status == ListStatus.Loading -> LoadingState(modifier = modifier)
+        state.status is ListStatus.Error -> ErrorState(
+            state.status.message,
+            modifier = modifier,
+            onRetry = viewModel::retry,
+        )
+        state.isEmpty -> EmptyState(
+            title = stringResource(R.string.search_empty, state.query),
+            icon = Icons.Outlined.SearchOff,
+            modifier = modifier,
+        )
+        else -> SearchResults(state, viewModel, modifier)
+    }
+}
+
+/** 「内容」标签:按文件里的文字找 */
+@Composable
+private fun ContentTab(state: SearchUiState, viewModel: SearchViewModel, onLocate: (Node) -> Unit, modifier: Modifier) {
+    val content = state.content
+    val formats = stringResource(R.string.search_content_formats)
+    when {
+        state.isIdle -> EmptyState(
+            title = stringResource(R.string.search_content_idle),
+            description = formats,
+            icon = Icons.Filled.Search,
+            modifier = modifier,
+        )
+        content.status == ListStatus.Loading -> LoadingState(modifier = modifier)
+        content.status is ListStatus.Error -> ErrorState(
+            content.status.message,
+            modifier = modifier,
+            onRetry = viewModel::retry,
+        )
+        content.notice != null -> ContentNoticeText(content.notice, modifier = modifier)
+        content.isEmpty -> EmptyState(
+            title = stringResource(R.string.search_content_empty),
+            description = formats,
+            icon = Icons.Outlined.SearchOff,
+            modifier = modifier,
+        )
+        else -> ContentHitList(
+            content = content,
+            onClick = viewModel::onHitClick,
+            onLongClick = { viewModel.showActions(it.node) },
+            onLocate = onLocate,
+            onLoadMore = viewModel::loadMoreContent,
+            modifier = modifier,
+        )
+    }
 }
 
 @Composable

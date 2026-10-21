@@ -46,6 +46,29 @@ class PreviewViewModelTest {
     }
 
     @Test
+    fun `a session from content search carries each file's hit page, others open at the first page`() {
+        // 内容搜索结果:PDF 带命中页;0 / 负数不是合法页码,当作没有
+        sessions.open(listOf(file("a"), file("b"), file("c"), file("d")), pdfPages = mapOf("a" to 3, "c" to 0, "d" to -1))
+        val vm = viewModel("b")
+        assertThat(vm.items.map { it.nodeId }).containsExactly("a", "b", "c", "d").inOrder()
+        assertThat(vm.items.map { it.pdfPage }).containsExactly(3, null, null, null).inOrder()
+        assertThat(vm.initialPage).isEqualTo(1)
+
+        // 其它入口(文件页、文件名搜索、传输助手)照旧:没有起始页
+        sessions.open(listOf(file("a"), file("b")))
+        assertThat(viewModel("a").items.map { it.pdfPage }).containsExactly(null, null)
+    }
+
+    @Test
+    fun `the side pane restart picks up the hit pages of the new session`() {
+        sessions.open(listOf(file("a")))
+        val vm = viewModel("a")
+        sessions.open(listOf(file("x"), file("y")), pdfPages = mapOf("y" to 7))
+        vm.restart("y")
+        assertThat(vm.session.value.items.map { it.pdfPage }).containsExactly(null, 7).inOrder()
+    }
+
+    @Test
     fun `after the process is recreated only the file being viewed is left`() {
         // 会话列表在内存里,进程重建后没了;SavedStateHandle 里记着翻到的那一项
         val vm = viewModel("a", current = "c")

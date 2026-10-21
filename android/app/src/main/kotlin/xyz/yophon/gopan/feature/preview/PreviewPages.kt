@@ -563,9 +563,18 @@ internal fun formatClock(ms: Long): String {
 
 // ---- PDF ----
 
-/** PDF(原文件或 Office 派生):系统 PdfRenderer 逐页渲染;点一页全屏放大看 */
+/**
+ * PDF(原文件或 Office 派生):系统 PdfRenderer 逐页渲染;点一页全屏放大看。
+ * [initialPage]:打开时先停在这一页(从 1 起,内容搜索的命中页);null 从第一页看。
+ */
 @Composable
-internal fun PdfPage(file: File, onOpenPage: (PdfDocument, Int) -> Unit, onOpenWith: () -> Unit, onDownload: () -> Unit) {
+internal fun PdfPage(
+    file: File,
+    onOpenPage: (PdfDocument, Int) -> Unit,
+    onOpenWith: () -> Unit,
+    onDownload: () -> Unit,
+    initialPage: Int? = null,
+) {
     val result by produceState<Result<PdfDocument>?>(null, file) {
         val r = try {
             Result.success(PdfDocument.open(file))
@@ -585,13 +594,14 @@ internal fun PdfPage(file: File, onOpenPage: (PdfDocument, Int) -> Unit, onOpenW
             stringResource(R.string.preview_pdf_error),
             listOf(openWithAction(onOpenWith), downloadAction(onDownload)),
         )
-        else -> PdfPages(r.getOrThrow(), onOpenPage)
+        else -> PdfPages(r.getOrThrow(), onOpenPage, initialPage)
     }
 }
 
 @Composable
-private fun PdfPages(doc: PdfDocument, onOpenPage: (PdfDocument, Int) -> Unit) {
-    val listState = rememberLazyListState()
+private fun PdfPages(doc: PdfDocument, onOpenPage: (PdfDocument, Int) -> Unit, initialPage: Int?) {
+    // 起始页只决定列表刚出现时停在哪;之后用户怎么滚都不会被拉回去
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = PdfDocument.startIndex(initialPage, doc.pageCount))
     val density = LocalDensity.current
     val side = 8.dp
     BoxWithConstraints(Modifier.fillMaxSize()) {

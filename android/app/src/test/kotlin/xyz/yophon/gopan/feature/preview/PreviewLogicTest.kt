@@ -88,6 +88,29 @@ class PreviewLogicTest {
     }
 
     @Test
+    fun `the pdf page list starts at the hit page, clamped to the document`() {
+        // 没有起始页:第一页(其它入口照旧)
+        assertThat(PdfDocument.startIndex(null, 10)).isEqualTo(0)
+        // 页码从 1 起,列表下标从 0 起
+        assertThat(PdfDocument.startIndex(1, 10)).isEqualTo(0)
+        assertThat(PdfDocument.startIndex(3, 10)).isEqualTo(2)
+        assertThat(PdfDocument.startIndex(10, 10)).isEqualTo(9)
+        // 派生 PDF 的分页与提取时对不上:停在最后一页;异常值回到第一页
+        assertThat(PdfDocument.startIndex(99, 10)).isEqualTo(9)
+        assertThat(PdfDocument.startIndex(0, 10)).isEqualTo(0)
+        assertThat(PdfDocument.startIndex(-5, 10)).isEqualTo(0)
+        assertThat(PdfDocument.startIndex(3, 0)).isEqualTo(0)
+    }
+
+    @Test
+    fun `preview items carry the hit page only when it is a real page number`() {
+        val node = xyz.yophon.gopan.core.data.Node(id = "a", name = "a.pdf", kind = xyz.yophon.gopan.core.data.NodeKind.FILE)
+        assertThat(node.toPreviewItem().pdfPage).isNull()
+        assertThat(node.toPreviewItem(4).pdfPage).isEqualTo(4)
+        assertThat(node.toPreviewItem(0).pdfPage).isNull()
+    }
+
+    @Test
     fun `preview items carry the list thumbnail key only for files with thumbnails`() {
         val withThumb = xyz.yophon.gopan.core.data.Node(
             id = "a",

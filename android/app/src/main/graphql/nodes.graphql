@@ -1,5 +1,5 @@
 # 文件节点 operations(文件线)。字段选择以 web/src/api/operations/nodes.graphql 为底,
-# 列表类查询共用 NodeItem 片段:Children / SearchNodes / Trash / Node / CreateFolder / RenameNode
+# 列表类查询共用 NodeItem 片段:Children / SearchNodes / SearchContent / Trash / Node / CreateFolder / RenameNode
 # 都映射到同一个生成类型,core.data 里只写一处 toNode()。
 # 比网页端多选了 mime(列表图标按 kind/mime 分类)与 createdAt(详情页),都是 schema 已有字段。
 # deletedAt / purgeAt 只有 trash 查询会填,其它查询返回 null。
@@ -110,5 +110,24 @@ query SearchNodes($q: String!, $cursor: String) {
     }
     nextCursor
     total
+  }
+}
+
+# 按内容搜索(doc/20):命中片段 + 高亮区间(片段内按码点计)+ PDF 页码;不返回 total。
+# node 用 NodeItem 片段,与文件名结果同一个 toNode():长按操作、所在目录、预览都照常复用。
+query SearchContent($q: String!, $cursor: String) {
+  searchContent(q: $q, cursor: $cursor) {
+    items {
+      node {
+        ...NodeItem
+      }
+      snippet
+      highlights {
+        start
+        length
+      }
+      page
+    }
+    nextCursor
   }
 }

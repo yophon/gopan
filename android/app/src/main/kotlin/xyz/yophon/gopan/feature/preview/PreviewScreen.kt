@@ -253,7 +253,13 @@ private fun PreviewPageHost(
         is PreviewContent.Video -> VideoPage(c, isCurrent, viewModel.mediaClient, page, onControllerVisible = onChromeVisible)
         is PreviewContent.Audio -> AudioPage(item.nodeId, title, c, isCurrent)
         is PreviewContent.PdfDownloading -> PdfDownloadingPage(c.fraction)
-        is PreviewContent.Pdf -> PdfPage(c.file, onOpenPdfPage, onOpenWith = viewModel::openWith, onDownload = viewModel::download)
+        is PreviewContent.Pdf -> PdfPage(
+            c.file,
+            onOpenPdfPage,
+            onOpenWith = viewModel::openWith,
+            onDownload = viewModel::download,
+            initialPage = item.pdfPage,
+        )
         is PreviewContent.Text -> TextPage(c, onLoadMore = page::loadMoreText)
         PreviewContent.OfficeConverting -> OfficeConvertingPage()
         PreviewContent.OfficeUnavailable -> MessagePanel(

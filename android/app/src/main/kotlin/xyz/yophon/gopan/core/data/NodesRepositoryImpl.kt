@@ -22,6 +22,7 @@ import xyz.yophon.gopan.graphql.PurgeNodesMutation
 import xyz.yophon.gopan.graphql.PurgeTrashMutation
 import xyz.yophon.gopan.graphql.RenameNodeMutation
 import xyz.yophon.gopan.graphql.RestoreNodesMutation
+import xyz.yophon.gopan.graphql.SearchContentQuery
 import xyz.yophon.gopan.graphql.SearchNodesQuery
 import xyz.yophon.gopan.graphql.TrashQuery
 import xyz.yophon.gopan.graphql.type.NodeOrder
@@ -93,6 +94,13 @@ class NodesRepositoryImpl @Inject constructor(
         val data = apollo.query(SearchNodesQuery(q = q, cursor = Optional.present(cursor))).execute().requireData()
         val p = data.searchNodes
         return NodePage(items = p.items.map { it.nodeItem.toNode().also(::remember) }, nextCursor = p.nextCursor, total = p.total)
+    }
+
+    override suspend fun searchContent(q: String, cursor: String?): ContentHitPage {
+        val data = apollo.query(SearchContentQuery(q = q, cursor = Optional.present(cursor))).execute().requireData()
+        val p = data.searchContent
+        // 命中的都是文件,不进 knownFolders
+        return ContentHitPage(items = p.items.map { it.toContentHit() }, nextCursor = p.nextCursor)
     }
 
     override suspend fun trash(cursor: String?): NodePage {

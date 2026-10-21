@@ -45,6 +45,10 @@ object GopanErrors {
     const val NOT_A_FOLDER = "NOT_A_FOLDER"
     const val QUERY_TOO_DEEP = "QUERY_TOO_DEEP"
 
+    // ---- 内容搜索(server/internal/service/content.go) ----
+    const val QUERY_TOO_SHORT = "QUERY_TOO_SHORT"
+    const val CONTENT_SEARCH_DISABLED = "CONTENT_SEARCH_DISABLED"
+
     // ---- 上传协议(server/internal/service/upload.go、browser_upload.go) ----
     const val UPLOAD_PROCESSING = "UPLOAD_PROCESSING"
     const val MISSING_PART = "MISSING_PART"
@@ -90,6 +94,8 @@ object GopanErrors {
         FORBIDDEN to "没有权限执行该操作",
         NOT_A_FOLDER to "目标不是可用的文件夹",
         QUERY_TOO_DEEP to "请求异常,请刷新重试",
+        QUERY_TOO_SHORT to "按内容搜索至少要两个汉字或三个字母",
+        CONTENT_SEARCH_DISABLED to "本站没有开启内容搜索",
         UPLOAD_PROCESSING to "服务器正在校验文件",
         MISSING_PART to "有分片未上传完成,请重试",
         COMPLETE_FAILED to "合并分片失败,请重试",

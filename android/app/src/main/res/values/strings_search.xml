@@ -7,4 +7,16 @@
     <string name="search_empty">没有找到与「%1$s」相关的内容</string>
     <string name="search_result_count">共 %1$d 个结果</string>
     <string name="search_action_locate">所在目录</string>
+
+    <!-- 「文件名」「内容」两个标签(doc/20) -->
+    <string name="search_tab_name">文件名</string>
+    <string name="search_tab_content">内容</string>
+    <string name="search_hint_content">搜索文件内容</string>
+    <string name="search_content_idle">输入关键词,按文件里的文字找</string>
+    <string name="search_content_formats">支持 PDF、Word / Excel / PowerPoint、OpenDocument、文本与代码;扫描件里的字搜不到。</string>
+    <string name="search_content_empty">没有文件的内容包含这个关键词</string>
+    <string name="search_content_too_short">按内容搜索至少要两个汉字或三个字母</string>
+    <string name="search_content_disabled">本站没有开启内容搜索</string>
+    <string name="search_content_page">第 %1$d 页</string>
+    <string name="search_hit_more">更多操作</string>
 </resources>

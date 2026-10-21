@@ -208,12 +208,15 @@ abstract class NodeActionsViewModel(
     /** 当前列表里可以左右翻的节点(文件夹会被去掉);默认只有被点的那个 */
     protected open fun previewSiblings(): List<Node> = emptyList()
 
+    /** 预览里 PDF 先翻到的页(节点 id → 从 1 起的页码);只有内容搜索结果有,默认都从第一页看 */
+    protected open fun previewPdfPages(): Map<String, Int> = emptyMap()
+
     /** 预览文件:左右翻的是当前列表里的文件 */
     fun preview(node: Node) {
         if (node.isFolder) return
         closeDialog()
         val siblings = previewSiblings().takeIf { list -> list.any { it.id == node.id } } ?: listOf(node)
-        previews.open(siblings)
+        previews.open(siblings, previewPdfPages())
         send(NodeEffect.OpenPreview(node.id))
     }
 

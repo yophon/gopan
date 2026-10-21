@@ -1,6 +1,7 @@
 package xyz.yophon.gopan.feature.search
 
 import androidx.compose.runtime.Immutable
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
@@ -9,15 +10,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import xyz.yophon.gopan.core.data.ContentHit
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodesRepository
+import xyz.yophon.gopan.core.data.mergeHits
 import xyz.yophon.gopan.core.transfer.TransferActions
 import xyz.yophon.gopan.core.data.mergePages
+import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.network.gopanResult
 import xyz.yophon.gopan.core.network.toGopanException
@@ -28,43 +33,86 @@ import xyz.yophon.gopan.feature.drive.UiText
 import xyz.yophon.gopan.feature.preview.PreviewSessionStore
 import javax.inject.Inject
 
+/** 搜索页的两个标签(与网页端一致);换关键词、清空关键词都不变 */
+enum class SearchTab { NAME, CONTENT }
+
+/** 「内容」标签里代替结果的一行提示:不是出错,不给重试 */
+enum class ContentNotice {
+    /** 关键词不到两个汉字或三个字母 */
+    QUERY_TOO_SHORT,
+
+    /** 本站关了内容索引 */
+    DISABLED,
+}
+
+/** 「内容」标签的结果:没有 total,只靠游标翻页 */
+@Immutable
+data class ContentResults(
+    val hits: List<ContentHit> = emptyList(),
+    val status: ListStatus = ListStatus.Content,
+    val notice: ContentNotice? = null,
+    val nextCursor: String? = null,
+    val isLoadingMore: Boolean = false,
+    val loadMoreError: String? = null,
+) {
+    val isEmpty: Boolean get() = status == ListStatus.Content && notice == null && hits.isEmpty()
+}
+
 @Immutable
 data class SearchUiState(
     /** 真正提交过搜索的关键词(trim 后);空串 = 还没搜 */
     val query: String = "",
+    val tab: SearchTab = SearchTab.NAME,
+    // ---- 「文件名」标签 ----
     val items: List<Node> = emptyList(),
     val status: ListStatus = ListStatus.Content,
     val total: Int = 0,
     val nextCursor: String? = null,
     val isLoadingMore: Boolean = false,
     val loadMoreError: String? = null,
+    // ---- 「内容」标签 ----
+    val content: ContentResults = ContentResults(),
 ) {
     val isIdle: Boolean get() = query.isEmpty()
     val isEmpty: Boolean get() = !isIdle && status == ListStatus.Content && items.isEmpty()
 }
 
-/** 搜索页:关键词 300ms 防抖,结果分页;操作(重命名 / 移动 / 复制 / 删除)与文件页共用基类 */
+/**
+ * 搜索页:关键词 300ms 防抖,结果分页;操作(重命名 / 移动 / 复制 / 删除)与文件页共用基类。
+ * 两个标签只搜当前显示的那个:换关键词时两边的结果都作废,切到另一个标签时它还没搜过这个关键词才搜。
+ * 标签记在 SavedStateHandle 里,进程重建后与界面恢复的关键词一起回来。
+ */
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     repo: NodesRepository,
     transfers: TransferActions,
     previews: PreviewSessionStore,
+    private val savedState: SavedStateHandle,
 ) : NodeActionsViewModel(repo, transfers, previews) {
 
-    private val _state = MutableStateFlow(SearchUiState())
+    private val _state = MutableStateFlow(SearchUiState(tab = restoredTab()))
     val state: StateFlow<SearchUiState> = _state.asStateFlow()
 
     private val input = MutableStateFlow("")
+    private val tab = MutableStateFlow(_state.value.tab)
+
+    /** 两个标签的结果各属于哪个关键词;对不上(null)= 还没搜过当前关键词,切过去要搜 */
+    private var nameLoadedFor: String? = null
+    private var contentLoadedFor: String? = null
+
+    /** 两个标签各自上次加载时的变更计数:别处改过东西(重命名、删除…)后回来静默重搜 */
     private var loadedVersion = -1L
+    private var contentVersion = -1L
+
     private var loadMoreJob: Job? = null
+    private var contentMoreJob: Job? = null
 
     init {
         viewModelScope.launch {
-            input.map { it.trim() }
-                .debounce(DEBOUNCE_MS)
-                .distinctUntilChanged()
-                .collectLatest { q -> search(q, silent = false) }
+            // 换关键词与换标签都会走到这里;collectLatest 取消上一次还没回来的搜索
+            combine(input.map { it.trim() }.debounce(DEBOUNCE_MS).distinctUntilChanged(), tab) { q, t -> q to t }
+                .collectLatest { (q, t) -> show(q, t) }
         }
     }
 
@@ -72,32 +120,94 @@ class SearchViewModel @Inject constructor(
         input.value = text
     }
 
+    fun onTabSelected(selected: SearchTab) {
+        if (_state.value.tab == selected) return
+        savedState[TAB_KEY] = selected.name
+        _state.update { it.copy(tab = selected) }
+        tab.value = selected
+    }
+
     fun retry() {
-        viewModelScope.launch { search(_state.value.query, silent = false) }
+        val s = _state.value
+        viewModelScope.launch {
+            when (s.tab) {
+                SearchTab.NAME -> search(s.query, silent = false)
+                SearchTab.CONTENT -> searchContent(s.query, silent = false)
+            }
+        }
     }
 
     fun onResumed() {
         val s = _state.value
-        if (s.isIdle || s.status != ListStatus.Content) return
-        if (loadedVersion != repo.version.value) viewModelScope.launch { search(s.query, silent = true) }
+        if (s.isIdle) return
+        when (s.tab) {
+            SearchTab.NAME -> {
+                if (s.status != ListStatus.Content) return
+                if (loadedVersion != repo.version.value) viewModelScope.launch { search(s.query, silent = true) }
+            }
+            SearchTab.CONTENT -> {
+                if (s.content.status != ListStatus.Content || s.content.notice != null) return
+                if (contentVersion != repo.version.value) viewModelScope.launch { searchContent(s.query, silent = true) }
+            }
+        }
     }
 
     fun onItemClick(node: Node) {
         if (node.isFolder) send(NodeEffect.OpenFolder(node.id)) else preview(node)
     }
 
-    override fun previewSiblings(): List<Node> = _state.value.items
+    /** 点内容结果:进预览,左右翻的是这批结果;PDF 直接翻到命中页 */
+    fun onHitClick(hit: ContentHit) = preview(hit.node)
+
+    override fun previewSiblings(): List<Node> {
+        val s = _state.value
+        return when (s.tab) {
+            SearchTab.NAME -> s.items
+            SearchTab.CONTENT -> s.content.hits.map { it.node }
+        }
+    }
+
+    override fun previewPdfPages(): Map<String, Int> {
+        val s = _state.value
+        if (s.tab != SearchTab.CONTENT) return emptyMap()
+        return s.content.hits.mapNotNull { h -> h.page?.let { h.node.id to it } }.toMap()
+    }
+
+    /** 关键词或标签变了:关键词变了先把两边的结果作废,再按需搜当前标签 */
+    private suspend fun show(q: String, t: SearchTab) {
+        if (q != _state.value.query) {
+            // 在途的翻页属于旧结果,游标也不绑定关键词,必须取消,否则旧页会拼进新列表
+            loadMoreJob?.cancel()
+            contentMoreJob?.cancel()
+            nameLoadedFor = null
+            contentLoadedFor = null
+            _state.update {
+                if (q.isEmpty()) {
+                    SearchUiState(tab = it.tab)
+                } else {
+                    // 另一个标签也先标成加载中:切过去时不会闪一下上个关键词的结果
+                    SearchUiState(query = q, tab = it.tab, status = ListStatus.Loading, content = ContentResults(status = ListStatus.Loading))
+                }
+            }
+        }
+        if (q.isEmpty()) return
+        when (t) {
+            SearchTab.NAME -> when {
+                nameLoadedFor != q -> search(q, silent = false)
+                loadedVersion != repo.version.value -> search(q, silent = true)
+            }
+            SearchTab.CONTENT -> when {
+                contentLoadedFor != q -> searchContent(q, silent = false)
+                contentVersion != repo.version.value && _state.value.content.notice == null -> searchContent(q, silent = true)
+            }
+        }
+    }
 
     private suspend fun search(q: String, silent: Boolean) {
-        // 换了关键词(或重搜):在途的翻页属于旧结果,游标也不绑定关键词,必须取消,否则旧页会拼进新列表
         loadMoreJob?.cancel()
-        if (q.isEmpty()) {
-            _state.update { SearchUiState() }
-            return
-        }
+        if (q.isEmpty()) return
         _state.update {
             it.copy(
-                query = q,
                 status = if (silent) it.status else ListStatus.Loading,
                 items = if (silent) it.items else emptyList(),
                 nextCursor = null,
@@ -107,16 +217,61 @@ class SearchViewModel @Inject constructor(
         }
         gopanResult { repo.search(q, null) }
             .onSuccess { page ->
+                // 期间换了关键词(重试、回前台的静默重搜不受 collectLatest 管):丢弃
+                if (_state.value.query != q) return@onSuccess
+                nameLoadedFor = q
                 loadedVersion = repo.version.value
                 _state.update { it.copy(items = page.items, total = page.total, nextCursor = page.nextCursor, status = ListStatus.Content) }
             }
             .onFailure { e ->
+                if (_state.value.query != q) return@onFailure
                 val ge = e as? GopanException ?: e.toGopanException()
                 if (silent && _state.value.items.isNotEmpty()) {
                     // 静默重搜失败:保留手上的结果,只提示
                     message(UiText.Plain(ge.message ?: ge.code))
                 } else {
                     _state.update { it.copy(status = ListStatus.Error(ge.message ?: ge.code), items = emptyList()) }
+                }
+            }
+    }
+
+    private suspend fun searchContent(q: String, silent: Boolean) {
+        contentMoreJob?.cancel()
+        if (q.isEmpty()) return
+        _state.update {
+            val c = it.content
+            it.copy(
+                content = c.copy(
+                    status = if (silent) c.status else ListStatus.Loading,
+                    hits = if (silent) c.hits else emptyList(),
+                    notice = if (silent) c.notice else null,
+                    nextCursor = null,
+                    isLoadingMore = false,
+                    loadMoreError = null,
+                ),
+            )
+        }
+        gopanResult { repo.searchContent(q, null) }
+            .onSuccess { page ->
+                if (_state.value.query != q) return@onSuccess
+                contentLoadedFor = q
+                contentVersion = repo.version.value
+                // 首页也去重:结果列表按文件 id 做 key,重复会让 LazyColumn 直接崩
+                _state.update { it.copy(content = ContentResults(hits = mergeHits(emptyList(), page.items), nextCursor = page.nextCursor)) }
+            }
+            .onFailure { e ->
+                if (_state.value.query != q) return@onFailure
+                val ge = e as? GopanException ?: e.toGopanException()
+                val notice = contentNotice(ge.code)
+                when {
+                    // 关键词太短 / 本站没开:这就是这个关键词的结果,切标签回来不用再问一次
+                    notice != null -> {
+                        contentLoadedFor = q
+                        contentVersion = repo.version.value
+                        _state.update { it.copy(content = ContentResults(notice = notice)) }
+                    }
+                    silent && _state.value.content.hits.isNotEmpty() -> message(UiText.Plain(ge.message ?: ge.code))
+                    else -> _state.update { it.copy(content = ContentResults(status = ListStatus.Error(ge.message ?: ge.code))) }
                 }
             }
     }
@@ -142,12 +297,57 @@ class SearchViewModel @Inject constructor(
         }
     }
 
+    fun loadMoreContent() {
+        val s = _state.value
+        val c = s.content
+        val cursor = c.nextCursor ?: return
+        if (c.isLoadingMore || c.status != ListStatus.Content) return
+        contentMoreJob = viewModelScope.launch {
+            _state.update { it.copy(content = it.content.copy(isLoadingMore = true, loadMoreError = null)) }
+            gopanResult { repo.searchContent(s.query, cursor) }
+                .onSuccess { page ->
+                    _state.update {
+                        if (it.query != s.query) {
+                            it.copy(content = it.content.copy(isLoadingMore = false))
+                        } else {
+                            it.copy(
+                                content = it.content.copy(
+                                    hits = mergeHits(it.content.hits, page.items),
+                                    nextCursor = page.nextCursor,
+                                    isLoadingMore = false,
+                                ),
+                            )
+                        }
+                    }
+                }
+                .onFailure { e ->
+                    val ge = e as? GopanException ?: e.toGopanException()
+                    _state.update { it.copy(content = it.content.copy(isLoadingMore = false, loadMoreError = ge.message ?: ge.code)) }
+                }
+        }
+    }
+
+    /** 变更后静默重搜当前标签;另一个标签的变更计数对不上,切过去时再重搜 */
     override suspend fun afterMutation() {
-        val q = _state.value.query
-        if (q.isNotEmpty()) search(q, silent = true)
+        val s = _state.value
+        if (s.query.isEmpty()) return
+        when (s.tab) {
+            SearchTab.NAME -> search(s.query, silent = true)
+            SearchTab.CONTENT -> if (s.content.notice == null) searchContent(s.query, silent = true)
+        }
+    }
+
+    private fun restoredTab(): SearchTab =
+        savedState.get<String>(TAB_KEY)?.let { name -> SearchTab.entries.firstOrNull { it.name == name } } ?: SearchTab.NAME
+
+    private fun contentNotice(code: String): ContentNotice? = when (code) {
+        GopanErrors.QUERY_TOO_SHORT -> ContentNotice.QUERY_TOO_SHORT
+        GopanErrors.CONTENT_SEARCH_DISABLED -> ContentNotice.DISABLED
+        else -> null
     }
 
     companion object {
         const val DEBOUNCE_MS = 300L
+        private const val TAB_KEY = "search.tab"
     }
 }

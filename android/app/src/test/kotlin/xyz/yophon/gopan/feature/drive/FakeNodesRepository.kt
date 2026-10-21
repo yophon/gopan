@@ -1,13 +1,17 @@
 package xyz.yophon.gopan.feature.drive
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import xyz.yophon.gopan.core.data.ContentHit
+import xyz.yophon.gopan.core.data.ContentHitPage
 import xyz.yophon.gopan.core.data.Listing
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodeKind
 import xyz.yophon.gopan.core.data.NodePage
 import xyz.yophon.gopan.core.data.NodesRepository
+import xyz.yophon.gopan.core.data.TextRange
 import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.prefs.DriveSortOrder
@@ -80,6 +84,24 @@ class FakeNodesRepository : NodesRepository {
         return pages.getOrNull(cursor?.toInt() ?: 0) ?: NodePage.EMPTY
     }
 
+    /** 关键词 → 内容搜索的页列表(游标同样是页号字符串) */
+    val contentResults = HashMap<String, List<ContentHitPage>>()
+
+    /** 关键词 → 内容搜索抛的错误(QUERY_TOO_SHORT / CONTENT_SEARCH_DISABLED …) */
+    val contentErrors = HashMap<String, GopanException>()
+
+    /** 内容搜索每次请求的耗时(虚拟时钟):测"换关键词取消在途请求、丢弃旧页" */
+    var contentDelayMs = 0L
+
+    override suspend fun searchContent(q: String, cursor: String?): ContentHitPage {
+        calls += "searchContent($q,$cursor)"
+        if (contentDelayMs > 0) delay(contentDelayMs)
+        if (networkDown) throw GopanException(GopanErrors.NETWORK, "网络连接失败,请检查网络后重试")
+        contentErrors[q]?.let { throw it }
+        val pages = contentResults[q] ?: return ContentHitPage.EMPTY
+        return pages.getOrNull(cursor?.toInt() ?: 0) ?: ContentHitPage.EMPTY
+    }
+
     override suspend fun trash(cursor: String?): NodePage {
         calls += "trash($cursor)"
         if (networkDown) throw GopanException(GopanErrors.NETWORK, "网络连接失败,请检查网络后重试")
@@ -141,5 +163,11 @@ class FakeNodesRepository : NodesRepository {
 
         fun page(vararg items: Node, nextCursor: String? = null, total: Int = items.size) =
             NodePage(items.toList(), nextCursor, total)
+
+        /** 一条内容命中:片段默认就是文件名,高亮整段 */
+        fun hit(node: Node, snippet: String = node.name, page: Int? = null, highlights: List<TextRange> = listOf(TextRange(0, snippet.codePointCount(0, snippet.length)))) =
+            ContentHit(node, snippet, highlights, page)
+
+        fun hits(vararg items: ContentHit, nextCursor: String? = null) = ContentHitPage(items.toList(), nextCursor)
     }
 }

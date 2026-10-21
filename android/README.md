@@ -70,7 +70,7 @@ resource-id(uiautomator 据此定位)、Timber 打日志、Yophon ID 允许本�
 
 ```
 app/src/main/graphql/            GraphQL operations(按域一个文件,字段选择与 web/src/api/operations 一致;
-                                 nodes.graphql 的 NodeItem 片段供 Children/SearchNodes/Trash/Node/CreateFolder/RenameNode 共用)
+                                 nodes.graphql 的 NodeItem 片段供 Children/SearchNodes/SearchContent/Trash/Node/CreateFolder/RenameNode 共用)
 app/src/main/kotlin/xyz/yophon/gopan/
   GopanApp.kt                    @HiltAndroidApp;启动时跑 SessionManager.startBootstrap();
                                  实现 Coil 的 SingletonImageLoader.Factory,缩略图加载复用全局 OkHttpClient
@@ -116,7 +116,8 @@ app/src/main/kotlin/xyz/yophon/gopan/
                                  NodeActionsViewModel(新建/重命名/移动/复制/删除/分享/预览)、
                                  FolderPickerDialog(全屏目标选择器)、BreadcrumbBar、NodeSheets(详情/操作)、DriveGraph(文件 tab 嵌套图,含回收站与搜索路由)
   feature/trash/                 TrashScreen / TrashViewModel(还原、彻删、清空两次确认)、TrashExpiry(剩余天数)
-  feature/search/                SearchScreen / SearchViewModel(300ms 防抖、分页)
+  feature/search/                SearchScreen / SearchViewModel(「文件名」「内容」两个标签,300ms 防抖、分页;只搜当前标签,换关键词两边作废)、
+                                 ContentHits(内容结果行:命中页、片段高亮按码点换算到 UTF-16)
   feature/account/               AccountScreen / AccountViewModel(用量条、回收站与传输列表入口、传输设置、改密码对话框、主题 / 动态取色 / 列表视图偏好、
                                  管理端入口(仅管理员)、检查更新(打开页面时静默查一次,有新版本标出)、崩溃日志与开源许可入口、退出登录)、
                                  AccountUsage、ChangePasswordForm
@@ -204,6 +205,7 @@ GraphQL operations 按域各自一个文件(`nodes.graphql` 归文件线,`chat.g
 
 - **入口**:文件页、搜索结果、传输助手里点文件 → 全屏预览,左右翻的是打开时那个列表里的文件(传输助手是当前显示的消息,从旧到新)。
   列表放在 `PreviewSessionStore`(路由只带起点 nodeId);进程被回收后只剩当时看的那一个文件。平板(宽 ≥ 840dp)文件页点文件在右侧栏预览。
+  从内容搜索结果打开时每项带命中页(`PreviewItem.pdfPage`),按 PDF 显示(含 Office 派生)的页列表一打开就停在那一页;其它入口都从第一页看。
 - **加载**:每页现取 `node(id){preview{…}}`(预签名 15 分钟),只留最近 6 页,屏幕上(含左右各预加载一页)的不释放。
   - 图片:2048 大图派生(没有派生时原图,解码边长封顶 4096),加载出来之前用列表缩略图垫底;双指 / 双击缩放,放大时不翻页;「查看原图」换原图。
   - 视频:页面内 ExoPlayer,翻到才缓冲并自动播放,翻走暂停,离开即释放;播放控件显隐与顶栏同步。
