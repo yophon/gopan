@@ -23,6 +23,7 @@ fun fileCategory(kind: NodeKind, name: String, mime: String?, previewKind: Previ
         PreviewKind.PDF, PreviewKind.NATIVE_PDF -> return FileCategory.PDF
         PreviewKind.TEXT -> return FileCategory.TEXT
         PreviewKind.OFFICE -> return officeCategory(ext)
+        PreviewKind.ARCHIVE -> return FileCategory.ARCHIVE
         PreviewKind.NONE -> Unit
     }
     val m = mime?.lowercase()?.substringBefore(';')?.trim().orEmpty()

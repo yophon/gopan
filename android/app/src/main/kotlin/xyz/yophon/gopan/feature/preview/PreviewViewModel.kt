@@ -16,10 +16,17 @@ import okhttp3.OkHttpClient
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodeKind
+import xyz.yophon.gopan.core.data.archive.ArchiveRepository
+import xyz.yophon.gopan.core.data.archive.ExtractRequest
+import xyz.yophon.gopan.core.data.preview.PreviewInfo
 import xyz.yophon.gopan.core.data.preview.PreviewRepository
 import xyz.yophon.gopan.core.network.gopanResult
+import xyz.yophon.gopan.core.share.AppNavRequests
+import xyz.yophon.gopan.core.share.NavRequest
 import xyz.yophon.gopan.core.transfer.TransferActions
 import xyz.yophon.gopan.core.transfer.upload.PartUploader
+import xyz.yophon.gopan.feature.archive.ExtractEvent
+import xyz.yophon.gopan.feature.archive.ExtractSubmitter
 import xyz.yophon.gopan.feature.drive.UiText
 import javax.inject.Inject
 import javax.inject.Named
@@ -36,6 +43,9 @@ sealed interface PreviewEffect {
 
     /** 新任务入队:Android 13+ 第一次时申请通知权限 */
     data object TransferQueued : PreviewEffect
+
+    /** 压缩包的解压任务已提交:Snackbar 带「查看」 */
+    data object ExtractStarted : PreviewEffect
 }
 
 /**
@@ -50,6 +60,8 @@ class PreviewViewModel @Inject constructor(
     private val transfers: TransferActions,
     /** 视频播放用:不带登录凭证的对象存储客户端(预签名地址自带授权) */
     @Named(PartUploader.TRANSFER_CLIENT) val mediaClient: OkHttpClient,
+    private val archives: ArchiveRepository,
+    private val navRequests: AppNavRequests,
 ) : ViewModel() {
 
     private val handle = savedStateHandle
@@ -98,7 +110,7 @@ class PreviewViewModel @Inject constructor(
     /** 取(必要时创建并开始加载)某一项的页面 */
     fun page(nodeId: String): PreviewPage {
         pages[nodeId]?.let { return it }
-        val page = PreviewPage(nodeId, repo, viewModelScope)
+        val page = PreviewPage(nodeId, repo, viewModelScope, archives)
         pages[nodeId] = page
         page.start()
         trim()
@@ -178,6 +190,24 @@ class PreviewViewModel @Inject constructor(
                 .onFailure { send(PreviewEffect.Message(UiText.Plain(it.message ?: "发送失败"))) }
         }
     }
+
+    // ---- 压缩包卡片 ----
+
+    val extract = ExtractSubmitter(archives, viewModelScope) { event ->
+        when (event) {
+            is ExtractEvent.Started -> send(PreviewEffect.ExtractStarted)
+            is ExtractEvent.Failed -> send(PreviewEffect.Message(UiText.Plain(event.message)))
+        }
+    }
+
+    /** 「解压到这里」:解到压缩包所在的文件夹 */
+    fun extractHere(info: PreviewInfo) = extract.submit(ExtractRequest(nodeId = info.nodeId, parentId = info.parentId))
+
+    /** 「解压到…」:先选目标文件夹 */
+    fun extractTo(info: PreviewInfo) = extract.pick(ExtractRequest(nodeId = info.nodeId))
+
+    /** Snackbar 的「查看」:请主界面打开传输列表 */
+    fun showTransfers() = navRequests.post(NavRequest.OPEN_TRANSFERS)
 
     /** 预览里「分享」:当前文件(没加载出信息时给出提示并返回 null) */
     fun shareTarget(): Node? = currentNode() ?: run {

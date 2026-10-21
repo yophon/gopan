@@ -12,7 +12,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -25,7 +27,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import xyz.yophon.gopan.core.auth.AuthState
+import xyz.yophon.gopan.core.ui.nav.LocalOpenArchive
 import xyz.yophon.gopan.core.ui.nav.Routes
+import xyz.yophon.gopan.feature.archive.ArchiveScreen
 import xyz.yophon.gopan.feature.drive.ifResumed
 import xyz.yophon.gopan.feature.login.loginGraph
 import xyz.yophon.gopan.feature.preview.PreviewScreen
@@ -50,20 +54,38 @@ fun RootNavHost(authState: AuthState) {
             .semantics { testTagsAsResourceId = BuildConfig.TEST_HOOKS },
         color = MaterialTheme.colorScheme.background,
     ) {
-        NavHost(navController = navController, startDestination = Routes.Startup) {
-            composable<Routes.Startup> { StartupScreen() }
-            loginGraph(navController)
-            composable<Routes.Main> { entry ->
-                MainScaffold(onOpenPreview = { id -> entry.ifResumed { navController.navigate(Routes.Preview(id)) } })
-            }
-            // 预览:根导航上的全屏页,盖住底部导航;从文件、搜索、传输助手进来
-            composable<Routes.Preview>(
-                enterTransition = { fadeIn(tween(FADE_MS)) },
-                exitTransition = { fadeOut(tween(FADE_MS)) },
-                popEnterTransition = { fadeIn(tween(FADE_MS)) },
-                popExitTransition = { fadeOut(tween(FADE_MS)) },
-            ) { entry ->
-                PreviewScreen(onBack = { entry.ifResumed { navController.popBackStack() } })
+        // 压缩包浏览页从预览(全屏页或平板侧栏)打开:当前页面还在前台时才跳
+        val openArchive: (Routes.Archive) -> Unit = remember(navController) {
+            { route -> navController.currentBackStackEntry?.ifResumed { navController.navigate(route) } }
+        }
+        CompositionLocalProvider(LocalOpenArchive provides openArchive) {
+            NavHost(navController = navController, startDestination = Routes.Startup) {
+                composable<Routes.Startup> { StartupScreen() }
+                loginGraph(navController)
+                composable<Routes.Main> { entry ->
+                    MainScaffold(onOpenPreview = { id -> entry.ifResumed { navController.navigate(Routes.Preview(id)) } })
+                }
+                // 预览:根导航上的全屏页,盖住底部导航;从文件、搜索、传输助手进来
+                composable<Routes.Preview>(
+                    enterTransition = { fadeIn(tween(FADE_MS)) },
+                    exitTransition = { fadeOut(tween(FADE_MS)) },
+                    popEnterTransition = { fadeIn(tween(FADE_MS)) },
+                    popExitTransition = { fadeOut(tween(FADE_MS)) },
+                ) { entry ->
+                    PreviewScreen(onBack = { entry.ifResumed { navController.popBackStack() } })
+                }
+                // 压缩包浏览:同样盖住底部导航;「查看」解压进度时退回主界面,由它跳到传输列表
+                composable<Routes.Archive>(
+                    enterTransition = { fadeIn(tween(FADE_MS)) },
+                    exitTransition = { fadeOut(tween(FADE_MS)) },
+                    popEnterTransition = { fadeIn(tween(FADE_MS)) },
+                    popExitTransition = { fadeOut(tween(FADE_MS)) },
+                ) { entry ->
+                    ArchiveScreen(
+                        onBack = { entry.ifResumed { navController.popBackStack() } },
+                        onLeaveToMain = { entry.ifResumed { navController.popBackStack<Routes.Main>(inclusive = false) } },
+                    )
+                }
             }
         }
     }

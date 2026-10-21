@@ -79,6 +79,10 @@ import xyz.yophon.gopan.core.ui.format.formatBytes
 import xyz.yophon.gopan.core.ui.theme.GopanTheme
 import xyz.yophon.gopan.core.ui.transfer.rememberTransferPermissions
 import xyz.yophon.gopan.core.data.Node
+import xyz.yophon.gopan.core.ui.nav.LocalOpenArchive
+import xyz.yophon.gopan.core.ui.nav.Routes
+import xyz.yophon.gopan.feature.archive.ExtractPickerHost
+import xyz.yophon.gopan.feature.archive.showExtractStarted
 import xyz.yophon.gopan.feature.drive.resolve
 import xyz.yophon.gopan.feature.shares.ShareCreateDialog
 import xyz.yophon.gopan.core.ui.exposeTestTags
@@ -163,9 +167,17 @@ private fun PreviewBody(onBack: () -> Unit, viewModel: PreviewViewModel, session
                 is PreviewEffect.Message -> launch { snackbar.showSnackbar(effect.text.resolve(context)) }
                 PreviewEffect.RequestStoragePermission -> permissions.requestStoragePermission()
                 PreviewEffect.TransferQueued -> permissions.onTransferQueued()
+                // 「查看」:主界面打开传输列表;全屏预览先退回去它才看得见
+                PreviewEffect.ExtractStarted -> launch {
+                    snackbar.showExtractStarted(context) {
+                        viewModel.showTransfers()
+                        if (!pane) onBack()
+                    }
+                }
             }
         }
     }
+    ExtractPickerHost(viewModel.extract)
     if (!pane) PreviewSystemBars(hidden = !chromeVisible)
 
     val currentIndex = pagerState.currentPage.coerceIn(0, items.lastIndex)
@@ -278,6 +290,20 @@ private fun PreviewPageHost(
             modifier = Modifier.testTag("preview_office_failed"),
         )
         PreviewContent.Unsupported -> UnsupportedPage(onOpenWith = viewModel::openWith, onDownload = viewModel::download)
+        is PreviewContent.Archive -> {
+            val openArchive = LocalOpenArchive.current
+            val extracting by viewModel.extract.state.collectAsStateWithLifecycle()
+            val info = state.info
+            ArchiveSummaryPage(
+                summary = c.summary,
+                busy = extracting.busy,
+                onBrowse = { info?.let { openArchive(Routes.Archive(it.nodeId, it.name, it.parentId)) } },
+                onExtractHere = { info?.let(viewModel::extractHere) },
+                onExtractTo = { info?.let(viewModel::extractTo) },
+                onOpenWith = viewModel::openWith,
+                onDownload = viewModel::download,
+            )
+        }
     }
 }
 
@@ -386,7 +412,7 @@ private fun PreviewTopBar(
  * 离开预览恢复原样。
  */
 @Composable
-private fun PreviewSystemBars(hidden: Boolean) {
+internal fun PreviewSystemBars(hidden: Boolean) {
     val activity = LocalActivity.current ?: return
     val view = LocalView.current
     val controller = remember(activity, view) { WindowCompat.getInsetsController(activity.window, view) }

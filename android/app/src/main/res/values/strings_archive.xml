@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 压缩包浏览、预览与解压(doc/21 A3);feature.archive 与预览页的压缩包卡片用 -->
+<resources>
+    <!-- 概要 -->
+    <string name="archive_summary">%1$d 个文件 · 解压后 %2$s</string>
+    <string name="archive_pending">正在读取压缩包目录…</string>
+    <string name="archive_unavailable">这个压缩包打不开</string>
+    <string name="archive_truncated">条目太多或压缩包太大,只列出了一部分</string>
+    <string name="archive_encrypted">有文件加密了:能看到名字,但不能预览和解压</string>
+    <string name="archive_browse">浏览压缩包</string>
+
+    <!-- 浏览 -->
+    <string name="archive_back">返回</string>
+    <string name="archive_empty_dir">空目录</string>
+    <string name="archive_type_folder">文件夹</string>
+
+    <!-- 条目标记(行尾小标签)与点开时的说明 -->
+    <string name="archive_flag_encrypted">已加密</string>
+    <string name="archive_flag_unsafe">路径不安全</string>
+    <string name="archive_flag_link">链接</string>
+    <string name="archive_flag_unsupported">不支持的压缩方式</string>
+    <string name="archive_flag_msg_encrypted">这个文件加密了,打不开</string>
+    <string name="archive_flag_msg_unsafe">这个文件的路径不安全(带 ..),不能预览和解压</string>
+    <string name="archive_flag_msg_link">这是链接,不是普通文件</string>
+    <string name="archive_flag_msg_unsupported">这个文件的压缩方式不支持,请下载整个压缩包后解压</string>
+    <string name="archive_entry_too_large">太大,请解压后查看</string>
+    <string name="archive_entry_too_deep">在压缩包里太深,请解压后查看</string>
+
+    <!-- 包里的单个文件 -->
+    <string name="archive_back_to_list">返回目录</string>
+    <string name="archive_open_with">用其他应用打开</string>
+    <string name="archive_share">分享</string>
+    <string name="archive_share_chooser">分享到</string>
+    <string name="archive_fetching">正在读取 %1$s</string>
+    <string name="archive_fetching_percent">%1$d%%</string>
+
+    <!-- 解压 -->
+    <string name="archive_extract_all">全部解压</string>
+    <string name="archive_extract_dir">解压此目录</string>
+    <string name="archive_extract_selected">解压选中的 %1$d 项</string>
+    <string name="archive_extract_here">解压到这里</string>
+    <string name="archive_extract_to">解压到…</string>
+    <string name="archive_picker_title">解压到</string>
+    <string name="archive_msg_extract_started">已开始解压,进度见「传输」</string>
+    <string name="archive_msg_view_transfers">查看</string>
+</resources>

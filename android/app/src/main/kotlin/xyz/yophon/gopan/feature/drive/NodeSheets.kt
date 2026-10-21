@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Download
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.RestoreFromTrash
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -40,6 +42,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,14 +52,20 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.Node
+import xyz.yophon.gopan.core.data.archive.ExtractRequest
 import xyz.yophon.gopan.core.ui.components.ConfirmDialog
 import xyz.yophon.gopan.core.ui.components.TextInputDialog
 import xyz.yophon.gopan.core.ui.format.formatBytes
 import xyz.yophon.gopan.core.ui.format.formatTime
+import xyz.yophon.gopan.feature.archive.ExtractEvent
+import xyz.yophon.gopan.feature.archive.ExtractPickerHost
+import xyz.yophon.gopan.feature.archive.ExtractViewModel
+import xyz.yophon.gopan.feature.archive.isArchiveNode
 import xyz.yophon.gopan.feature.collect.FileRequestDialog
 import xyz.yophon.gopan.feature.collect.FileRequestTarget
 import xyz.yophon.gopan.feature.shares.ShareCreateDialog
@@ -69,6 +78,8 @@ enum class NodeAction(@StringRes val label: Int, val icon: ImageVector, val dest
     SEND_TO_CHAT(R.string.drive_action_send_to_chat, Icons.AutoMirrored.Outlined.Send),
     SHARE(R.string.drive_action_share, Icons.Outlined.Share),
     COLLECT(R.string.drive_action_collect, Icons.Outlined.DriveFolderUpload),
+    EXTRACT_HERE(R.string.archive_extract_here, Icons.Outlined.Unarchive),
+    EXTRACT_TO(R.string.archive_extract_to, Icons.Outlined.CreateNewFolder),
     RENAME(R.string.drive_action_rename, Icons.Outlined.DriveFileRenameOutline),
     MOVE(R.string.drive_action_move, Icons.AutoMirrored.Outlined.DriveFileMove),
     COPY(R.string.drive_action_copy, Icons.Outlined.ContentCopy),
@@ -85,6 +96,8 @@ val DRIVE_ACTIONS = listOf(
     NodeAction.PACK,
     NodeAction.SHARE,
     NodeAction.COLLECT,
+    NodeAction.EXTRACT_HERE,
+    NodeAction.EXTRACT_TO,
     NodeAction.SEND_TO_CHAT,
     NodeAction.RENAME,
     NodeAction.MOVE,
@@ -93,10 +106,11 @@ val DRIVE_ACTIONS = listOf(
     NodeAction.DETAILS,
 )
 
-/** 这个操作对这个节点有没有意义:打开只对文件,打包、收集文件只对文件夹 */
+/** 这个操作对这个节点有没有意义:打开只对文件,打包、收集文件只对文件夹,解压只对压缩包 */
 fun NodeAction.appliesTo(node: Node): Boolean = when (this) {
     NodeAction.OPEN -> !node.isFolder
     NodeAction.PACK, NodeAction.COLLECT -> node.isFolder
+    NodeAction.EXTRACT_HERE, NodeAction.EXTRACT_TO -> isArchiveNode(node)
     else -> true
 }
 
@@ -277,6 +291,17 @@ fun NodeDialogHost(
     onLocate: ((Node) -> Unit)? = null,
 ) {
     val rootName = stringResource(R.string.drive_title_root)
+    // 「解压到这里」「解压到…」:提交结果借页面的 Snackbar 提示(进度在「传输」的后台任务里)
+    val extractor: ExtractViewModel = hiltViewModel()
+    LaunchedEffect(extractor) {
+        extractor.events.collect { event ->
+            when (event) {
+                is ExtractEvent.Started -> viewModel.message(UiText.Res(R.string.archive_msg_extract_started))
+                is ExtractEvent.Failed -> viewModel.message(UiText.Plain(event.message))
+            }
+        }
+    }
+    ExtractPickerHost(extractor.extract)
     when (dialog) {
         null -> Unit
         is NodeDialog.Actions -> NodeActionSheet(
@@ -292,6 +317,9 @@ fun NodeDialogHost(
                     NodeAction.SEND_TO_CHAT -> viewModel.sendToChat(node)
                     NodeAction.SHARE -> viewModel.requestShare(node)
                     NodeAction.COLLECT -> viewModel.requestCollect(node)
+                    // 解到压缩包所在的文件夹(搜索结果也是压缩包旁边,不是当前页面)
+                    NodeAction.EXTRACT_HERE -> extractor.extract.submit(ExtractRequest(nodeId = node.id, parentId = node.parentId))
+                    NodeAction.EXTRACT_TO -> extractor.extract.pick(ExtractRequest(nodeId = node.id))
                     NodeAction.RENAME -> viewModel.requestRename(node)
                     NodeAction.MOVE -> viewModel.requestMove(listOf(node.id))
                     NodeAction.COPY -> viewModel.requestCopy(listOf(node.id))
@@ -351,6 +379,8 @@ fun NodeDialogHost(
                 when (dialog.mode) {
                     PickerMode.MOVE -> viewModel.moveTo(dialog.ids, target, rootName)
                     PickerMode.COPY -> viewModel.copyTo(dialog.ids, target, rootName)
+                    // 解压的选择器由 ExtractPickerHost 画,不走这里
+                    PickerMode.EXTRACT -> Unit
                 }
             },
             onDismiss = viewModel::dismissDialog,

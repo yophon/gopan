@@ -54,6 +54,13 @@ object Routes {
     @Serializable
     data class Preview(val nodeId: String)
 
+    /**
+     * 压缩包浏览(doc/21 四):根导航上的全屏页,从预览页的压缩包卡片进来。
+     * [parentId]:压缩包所在的文件夹(「解压到这里」的目标),null = 根目录
+     */
+    @Serializable
+    data class Archive(val nodeId: String, val name: String = "", val parentId: String? = null)
+
     // ---- 传输助手 ----
     @Serializable
     data object Chat

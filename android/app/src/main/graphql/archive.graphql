@@ -1,0 +1,40 @@
+# 压缩包(doc/21 四):概要、按目录列条目、提交解压(后台任务,进度在「传输」的后台任务里)
+
+query ArchiveInfo($nodeId: ID!) {
+  archiveInfo(nodeId: $nodeId) {
+    status
+    format
+    entryCount
+    fileCount
+    totalSize
+    solid
+    encrypted
+    error
+  }
+}
+
+query ArchiveEntries($nodeId: ID!, $path: String, $cursor: String) {
+  archiveEntries(nodeId: $nodeId, path: $path, cursor: $cursor) {
+    items {
+      idx
+      path
+      name
+      isDir
+      size
+      modifiedAt
+      flag
+      previewable
+      downloadable
+    }
+    nextCursor
+    total
+  }
+}
+
+mutation ExtractArchive($nodeId: ID!, $base: String, $paths: [String!], $parentId: ID) {
+  extractArchive(nodeId: $nodeId, base: $base, paths: $paths, parentId: $parentId) {
+    id
+    status
+    title
+  }
+}

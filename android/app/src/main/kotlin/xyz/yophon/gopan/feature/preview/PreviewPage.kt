@@ -13,11 +13,15 @@ import kotlinx.coroutines.launch
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodeKind
 import xyz.yophon.gopan.core.data.PreviewKind
+import xyz.yophon.gopan.core.data.archive.ArchiveRepository
+import xyz.yophon.gopan.core.data.archive.ArchiveStatus
 import xyz.yophon.gopan.core.data.preview.DerivativeStatus
 import xyz.yophon.gopan.core.data.preview.PreviewInfo
 import xyz.yophon.gopan.core.data.preview.PreviewRepository
 import xyz.yophon.gopan.core.data.preview.TextContent
 import xyz.yophon.gopan.core.network.gopanResult
+import xyz.yophon.gopan.feature.archive.ArchiveSummary
+import xyz.yophon.gopan.feature.archive.summary
 import java.io.File
 
 /** 一页预览的内容 */
@@ -48,6 +52,9 @@ sealed interface PreviewContent {
 
     data object OfficeFailed : PreviewContent
 
+    /** 压缩包:概要卡片(格式、文件数、解压后大小),浏览与解压的入口;还在读目录时每 2 秒刷新 */
+    data class Archive(val summary: ArchiveSummary) : PreviewContent
+
     data object Unsupported : PreviewContent
 }
 
@@ -60,13 +67,15 @@ data class PreviewPageState(val info: PreviewInfo? = null, val content: PreviewC
 
 /**
  * 一个文件的预览页:按服务端给的预览类型准备内容。预签名地址 15 分钟有效,每次打开现取;
- * Office 没有派生 PDF 时触发一次转换,转换中每 2 秒查一次状态 —— 只在这页显示着([setAttached])时查。
+ * Office 没有派生 PDF 时触发一次转换,转换中每 2 秒查一次状态 —— 只在这页显示着([setAttached])时查;
+ * 压缩包还在读目录时同样每 2 秒查一次概要。
  * 由 [PreviewViewModel] 持有:最近看过的几页留着(翻回来不重新加载),翻远了取消并释放。
  */
 class PreviewPage(
     val nodeId: String,
     private val repo: PreviewRepository,
     private val scope: CoroutineScope,
+    private val archives: ArchiveRepository,
 ) {
     private val _state = MutableStateFlow(PreviewPageState())
     val state: StateFlow<PreviewPageState> = _state.asStateFlow()
@@ -176,6 +185,7 @@ class PreviewPage(
                 )
             }
             PreviewKind.OFFICE -> office(info)
+            PreviewKind.ARCHIVE -> archive()
             PreviewKind.NONE -> set(PreviewContent.Unsupported)
         }
     }
@@ -219,6 +229,23 @@ class PreviewPage(
         }
     }
 
+    /** 压缩包:先看概要;服务端还在读目录(PENDING)就每 2 秒再问,读完换成概要卡片 */
+    private suspend fun archive() {
+        val info = gopanResult { archives.info(nodeId) }.getOrElse {
+            set(PreviewContent.Error(it.message ?: "读取压缩包失败"))
+            return
+        }
+        set(PreviewContent.Archive(info.summary()))
+        if (info.status != ArchiveStatus.PENDING) return
+        while (true) {
+            delay(ARCHIVE_POLL_MS)
+            attached.first { it }
+            val next = gopanResult { archives.info(nodeId) }.getOrNull() ?: continue
+            set(PreviewContent.Archive(next.summary()))
+            if (next.status != ArchiveStatus.PENDING) return
+        }
+    }
+
     private suspend fun downloadPdf(url: String, key: String) {
         set(PreviewContent.PdfDownloading(null))
         var lastPercent = -1
@@ -244,6 +271,7 @@ class PreviewPage(
 
     companion object {
         const val OFFICE_POLL_MS = 2_000L
+        const val ARCHIVE_POLL_MS = 2_000L
     }
 }
 

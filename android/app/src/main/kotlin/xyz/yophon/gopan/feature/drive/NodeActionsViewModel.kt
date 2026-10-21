@@ -36,7 +36,8 @@ sealed interface ListStatus {
     data class Error(val message: String) : ListStatus
 }
 
-enum class PickerMode { MOVE, COPY }
+/** 目标选择器的用途:移动、复制,或压缩包「解压到…」(feature.archive) */
+enum class PickerMode { MOVE, COPY, EXTRACT }
 
 /** 文件页 / 搜索页共用的弹层;ViewModel 持有,旋转屏幕不丢 */
 sealed interface NodeDialog {

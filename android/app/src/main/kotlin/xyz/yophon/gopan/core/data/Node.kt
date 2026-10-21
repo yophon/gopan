@@ -10,8 +10,11 @@ import xyz.yophon.gopan.graphql.type.PreviewKind as GqlPreviewKind
 /** 与 GraphQL 的 NodeKind 同名;领域层不直接依赖生成代码,未知值一律按 FILE 处理 */
 enum class NodeKind { FILE, FOLDER }
 
-/** 与 GraphQL 的 PreviewKind 同名;服务端新增类型时旧客户端按 NONE 处理 */
-enum class PreviewKind { NONE, IMAGE, PDF, NATIVE_PDF, VIDEO, AUDIO, TEXT, OFFICE }
+/** 与 GraphQL 的 PreviewKind 同名;服务端新增类型时旧客户端按 NONE 处理(见 [previewKindOf]) */
+enum class PreviewKind { NONE, IMAGE, PDF, NATIVE_PDF, VIDEO, AUDIO, TEXT, OFFICE, ARCHIVE }
+
+/** GraphQL 枚举的原始值 → 领域枚举;不认识的(更新的服务端加的类型)按 NONE,预览页显示「暂不支持」 */
+fun previewKindOf(rawValue: String): PreviewKind = PreviewKind.entries.firstOrNull { it.name == rawValue } ?: PreviewKind.NONE
 
 @Immutable
 @Serializable
@@ -98,4 +101,4 @@ fun NodeItem.toNode(): Node = Node(
 )
 
 private fun GqlPreviewKind.toDomain(): PreviewKind =
-    PreviewKind.entries.firstOrNull { it.name == rawValue } ?: PreviewKind.NONE
+    previewKindOf(rawValue)

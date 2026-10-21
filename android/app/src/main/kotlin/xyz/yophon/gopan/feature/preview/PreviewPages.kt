@@ -566,13 +566,14 @@ internal fun formatClock(ms: Long): String {
 /**
  * PDF(原文件或 Office 派生):系统 PdfRenderer 逐页渲染;点一页全屏放大看。
  * [initialPage]:打开时先停在这一页(从 1 起,内容搜索的命中页);null 从第一页看。
+ * [onDownload] 为 null 时打不开的提示里只给「用其他应用打开」(压缩包里的 PDF 没有网盘下载)。
  */
 @Composable
 internal fun PdfPage(
     file: File,
     onOpenPage: (PdfDocument, Int) -> Unit,
     onOpenWith: () -> Unit,
-    onDownload: () -> Unit,
+    onDownload: (() -> Unit)?,
     initialPage: Int? = null,
 ) {
     val result by produceState<Result<PdfDocument>?>(null, file) {
@@ -592,7 +593,7 @@ internal fun PdfPage(
         r.isFailure -> MessagePanel(
             Icons.Outlined.ErrorOutline,
             stringResource(R.string.preview_pdf_error),
-            listOf(openWithAction(onOpenWith), downloadAction(onDownload)),
+            listOfNotNull(openWithAction(onOpenWith), onDownload?.let { downloadAction(it) }),
         )
         else -> PdfPages(r.getOrThrow(), onOpenPage, initialPage)
     }

@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import xyz.yophon.gopan.core.data.PreviewKind
+import xyz.yophon.gopan.core.data.previewKindOf
 import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.network.await
@@ -95,7 +96,7 @@ class DefaultPreviewRepository @Inject constructor(
             mime = n.mime,
             sha256 = n.sha256,
             updatedAt = n.updatedAt,
-            kind = PreviewKind.entries.firstOrNull { it.name == p.kind.rawValue } ?: PreviewKind.NONE,
+            kind = previewKindOf(p.kind.rawValue),
             thumbUrl = p.thumbUrl,
             largeUrl = p.largeUrl,
             contentUrl = p.contentUrl,

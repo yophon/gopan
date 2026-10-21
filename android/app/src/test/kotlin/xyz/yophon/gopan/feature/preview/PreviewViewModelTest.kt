@@ -13,6 +13,11 @@ import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodeKind
 import xyz.yophon.gopan.core.data.PreviewKind
+import xyz.yophon.gopan.core.data.archive.ExtractRequest
+import xyz.yophon.gopan.core.network.GopanException
+import xyz.yophon.gopan.core.share.AppNavRequests
+import xyz.yophon.gopan.core.share.NavRequest
+import xyz.yophon.gopan.feature.archive.FakeArchiveRepository
 import xyz.yophon.gopan.feature.drive.FakeTransferActions
 import xyz.yophon.gopan.feature.drive.MainDispatcherRule
 import xyz.yophon.gopan.feature.drive.UiText
@@ -24,8 +29,10 @@ class PreviewViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val repo = FakePreviewRepository()
+    private val archives = FakeArchiveRepository()
     private val transfers = FakeTransferActions()
     private val sessions = PreviewSessionStore()
+    private val navRequests = AppNavRequests()
 
     private fun file(id: String) = Node(id = id, name = "$id.jpg", kind = NodeKind.FILE, size = 10)
 
@@ -34,7 +41,7 @@ class PreviewViewModelTest {
             put(PreviewViewModel.NODE_ID_ARG, start)
             if (current != null) put("preview.current", current)
         }
-        return PreviewViewModel(SavedStateHandle(args), sessions, repo, transfers, OkHttpClient())
+        return PreviewViewModel(SavedStateHandle(args), sessions, repo, transfers, OkHttpClient(), archives, navRequests)
     }
 
     @Test
@@ -80,7 +87,7 @@ class PreviewViewModelTest {
     fun `the settled page is remembered for recreation`() {
         sessions.open(listOf(file("a"), file("b")))
         val handle = SavedStateHandle(mapOf(PreviewViewModel.NODE_ID_ARG to "a"))
-        val vm = PreviewViewModel(handle, sessions, repo, transfers, OkHttpClient())
+        val vm = PreviewViewModel(handle, sessions, repo, transfers, OkHttpClient(), archives, navRequests)
         vm.onPageSettled(1)
         assertThat(vm.current.value).isEqualTo(1)
         assertThat(handle.get<String>("preview.current")).isEqualTo("b")
@@ -189,5 +196,32 @@ class PreviewViewModelTest {
             assertThat((msg.text as UiText.Res).id).isEqualTo(R.string.preview_not_loaded)
         }
         assertThat(transfers.downloaded).isEmpty()
+    }
+
+    @Test
+    fun `the archive card extracts next to the archive or into a picked folder`() = runTest {
+        val zip = info("z", PreviewKind.ARCHIVE, name = "资料.zip")
+        val vm = viewModel("z")
+        vm.effects.test {
+            vm.extractHere(zip)
+            advanceUntilIdle()
+            assertThat(awaitItem()).isEqualTo(PreviewEffect.ExtractStarted)
+            assertThat(archives.extracts.last()).isEqualTo(ExtractRequest(nodeId = "z", base = null, paths = emptyList(), parentId = "p"))
+
+            vm.extractTo(zip)
+            assertThat(vm.extract.state.value.picker?.request?.nodeId).isEqualTo("z")
+            vm.extract.onPicked("folder-2")
+            advanceUntilIdle()
+            assertThat(awaitItem()).isEqualTo(PreviewEffect.ExtractStarted)
+            assertThat(archives.extracts.last().parentId).isEqualTo("folder-2")
+            assertThat(vm.extract.state.value.picker).isNull()
+
+            archives.extractError = GopanException("TOO_MANY_JOBS", "进行中的任务太多,稍后再试")
+            vm.extractHere(zip)
+            advanceUntilIdle()
+            assertThat((awaitItem() as PreviewEffect.Message).text).isEqualTo(UiText.Plain("进行中的任务太多,稍后再试"))
+        }
+        vm.showTransfers()
+        assertThat(navRequests.request.value).isEqualTo(NavRequest.OPEN_TRANSFERS)
     }
 }

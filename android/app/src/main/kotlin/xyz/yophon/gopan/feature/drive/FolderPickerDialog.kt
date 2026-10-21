@@ -51,7 +51,7 @@ import xyz.yophon.gopan.core.ui.components.ErrorState
 import xyz.yophon.gopan.core.ui.components.LoadingState
 
 /**
- * 移动 / 复制的目标选择器(全屏对话框):从根开始逐级进入,底部「选择此文件夹」。
+ * 移动 / 复制 / 解压的目标选择器(全屏对话框):从根开始逐级进入,底部「选择此文件夹」。
  * 返回键先回上一级,到根再关闭。
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,7 +83,13 @@ fun FolderPickerDialog(
                 TopAppBar(
                     title = {
                         Text(
-                            stringResource(if (mode == PickerMode.MOVE) R.string.drive_picker_move_title else R.string.drive_picker_copy_title),
+                            stringResource(
+                                when (mode) {
+                                    PickerMode.MOVE -> R.string.drive_picker_move_title
+                                    PickerMode.COPY -> R.string.drive_picker_copy_title
+                                    PickerMode.EXTRACT -> R.string.archive_picker_title
+                                },
+                            ),
                         )
                     },
                     navigationIcon = {

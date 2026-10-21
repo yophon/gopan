@@ -14,22 +14,27 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Test
 import xyz.yophon.gopan.core.data.PreviewKind
+import xyz.yophon.gopan.core.data.archive.ArchiveStatus
 import xyz.yophon.gopan.core.data.preview.DerivativeStatus
 import xyz.yophon.gopan.core.data.preview.TextContent
 import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
+import xyz.yophon.gopan.feature.archive.ArchiveSummary
+import xyz.yophon.gopan.feature.archive.FakeArchiveRepository
+import xyz.yophon.gopan.feature.archive.FakeArchiveRepository.Companion.archiveInfo
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PreviewPageTest {
 
     private val repo = FakePreviewRepository()
+    private val archives = FakeArchiveRepository()
 
     /** 页面的协程跑在前台测试调度器上(advanceUntilIdle 会推进它),测试结束取消(轮询不会挂住 runTest) */
     private var pageScope: CoroutineScope? = null
 
     private fun TestScope.page(id: String, attached: Boolean = true): PreviewPage {
         val scope = pageScope ?: CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)).also { pageScope = it }
-        return PreviewPage(id, repo, scope).also {
+        return PreviewPage(id, repo, scope, archives).also {
             it.setAttached(attached)
             it.start()
         }
@@ -238,5 +243,58 @@ class PreviewPageTest {
 
         assertThat(page.freshContentUrl()).isEqualTo("https://s3/m?sig=2")
         assertThat(page.state.value.info?.contentUrl).isEqualTo("https://s3/m?sig=2")
+    }
+
+    @Test
+    fun `an archive shows its summary and polls while the index is being built`() = runTest {
+        repo.respond("z", info("z", PreviewKind.ARCHIVE, name = "资料.zip"))
+        archives.respondInfo(
+            archiveInfo(ArchiveStatus.PENDING),
+            archiveInfo(ArchiveStatus.DONE, format = "zip", fileCount = 12, totalSize = 2048),
+        )
+        val page = page("z")
+        runCurrent()
+        assertThat(page.state.value.content).isEqualTo(PreviewContent.Archive(ArchiveSummary.Pending))
+
+        advanceTimeBy(PreviewPage.ARCHIVE_POLL_MS)
+        runCurrent()
+        assertThat(page.state.value.content)
+            .isEqualTo(PreviewContent.Archive(ArchiveSummary.Ready("ZIP", 12, 2048, truncated = false, encrypted = false)))
+        assertThat(archives.infoCalls).isEqualTo(2)
+
+        // 读完不再问
+        advanceTimeBy(30_000)
+        runCurrent()
+        assertThat(archives.infoCalls).isEqualTo(2)
+    }
+
+    @Test
+    fun `archive polling pauses while the page is off screen`() = runTest {
+        repo.respond("z", info("z", PreviewKind.ARCHIVE))
+        archives.respondInfo(archiveInfo(ArchiveStatus.PENDING), archiveInfo(ArchiveStatus.DONE))
+        val page = page("z", attached = false)
+        advanceTimeBy(10_000)
+        runCurrent()
+        assertThat(archives.infoCalls).isEqualTo(1)
+
+        page.setAttached(true)
+        runCurrent()
+        assertThat(archives.infoCalls).isEqualTo(2)
+        assertThat(page.state.value.content).isInstanceOf(PreviewContent.Archive::class.java)
+    }
+
+    @Test
+    fun `an archive the server cannot read, or a failed request, is not a summary`() = runTest {
+        repo.respond("u", info("u", PreviewKind.ARCHIVE))
+        archives.respondInfo(archiveInfo(ArchiveStatus.FAILED, error = "压缩包损坏"))
+        val failed = page("u")
+        advanceUntilIdle()
+        assertThat(failed.state.value.content).isEqualTo(PreviewContent.Archive(ArchiveSummary.Unavailable("压缩包损坏")))
+
+        archives.infoError = GopanException(GopanErrors.NETWORK, "网络连接失败")
+        repo.respond("e", info("e", PreviewKind.ARCHIVE))
+        val error = page("e")
+        advanceUntilIdle()
+        assertThat(error.state.value.content).isEqualTo(PreviewContent.Error("网络连接失败"))
     }
 }
