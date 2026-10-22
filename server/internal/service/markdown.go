@@ -31,17 +31,27 @@ var markdownExts = map[string]bool{".md": true, ".markdown": true, ".mdown": tru
 // IsMarkdownName 按 Markdown 渲染的文件。
 func IsMarkdownName(name string) bool { return markdownExts[strings.ToLower(filepath.Ext(name))] }
 
-// Load 读一篇 Markdown(≤ 2 MB)。owner 对分享访客是分享的属主,访问范围由调用方先校验。
-func (m *Markdown) Load(ctx context.Context, owner, nodeID uuid.UUID) (store.GetNodeWithBlobRow, []byte, error) {
+// Node 取一篇 Markdown 的节点(不读内容):相对路径按它所在的文件夹解析。
+// owner 对分享访客是分享的属主,访问范围由调用方先校验。
+func (m *Markdown) Node(ctx context.Context, owner, nodeID uuid.UUID) (store.GetNodeWithBlobRow, error) {
 	row, err := m.q.GetNodeWithBlob(ctx, store.GetNodeWithBlobParams{ID: nodeID, OwnerID: owner})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return row, nil, ErrNotFound
+		return row, ErrNotFound
 	}
 	if err != nil {
-		return row, nil, err
+		return row, err
 	}
 	if row.Kind != "file" || row.BlobSha256 == nil || row.BlobSize == nil || !IsMarkdownName(row.Name) {
-		return row, nil, errf("UNSUPPORTED_TYPE", "不是 Markdown 文件")
+		return row, errf("UNSUPPORTED_TYPE", "不是 Markdown 文件")
+	}
+	return row, nil
+}
+
+// Load 读一篇 Markdown(≤ 2 MB)。
+func (m *Markdown) Load(ctx context.Context, owner, nodeID uuid.UUID) (store.GetNodeWithBlobRow, []byte, error) {
+	row, err := m.Node(ctx, owner, nodeID)
+	if err != nil {
+		return row, nil, err
 	}
 	if *row.BlobSize > mdrender.MaxSize {
 		return row, nil, errf("TOO_LARGE", "文件超过 2 MB,请下载或看源文件")

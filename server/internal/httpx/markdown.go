@@ -57,16 +57,15 @@ func MarkdownHandler(auth *service.Auth, md *service.Markdown, shares *service.S
 			suffix += "&theme=" + theme
 		}
 
-		row, src, err := md.Load(r.Context(), ident.UserID, nodeID)
-		if err != nil {
-			mdServiceErr(w, err)
-			return
-		}
-
 		if strings.HasSuffix(r.URL.Path, "/f") {
 			rel := q.Get("p")
 			if rel == "" {
 				mdError(w, http.StatusBadRequest, "地址不对")
+				return
+			}
+			row, err := md.Node(r.Context(), ident.UserID, nodeID) // 只要它所在的文件夹,不读内容
+			if err != nil {
+				mdServiceErr(w, err)
 				return
 			}
 			target, err := md.Resolve(r.Context(), ident.UserID, row.ParentID, rel)
@@ -91,6 +90,11 @@ func MarkdownHandler(auth *service.Auth, md *service.Markdown, shares *service.S
 			return
 		}
 
+		row, src, err := md.Load(r.Context(), ident.UserID, nodeID)
+		if err != nil {
+			mdServiceErr(w, err)
+			return
+		}
 		base := "/md/" + nodeID.String() + "/f?p="
 		tail := "&" + strings.TrimPrefix(suffix, "?")
 		out, err := mdrender.Render(src, mdrender.Options{Theme: theme, Title: row.Name, Resolve: func(rel string, _ bool) string {
