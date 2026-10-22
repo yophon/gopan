@@ -198,6 +198,10 @@ const quotaStatus = computed(() => {
 .bell-badge :deep(.el-badge__content) {
   font-weight: 400;
 }
+/* 默认向右平移整个角标宽度,两位数时会顶出侧栏、出现横向滚动条:只往外移半个 */
+.bell-badge :deep(.el-badge__content.is-fixed) {
+  transform: translateY(-50%) translateX(50%);
+}
 .nav-extra {
   display: flex;
   align-items: center;

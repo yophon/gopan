@@ -181,8 +181,10 @@ async function onLogout() {
   font-weight: 600;
 }
 .topbar-badge :deep(.el-badge__content.is-fixed) {
+  /* 默认向右平移整个角标宽度,两位数时会顶出屏幕右边:收在按钮里面 */
   top: 8px;
-  right: 14px;
+  right: 4px;
+  transform: translateY(-50%);
 }
 .main {
   padding: 16px 24px;
