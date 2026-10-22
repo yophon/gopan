@@ -13,7 +13,7 @@ import (
 )
 
 const claimCompletingUpload = `-- name: ClaimCompletingUpload :one
-SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id FROM upload_sessions
+SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id, actor FROM upload_sessions
 WHERE status = 'completing' AND object_key IS NOT NULL AND expires_at > now()
 ORDER BY created_at
 LIMIT 1 FOR UPDATE SKIP LOCKED
@@ -40,6 +40,7 @@ func (q *Queries) ClaimCompletingUpload(ctx context.Context) (UploadSession, err
 		&i.FailCode,
 		&i.RequestID,
 		&i.VisitorID,
+		&i.Actor,
 	)
 	return i, err
 }
@@ -69,7 +70,7 @@ func (q *Queries) CountActiveSessions(ctx context.Context, ownerID uuid.UUID) (i
 const createUploadSession = `-- name: CreateUploadSession :one
 INSERT INTO upload_sessions (id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, expires_at, object_key)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id
+RETURNING id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id, actor
 `
 
 type CreateUploadSessionParams struct {
@@ -117,6 +118,7 @@ func (q *Queries) CreateUploadSession(ctx context.Context, arg CreateUploadSessi
 		&i.FailCode,
 		&i.RequestID,
 		&i.VisitorID,
+		&i.Actor,
 	)
 	return i, err
 }
@@ -153,7 +155,7 @@ func (q *Queries) FinishUploadSession(ctx context.Context, arg FinishUploadSessi
 }
 
 const getUploadSession = `-- name: GetUploadSession :one
-SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id FROM upload_sessions WHERE id = $1 AND owner_id = $2
+SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id, actor FROM upload_sessions WHERE id = $1 AND owner_id = $2
 `
 
 type GetUploadSessionParams struct {
@@ -182,12 +184,13 @@ func (q *Queries) GetUploadSession(ctx context.Context, arg GetUploadSessionPara
 		&i.FailCode,
 		&i.RequestID,
 		&i.VisitorID,
+		&i.Actor,
 	)
 	return i, err
 }
 
 const getUploadSessionForUpdate = `-- name: GetUploadSessionForUpdate :one
-SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id FROM upload_sessions WHERE id = $1 AND owner_id = $2 FOR UPDATE
+SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id, actor FROM upload_sessions WHERE id = $1 AND owner_id = $2 FOR UPDATE
 `
 
 type GetUploadSessionForUpdateParams struct {
@@ -216,12 +219,13 @@ func (q *Queries) GetUploadSessionForUpdate(ctx context.Context, arg GetUploadSe
 		&i.FailCode,
 		&i.RequestID,
 		&i.VisitorID,
+		&i.Actor,
 	)
 	return i, err
 }
 
 const listExpiredSessions = `-- name: ListExpiredSessions :many
-SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id FROM upload_sessions
+SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id, actor FROM upload_sessions
 WHERE (status IN ('uploading', 'completing') OR object_key IS NOT NULL) AND expires_at < now()
 LIMIT 100
 `
@@ -253,6 +257,7 @@ func (q *Queries) ListExpiredSessions(ctx context.Context) ([]UploadSession, err
 			&i.FailCode,
 			&i.RequestID,
 			&i.VisitorID,
+			&i.Actor,
 		); err != nil {
 			return nil, err
 		}
@@ -304,7 +309,7 @@ func (q *Queries) SetUploadSessionStatus(ctx context.Context, arg SetUploadSessi
 }
 
 const tryLockUploadSession = `-- name: TryLockUploadSession :one
-SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id FROM upload_sessions WHERE id = $1 AND owner_id = $2 FOR UPDATE NOWAIT
+SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id, actor FROM upload_sessions WHERE id = $1 AND owner_id = $2 FOR UPDATE NOWAIT
 `
 
 type TryLockUploadSessionParams struct {
@@ -333,6 +338,7 @@ func (q *Queries) TryLockUploadSession(ctx context.Context, arg TryLockUploadSes
 		&i.FailCode,
 		&i.RequestID,
 		&i.VisitorID,
+		&i.Actor,
 	)
 	return i, err
 }

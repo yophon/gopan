@@ -26,4 +26,9 @@ type Resolver struct {
 	Media     *service.Media
 	Notify    *service.Notifier
 	Links     *service.Links
+
+	Activities *service.Activities
+	Space      *service.Space
+	Feeds      *service.Feeds
+	Clips      *service.Clips
 }

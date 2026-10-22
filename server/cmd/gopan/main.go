@@ -209,6 +209,15 @@ func run() error {
 	appPass.SetNotifier(notifier)
 	oauth.SetNotifier(notifier)
 	wk.SetNotify(notifier, media)
+	// 动态、空间、订阅、剪藏(doc/23)
+	activities := service.NewActivities(pool, nodes)
+	space := service.NewSpace(pool)
+	markdown := service.NewMarkdown(pool, obj)
+	fetchGuard := fetcher.Guard{AllowPrivate: cfg.FetchAllowPrivate, Deny: cfg.FetchDeny}
+	clips := service.NewClips(pool, obj, jobs, uploads, fetchGuard, "Mozilla/5.0 (compatible; gopan-clip)")
+	jobs.SetClips(clips)
+	feeds := service.NewFeeds(pool, jobs, clips, nodes, uploads, notifier, fetchGuard, "gopan-feed (+https://github.com/yophon/gopan)")
+	wk.SetV35(activities, feeds)
 	go wk.Run(ctx, cfg.Workers)
 	go jobs.Run(ctx, cfg.JobWorkers)
 	go notifier.Run(ctx)
@@ -218,6 +227,7 @@ func run() error {
 	es := graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
 		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass, MCPTokens: mcpTokens, OAuth: oauth, Chats: chats, Collects: collects, Content: content, Jobs: jobs, Archives: archives,
 		Media: media, Notify: notifier, Links: links,
+		Activities: activities, Space: space, Feeds: feeds, Clips: clips,
 	}})
 
 	mux := http.NewServeMux()
@@ -246,12 +256,15 @@ func run() error {
 	mux.HandleFunc("GET /oauth/authorize", oauthHTTP.Authorize)
 	mux.HandleFunc("POST /oauth/token", oauthHTTP.Token)
 	mux.HandleFunc("POST /oauth/register", oauthHTTP.Register)
-	mux.Handle("/mcp", mcpserver.NewHandler(nodes, uploads, mcpTokens, oauth, packer, packTickets, chats, content, jobs, archives, links))
+	mux.Handle("/mcp", mcpserver.NewHandler(nodes, uploads, mcpTokens, oauth, packer, packTickets, chats, content, jobs, archives, links, activities, clips))
 	mux.Handle("/mcp/admin", mcpserver.NewAdminHandler(nodes, mcpTokens, oauth, cfg.DefaultQuota))
 	mux.Handle("GET /mcp-download/{ticket}", httpx.MCPPackHandler(packTickets, packer))
 	mux.Handle("GET /pack", httpx.PackHandler(auth, packer, shares, cfg.TrustedProxies))
 	mux.Handle("GET /arc/{node}/{idx}", httpx.ArchiveEntryHandler(auth, archives, shares))
 	mux.Handle("GET /sub/{node}", httpx.SubtitleHandler(auth, media, shares))
+	mdHandler := httpx.MarkdownHandler(auth, markdown, shares)
+	mux.Handle("GET /md/{node}", mdHandler)
+	mux.Handle("GET /md/{node}/f", mdHandler)
 	linkHandler := httpx.LinkHandler(links, obj, cfg.TrustedProxies)
 	mux.Handle("GET /x/{token}", linkHandler)
 	mux.Handle("GET /x/{token}/{name...}", linkHandler)

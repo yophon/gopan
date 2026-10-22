@@ -67,6 +67,12 @@ type MCPPrincipal struct {
 	Username       string
 	CredentialType string
 	Scopes         map[string]struct{}
+	Name           string // API Key 的名字 / OAuth 客户端名
+}
+
+// Actor 动态里的来源:Agent(API Key / OAuth 授权),名字是 Key 的名字或客户端名。
+func (p *MCPPrincipal) Actor() Actor {
+	return Actor{Kind: ActorAgent, Ref: p.CredentialType + ":" + p.CredentialID.String(), Label: p.Name}
 }
 
 func (p *MCPPrincipal) HasScope(scope string) bool {
@@ -190,6 +196,6 @@ func (m *MCPTokens) Authenticate(ctx context.Context, token string) (*MCPPrincip
 	_ = m.q.TouchMCPToken(ctx, row.ID)
 	return &MCPPrincipal{
 		TokenID: row.ID, CredentialID: row.ID, UserID: row.UserID, Username: row.Username,
-		CredentialType: "api_key", Scopes: scopes,
+		CredentialType: "api_key", Scopes: scopes, Name: row.Name,
 	}, nil
 }

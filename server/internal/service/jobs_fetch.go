@@ -42,7 +42,15 @@ func (j *Jobs) runFetch(ctx context.Context, run *jobRun) (*uuid.UUID, error) {
 		return nil, mapFetchErr(err)
 	}
 	defer st.Close()
-	run.setTitle(st.Name)
+	name := st.Name
+	if p.Name != "" {
+		// 订阅给的名字(「日期 标题」)没带扩展名时补上源站文件的
+		name = fetcher.Clean(p.Name)
+		if path.Ext(name) == "" || len(path.Ext(name)) > 6 {
+			name += path.Ext(st.Name)
+		}
+	}
+	run.setTitle(name)
 	if st.Size >= 0 {
 		run.setBytesTotal(st.Size)
 	}
@@ -82,7 +90,7 @@ func (j *Jobs) runFetch(ctx context.Context, run *jobRun) (*uuid.UUID, error) {
 		run.warning = errf("GOT_HTML", "拿到的是网页,不是文件:源站可能要求登录、或拦截了服务器的访问")
 	}
 	node, err := j.uploads.CommitStaged(ctx, StagedFile{
-		Owner: owner, Parent: run.job.ParentID, Name: st.Name,
+		Owner: owner, Parent: run.job.ParentID, Name: name,
 		Sha: hex.EncodeToString(cr.h.Sum(nil)), Size: size, TmpKey: key,
 	})
 	if err != nil {

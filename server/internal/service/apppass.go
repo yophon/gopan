@@ -81,22 +81,28 @@ func (a *AppPasswords) Revoke(ctx context.Context, userID, id uuid.UUID) error {
 // 限速只记失败:WebDAV 客户端每个请求都带 Basic 重新认证,rclone 一秒几十个请求
 // 是正常水位,按"每次认证"扣令牌会把合法客户端打成 429;要防的是爆破,即失败尝试。
 func (a *AppPasswords) Authenticate(ctx context.Context, username, password, ip string) (uuid.UUID, error) {
-	fail := func() (uuid.UUID, error) {
+	id, _, err := a.AuthenticateActor(ctx, username, password, ip)
+	return id, err
+}
+
+// AuthenticateActor 同 Authenticate,另外带回这把应用密码作为动态里的来源(doc/23 二.1)。
+func (a *AppPasswords) AuthenticateActor(ctx context.Context, username, password, ip string) (uuid.UUID, Actor, error) {
+	fail := func() (uuid.UUID, Actor, error) {
 		if !a.limiter.Allow("dav:" + ip) {
-			return uuid.Nil, ErrRateLimited
+			return uuid.Nil, Actor{}, ErrRateLimited
 		}
-		return uuid.Nil, ErrUnauthenticated
+		return uuid.Nil, Actor{}, ErrUnauthenticated
 	}
 	row, err := a.q.GetAppPasswordByHash(ctx, hashToken(password))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fail()
 		}
-		return uuid.Nil, err
+		return uuid.Nil, Actor{}, err
 	}
 	if row.Username != username || row.OwnerDisabled {
 		return fail()
 	}
 	_ = a.q.TouchAppPassword(ctx, row.ID) // 尽力而为,失败不影响认证
-	return row.UserID, nil
+	return row.UserID, Actor{Kind: ActorWebDAV, Ref: row.ID.String(), Label: row.Name}, nil
 }

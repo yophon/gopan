@@ -357,8 +357,8 @@ WHERE n.owner_id = $1
   AND n.deleted_at IS NULL
 ORDER BY
   n.kind DESC, -- folder 在前
-  CASE WHEN $3::text = 'NAME'       AND NOT $4::boolean THEN n.name END ASC,
-  CASE WHEN $3::text = 'NAME'       AND     $4::boolean THEN n.name END DESC,
+  CASE WHEN $3::text = 'NAME'       AND NOT $4::boolean THEN n.name COLLATE natural_sort END ASC,
+  CASE WHEN $3::text = 'NAME'       AND     $4::boolean THEN n.name COLLATE natural_sort END DESC,
   CASE WHEN $3::text = 'SIZE'       AND NOT $4::boolean THEN b.size END ASC NULLS FIRST,
   CASE WHEN $3::text = 'SIZE'       AND     $4::boolean THEN b.size END DESC NULLS LAST,
   CASE WHEN $3::text = 'UPDATED_AT' AND NOT $4::boolean THEN n.updated_at END ASC,
@@ -394,6 +394,7 @@ type ListChildrenRow struct {
 }
 
 // 首页(无 cursor)。翻页走下面 6 条 keyset 查询,方向拆开写,不用 CASE 包 WHERE,留住索引通道。
+// 名字按自然顺序(排序规则 natural_sort,迁移 00027):第2集在第10集前,中文按拼音。
 func (q *Queries) ListChildren(ctx context.Context, arg ListChildrenParams) ([]ListChildrenRow, error) {
 	rows, err := q.db.Query(ctx, listChildren,
 		arg.OwnerID,
@@ -493,9 +494,9 @@ WHERE n.owner_id = $1
   AND n.deleted_at IS NULL
   AND (n.kind < $3::text
        OR (n.kind = $3::text
-           AND (n.name > $4::text
+           AND ((n.name COLLATE natural_sort) > $4::text
                 OR (n.name = $4::text AND n.id > $5))))
-ORDER BY n.kind DESC, n.name ASC, n.id
+ORDER BY n.kind DESC, n.name COLLATE natural_sort ASC, n.id
 LIMIT $6
 `
 
@@ -578,9 +579,9 @@ WHERE n.owner_id = $1
   AND n.deleted_at IS NULL
   AND (n.kind < $3::text
        OR (n.kind = $3::text
-           AND (n.name < $4::text
+           AND ((n.name COLLATE natural_sort) < $4::text
                 OR (n.name = $4::text AND n.id > $5))))
-ORDER BY n.kind DESC, n.name DESC, n.id
+ORDER BY n.kind DESC, n.name COLLATE natural_sort DESC, n.id
 LIMIT $6
 `
 
@@ -1791,15 +1792,21 @@ func (q *Queries) SiblingNameExists(ctx context.Context, arg SiblingNameExistsPa
 	return exists, err
 }
 
-const softDeleteSubtree = `-- name: SoftDeleteSubtree :exec
+const softDeleteSubtree = `-- name: SoftDeleteSubtree :one
 WITH RECURSIVE sub AS (
     SELECT r.id FROM nodes r WHERE r.id = $1 AND r.owner_id = $2 AND r.deleted_at IS NULL
     UNION ALL
     SELECT n.id FROM nodes n JOIN sub s ON n.parent_id = s.id
     WHERE n.deleted_at IS NULL
+), upd AS (
+    UPDATE nodes SET deleted_at = now()
+    WHERE nodes.id IN (SELECT s.id FROM sub s)
+    RETURNING nodes.kind, nodes.blob_id
 )
-UPDATE nodes SET deleted_at = now()
-WHERE nodes.id IN (SELECT s.id FROM sub s)
+SELECT count(*)::bigint AS nodes,
+       count(*) FILTER (WHERE upd.kind = 'file')::bigint AS files,
+       COALESCE(sum(b.size), 0)::bigint AS bytes
+FROM upd LEFT JOIN blobs b ON b.id = upd.blob_id
 `
 
 type SoftDeleteSubtreeParams struct {
@@ -1807,9 +1814,18 @@ type SoftDeleteSubtreeParams struct {
 	OwnerID uuid.UUID
 }
 
-func (q *Queries) SoftDeleteSubtree(ctx context.Context, arg SoftDeleteSubtreeParams) error {
-	_, err := q.db.Exec(ctx, softDeleteSubtree, arg.ID, arg.OwnerID)
-	return err
+type SoftDeleteSubtreeRow struct {
+	Nodes int64
+	Files int64
+	Bytes int64
+}
+
+// 返回这次进回收站的文件数与字节(动态里记这一笔、大量删除提醒按它算);已在回收站里的是 0
+func (q *Queries) SoftDeleteSubtree(ctx context.Context, arg SoftDeleteSubtreeParams) (SoftDeleteSubtreeRow, error) {
+	row := q.db.QueryRow(ctx, softDeleteSubtree, arg.ID, arg.OwnerID)
+	var i SoftDeleteSubtreeRow
+	err := row.Scan(&i.Nodes, &i.Files, &i.Bytes)
+	return i, err
 }
 
 const subtractUsedBytes = `-- name: SubtractUsedBytes :exec

@@ -126,6 +126,11 @@ func (s *Uploads) Init(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID
 		_ = s.obj.AbortMultipart(context.WithoutCancel(ctx), key, uploadID)
 		return nil, err
 	}
+	// 定稿在 worker 里做,来源先记在会话上
+	if err := s.q.SetUploadSessionActor(ctx, store.SetUploadSessionActorParams{ID: sess.ID, Actor: actorJSON(ctx)}); err != nil {
+		_ = s.Abort(context.WithoutCancel(ctx), owner, id)
+		return nil, err
+	}
 	view, err := s.sessionView(ctx, sess)
 	if err != nil {
 		_ = s.Abort(context.WithoutCancel(ctx), owner, id)
@@ -235,6 +240,9 @@ func (s *Uploads) linkBlob(ctx context.Context, owner uuid.UUID, parentID *uuid.
 	if err := attachChatMessage(ctx, qtx, owner, parentID, node.ID); err != nil {
 		return store.Node{}, err
 	}
+	if err := recordActs(ctx, qtx, owner, fileAct(OpUpload, node, blob.Size)); err != nil {
+		return store.Node{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return store.Node{}, err
 	}
@@ -318,6 +326,7 @@ func (s *Uploads) CommitStreamed(ctx context.Context, owner uuid.UUID, parentID 
 	}
 
 	var node store.Node
+	act := OpUpload
 	switch {
 	case overwrite && existing.BlobID != nil && *existing.BlobID == blob.ID:
 		// 内容没变:只碰 updated_at,引用与配额原样
@@ -326,6 +335,7 @@ func (s *Uploads) CommitStreamed(ctx context.Context, owner uuid.UUID, parentID 
 			return nil, err
 		}
 	case overwrite:
+		act = OpOverwrite
 		node, err = qtx.ReplaceNodeBlob(ctx, store.ReplaceNodeBlobParams{ID: existing.ID, OwnerID: owner, BlobID: &blob.ID})
 		if err != nil {
 			return nil, err
@@ -367,6 +377,12 @@ func (s *Uploads) CommitStreamed(ctx context.Context, owner uuid.UUID, parentID 
 	}
 	if err := qtx.MarkAncestorsStale(ctx, node.ID); err != nil {
 		return nil, err
+	}
+	// 内容没变的覆盖(rclone 重传同一个文件)不记
+	if !(overwrite && existing.BlobID != nil && *existing.BlobID == blob.ID) {
+		if err := recordActs(ctx, qtx, owner, fileAct(act, node, size)); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err

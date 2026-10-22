@@ -443,12 +443,12 @@ func normalizeFolderPath(p string) (string, []string, error) {
 			continue
 		}
 		if err := validateName(seg); err != nil {
-			return "", nil, errf("INVALID_INPUT", "图床文件夹路径里有不合法的名字:%s", seg)
+			return "", nil, errf("INVALID_INPUT", "文件夹路径里有不合法的名字:%s", seg)
 		}
 		segs = append(segs, seg)
 	}
 	if len(segs) == 0 || len(segs) > 10 {
-		return "", nil, errf("INVALID_INPUT", "图床文件夹要是 1 到 10 层的路径,如 /图床")
+		return "", nil, errf("INVALID_INPUT", "文件夹要是 1 到 10 层的路径,如 /图床")
 	}
 	return "/" + strings.Join(segs, "/"), segs, nil
 }

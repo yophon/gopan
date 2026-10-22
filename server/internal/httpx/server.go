@@ -185,6 +185,10 @@ func WithAuth(next http.Handler, auth *service.Auth, trustedProxies []*net.IPNet
 			if id, err := auth.ParseAccessContext(ctx, strings.TrimPrefix(h, "Bearer ")); err == nil {
 				ctx = context.WithValue(ctx, keyIdentity, id)
 				auth.TouchSession(ctx, id.FamilyID) // 推进 last_seen,节流在 Auth 内部
+				if id.Scope == service.ScopeUser {
+					// 动态(doc/23 二):来源是这台设备,一次请求里的改动算一批
+					ctx = service.WithBatch(service.WithActor(ctx, service.SessionActor(id.FamilyID, r.UserAgent())))
+				}
 			}
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -263,6 +267,8 @@ func normalizePath(p string) string {
 		return "/x/:token"
 	case strings.HasPrefix(p, "/sub/"):
 		return "/sub/:node"
+	case strings.HasPrefix(p, "/md/"):
+		return "/md/:node"
 	case p == "/api/img/upload":
 		return p
 	case p == "/dav" || strings.HasPrefix(p, "/dav/"):

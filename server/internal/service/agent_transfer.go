@@ -78,7 +78,7 @@ func (s *Uploads) PrepareAgentUpload(
 	local := *s
 	local.pool = tx
 	local.q = store.New(tx)
-	local.nodes = &Nodes{pool: tx, q: local.q}
+	local.nodes = &Nodes{pool: tx, q: local.q, notify: s.nodes.notify}
 	if idempotencyKey != nil {
 		var savedHash string
 		var nodeID, transferID *uuid.UUID
@@ -241,6 +241,10 @@ func (s *Uploads) prepareAgentUpload(ctx context.Context, owner uuid.UUID, paren
 		if minioUploadID != nil {
 			_ = s.obj.AbortMultipart(ctx, objectKey, *minioUploadID)
 		}
+		return nil, err
+	}
+	// 定稿在 worker 里做(CommitStreamed),来源先记在会话上
+	if err := s.q.SetTransferSessionActor(ctx, store.SetTransferSessionActorParams{ID: sess.ID, Actor: actorJSON(ctx)}); err != nil {
 		return nil, err
 	}
 	view, err := s.agentTransferView(ctx, sess, 1, maxPartURLsPerCall)
@@ -449,7 +453,7 @@ func (s *Uploads) finalizeAgentTransfer(ctx context.Context, sess store.Transfer
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
-	node, err := s.CommitStreamed(ctx, sess.OwnerID, sess.TargetParent, sess.TargetName, sha, size, sess.ObjectKey)
+	node, err := s.CommitStreamed(actorFromJSON(ctx, sess.Actor), sess.OwnerID, sess.TargetParent, sess.TargetName, sha, size, sess.ObjectKey)
 	if err != nil {
 		return err
 	}

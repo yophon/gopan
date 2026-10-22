@@ -79,6 +79,8 @@ type PreviewInfo struct {
 	ContentURL  *string
 	Status      *string // PENDING/RUNNING/DONE/FAILED,仅 OFFICE 用
 	DurationSec *int
+	// Markdown 能用 /md/{nodeId} 渲染着看(.md 且不超过 2 MB;doc/23 五.2)
+	Markdown bool
 }
 
 type Previews struct {
@@ -111,7 +113,7 @@ func (s *Previews) ForList(ctx context.Context, name string, sha, mime *string, 
 		return PreviewInfo{Kind: PvNone}
 	}
 	kind := ClassifyPreview(name, mime, size)
-	info := PreviewInfo{Kind: kind}
+	info := PreviewInfo{Kind: kind, Markdown: IsMarkdownName(name) && size != nil && *size <= 2<<20}
 	if kind == PvImage || kind == PvVideo {
 		thumbKind := "thumb256"
 		if u, err := s.obj.PresignGetInline(ctx, objstore.DerivedKey(*sha, thumbKind), derivedMime(thumbKind)); err == nil {

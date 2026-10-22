@@ -43,7 +43,7 @@ func (s *Nodes) MCPMutation(ctx context.Context, owner uuid.UUID, key string, re
 			return nil, err
 		}
 	}
-	result, err := fn(&Nodes{pool: tx, q: store.New(tx)})
+	result, err := fn(&Nodes{pool: tx, q: store.New(tx), notify: s.notify})
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (s *Nodes) MCPItem(ctx context.Context, fn func(*Nodes) error) error {
 		return err
 	}
 	defer tx.Rollback(context.Background())
-	if err = fn(&Nodes{pool: tx, q: store.New(tx)}); err != nil {
+	if err = fn(&Nodes{pool: tx, q: store.New(tx), notify: s.notify}); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

@@ -9,6 +9,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Activity struct {
+	ID         int64
+	OwnerID    uuid.UUID
+	At         pgtype.Timestamptz
+	ActorKind  string
+	ActorRef   string
+	ActorLabel string
+	BatchID    uuid.UUID
+	Action     string
+	NodeID     *uuid.UUID
+	NodeKind   string
+	Name       string
+	ParentPath string
+	Detail     []byte
+	UndoneAt   pgtype.Timestamptz
+}
+
 type AppPassword struct {
 	ID         uuid.UUID
 	UserID     uuid.UUID
@@ -78,12 +95,78 @@ type ChatMessage struct {
 	Source    string
 }
 
+type Clip struct {
+	ID          uuid.UUID
+	OwnerID     uuid.UUID
+	Url         string
+	Title       string
+	Site        string
+	Byline      string
+	Excerpt     string
+	PublishedAt pgtype.Timestamptz
+	NodeID      uuid.UUID
+	Words       int32
+	Images      int32
+	ReadAt      pgtype.Timestamptz
+	CreatedAt   pgtype.Timestamptz
+}
+
+type ClipPref struct {
+	OwnerID   uuid.UUID
+	Folder    string
+	ByMonth   bool
+	UpdatedAt pgtype.Timestamptz
+}
+
 type Derivative struct {
 	BlobID    uuid.UUID
 	Kind      string
 	MinioKey  string
 	Size      int64
 	CreatedAt pgtype.Timestamptz
+}
+
+type Feed struct {
+	ID              uuid.UUID
+	OwnerID         uuid.UUID
+	Kind            string
+	Url             string
+	Title           string
+	SiteUrl         string
+	FolderID        *uuid.UUID
+	Mode            string
+	IncludeWords    string
+	ExcludeWords    string
+	AssetPattern    string
+	Prerelease      bool
+	KeepLast        int32
+	IntervalMinutes int32
+	Etag            string
+	LastModified    string
+	NextCheckAt     pgtype.Timestamptz
+	LastCheckedAt   pgtype.Timestamptz
+	LastOkAt        pgtype.Timestamptz
+	LastError       *string
+	FailCount       int32
+	Enabled         bool
+	CreatedAt       pgtype.Timestamptz
+}
+
+type FeedItem struct {
+	ID            uuid.UUID
+	FeedID        uuid.UUID
+	Guid          string
+	Title         string
+	Url           string
+	EnclosureUrl  string
+	EnclosureType string
+	EnclosureSize *int64
+	PublishedAt   pgtype.Timestamptz
+	State         string
+	JobID         *uuid.UUID
+	NodeID        *uuid.UUID
+	Error         *string
+	CreatedAt     pgtype.Timestamptz
 }
 
 type FileRequest struct {
@@ -431,6 +514,7 @@ type TransferSession struct {
 	IdempotencyKey *string
 	CreatedAt      pgtype.Timestamptz
 	ExpiresAt      pgtype.Timestamptz
+	Actor          []byte
 }
 
 type UploadSession struct {
@@ -451,6 +535,7 @@ type UploadSession struct {
 	FailCode      *string
 	RequestID     *uuid.UUID
 	VisitorID     *uuid.UUID
+	Actor         []byte
 }
 
 type User struct {

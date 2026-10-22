@@ -181,6 +181,7 @@ func gqlPreview(p service.PreviewInfo) *PreviewInfo {
 		ContentURL:  p.ContentURL,
 		DurationSec: p.DurationSec,
 		Subtitles:   []*SubtitleTrack{},
+		Markdown:    p.Markdown,
 	}
 	if p.Status != nil {
 		st := TaskStatus(*p.Status)

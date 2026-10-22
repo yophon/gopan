@@ -28,6 +28,11 @@ func NewAdmin(q *store.Queries, defaultQuota int64) *Admin {
 // SetContentIndex 由 main 按 GOPAN_CONTENT_INDEX 注入。
 func (a *Admin) SetContentIndex(v bool) { a.contentIndex = v }
 
+// Require 调用者必须是没被停用的管理员(给别的服务的管理端接口用)。
+func (a *Admin) Require(ctx context.Context, callerID uuid.UUID) error {
+	return a.require(ctx, callerID)
+}
+
 func (a *Admin) require(ctx context.Context, callerID uuid.UUID) error {
 	u, err := a.q.GetUserByID(ctx, callerID)
 	if err != nil || !u.IsAdmin || u.DisabledAt.Valid {

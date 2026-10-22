@@ -21,7 +21,7 @@ WHERE id = (
     FOR UPDATE SKIP LOCKED
     LIMIT 1
 )
-RETURNING id, owner_id, target_parent, target_name, size, mime, expected_sha256, computed_sha256, object_key, transport, minio_upload_id, part_size, status, fail_reason, node_id, idempotency_key, created_at, expires_at
+RETURNING id, owner_id, target_parent, target_name, size, mime, expected_sha256, computed_sha256, object_key, transport, minio_upload_id, part_size, status, fail_reason, node_id, idempotency_key, created_at, expires_at, actor
 `
 
 func (q *Queries) ClaimFinalizingTransfer(ctx context.Context) (TransferSession, error) {
@@ -46,6 +46,7 @@ func (q *Queries) ClaimFinalizingTransfer(ctx context.Context) (TransferSession,
 		&i.IdempotencyKey,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.Actor,
 	)
 	return i, err
 }
@@ -68,7 +69,7 @@ INSERT INTO transfer_sessions (
     object_key, transport, minio_upload_id, part_size, idempotency_key, expires_at
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-RETURNING id, owner_id, target_parent, target_name, size, mime, expected_sha256, computed_sha256, object_key, transport, minio_upload_id, part_size, status, fail_reason, node_id, idempotency_key, created_at, expires_at
+RETURNING id, owner_id, target_parent, target_name, size, mime, expected_sha256, computed_sha256, object_key, transport, minio_upload_id, part_size, status, fail_reason, node_id, idempotency_key, created_at, expires_at, actor
 `
 
 type CreateTransferSessionParams struct {
@@ -123,12 +124,13 @@ func (q *Queries) CreateTransferSession(ctx context.Context, arg CreateTransferS
 		&i.IdempotencyKey,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.Actor,
 	)
 	return i, err
 }
 
 const getTransferSession = `-- name: GetTransferSession :one
-SELECT id, owner_id, target_parent, target_name, size, mime, expected_sha256, computed_sha256, object_key, transport, minio_upload_id, part_size, status, fail_reason, node_id, idempotency_key, created_at, expires_at FROM transfer_sessions WHERE id = $1 AND owner_id = $2
+SELECT id, owner_id, target_parent, target_name, size, mime, expected_sha256, computed_sha256, object_key, transport, minio_upload_id, part_size, status, fail_reason, node_id, idempotency_key, created_at, expires_at, actor FROM transfer_sessions WHERE id = $1 AND owner_id = $2
 `
 
 type GetTransferSessionParams struct {
@@ -158,12 +160,13 @@ func (q *Queries) GetTransferSession(ctx context.Context, arg GetTransferSession
 		&i.IdempotencyKey,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.Actor,
 	)
 	return i, err
 }
 
 const getTransferSessionByIdempotencyKey = `-- name: GetTransferSessionByIdempotencyKey :one
-SELECT id, owner_id, target_parent, target_name, size, mime, expected_sha256, computed_sha256, object_key, transport, minio_upload_id, part_size, status, fail_reason, node_id, idempotency_key, created_at, expires_at FROM transfer_sessions
+SELECT id, owner_id, target_parent, target_name, size, mime, expected_sha256, computed_sha256, object_key, transport, minio_upload_id, part_size, status, fail_reason, node_id, idempotency_key, created_at, expires_at, actor FROM transfer_sessions
 WHERE owner_id = $1 AND idempotency_key = $2
 `
 
@@ -194,12 +197,13 @@ func (q *Queries) GetTransferSessionByIdempotencyKey(ctx context.Context, arg Ge
 		&i.IdempotencyKey,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.Actor,
 	)
 	return i, err
 }
 
 const listExpiredTransferSessions = `-- name: ListExpiredTransferSessions :many
-SELECT id, owner_id, target_parent, target_name, size, mime, expected_sha256, computed_sha256, object_key, transport, minio_upload_id, part_size, status, fail_reason, node_id, idempotency_key, created_at, expires_at FROM transfer_sessions
+SELECT id, owner_id, target_parent, target_name, size, mime, expected_sha256, computed_sha256, object_key, transport, minio_upload_id, part_size, status, fail_reason, node_id, idempotency_key, created_at, expires_at, actor FROM transfer_sessions
 WHERE status IN ('uploading','completing','finalizing','processing') AND expires_at < now()
 LIMIT 100
 `
@@ -232,6 +236,7 @@ func (q *Queries) ListExpiredTransferSessions(ctx context.Context) ([]TransferSe
 			&i.IdempotencyKey,
 			&i.CreatedAt,
 			&i.ExpiresAt,
+			&i.Actor,
 		); err != nil {
 			return nil, err
 		}
@@ -262,7 +267,7 @@ func (q *Queries) MarkTransferAborted(ctx context.Context, arg MarkTransferAbort
 const markTransferCompleting = `-- name: MarkTransferCompleting :one
 UPDATE transfer_sessions SET status = 'completing', fail_reason = NULL
 WHERE id = $1 AND owner_id = $2 AND status = 'uploading'
-RETURNING id, owner_id, target_parent, target_name, size, mime, expected_sha256, computed_sha256, object_key, transport, minio_upload_id, part_size, status, fail_reason, node_id, idempotency_key, created_at, expires_at
+RETURNING id, owner_id, target_parent, target_name, size, mime, expected_sha256, computed_sha256, object_key, transport, minio_upload_id, part_size, status, fail_reason, node_id, idempotency_key, created_at, expires_at, actor
 `
 
 type MarkTransferCompletingParams struct {
@@ -292,6 +297,7 @@ func (q *Queries) MarkTransferCompleting(ctx context.Context, arg MarkTransferCo
 		&i.IdempotencyKey,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.Actor,
 	)
 	return i, err
 }
@@ -314,7 +320,7 @@ func (q *Queries) MarkTransferFailed(ctx context.Context, arg MarkTransferFailed
 const markTransferFinalizing = `-- name: MarkTransferFinalizing :one
 UPDATE transfer_sessions SET status = 'finalizing', fail_reason = NULL
 WHERE id = $1 AND owner_id = $2 AND status IN ('uploading','completing')
-RETURNING id, owner_id, target_parent, target_name, size, mime, expected_sha256, computed_sha256, object_key, transport, minio_upload_id, part_size, status, fail_reason, node_id, idempotency_key, created_at, expires_at
+RETURNING id, owner_id, target_parent, target_name, size, mime, expected_sha256, computed_sha256, object_key, transport, minio_upload_id, part_size, status, fail_reason, node_id, idempotency_key, created_at, expires_at, actor
 `
 
 type MarkTransferFinalizingParams struct {
@@ -344,6 +350,7 @@ func (q *Queries) MarkTransferFinalizing(ctx context.Context, arg MarkTransferFi
 		&i.IdempotencyKey,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.Actor,
 	)
 	return i, err
 }

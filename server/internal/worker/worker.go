@@ -41,6 +41,9 @@ type Pool struct {
 	// 通知与影音的周期维护(doc/22)
 	notify *service.Notifier
 	media  *service.Media
+	// 动态清理、订阅检查(doc/23)
+	activities *service.Activities
+	feeds      *service.Feeds
 }
 
 func New(pool *pgxpool.Pool, obj *objstore.Store, nodes *service.Nodes, trashTTL time.Duration, ffmpeg, ffprobe, gotenberg string) *Pool {
@@ -59,6 +62,11 @@ func (w *Pool) SetCollects(collects *service.Collects) {
 // SetArchives 压缩包目录索引(doc/21 四.2):注入后才建索引、才跑回填。
 func (w *Pool) SetArchives(archives *service.Archives) {
 	w.archives = archives
+}
+
+// SetV35 动态的每日清理、订阅的定时检查(doc/23)。
+func (w *Pool) SetV35(a *service.Activities, f *service.Feeds) {
+	w.activities, w.feeds = a, f
 }
 
 func (w *Pool) SetNotify(n *service.Notifier, m *service.Media) {
@@ -112,6 +120,12 @@ func (w *Pool) Run(ctx context.Context, n int) {
 	}
 	if w.media != nil {
 		go w.periodic(ctx, 24*time.Hour, "play-progress-cleanup", w.media.Cleanup)
+	}
+	if w.activities != nil {
+		go w.periodic(ctx, 24*time.Hour, "activity-cleanup", w.activities.Cleanup)
+	}
+	if w.feeds != nil {
+		go w.periodic(ctx, 5*time.Minute, "feed-check", w.feeds.CheckDue)
 	}
 	<-ctx.Done()
 }

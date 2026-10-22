@@ -275,7 +275,7 @@ func (o *OAuth) Authenticate(ctx context.Context, token string) (*MCPPrincipal, 
 	_ = o.q.TouchOAuthAccessToken(ctx, row.ID)
 	return &MCPPrincipal{
 		TokenID: row.ID, CredentialID: row.GrantID, UserID: row.UserID, Username: row.Username,
-		CredentialType: "oauth", Scopes: scopeSet(intersectScopes(row.Scopes, row.GrantScopes)),
+		CredentialType: "oauth", Scopes: scopeSet(intersectScopes(row.Scopes, row.GrantScopes)), Name: row.ClientName,
 	}, nil
 }
 

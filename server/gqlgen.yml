@@ -54,6 +54,47 @@ models:
     fields:
       result:
         resolver: true
+  Activity:
+    extraFields:
+      OwnerID:
+        type: string
+        description: "由转换器置位,供 node 字段 resolver 取节点"
+    fields:
+      node:
+        resolver: true
+  Feed:
+    extraFields:
+      OwnerID:
+        type: string
+        description: "由转换器置位"
+      FolderID:
+        type: string
+        description: "由转换器置位,供 folder 字段 resolver 取节点"
+    fields:
+      folder:
+        resolver: true
+  FeedItem:
+    extraFields:
+      OwnerID:
+        type: string
+        description: "由转换器置位"
+      NodeID:
+        type: string
+        description: "由转换器置位,供 node 字段 resolver 取节点"
+    fields:
+      node:
+        resolver: true
+  Clip:
+    extraFields:
+      OwnerID:
+        type: string
+        description: "由转换器置位"
+      NodeID:
+        type: string
+        description: "由转换器置位,供 node 字段 resolver 取节点"
+    fields:
+      node:
+        resolver: true
   ID:
     model: github.com/99designs/gqlgen/graphql.String
   Int64:

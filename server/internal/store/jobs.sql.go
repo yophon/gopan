@@ -58,6 +58,7 @@ UPDATE user_jobs SET status = 'running', attempts = attempts + 1,
 WHERE id = (
     SELECT j.id FROM user_jobs j
     WHERE j.status = 'queued'
+      AND (j.kind = 'clip_url') = $1::boolean
       AND (j.heartbeat_at IS NULL OR j.heartbeat_at <= now() - interval '30 seconds' * j.attempts)
     ORDER BY j.created_at
     FOR UPDATE SKIP LOCKED
@@ -67,8 +68,9 @@ RETURNING id, owner_id, kind, status, params, parent_id, result_node_id, title, 
 `
 
 // 交还队列的任务按已试次数退避(30 秒 × attempts;交还时刷新了 heartbeat_at)。
-func (q *Queries) ClaimJob(ctx context.Context) (UserJob, error) {
-	row := q.db.QueryRow(ctx, claimJob)
+// clip = true 只领剪藏任务(单独一路 runner,不排在大文件下载后面),false 领其余的。
+func (q *Queries) ClaimJob(ctx context.Context, clip bool) (UserJob, error) {
+	row := q.db.QueryRow(ctx, claimJob, clip)
 	var i UserJob
 	err := row.Scan(
 		&i.ID,

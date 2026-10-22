@@ -149,6 +149,9 @@ type PreviewInfo {
   durationSec: Int
   # 外挂字幕(doc/22 二.2):只有 VIDEO 在 node(id) / requestPreview 里给出,列表里恒为空
   subtitles: [SubtitleTrack!]!
+  # .md 且不超过 2 MB:能渲染着看,GET /md/{nodeId}?token=<access>[&theme=light|dark](doc/23 五.2)。
+  # kind 仍是 TEXT,老客户端照旧按文本显示
+  markdown: Boolean!
 }
 
 # 同文件夹里与视频同名的字幕文件。内容一律转成 WebVTT:GET /sub/{nodeId}?token=<access>
@@ -187,7 +190,7 @@ enum NotificationLevel { INFO, WARN, ALERT }
 
 # 点开通知跳到哪。NODE:id 是文件 / 文件夹,parentId 是所在文件夹(null = 根目录);
 # FILE_REQUEST / LINK:id 是收集链接 / 直链;JOBS:后台任务列表;SESSIONS:登录设备;CREDENTIALS:新建的凭据,id 是 webdav(应用密码)/ mcp(API Key、Agent 授权)/ img(图床密钥);ADMIN:管理端
-enum NotificationTargetKind { NODE, FILE_REQUEST, LINK, JOBS, SESSIONS, CREDENTIALS, ADMIN }
+enum NotificationTargetKind { NODE, FILE_REQUEST, LINK, JOBS, SESSIONS, CREDENTIALS, ADMIN, ACTIVITY, FEED }
 
 type NotificationTarget {
   kind: NotificationTargetKind!
@@ -578,7 +581,7 @@ type CollectUpload {
 
 # ---------- 后台任务(doc/21):离线下载、解压 ----------
 
-enum JobKind { FETCH_URL, EXTRACT_ARCHIVE }
+enum JobKind { FETCH_URL, EXTRACT_ARCHIVE, CLIP_URL }
 enum JobStatus { QUEUED, RUNNING, DONE, FAILED, CANCELED }
 
 type Job {
@@ -668,6 +671,358 @@ type ChatMessage {
   node: Node
 }
 
+# ---------- 动态与撤回(doc/23 二) ----------
+
+enum ActorKind { WEB, ANDROID, WEBDAV, AGENT, IMG, COLLECT, JOB, FEED, CLIP, SYSTEM }
+enum ActivityAction { MKDIR, UPLOAD, OVERWRITE, RENAME, MOVE, COPY, DELETE, RESTORE, PURGE, EXTRACT }
+
+type ActivityActor {
+  kind: ActorKind!
+  # 来源的标识:登录会话 / 应用密码 / 凭据(api_key:… / oauth:…)/ 图床密钥 / 收集链接 / 任务 / 订阅的 id;系统为空
+  ref: String!
+  # 当时的名字快照:设备名、应用密码名、Key 名、收集链接标题 · 访客名……
+  label: String!
+}
+
+type Activity {
+  id: ID!
+  at: Time!
+  actor: ActivityActor!
+  # 同一次操作共用:一次多选移动、一次 Agent 工具调用、一个后台任务、一次撤回
+  batchId: ID!
+  action: ActivityAction!
+  # 节点彻底删除后 id 仍在;node 只在节点还在网盘里(不在回收站)时给出
+  nodeId: ID
+  node: Node
+  nodeKind: NodeKind
+  name: String!
+  # 当时所在的文件夹(移动的话是移动后的)
+  parentPath: String!
+  # 移动:从哪到哪
+  fromPath: String
+  toPath: String
+  # 改名(以及还原时撞名改了名):前后的名字
+  oldName: String
+  newName: String
+  # 涉及的文件数与字节(删除 / 复制 / 解压是整棵子树)
+  files: Int64!
+  bytes: Int64!
+  # 补充说明:解压的是哪个包等
+  note: String
+  # 这条是对哪条的撤回
+  undoOf: ID
+  undoneAt: Time
+  # 这类操作原则上能撤回(覆盖、彻底删除、已撤回过的为 false);现在能不能真撤看 undoPreview
+  undoable: Boolean!
+}
+
+type ActivityPage {
+  items: [Activity!]!
+  nextCursor: String
+}
+
+type ActivityActorSummary {
+  actor: ActivityActor!
+  total: Int64!
+  lastAt: Time!
+}
+
+input ActivityFilter {
+  actorKind: ActorKind
+  actorRef: String
+  actions: [ActivityAction!]
+  nodeId: ID
+  batchId: ID
+  since: Time
+  until: Time
+}
+
+# 三选一:ids(最多 1000)、batchId、filter(至少给来源、时间或文件;最多撤最近的 1000 条)
+input UndoSelection {
+  ids: [ID!]
+  batchId: ID
+  filter: ActivityFilter
+}
+
+type UndoItem {
+  activity: Activity!
+  ok: Boolean!
+  # 撤不了的原因
+  reason: String
+}
+
+type UndoResult {
+  done: Int!
+  failed: Int!
+  # 从新到旧
+  items: [UndoItem!]!
+}
+
+# ---------- 空间分析(doc/23 三) ----------
+
+enum FileCategory { IMAGE, VIDEO, AUDIO, DOCUMENT, ARCHIVE, TEXT, OTHER }
+
+type SpaceCategory {
+  category: FileCategory!
+  files: Int64!
+  bytes: Int64!
+}
+
+type SpaceOverview {
+  usedBytes: Int64!
+  quotaBytes: Int64!
+  # 回收站里的(还占着配额,彻底删除或到期后才释放)
+  trashFiles: Int64!
+  trashBytes: Int64!
+  byType: [SpaceCategory!]!
+  # 重复文件:组数与删掉多余的能省下的配额(服务器上同一份内容本来只存一份)
+  duplicateGroups: Int64!
+  duplicateBytes: Int64!
+}
+
+type SpaceFolderLevel {
+  # 这一层的路径(根为 /)
+  path: String!
+  # 子文件夹按子树大小从大到小(statsStale 表示数字可能滞后)
+  folders: [Node!]!
+  # 直接放在这一层的文件
+  looseFiles: Int64!
+  looseBytes: Int64!
+}
+
+type SpaceFile {
+  node: Node!
+  # 所在文件夹
+  path: String!
+  category: FileCategory
+}
+
+type DuplicateGroup {
+  sha256: String!
+  size: Int64!
+  copies: Int!
+  # 最早的在前(默认留它)
+  files: [SpaceFile!]!
+}
+
+type DuplicatePage {
+  items: [DuplicateGroup!]!
+  # 还有下一页时给出下一页的 offset
+  nextOffset: Int
+}
+
+type IdleShare {
+  id: ID!
+  nodeId: ID!
+  name: String!
+  kind: NodeKind!
+  expiresAt: Time
+  createdAt: Time!
+  lastVisitAt: Time
+  expired: Boolean!
+}
+
+type IdleLink {
+  id: ID!
+  nodeId: ID!
+  name: String!
+  expiresAt: Time
+  createdAt: Time!
+  lastHitAt: Time
+  hits: Int64!
+  expired: Boolean!
+}
+
+type IdleRequest {
+  id: ID!
+  title: String!
+  folderId: ID!
+  expiresAt: Time!
+  createdAt: Time!
+}
+
+# 已过期的、或 90 天没人访问的分享与直链;已过期的收集链接
+type SpaceIdle {
+  shares: [IdleShare!]!
+  links: [IdleLink!]!
+  requests: [IdleRequest!]!
+}
+
+# 管理端:全站存储
+type AdminStorage {
+  # 各人用量加起来(同一份内容各算各的)
+  logicalBytes: Int64!
+  # 去重后实际存的
+  physicalBytes: Int64!
+  blobs: Int64!
+  # 已经没人引用、等着回收的
+  pendingGcBytes: Int64!
+  # 缩略图、转换的 PDF、视频封面
+  derivativeBytes: Int64!
+  derivatives: Int64!
+  # 正文索引与动态记录占的数据库空间
+  textIndexBytes: Int64!
+  activityBytes: Int64!
+}
+
+# ---------- 订阅(doc/23 四) ----------
+
+enum FeedKind { RSS, GITHUB }
+# DOWNLOAD 下载附件(播客音视频、GitHub 资源);CLIP 剪藏正文;NONE 只记录
+enum FeedMode { DOWNLOAD, CLIP, NONE }
+# NEW 记下了没处理(只记录、没附件);SKIPPED 被过滤或是订阅前的旧条目;QUEUED 等着或正在处理
+enum FeedItemState { NEW, SKIPPED, QUEUED, DONE, FAILED }
+
+type Feed {
+  id: ID!
+  kind: FeedKind!
+  # RSS 地址;GitHub 为 owner/repo
+  url: String!
+  title: String!
+  siteUrl: String!
+  # 存到哪;被彻底删除后为 null(订阅已暂停)
+  folder: Node
+  mode: FeedMode!
+  # 标题关键词,逗号分隔:含任一 include(空 = 不限)且不含任何 exclude
+  includeWords: String!
+  excludeWords: String!
+  # GitHub:资源文件名通配,如 *.apk, linux-amd64(空 = 全部)
+  assetPattern: String!
+  prerelease: Boolean!
+  # 只留最近 N 条(更早的进回收站);0 = 不删
+  keepLast: Int!
+  intervalMinutes: Int!
+  enabled: Boolean!
+  lastCheckedAt: Time
+  lastOkAt: Time
+  lastError: String
+  failCount: Int!
+  nextCheckAt: Time!
+  createdAt: Time!
+  itemCount: Int!
+  newCount: Int!
+  latestAt: Time
+}
+
+type FeedItem {
+  id: ID!
+  title: String!
+  # 原文链接
+  url: String!
+  enclosureUrl: String!
+  enclosureType: String!
+  enclosureSize: Int64
+  publishedAt: Time
+  state: FeedItemState!
+  error: String
+  # 下好 / 剪好的文件(进了回收站或被「只留最近 N 条」清掉后为 null)
+  node: Node
+  jobId: ID
+  createdAt: Time!
+}
+
+type FeedItemPage {
+  items: [FeedItem!]!
+  nextCursor: String
+}
+
+type FeedPreviewItem {
+  title: String!
+  url: String!
+  enclosureUrl: String!
+  enclosureSize: Int64
+  publishedAt: Time
+}
+
+type FeedPreview {
+  kind: FeedKind!
+  url: String!
+  title: String!
+  siteUrl: String!
+  # 条目大多带音视频附件
+  podcast: Boolean!
+  suggestedMode: FeedMode!
+  # 最近 10 条
+  items: [FeedPreviewItem!]!
+}
+
+input FeedInput {
+  # 新建时必填:RSS / Atom 地址,或 GitHub 仓库(owner/repo、github.com 链接);修改时忽略
+  url: String
+  title: String
+  # 不给 = 新建时用 /订阅/<标题>,修改时不变
+  folderId: ID
+  mode: FeedMode
+  includeWords: String
+  excludeWords: String
+  assetPattern: String
+  prerelease: Boolean
+  keepLast: Int
+  # 60 – 10080,默认 360
+  intervalMinutes: Int
+  # 修改时用;新建总是开
+  enabled: Boolean
+  # 新建时:订阅前已有的条目里,处理最新的几条(其余标「已跳过」,可手动下载)
+  initial: Int
+}
+
+type OpmlFailure {
+  url: String!
+  reason: String!
+}
+
+type OpmlImportResult {
+  added: Int!
+  existed: Int!
+  failed: [OpmlFailure!]!
+}
+
+# ---------- 剪藏与 Markdown(doc/23 五) ----------
+
+type Clip {
+  id: ID!
+  url: String!
+  title: String!
+  site: String!
+  byline: String!
+  excerpt: String!
+  publishedAt: Time
+  # 那篇 .md;阅读用 /md/{node.id}?token=<access>
+  node: Node
+  words: Int!
+  images: Int!
+  readAt: Time
+  createdAt: Time!
+}
+
+type ClipPage {
+  items: [Clip!]!
+  nextCursor: String
+}
+
+type ClipSite {
+  site: String!
+  total: Int64!
+}
+
+# 剪过且没要求重新剪:existing 是已有的那篇;否则 job 是新建的剪藏任务
+type ClipResult {
+  job: Job
+  existing: Clip
+}
+
+type ClipPrefs {
+  # 剪藏文件夹,默认 /剪藏
+  folder: String!
+  # 按月分子文件夹(/剪藏/2026-10)
+  byMonth: Boolean!
+}
+
+input ClipPrefsInput {
+  folder: String!
+  byMonth: Boolean!
+}
+
 # ---------- 查询 ----------
 
 enum NodeOrder { NAME, SIZE, UPDATED_AT }
@@ -750,6 +1105,42 @@ type Query {
 
   adminUsers: [AdminUser!]!
   adminOverview: AdminOverview!
+
+  # 动态:新的在前;limit 最多 200
+  activities(filter: ActivityFilter, cursor: String, limit: Int = 50): ActivityPage!
+  # 近 90 天出现过的来源(筛选用),最近活跃的在前
+  activityActors: [ActivityActorSummary!]!
+  # 撤回前先看:会撤回哪些、哪些撤不了(不改任何东西)
+  undoPreview(selection: UndoSelection!): UndoResult!
+
+  # 空间分析:都是现算的只读查询
+  spaceOverview: SpaceOverview!
+  spaceFolders(parentId: ID): SpaceFolderLevel!
+  spaceLargeFiles(category: FileCategory, limit: Int = 100): [SpaceFile!]!
+  # 超过 days 天没改过、不小于 minSize 的文件
+  spaceStaleFiles(days: Int = 365, minSize: Int64 = 104857600, limit: Int = 100): [SpaceFile!]!
+  spaceDuplicates(offset: Int = 0, limit: Int = 50): DuplicatePage!
+  # 子树里一个文件都没有的文件夹(只列最上面一层;收集链接、订阅、传输助手用着的不算)
+  spaceEmptyFolders(limit: Int = 200): [SpaceFile!]!
+  spaceIdle: SpaceIdle!
+  adminStorage: AdminStorage!
+
+  # 订阅
+  feeds: [Feed!]!
+  feed(id: ID!): Feed!
+  feedItems(feedId: ID!, cursor: String): FeedItemPage!
+  # 贴地址先看一眼(抓一次,不保存);assetPattern / prerelease 只对 GitHub 有用
+  previewFeed(url: String!, assetPattern: String, prerelease: Boolean = false): FeedPreview!
+  # RSS 订阅导出成 OPML(GitHub 订阅不在里面)
+  exportOpml: String!
+
+  # 剪藏:新的在前,进了回收站的不列
+  clips(unreadOnly: Boolean = false, site: String, cursor: String): ClipPage!
+  clipSites: [ClipSite!]!
+  clip(id: ID!): Clip!
+  # 某篇 .md 是不是剪藏;不是为 null
+  nodeClip(nodeId: ID!): Clip
+  clipPrefs: ClipPrefs!
 }
 
 # ---------- 变更 ----------
@@ -870,6 +1261,27 @@ type Mutation {
   # 生成随机新密码并吊销该用户全部会话;明文只在返回值出现一次
   adminResetPassword(userId: ID!): String!
   adminRetryFailedTasks: Int!
+
+  # 撤回(从新到旧逐条,各自成败);撤回本身也记进动态
+  undoActivities(selection: UndoSelection!): UndoResult!
+
+  # 订阅:新建时先抓一次,地址不对当场报错(FEED_FETCH 类错误)
+  createFeed(input: FeedInput!): Feed!
+  updateFeed(id: ID!, input: FeedInput!): Feed!
+  # 退订,已下好的文件不动
+  deleteFeed(id: ID!): Boolean!
+  # 立即检查一次(同步,最多 20 秒)
+  refreshFeed(id: ID!): Feed!
+  # 手动处理一个条目:DOWNLOAD 下附件 / CLIP 剪藏正文
+  fetchFeedItem(itemId: ID!, mode: FeedMode!): FeedItem!
+  # 导入 OPML:播客下载附件、其余只记录;不补下旧内容
+  importOpml(opml: String!): OpmlImportResult!
+
+  # 剪藏一个网页。html 是书签栏小工具发来的页面内容(≤ 5 MB,要登录才看得到的页面用);
+  # 同一个地址剪过、那篇还在时默认直接给出已有的(force 重新剪)
+  clipUrl(url: String!, html: String, force: Boolean = false): ClipResult!
+  markClipRead(id: ID!, read: Boolean = true): Clip!
+  setClipPrefs(input: ClipPrefsInput!): ClipPrefs!
 }
 
 type MCPAccessRoot { credentialId: ID!, credentialType: String!, rootId: ID!, rootName: String! }

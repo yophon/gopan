@@ -47,6 +47,7 @@ SELECT EXISTS (
 
 -- name: ListChildren :many
 -- 首页(无 cursor)。翻页走下面 6 条 keyset 查询,方向拆开写,不用 CASE 包 WHERE,留住索引通道。
+-- 名字按自然顺序(排序规则 natural_sort,迁移 00027):第2集在第10集前,中文按拼音。
 SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
@@ -55,8 +56,8 @@ WHERE n.owner_id = sqlc.arg(owner_id)
   AND n.deleted_at IS NULL
 ORDER BY
   n.kind DESC, -- folder 在前
-  CASE WHEN sqlc.arg(order_by)::text = 'NAME'       AND NOT sqlc.arg(descending)::boolean THEN n.name END ASC,
-  CASE WHEN sqlc.arg(order_by)::text = 'NAME'       AND     sqlc.arg(descending)::boolean THEN n.name END DESC,
+  CASE WHEN sqlc.arg(order_by)::text = 'NAME'       AND NOT sqlc.arg(descending)::boolean THEN n.name COLLATE natural_sort END ASC,
+  CASE WHEN sqlc.arg(order_by)::text = 'NAME'       AND     sqlc.arg(descending)::boolean THEN n.name COLLATE natural_sort END DESC,
   CASE WHEN sqlc.arg(order_by)::text = 'SIZE'       AND NOT sqlc.arg(descending)::boolean THEN b.size END ASC NULLS FIRST,
   CASE WHEN sqlc.arg(order_by)::text = 'SIZE'       AND     sqlc.arg(descending)::boolean THEN b.size END DESC NULLS LAST,
   CASE WHEN sqlc.arg(order_by)::text = 'UPDATED_AT' AND NOT sqlc.arg(descending)::boolean THEN n.updated_at END ASC,
@@ -73,9 +74,9 @@ WHERE n.owner_id = sqlc.arg(owner_id)
   AND n.deleted_at IS NULL
   AND (n.kind < sqlc.arg(c_kind)::text
        OR (n.kind = sqlc.arg(c_kind)::text
-           AND (n.name > sqlc.arg(c_name)::text
+           AND ((n.name COLLATE natural_sort) > sqlc.arg(c_name)::text
                 OR (n.name = sqlc.arg(c_name)::text AND n.id > sqlc.arg(c_id)))))
-ORDER BY n.kind DESC, n.name ASC, n.id
+ORDER BY n.kind DESC, n.name COLLATE natural_sort ASC, n.id
 LIMIT sqlc.arg(page_limit);
 
 -- name: ListChildrenNameDesc :many
@@ -87,9 +88,9 @@ WHERE n.owner_id = sqlc.arg(owner_id)
   AND n.deleted_at IS NULL
   AND (n.kind < sqlc.arg(c_kind)::text
        OR (n.kind = sqlc.arg(c_kind)::text
-           AND (n.name < sqlc.arg(c_name)::text
+           AND ((n.name COLLATE natural_sort) < sqlc.arg(c_name)::text
                 OR (n.name = sqlc.arg(c_name)::text AND n.id > sqlc.arg(c_id)))))
-ORDER BY n.kind DESC, n.name DESC, n.id
+ORDER BY n.kind DESC, n.name COLLATE natural_sort DESC, n.id
 LIMIT sqlc.arg(page_limit);
 
 -- name: ListChildrenSizeAsc :many
@@ -285,15 +286,22 @@ SELECT count(*) > 0 AS is_descendant
 FROM nodes x
 WHERE x.id = $2 AND x.id IN (SELECT s.id FROM sub s);
 
--- name: SoftDeleteSubtree :exec
+-- name: SoftDeleteSubtree :one
+-- 返回这次进回收站的文件数与字节(动态里记这一笔、大量删除提醒按它算);已在回收站里的是 0
 WITH RECURSIVE sub AS (
     SELECT r.id FROM nodes r WHERE r.id = $1 AND r.owner_id = $2 AND r.deleted_at IS NULL
     UNION ALL
     SELECT n.id FROM nodes n JOIN sub s ON n.parent_id = s.id
     WHERE n.deleted_at IS NULL
+), upd AS (
+    UPDATE nodes SET deleted_at = now()
+    WHERE nodes.id IN (SELECT s.id FROM sub s)
+    RETURNING nodes.kind, nodes.blob_id
 )
-UPDATE nodes SET deleted_at = now()
-WHERE nodes.id IN (SELECT s.id FROM sub s);
+SELECT count(*)::bigint AS nodes,
+       count(*) FILTER (WHERE upd.kind = 'file')::bigint AS files,
+       COALESCE(sum(b.size), 0)::bigint AS bytes
+FROM upd LEFT JOIN blobs b ON b.id = upd.blob_id;
 
 -- name: RestoreSubtree :exec
 WITH RECURSIVE sub AS (

@@ -77,10 +77,23 @@ func (n *Notifier) noteJob(ctx context.Context, job store.UserJob, ok bool, msg 
 		return
 	}
 	what := "离线下载"
-	if job.Kind == JobExtract {
+	switch job.Kind {
+	case JobExtract:
 		what = "解压"
+	case JobClip:
+		what = "剪藏"
+	}
+	if ok && job.Source == JobSourceFeed {
+		return // 订阅自己发「有新内容」(doc/23 四.3)
 	}
 	ev := Event{Kind: EvJobDone, Level: LvInfo, Title: what + "完成:" + job.Title, Target: &Target{Kind: TgJobs}}
+	if ok && job.Kind == JobClip && job.ResultNodeID != nil {
+		t := &Target{Kind: TgNode, ID: job.ResultNodeID.String()}
+		if node, err := n.q.GetNode(ctx, *job.ResultNodeID); err == nil && node.ParentID != nil {
+			t.ParentID = node.ParentID.String()
+		}
+		ev.Target = t
+	}
 	if !ok {
 		ev.Kind, ev.Level, ev.Title, ev.Body = EvJobFailed, LvWarn, what+"失败:"+job.Title, msg
 	}

@@ -25,6 +25,9 @@ import (
 const (
 	JobFetch   = "fetch_url"
 	JobExtract = "extract_archive"
+	JobClip    = "clip_url"
+
+	JobSourceFeed = "feed" // 订阅建的任务
 
 	maxActiveJobs  = 10 // 每人排队 + 进行中
 	maxFetchURLs   = 10 // 一次提交的链接数
@@ -52,7 +55,11 @@ type Jobs struct {
 	client   *http.Client
 	archives *Archives
 	wake     chan struct{}
+	wakeClip chan struct{}
 	notify   *Notifier
+	clips    *Clips
+	// finished 任务到了终态(或被重新排队)时回调:订阅据此写回条目状态(doc/23 四.2)
+	finished func(ctx context.Context, job store.UserJob, status string, result *uuid.UUID, msg string)
 
 	heartbeat time.Duration
 	fetchIdle time.Duration // 测试缩短
@@ -62,7 +69,21 @@ type Jobs struct {
 func NewJobs(pool *pgxpool.Pool, obj *objstore.Store, uploads *Uploads, fetch FetchConfig) *Jobs {
 	return &Jobs{
 		pool: pool, q: store.New(pool), obj: obj, uploads: uploads, fetch: fetch,
-		client: fetch.Guard.Client(), wake: make(chan struct{}, 1), heartbeat: 5 * time.Second,
+		client: fetch.Guard.Client(), wake: make(chan struct{}, 1), wakeClip: make(chan struct{}, 1), heartbeat: 5 * time.Second,
+	}
+}
+
+// SetFinishHook 订阅在启动时注入。
+func (j *Jobs) SetFinishHook(fn func(ctx context.Context, job store.UserJob, status string, result *uuid.UUID, msg string)) {
+	j.finished = fn
+}
+
+// SetClips 剪藏任务要用剪藏服务(两者互相引用,启动时注入)。
+func (j *Jobs) SetClips(c *Clips) { j.clips = c }
+
+func (j *Jobs) finish(ctx context.Context, job store.UserJob, status string, result *uuid.UUID, msg string) {
+	if j.finished != nil {
+		j.finished(ctx, job, status, result, msg)
 	}
 }
 
@@ -82,6 +103,10 @@ func (j *Jobs) poke() {
 	case j.wake <- struct{}{}:
 	default:
 	}
+	select {
+	case j.wakeClip <- struct{}{}:
+	default:
+	}
 }
 
 func jobTmpKey(id uuid.UUID) string { return "tmp/jobs/" + id.String() }
@@ -90,6 +115,11 @@ func jobTmpKey(id uuid.UUID) string { return "tmp/jobs/" + id.String() }
 
 type fetchParams struct {
 	URL string `json:"url"`
+	// 订阅建的下载(doc/23 四.2):文件名用这个(否则按源站给的),结束时写回订阅条目
+	Name       string     `json:"name,omitempty"`
+	FeedID     *uuid.UUID `json:"feed_id,omitempty"`
+	FeedItemID *uuid.UUID `json:"feed_item_id,omitempty"`
+	FeedTitle  string     `json:"feed_title,omitempty"`
 }
 
 // FetchURLs 提交离线下载:每条链接一个任务,存到 parent(nil = 根目录)。
@@ -124,6 +154,7 @@ func (j *Jobs) FetchURLs(ctx context.Context, owner uuid.UUID, parent *uuid.UUID
 
 // JobSpec 一个待建的任务。
 type JobSpec struct {
+	ID         uuid.UUID // 零值 = 现生成(剪藏要先知道 id,好把页面内容存到它的暂存位置)
 	Kind       string
 	Params     []byte
 	Title      string
@@ -157,8 +188,11 @@ func (j *Jobs) create(ctx context.Context, owner uuid.UUID, parent *uuid.UUID, s
 	}
 	out := make([]store.UserJob, 0, len(specs))
 	for _, sp := range specs {
+		if sp.ID == uuid.Nil {
+			sp.ID = uuid.Must(uuid.NewV7())
+		}
 		row, err := q.CreateJob(ctx, store.CreateJobParams{
-			ID: uuid.Must(uuid.NewV7()), OwnerID: owner, Kind: sp.Kind, Params: sp.Params,
+			ID: sp.ID, OwnerID: owner, Kind: sp.Kind, Params: sp.Params,
 			ParentID: parent, Title: sp.Title, BytesTotal: sp.BytesTotal, FilesTotal: sp.FilesTotal, Source: source,
 		})
 		if err != nil {
@@ -219,6 +253,10 @@ func (j *Jobs) Cancel(ctx context.Context, owner, id uuid.UUID) (store.UserJob, 
 	if c, ok := j.running.Load(id); ok {
 		c.(context.CancelFunc)()
 	}
+	if row.Kind == JobClip {
+		_ = j.obj.Remove(context.WithoutCancel(ctx), clipHTMLKey(id))
+	}
+	j.finish(ctx, row, "canceled", nil, "已取消")
 	return row, nil
 }
 
@@ -241,6 +279,7 @@ func (j *Jobs) Retry(ctx context.Context, owner, id uuid.UUID) (store.UserJob, e
 	if err != nil {
 		return row, err
 	}
+	j.finish(ctx, row, "queued", nil, "")
 	j.poke()
 	return row, nil
 }
@@ -252,11 +291,12 @@ func (j *Jobs) ClearFinished(ctx context.Context, owner uuid.UUID) (int64, error
 
 // ---- 执行 ----
 
-// Run 启动 n 个 runner 与收尾循环,阻塞到 ctx 取消。
+// Run 启动 n 个 runner、一个剪藏 runner 与收尾循环,阻塞到 ctx 取消。
 func (j *Jobs) Run(ctx context.Context, n int) {
 	for range n {
-		go j.loop(ctx)
+		go j.loop(ctx, false)
 	}
+	go j.loop(ctx, true)
 	t := time.NewTicker(jobStaleCheck)
 	defer t.Stop()
 	last := time.Time{}
@@ -299,13 +339,17 @@ func (j *Jobs) Reap(ctx context.Context) {
 		_ = j.obj.Remove(ctx, jobTmpKey(id))
 		if job, err := j.q.GetJobByID(ctx, id); err == nil {
 			j.notify.noteJob(ctx, job, false, "运行中断,重试次数已用完")
+			j.finish(ctx, job, "failed", nil, "运行中断,重试次数已用完")
 		}
 	}
 }
 
-// RunOnce 领一个任务并执行完;没有可领的返回 false(测试与运维脚本用)。
+// RunOnce 领一个任务并执行完(先领普通的,再领剪藏);没有可领的返回 false(测试与运维脚本用)。
 func (j *Jobs) RunOnce(ctx context.Context) (bool, error) {
-	job, err := j.q.ClaimJob(ctx)
+	job, err := j.q.ClaimJob(ctx, false)
+	if errors.Is(err, pgx.ErrNoRows) {
+		job, err = j.q.ClaimJob(ctx, true)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -316,12 +360,16 @@ func (j *Jobs) RunOnce(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func (j *Jobs) loop(ctx context.Context) {
+func (j *Jobs) loop(ctx context.Context, clip bool) {
 	tick := time.NewTicker(15 * time.Second)
 	defer tick.Stop()
+	wake := j.wake
+	if clip {
+		wake = j.wakeClip
+	}
 	for {
 		for ctx.Err() == nil {
-			job, err := j.q.ClaimJob(ctx)
+			job, err := j.q.ClaimJob(ctx, clip)
 			if err != nil {
 				if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
 					slog.Error("claim job", "err", err)
@@ -333,7 +381,7 @@ func (j *Jobs) loop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-j.wake:
+		case <-wake:
 		case <-tick.C:
 		}
 	}
@@ -414,13 +462,17 @@ func (j *Jobs) execute(parent context.Context, job store.UserJob) {
 	case err == nil:
 		var n int64
 		if n, err = j.q.FinishJob(fctx, run.finishParams("done", result, run.warning)); n > 0 {
-			j.notify.noteJob(fctx, run.finished(), true, "")
+			snap := run.finished()
+			snap.ResultNodeID = result
+			j.notify.noteJob(fctx, snap, true, "")
+			j.finish(fctx, snap, "done", result, "")
 		}
 	case errors.As(err, &se):
 		slog.Info("job failed", "id", job.ID, "kind", job.Kind, "code", se.Code)
 		var n int64
 		if n, err = j.q.FinishJob(fctx, run.finishParams("failed", run.result, se)); n > 0 {
 			j.notify.noteJob(fctx, run.finished(), false, se.Message)
+			j.finish(fctx, run.finished(), "failed", nil, se.Message)
 		}
 	case parent.Err() != nil:
 		// 停机:交还队列,不算一次尝试,重启后接着跑
@@ -434,6 +486,7 @@ func (j *Jobs) execute(parent context.Context, job store.UserJob) {
 			var n int64
 			if n, err = j.q.FinishJob(fctx, run.finishParams("failed", nil, e)); n > 0 {
 				j.notify.noteJob(fctx, run.finished(), false, e.Message)
+				j.finish(fctx, run.finished(), "failed", nil, e.Message)
 			}
 		}
 	}
@@ -463,7 +516,28 @@ func (j *Jobs) heartbeatLoop(ctx context.Context, run *jobRun, cancel context.Ca
 	}
 }
 
+// jobActor 后台任务落库的文件在动态里的来源;同一个任务的改动算一批。
+func jobActor(job store.UserJob) Actor {
+	a := Actor{Kind: ActorJob, Ref: job.ID.String(), Label: "离线下载"}
+	switch job.Kind {
+	case JobExtract:
+		a.Label = "解压"
+	case JobClip:
+		a.Kind, a.Label = ActorClip, "剪藏"
+	}
+	// 订阅建的下载与剪藏:来源是那个订阅
+	var fp struct {
+		FeedID    *uuid.UUID `json:"feed_id"`
+		FeedTitle string     `json:"feed_title"`
+	}
+	if json.Unmarshal(job.Params, &fp) == nil && fp.FeedID != nil {
+		a = Actor{Kind: ActorFeed, Ref: fp.FeedID.String(), Label: fp.FeedTitle}
+	}
+	return a
+}
+
 func (j *Jobs) dispatch(ctx context.Context, run *jobRun) (*uuid.UUID, error) {
+	ctx = WithBatch(WithActor(ctx, jobActor(run.job)))
 	switch run.job.Kind {
 	case JobFetch:
 		return j.runFetch(WithChatSource(ctx, ChatSourceFetch), run)
@@ -472,6 +546,11 @@ func (j *Jobs) dispatch(ctx context.Context, run *jobRun) (*uuid.UUID, error) {
 			return nil, errf("UNSUPPORTED", "本次部署没有压缩包功能")
 		}
 		return j.archives.runExtract(ctx, j, run)
+	case JobClip:
+		if j.clips == nil {
+			return nil, errf("UNSUPPORTED", "本次部署没有剪藏功能")
+		}
+		return j.clips.runClip(ctx, j, run)
 	default:
 		return nil, errf("UNSUPPORTED", "未知任务类型 %s", run.job.Kind)
 	}

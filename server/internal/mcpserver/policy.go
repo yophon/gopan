@@ -40,6 +40,8 @@ func addTool[In, Out any](s *Server, server *mcp.Server, tool *mcp.Tool, handler
 		if e != nil {
 			return nil, out, e
 		}
+		// 动态(doc/23 二):这次工具调用里的所有改动算一批,来源是这把凭据
+		ctx = service.WithBatch(service.WithActor(ctx, p.Actor()))
 		defer func() {
 			status, code := "success", ""
 			if batch, ok := any(out).(BatchOutput); ok && batch.Failed > 0 {

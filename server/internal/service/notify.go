@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -32,6 +33,9 @@ const (
 	EvCredential    = "credential"
 	EvLinkAlert     = "link_alert"
 	EvBackup        = "backup"
+	EvMassDelete    = "mass_delete"
+	EvFeedNew       = "feed_new"
+	EvFeedFailed    = "feed_failed"
 )
 
 const (
@@ -54,6 +58,9 @@ var EventKinds = []EventKind{
 	{EvLogin, "新登录", true, false},
 	{EvCredential, "新的访问凭据", true, false},
 	{EvLinkAlert, "直链异常", true, false},
+	{EvMassDelete, "大量删除(WebDAV / Agent)", true, false},
+	{EvFeedNew, "订阅有新内容", false, false},
+	{EvFeedFailed, "订阅检查失败", true, false},
 	{EvBackup, "备份异常", true, true},
 }
 
@@ -77,6 +84,8 @@ const (
 	TgSessions    = "SESSIONS"
 	TgCredentials = "CREDENTIALS"
 	TgAdmin       = "ADMIN"
+	TgActivity    = "ACTIVITY" // id = 来源(kind:ref),parent_id = 从什么时候起(RFC 3339)
+	TgFeed        = "FEED"
 )
 
 type Target struct {
@@ -568,6 +577,23 @@ func TargetPath(t Target) string {
 		return "/drive"
 	case TgAdmin:
 		return "/admin"
+	case TgActivity:
+		v := url.Values{}
+		if t.ID != "" {
+			v.Set("actor", t.ID)
+		}
+		if t.ParentID != "" {
+			v.Set("since", t.ParentID)
+		}
+		if len(v) == 0 {
+			return "/activity"
+		}
+		return "/activity?" + v.Encode()
+	case TgFeed:
+		if t.ID == "" {
+			return "/feeds"
+		}
+		return "/feeds?id=" + t.ID
 	}
 	return "/"
 }

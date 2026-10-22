@@ -549,6 +549,20 @@ func (a *Archives) runExtract(ctx context.Context, j *Jobs, run *jobRun) (*uuid.
 		return nil, err
 	}
 	run.result = &dest.ID
+	// 动态里只记一条「解压到这个文件夹」(撤回 = 整个文件夹进回收站),包里的文件逐个落库时不单独记;
+	// 失败或取消时已解出的也在这个文件夹里,同样记
+	defer func() {
+		run.mu.Lock()
+		files := run.filesDone
+		run.mu.Unlock()
+		rctx := context.WithoutCancel(ctx)
+		if err := recordActs(rctx, a.q, owner, nodeAct(OpExtract, *dest, actDetail{
+			Files: int64(files), Bytes: run.bytesDone.Load(), Note: row.Name,
+		})); err != nil {
+			slog.Warn("record extract activity", "job", run.job.ID, "err", err)
+		}
+	}()
+	quiet := withQuiet(ctx)
 	dirs := map[string]uuid.UUID{"": dest.ID}
 	var ensure func(rel string) (uuid.UUID, error)
 	ensure = func(rel string) (uuid.UUID, error) {
@@ -613,7 +627,7 @@ func (a *Archives) runExtract(ctx context.Context, j *Jobs, run *jobRun) (*uuid.
 			}
 			return false, err
 		}
-		if _, err := a.uploads.CommitStaged(ctx, StagedFile{
+		if _, err := a.uploads.CommitStaged(quiet, StagedFile{
 			Owner: owner, Parent: &pid, Name: name, Sha: hex.EncodeToString(h.Sum(nil)), Size: s.e.Size, TmpKey: key,
 		}); err != nil {
 			return false, err

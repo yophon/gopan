@@ -10,6 +10,58 @@ import (
 	"time"
 )
 
+type Activity struct {
+	ID         string         `json:"id"`
+	At         time.Time      `json:"at"`
+	Actor      *ActivityActor `json:"actor"`
+	BatchID    string         `json:"batchId"`
+	Action     ActivityAction `json:"action"`
+	NodeID     *string        `json:"nodeId,omitempty"`
+	Node       *Node          `json:"node,omitempty"`
+	NodeKind   *NodeKind      `json:"nodeKind,omitempty"`
+	Name       string         `json:"name"`
+	ParentPath string         `json:"parentPath"`
+	FromPath   *string        `json:"fromPath,omitempty"`
+	ToPath     *string        `json:"toPath,omitempty"`
+	OldName    *string        `json:"oldName,omitempty"`
+	NewName    *string        `json:"newName,omitempty"`
+	Files      int64          `json:"files"`
+	Bytes      int64          `json:"bytes"`
+	Note       *string        `json:"note,omitempty"`
+	UndoOf     *string        `json:"undoOf,omitempty"`
+	UndoneAt   *time.Time     `json:"undoneAt,omitempty"`
+	Undoable   bool           `json:"undoable"`
+	// 由转换器置位,供 node 字段 resolver 取节点
+	OwnerID string `json:"-"`
+}
+
+type ActivityActor struct {
+	Kind  ActorKind `json:"kind"`
+	Ref   string    `json:"ref"`
+	Label string    `json:"label"`
+}
+
+type ActivityActorSummary struct {
+	Actor  *ActivityActor `json:"actor"`
+	Total  int64          `json:"total"`
+	LastAt time.Time      `json:"lastAt"`
+}
+
+type ActivityFilter struct {
+	ActorKind *ActorKind       `json:"actorKind,omitempty"`
+	ActorRef  *string          `json:"actorRef,omitempty"`
+	Actions   []ActivityAction `json:"actions,omitempty"`
+	NodeID    *string          `json:"nodeId,omitempty"`
+	BatchID   *string          `json:"batchId,omitempty"`
+	Since     *time.Time       `json:"since,omitempty"`
+	Until     *time.Time       `json:"until,omitempty"`
+}
+
+type ActivityPage struct {
+	Items      []*Activity `json:"items"`
+	NextCursor *string     `json:"nextCursor,omitempty"`
+}
+
 type AdminLink struct {
 	ID         string     `json:"id"`
 	Owner      string     `json:"owner"`
@@ -34,6 +86,17 @@ type AdminOverview struct {
 	BlobBytes      int64              `json:"blobBytes"`
 	TaskCounts     []*TaskCount       `json:"taskCounts"`
 	ContentIndex   *ContentIndexStats `json:"contentIndex"`
+}
+
+type AdminStorage struct {
+	LogicalBytes    int64 `json:"logicalBytes"`
+	PhysicalBytes   int64 `json:"physicalBytes"`
+	Blobs           int64 `json:"blobs"`
+	PendingGcBytes  int64 `json:"pendingGcBytes"`
+	DerivativeBytes int64 `json:"derivativeBytes"`
+	Derivatives     int64 `json:"derivatives"`
+	TextIndexBytes  int64 `json:"textIndexBytes"`
+	ActivityBytes   int64 `json:"activityBytes"`
 }
 
 type AdminUser struct {
@@ -95,6 +158,50 @@ type ChatMessage struct {
 	Node      *Node     `json:"node,omitempty"`
 	// 由列表转换器置位,供 node 字段 resolver 恢复真实 uuid
 	NodeID string `json:"-"`
+}
+
+type Clip struct {
+	ID          string     `json:"id"`
+	URL         string     `json:"url"`
+	Title       string     `json:"title"`
+	Site        string     `json:"site"`
+	Byline      string     `json:"byline"`
+	Excerpt     string     `json:"excerpt"`
+	PublishedAt *time.Time `json:"publishedAt,omitempty"`
+	Node        *Node      `json:"node,omitempty"`
+	Words       int        `json:"words"`
+	Images      int        `json:"images"`
+	ReadAt      *time.Time `json:"readAt,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	// 由转换器置位,供 node 字段 resolver 取节点
+	NodeID string `json:"-"`
+	// 由转换器置位
+	OwnerID string `json:"-"`
+}
+
+type ClipPage struct {
+	Items      []*Clip `json:"items"`
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+type ClipPrefs struct {
+	Folder  string `json:"folder"`
+	ByMonth bool   `json:"byMonth"`
+}
+
+type ClipPrefsInput struct {
+	Folder  string `json:"folder"`
+	ByMonth bool   `json:"byMonth"`
+}
+
+type ClipResult struct {
+	Job      *Job  `json:"job,omitempty"`
+	Existing *Clip `json:"existing,omitempty"`
+}
+
+type ClipSite struct {
+	Site  string `json:"site"`
+	Total int64  `json:"total"`
 }
 
 type CollectAuth struct {
@@ -170,6 +277,105 @@ type DirectLinkPage struct {
 	Total      int           `json:"total"`
 }
 
+type DuplicateGroup struct {
+	Sha256 string       `json:"sha256"`
+	Size   int64        `json:"size"`
+	Copies int          `json:"copies"`
+	Files  []*SpaceFile `json:"files"`
+}
+
+type DuplicatePage struct {
+	Items      []*DuplicateGroup `json:"items"`
+	NextOffset *int              `json:"nextOffset,omitempty"`
+}
+
+type Feed struct {
+	ID              string     `json:"id"`
+	Kind            FeedKind   `json:"kind"`
+	URL             string     `json:"url"`
+	Title           string     `json:"title"`
+	SiteURL         string     `json:"siteUrl"`
+	Folder          *Node      `json:"folder,omitempty"`
+	Mode            FeedMode   `json:"mode"`
+	IncludeWords    string     `json:"includeWords"`
+	ExcludeWords    string     `json:"excludeWords"`
+	AssetPattern    string     `json:"assetPattern"`
+	Prerelease      bool       `json:"prerelease"`
+	KeepLast        int        `json:"keepLast"`
+	IntervalMinutes int        `json:"intervalMinutes"`
+	Enabled         bool       `json:"enabled"`
+	LastCheckedAt   *time.Time `json:"lastCheckedAt,omitempty"`
+	LastOkAt        *time.Time `json:"lastOkAt,omitempty"`
+	LastError       *string    `json:"lastError,omitempty"`
+	FailCount       int        `json:"failCount"`
+	NextCheckAt     time.Time  `json:"nextCheckAt"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	ItemCount       int        `json:"itemCount"`
+	NewCount        int        `json:"newCount"`
+	LatestAt        *time.Time `json:"latestAt,omitempty"`
+	// 由转换器置位,供 folder 字段 resolver 取节点
+	FolderID string `json:"-"`
+	// 由转换器置位
+	OwnerID string `json:"-"`
+}
+
+type FeedInput struct {
+	URL             *string   `json:"url,omitempty"`
+	Title           *string   `json:"title,omitempty"`
+	FolderID        *string   `json:"folderId,omitempty"`
+	Mode            *FeedMode `json:"mode,omitempty"`
+	IncludeWords    *string   `json:"includeWords,omitempty"`
+	ExcludeWords    *string   `json:"excludeWords,omitempty"`
+	AssetPattern    *string   `json:"assetPattern,omitempty"`
+	Prerelease      *bool     `json:"prerelease,omitempty"`
+	KeepLast        *int      `json:"keepLast,omitempty"`
+	IntervalMinutes *int      `json:"intervalMinutes,omitempty"`
+	Enabled         *bool     `json:"enabled,omitempty"`
+	Initial         *int      `json:"initial,omitempty"`
+}
+
+type FeedItem struct {
+	ID            string        `json:"id"`
+	Title         string        `json:"title"`
+	URL           string        `json:"url"`
+	EnclosureURL  string        `json:"enclosureUrl"`
+	EnclosureType string        `json:"enclosureType"`
+	EnclosureSize *int64        `json:"enclosureSize,omitempty"`
+	PublishedAt   *time.Time    `json:"publishedAt,omitempty"`
+	State         FeedItemState `json:"state"`
+	Error         *string       `json:"error,omitempty"`
+	Node          *Node         `json:"node,omitempty"`
+	JobID         *string       `json:"jobId,omitempty"`
+	CreatedAt     time.Time     `json:"createdAt"`
+	// 由转换器置位,供 node 字段 resolver 取节点
+	NodeID string `json:"-"`
+	// 由转换器置位
+	OwnerID string `json:"-"`
+}
+
+type FeedItemPage struct {
+	Items      []*FeedItem `json:"items"`
+	NextCursor *string     `json:"nextCursor,omitempty"`
+}
+
+type FeedPreview struct {
+	Kind          FeedKind           `json:"kind"`
+	URL           string             `json:"url"`
+	Title         string             `json:"title"`
+	SiteURL       string             `json:"siteUrl"`
+	Podcast       bool               `json:"podcast"`
+	SuggestedMode FeedMode           `json:"suggestedMode"`
+	Items         []*FeedPreviewItem `json:"items"`
+}
+
+type FeedPreviewItem struct {
+	Title         string     `json:"title"`
+	URL           string     `json:"url"`
+	EnclosureURL  string     `json:"enclosureUrl"`
+	EnclosureSize *int64     `json:"enclosureSize,omitempty"`
+	PublishedAt   *time.Time `json:"publishedAt,omitempty"`
+}
+
 type FileRequest struct {
 	ID              string     `json:"id"`
 	Token           string     `json:"token"`
@@ -226,6 +432,36 @@ type FileRequestUpload struct {
 type FileRequestUploadPage struct {
 	Items      []*FileRequestUpload `json:"items"`
 	NextCursor *string              `json:"nextCursor,omitempty"`
+}
+
+type IdleLink struct {
+	ID        string     `json:"id"`
+	NodeID    string     `json:"nodeId"`
+	Name      string     `json:"name"`
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+	LastHitAt *time.Time `json:"lastHitAt,omitempty"`
+	Hits      int64      `json:"hits"`
+	Expired   bool       `json:"expired"`
+}
+
+type IdleRequest struct {
+	ID        string    `json:"id"`
+	Title     string    `json:"title"`
+	FolderID  string    `json:"folderId"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type IdleShare struct {
+	ID          string     `json:"id"`
+	NodeID      string     `json:"nodeId"`
+	Name        string     `json:"name"`
+	Kind        NodeKind   `json:"kind"`
+	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	LastVisitAt *time.Time `json:"lastVisitAt,omitempty"`
+	Expired     bool       `json:"expired"`
 }
 
 type Job struct {
@@ -457,6 +693,17 @@ type OAuthGrant struct {
 	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
+type OpmlFailure struct {
+	URL    string `json:"url"`
+	Reason string `json:"reason"`
+}
+
+type OpmlImportResult struct {
+	Added   int            `json:"added"`
+	Existed int            `json:"existed"`
+	Failed  []*OpmlFailure `json:"failed"`
+}
+
 type PartEtag struct {
 	PartNumber int    `json:"partNumber"`
 	Etag       string `json:"etag"`
@@ -482,6 +729,7 @@ type PreviewInfo struct {
 	Status      *TaskStatus      `json:"status,omitempty"`
 	DurationSec *int             `json:"durationSec,omitempty"`
 	Subtitles   []*SubtitleTrack `json:"subtitles"`
+	Markdown    bool             `json:"markdown"`
 }
 
 type Query struct {
@@ -539,6 +787,41 @@ type ShareVisitStats struct {
 	LastVisitKind *string    `json:"lastVisitKind,omitempty"`
 }
 
+type SpaceCategory struct {
+	Category FileCategory `json:"category"`
+	Files    int64        `json:"files"`
+	Bytes    int64        `json:"bytes"`
+}
+
+type SpaceFile struct {
+	Node     *Node         `json:"node"`
+	Path     string        `json:"path"`
+	Category *FileCategory `json:"category,omitempty"`
+}
+
+type SpaceFolderLevel struct {
+	Path       string  `json:"path"`
+	Folders    []*Node `json:"folders"`
+	LooseFiles int64   `json:"looseFiles"`
+	LooseBytes int64   `json:"looseBytes"`
+}
+
+type SpaceIdle struct {
+	Shares   []*IdleShare   `json:"shares"`
+	Links    []*IdleLink    `json:"links"`
+	Requests []*IdleRequest `json:"requests"`
+}
+
+type SpaceOverview struct {
+	UsedBytes       int64            `json:"usedBytes"`
+	QuotaBytes      int64            `json:"quotaBytes"`
+	TrashFiles      int64            `json:"trashFiles"`
+	TrashBytes      int64            `json:"trashBytes"`
+	ByType          []*SpaceCategory `json:"byType"`
+	DuplicateGroups int64            `json:"duplicateGroups"`
+	DuplicateBytes  int64            `json:"duplicateBytes"`
+}
+
 type SubtitleTrack struct {
 	NodeID  string `json:"nodeId"`
 	Name    string `json:"name"`
@@ -555,6 +838,24 @@ type TaskCount struct {
 type TextRange struct {
 	Start  int `json:"start"`
 	Length int `json:"length"`
+}
+
+type UndoItem struct {
+	Activity *Activity `json:"activity"`
+	Ok       bool      `json:"ok"`
+	Reason   *string   `json:"reason,omitempty"`
+}
+
+type UndoResult struct {
+	Done   int         `json:"done"`
+	Failed int         `json:"failed"`
+	Items  []*UndoItem `json:"items"`
+}
+
+type UndoSelection struct {
+	Ids     []string        `json:"ids,omitempty"`
+	BatchID *string         `json:"batchId,omitempty"`
+	Filter  *ActivityFilter `json:"filter,omitempty"`
 }
 
 type UploadInit struct {
@@ -579,6 +880,148 @@ type User struct {
 	UsedBytes           int64  `json:"usedBytes"`
 	IsAdmin             bool   `json:"isAdmin"`
 	UnreadNotifications int    `json:"unreadNotifications"`
+}
+
+type ActivityAction string
+
+const (
+	ActivityActionMkdir     ActivityAction = "MKDIR"
+	ActivityActionUpload    ActivityAction = "UPLOAD"
+	ActivityActionOverwrite ActivityAction = "OVERWRITE"
+	ActivityActionRename    ActivityAction = "RENAME"
+	ActivityActionMove      ActivityAction = "MOVE"
+	ActivityActionCopy      ActivityAction = "COPY"
+	ActivityActionDelete    ActivityAction = "DELETE"
+	ActivityActionRestore   ActivityAction = "RESTORE"
+	ActivityActionPurge     ActivityAction = "PURGE"
+	ActivityActionExtract   ActivityAction = "EXTRACT"
+)
+
+var AllActivityAction = []ActivityAction{
+	ActivityActionMkdir,
+	ActivityActionUpload,
+	ActivityActionOverwrite,
+	ActivityActionRename,
+	ActivityActionMove,
+	ActivityActionCopy,
+	ActivityActionDelete,
+	ActivityActionRestore,
+	ActivityActionPurge,
+	ActivityActionExtract,
+}
+
+func (e ActivityAction) IsValid() bool {
+	switch e {
+	case ActivityActionMkdir, ActivityActionUpload, ActivityActionOverwrite, ActivityActionRename, ActivityActionMove, ActivityActionCopy, ActivityActionDelete, ActivityActionRestore, ActivityActionPurge, ActivityActionExtract:
+		return true
+	}
+	return false
+}
+
+func (e ActivityAction) String() string {
+	return string(e)
+}
+
+func (e *ActivityAction) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ActivityAction(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ActivityAction", str)
+	}
+	return nil
+}
+
+func (e ActivityAction) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ActivityAction) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ActivityAction) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type ActorKind string
+
+const (
+	ActorKindWeb     ActorKind = "WEB"
+	ActorKindAndroid ActorKind = "ANDROID"
+	ActorKindWebdav  ActorKind = "WEBDAV"
+	ActorKindAgent   ActorKind = "AGENT"
+	ActorKindImg     ActorKind = "IMG"
+	ActorKindCollect ActorKind = "COLLECT"
+	ActorKindJob     ActorKind = "JOB"
+	ActorKindFeed    ActorKind = "FEED"
+	ActorKindClip    ActorKind = "CLIP"
+	ActorKindSystem  ActorKind = "SYSTEM"
+)
+
+var AllActorKind = []ActorKind{
+	ActorKindWeb,
+	ActorKindAndroid,
+	ActorKindWebdav,
+	ActorKindAgent,
+	ActorKindImg,
+	ActorKindCollect,
+	ActorKindJob,
+	ActorKindFeed,
+	ActorKindClip,
+	ActorKindSystem,
+}
+
+func (e ActorKind) IsValid() bool {
+	switch e {
+	case ActorKindWeb, ActorKindAndroid, ActorKindWebdav, ActorKindAgent, ActorKindImg, ActorKindCollect, ActorKindJob, ActorKindFeed, ActorKindClip, ActorKindSystem:
+		return true
+	}
+	return false
+}
+
+func (e ActorKind) String() string {
+	return string(e)
+}
+
+func (e *ActorKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ActorKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ActorKind", str)
+	}
+	return nil
+}
+
+func (e ActorKind) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ActorKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ActorKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 type ArchiveStatus string
@@ -642,21 +1085,261 @@ func (e ArchiveStatus) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+type FeedItemState string
+
+const (
+	FeedItemStateNew     FeedItemState = "NEW"
+	FeedItemStateSkipped FeedItemState = "SKIPPED"
+	FeedItemStateQueued  FeedItemState = "QUEUED"
+	FeedItemStateDone    FeedItemState = "DONE"
+	FeedItemStateFailed  FeedItemState = "FAILED"
+)
+
+var AllFeedItemState = []FeedItemState{
+	FeedItemStateNew,
+	FeedItemStateSkipped,
+	FeedItemStateQueued,
+	FeedItemStateDone,
+	FeedItemStateFailed,
+}
+
+func (e FeedItemState) IsValid() bool {
+	switch e {
+	case FeedItemStateNew, FeedItemStateSkipped, FeedItemStateQueued, FeedItemStateDone, FeedItemStateFailed:
+		return true
+	}
+	return false
+}
+
+func (e FeedItemState) String() string {
+	return string(e)
+}
+
+func (e *FeedItemState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = FeedItemState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid FeedItemState", str)
+	}
+	return nil
+}
+
+func (e FeedItemState) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *FeedItemState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e FeedItemState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type FeedKind string
+
+const (
+	FeedKindRss    FeedKind = "RSS"
+	FeedKindGithub FeedKind = "GITHUB"
+)
+
+var AllFeedKind = []FeedKind{
+	FeedKindRss,
+	FeedKindGithub,
+}
+
+func (e FeedKind) IsValid() bool {
+	switch e {
+	case FeedKindRss, FeedKindGithub:
+		return true
+	}
+	return false
+}
+
+func (e FeedKind) String() string {
+	return string(e)
+}
+
+func (e *FeedKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = FeedKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid FeedKind", str)
+	}
+	return nil
+}
+
+func (e FeedKind) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *FeedKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e FeedKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type FeedMode string
+
+const (
+	FeedModeDownload FeedMode = "DOWNLOAD"
+	FeedModeClip     FeedMode = "CLIP"
+	FeedModeNone     FeedMode = "NONE"
+)
+
+var AllFeedMode = []FeedMode{
+	FeedModeDownload,
+	FeedModeClip,
+	FeedModeNone,
+}
+
+func (e FeedMode) IsValid() bool {
+	switch e {
+	case FeedModeDownload, FeedModeClip, FeedModeNone:
+		return true
+	}
+	return false
+}
+
+func (e FeedMode) String() string {
+	return string(e)
+}
+
+func (e *FeedMode) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = FeedMode(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid FeedMode", str)
+	}
+	return nil
+}
+
+func (e FeedMode) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *FeedMode) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e FeedMode) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type FileCategory string
+
+const (
+	FileCategoryImage    FileCategory = "IMAGE"
+	FileCategoryVideo    FileCategory = "VIDEO"
+	FileCategoryAudio    FileCategory = "AUDIO"
+	FileCategoryDocument FileCategory = "DOCUMENT"
+	FileCategoryArchive  FileCategory = "ARCHIVE"
+	FileCategoryText     FileCategory = "TEXT"
+	FileCategoryOther    FileCategory = "OTHER"
+)
+
+var AllFileCategory = []FileCategory{
+	FileCategoryImage,
+	FileCategoryVideo,
+	FileCategoryAudio,
+	FileCategoryDocument,
+	FileCategoryArchive,
+	FileCategoryText,
+	FileCategoryOther,
+}
+
+func (e FileCategory) IsValid() bool {
+	switch e {
+	case FileCategoryImage, FileCategoryVideo, FileCategoryAudio, FileCategoryDocument, FileCategoryArchive, FileCategoryText, FileCategoryOther:
+		return true
+	}
+	return false
+}
+
+func (e FileCategory) String() string {
+	return string(e)
+}
+
+func (e *FileCategory) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = FileCategory(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid FileCategory", str)
+	}
+	return nil
+}
+
+func (e FileCategory) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *FileCategory) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e FileCategory) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 type JobKind string
 
 const (
 	JobKindFetchURL       JobKind = "FETCH_URL"
 	JobKindExtractArchive JobKind = "EXTRACT_ARCHIVE"
+	JobKindClipURL        JobKind = "CLIP_URL"
 )
 
 var AllJobKind = []JobKind{
 	JobKindFetchURL,
 	JobKindExtractArchive,
+	JobKindClipURL,
 }
 
 func (e JobKind) IsValid() bool {
 	switch e {
-	case JobKindFetchURL, JobKindExtractArchive:
+	case JobKindFetchURL, JobKindExtractArchive, JobKindClipURL:
 		return true
 	}
 	return false
@@ -996,6 +1679,8 @@ const (
 	NotificationTargetKindSessions    NotificationTargetKind = "SESSIONS"
 	NotificationTargetKindCredentials NotificationTargetKind = "CREDENTIALS"
 	NotificationTargetKindAdmin       NotificationTargetKind = "ADMIN"
+	NotificationTargetKindActivity    NotificationTargetKind = "ACTIVITY"
+	NotificationTargetKindFeed        NotificationTargetKind = "FEED"
 )
 
 var AllNotificationTargetKind = []NotificationTargetKind{
@@ -1006,11 +1691,13 @@ var AllNotificationTargetKind = []NotificationTargetKind{
 	NotificationTargetKindSessions,
 	NotificationTargetKindCredentials,
 	NotificationTargetKindAdmin,
+	NotificationTargetKindActivity,
+	NotificationTargetKindFeed,
 }
 
 func (e NotificationTargetKind) IsValid() bool {
 	switch e {
-	case NotificationTargetKindNode, NotificationTargetKindFileRequest, NotificationTargetKindLink, NotificationTargetKindJobs, NotificationTargetKindSessions, NotificationTargetKindCredentials, NotificationTargetKindAdmin:
+	case NotificationTargetKindNode, NotificationTargetKindFileRequest, NotificationTargetKindLink, NotificationTargetKindJobs, NotificationTargetKindSessions, NotificationTargetKindCredentials, NotificationTargetKindAdmin, NotificationTargetKindActivity, NotificationTargetKindFeed:
 		return true
 	}
 	return false

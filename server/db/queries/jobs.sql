@@ -10,11 +10,13 @@ SELECT count(*) FROM user_jobs WHERE owner_id = $1 AND status IN ('queued', 'run
 
 -- name: ClaimJob :one
 -- 交还队列的任务按已试次数退避(30 秒 × attempts;交还时刷新了 heartbeat_at)。
+-- clip = true 只领剪藏任务(单独一路 runner,不排在大文件下载后面),false 领其余的。
 UPDATE user_jobs SET status = 'running', attempts = attempts + 1,
     started_at = COALESCE(started_at, now()), heartbeat_at = now()
 WHERE id = (
     SELECT j.id FROM user_jobs j
     WHERE j.status = 'queued'
+      AND (j.kind = 'clip_url') = @clip::boolean
       AND (j.heartbeat_at IS NULL OR j.heartbeat_at <= now() - interval '30 seconds' * j.attempts)
     ORDER BY j.created_at
     FOR UPDATE SKIP LOCKED

@@ -28,7 +28,7 @@ const createCollectUploadSession = `-- name: CreateCollectUploadSession :one
 INSERT INTO upload_sessions (id, owner_id, size, target_parent, target_name, minio_upload_id, part_size,
     expires_at, object_key, request_id, visitor_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id
+RETURNING id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id, actor
 `
 
 type CreateCollectUploadSessionParams struct {
@@ -78,6 +78,7 @@ func (q *Queries) CreateCollectUploadSession(ctx context.Context, arg CreateColl
 		&i.FailCode,
 		&i.RequestID,
 		&i.VisitorID,
+		&i.Actor,
 	)
 	return i, err
 }
@@ -227,7 +228,7 @@ func (q *Queries) FileRequestUsage(ctx context.Context, requestID uuid.UUID) (Fi
 }
 
 const getCollectUploadSession = `-- name: GetCollectUploadSession :one
-SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id FROM upload_sessions WHERE id = $1 AND request_id = $2 AND visitor_id = $3
+SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id, actor FROM upload_sessions WHERE id = $1 AND request_id = $2 AND visitor_id = $3
 `
 
 type GetCollectUploadSessionParams struct {
@@ -258,6 +259,7 @@ func (q *Queries) GetCollectUploadSession(ctx context.Context, arg GetCollectUpl
 		&i.FailCode,
 		&i.RequestID,
 		&i.VisitorID,
+		&i.Actor,
 	)
 	return i, err
 }

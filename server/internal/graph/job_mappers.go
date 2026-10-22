@@ -35,6 +35,9 @@ func gqlJob(j store.UserJob) *Job {
 	if j.Kind == service.JobExtract {
 		out.Kind = JobKindExtractArchive
 	} else {
+		if j.Kind == service.JobClip {
+			out.Kind = JobKindClipURL
+		}
 		var p struct {
 			URL string `json:"url"`
 		}

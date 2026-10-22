@@ -151,6 +151,7 @@ func ImageUploadHandler(auth *service.Auth, tokens *service.MCPTokens, links *se
 		}
 		meta := service.LinkMeta{IP: ClientIPFrom(r, trusted), UA: r.UserAgent()}
 		var owner uuid.UUID
+		var actor service.Actor
 		if strings.HasPrefix(bearer, "gopan_key_") {
 			p, err := tokens.Authenticate(r.Context(), bearer)
 			if err != nil {
@@ -164,6 +165,7 @@ func ImageUploadHandler(auth *service.Auth, tokens *service.MCPTokens, links *se
 			owner, meta.Source = p.UserID, "api"
 			id := p.TokenID
 			meta.APIKeyID = &id
+			actor = service.Actor{Kind: service.ActorImg, Ref: p.TokenID.String(), Label: p.Name}
 		} else {
 			ident, err := auth.ParseAccessContext(r.Context(), bearer)
 			if err != nil || ident.Scope != service.ScopeUser {
@@ -171,6 +173,7 @@ func ImageUploadHandler(auth *service.Auth, tokens *service.MCPTokens, links *se
 				return
 			}
 			owner, meta.Source = ident.UserID, "web"
+			actor = service.SessionActor(ident.FamilyID, r.UserAgent())
 		}
 		// 20 MB 走慢网可能超过 Server 级 60s 读超时
 		rc := http.NewResponseController(w)
@@ -182,7 +185,7 @@ func ImageUploadHandler(auth *service.Auth, tokens *service.MCPTokens, links *se
 			writeImgErr(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
 			return
 		}
-		res, err := links.UploadImage(r.Context(), service.ImageUpload{
+		res, err := links.UploadImage(service.WithActor(r.Context(), actor), service.ImageUpload{
 			Owner: owner, Name: name, Body: body, Meta: meta, Origin: requestOrigin(r),
 		})
 		if err != nil {

@@ -262,6 +262,7 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 	if err := attachChatMessage(ctx, q, sess.OwnerID, parent, n.ID); err != nil {
 		return nil, err
 	}
+	actx := actorFromJSON(ctx, sess.Actor)
 	if collect != nil {
 		if err := collect.record(ctx, q, sess, n, size, sum); err != nil {
 			return nil, err
@@ -271,6 +272,14 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 			uploader = collect.visitor.Name
 		}
 		s.notify.noteCollectUpload(ctx, tx, sess.OwnerID, collect.request, uploader, n.Name, size)
+		label := collect.request.Title
+		if uploader != "" {
+			label += " · " + uploader
+		}
+		actx = WithActor(ctx, Actor{Kind: ActorCollect, Ref: collect.request.ID.String(), Label: label})
+	}
+	if err := recordActs(actx, q, sess.OwnerID, fileAct(OpUpload, n, size)); err != nil {
+		return nil, err
 	}
 	if err := q.FinishUploadSession(ctx, store.FinishUploadSessionParams{ID: sess.ID, NodeID: &n.ID}); err != nil {
 		return nil, err

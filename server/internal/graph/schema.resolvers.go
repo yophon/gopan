@@ -18,6 +18,14 @@ import (
 )
 
 // Node is the resolver for the node field.
+func (r *activityResolver) Node(ctx context.Context, obj *Activity) (*Node, error) {
+	if obj.NodeID == nil {
+		return nil, nil
+	}
+	return r.activeNode(ctx, obj.OwnerID, *obj.NodeID)
+}
+
+// Node is the resolver for the node field.
 func (r *chatMessageResolver) Node(ctx context.Context, obj *ChatMessage) (*Node, error) {
 	if obj.NodeID == "" {
 		return nil, nil
@@ -39,6 +47,21 @@ func (r *chatMessageResolver) Node(ctx context.Context, obj *ChatMessage) (*Node
 		return nil, err
 	}
 	return n, nil
+}
+
+// Node is the resolver for the node field.
+func (r *clipResolver) Node(ctx context.Context, obj *Clip) (*Node, error) {
+	return r.activeNode(ctx, obj.OwnerID, obj.NodeID)
+}
+
+// Folder is the resolver for the folder field.
+func (r *feedResolver) Folder(ctx context.Context, obj *Feed) (*Node, error) {
+	return r.activeNode(ctx, obj.OwnerID, obj.FolderID)
+}
+
+// Node is the resolver for the node field.
+func (r *feedItemResolver) Node(ctx context.Context, obj *FeedItem) (*Node, error) {
+	return r.activeNode(ctx, obj.OwnerID, obj.NodeID)
 }
 
 // Result is the resolver for the result field.
@@ -1074,6 +1097,56 @@ func (r *mutationResolver) AdminRetryFailedTasks(ctx context.Context) (int, erro
 	return int(n), err
 }
 
+// UndoActivities is the resolver for the undoActivities field.
+func (r *mutationResolver) UndoActivities(ctx context.Context, selection UndoSelection) (*UndoResult, error) {
+	return r.undo(ctx, selection, false)
+}
+
+// CreateFeed is the resolver for the createFeed field.
+func (r *mutationResolver) CreateFeed(ctx context.Context, input FeedInput) (*Feed, error) {
+	return r.createFeed(ctx, input)
+}
+
+// UpdateFeed is the resolver for the updateFeed field.
+func (r *mutationResolver) UpdateFeed(ctx context.Context, id string, input FeedInput) (*Feed, error) {
+	return r.updateFeed(ctx, id, input)
+}
+
+// DeleteFeed is the resolver for the deleteFeed field.
+func (r *mutationResolver) DeleteFeed(ctx context.Context, id string) (bool, error) {
+	return r.deleteFeed(ctx, id)
+}
+
+// RefreshFeed is the resolver for the refreshFeed field.
+func (r *mutationResolver) RefreshFeed(ctx context.Context, id string) (*Feed, error) {
+	return r.feedByID(ctx, id, true)
+}
+
+// FetchFeedItem is the resolver for the fetchFeedItem field.
+func (r *mutationResolver) FetchFeedItem(ctx context.Context, itemID string, mode FeedMode) (*FeedItem, error) {
+	return r.fetchFeedItem(ctx, itemID, mode)
+}
+
+// ImportOpml is the resolver for the importOpml field.
+func (r *mutationResolver) ImportOpml(ctx context.Context, opml string) (*OpmlImportResult, error) {
+	return r.importOpml(ctx, opml)
+}
+
+// ClipURL is the resolver for the clipUrl field.
+func (r *mutationResolver) ClipURL(ctx context.Context, url string, html *string, force *bool) (*ClipResult, error) {
+	return r.clipURL(ctx, url, html, force)
+}
+
+// MarkClipRead is the resolver for the markClipRead field.
+func (r *mutationResolver) MarkClipRead(ctx context.Context, id string, read *bool) (*Clip, error) {
+	return r.markClipRead(ctx, id, read)
+}
+
+// SetClipPrefs is the resolver for the setClipPrefs field.
+func (r *mutationResolver) SetClipPrefs(ctx context.Context, input ClipPrefsInput) (*ClipPrefs, error) {
+	return r.clipPrefs(ctx, &input)
+}
+
 // Preview is the resolver for the preview field.
 func (r *nodeResolver) Preview(ctx context.Context, obj *Node) (*PreviewInfo, error) {
 	if obj.Kind != NodeKindFile {
@@ -2046,6 +2119,111 @@ func (r *queryResolver) AdminOverview(ctx context.Context) (*AdminOverview, erro
 	}, nil
 }
 
+// Activities is the resolver for the activities field.
+func (r *queryResolver) Activities(ctx context.Context, filter *ActivityFilter, cursor *string, limit *int) (*ActivityPage, error) {
+	return r.listActivities(ctx, filter, cursor, limit)
+}
+
+// ActivityActors is the resolver for the activityActors field.
+func (r *queryResolver) ActivityActors(ctx context.Context) ([]*ActivityActorSummary, error) {
+	return r.activityActors(ctx)
+}
+
+// UndoPreview is the resolver for the undoPreview field.
+func (r *queryResolver) UndoPreview(ctx context.Context, selection UndoSelection) (*UndoResult, error) {
+	return r.undo(ctx, selection, true)
+}
+
+// SpaceOverview is the resolver for the spaceOverview field.
+func (r *queryResolver) SpaceOverview(ctx context.Context) (*SpaceOverview, error) {
+	return r.spaceOverview(ctx)
+}
+
+// SpaceFolders is the resolver for the spaceFolders field.
+func (r *queryResolver) SpaceFolders(ctx context.Context, parentID *string) (*SpaceFolderLevel, error) {
+	return r.spaceFolders(ctx, parentID)
+}
+
+// SpaceLargeFiles is the resolver for the spaceLargeFiles field.
+func (r *queryResolver) SpaceLargeFiles(ctx context.Context, category *FileCategory, limit *int) ([]*SpaceFile, error) {
+	return r.spaceLargeFiles(ctx, category, limit)
+}
+
+// SpaceStaleFiles is the resolver for the spaceStaleFiles field.
+func (r *queryResolver) SpaceStaleFiles(ctx context.Context, days *int, minSize *int64, limit *int) ([]*SpaceFile, error) {
+	return r.spaceStaleFiles(ctx, days, minSize, limit)
+}
+
+// SpaceDuplicates is the resolver for the spaceDuplicates field.
+func (r *queryResolver) SpaceDuplicates(ctx context.Context, offset *int, limit *int) (*DuplicatePage, error) {
+	return r.spaceDuplicates(ctx, offset, limit)
+}
+
+// SpaceEmptyFolders is the resolver for the spaceEmptyFolders field.
+func (r *queryResolver) SpaceEmptyFolders(ctx context.Context, limit *int) ([]*SpaceFile, error) {
+	return r.spaceEmptyFolders(ctx, limit)
+}
+
+// SpaceIdle is the resolver for the spaceIdle field.
+func (r *queryResolver) SpaceIdle(ctx context.Context) (*SpaceIdle, error) {
+	return r.spaceIdle(ctx)
+}
+
+// AdminStorage is the resolver for the adminStorage field.
+func (r *queryResolver) AdminStorage(ctx context.Context) (*AdminStorage, error) {
+	return r.adminStorage(ctx)
+}
+
+// Feeds is the resolver for the feeds field.
+func (r *queryResolver) Feeds(ctx context.Context) ([]*Feed, error) {
+	return r.listFeeds(ctx)
+}
+
+// Feed is the resolver for the feed field.
+func (r *queryResolver) Feed(ctx context.Context, id string) (*Feed, error) {
+	return r.feedByID(ctx, id, false)
+}
+
+// FeedItems is the resolver for the feedItems field.
+func (r *queryResolver) FeedItems(ctx context.Context, feedID string, cursor *string) (*FeedItemPage, error) {
+	return r.feedItems(ctx, feedID, cursor)
+}
+
+// PreviewFeed is the resolver for the previewFeed field.
+func (r *queryResolver) PreviewFeed(ctx context.Context, url string, assetPattern *string, prerelease *bool) (*FeedPreview, error) {
+	return r.previewFeed(ctx, url, assetPattern, prerelease)
+}
+
+// ExportOpml is the resolver for the exportOpml field.
+func (r *queryResolver) ExportOpml(ctx context.Context) (string, error) {
+	return r.exportOpml(ctx)
+}
+
+// Clips is the resolver for the clips field.
+func (r *queryResolver) Clips(ctx context.Context, unreadOnly *bool, site *string, cursor *string) (*ClipPage, error) {
+	return r.listClips(ctx, unreadOnly, site, cursor)
+}
+
+// ClipSites is the resolver for the clipSites field.
+func (r *queryResolver) ClipSites(ctx context.Context) ([]*ClipSite, error) {
+	return r.clipSites(ctx)
+}
+
+// Clip is the resolver for the clip field.
+func (r *queryResolver) Clip(ctx context.Context, id string) (*Clip, error) {
+	return r.clipByID(ctx, id)
+}
+
+// NodeClip is the resolver for the nodeClip field.
+func (r *queryResolver) NodeClip(ctx context.Context, nodeID string) (*Clip, error) {
+	return r.nodeClip(ctx, nodeID)
+}
+
+// ClipPrefs is the resolver for the clipPrefs field.
+func (r *queryResolver) ClipPrefs(ctx context.Context) (*ClipPrefs, error) {
+	return r.clipPrefs(ctx, nil)
+}
+
 // UnreadNotifications is the resolver for the unreadNotifications field.
 func (r *userResolver) UnreadNotifications(ctx context.Context, obj *User) (int, error) {
 	id, err := parseID(obj.ID)
@@ -2055,8 +2233,20 @@ func (r *userResolver) UnreadNotifications(ctx context.Context, obj *User) (int,
 	return r.Notify.Unread(ctx, id)
 }
 
+// Activity returns ActivityResolver implementation.
+func (r *Resolver) Activity() ActivityResolver { return &activityResolver{r} }
+
 // ChatMessage returns ChatMessageResolver implementation.
 func (r *Resolver) ChatMessage() ChatMessageResolver { return &chatMessageResolver{r} }
+
+// Clip returns ClipResolver implementation.
+func (r *Resolver) Clip() ClipResolver { return &clipResolver{r} }
+
+// Feed returns FeedResolver implementation.
+func (r *Resolver) Feed() FeedResolver { return &feedResolver{r} }
+
+// FeedItem returns FeedItemResolver implementation.
+func (r *Resolver) FeedItem() FeedItemResolver { return &feedItemResolver{r} }
 
 // Job returns JobResolver implementation.
 func (r *Resolver) Job() JobResolver { return &jobResolver{r} }
@@ -2074,7 +2264,11 @@ func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 func (r *Resolver) User() UserResolver { return &userResolver{r} }
 
 type (
+	activityResolver    struct{ *Resolver }
 	chatMessageResolver struct{ *Resolver }
+	clipResolver        struct{ *Resolver }
+	feedResolver        struct{ *Resolver }
+	feedItemResolver    struct{ *Resolver }
 	jobResolver         struct{ *Resolver }
 	mutationResolver    struct{ *Resolver }
 	nodeResolver        struct{ *Resolver }

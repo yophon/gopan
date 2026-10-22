@@ -230,14 +230,52 @@ func (s *Nodes) CreateFolder(ctx context.Context, owner uuid.UUID, parentID *uui
 	if err != nil {
 		return store.Node{}, err
 	}
-	n, err := s.q.CreateNode(ctx, store.CreateNodeParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return store.Node{}, err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+	n, err := qtx.CreateNode(ctx, store.CreateNodeParams{
 		ID: uuid.Must(uuid.NewV7()), OwnerID: owner, ParentID: parentID,
 		Name: name, Kind: "folder",
 	})
 	if isUniqueViolation(err) {
 		return store.Node{}, errf("NAME_CONFLICT", "同名文件或文件夹已存在")
 	}
-	return n, err
+	if err != nil {
+		return store.Node{}, err
+	}
+	if err := recordActs(ctx, qtx, owner, nodeAct(OpMkdir, n, actDetail{})); err != nil {
+		return store.Node{}, err
+	}
+	return n, tx.Commit(ctx)
+}
+
+// CreateFolderExact 按给定的名字建文件夹,同名就报 NAME_CONFLICT(WebDAV MKCOL 的语义,不自动改名)。
+func (s *Nodes) CreateFolderExact(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID, name string) (store.Node, error) {
+	if err := validateName(name); err != nil {
+		return store.Node{}, err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return store.Node{}, err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+	n, err := qtx.CreateNode(ctx, store.CreateNodeParams{
+		ID: uuid.Must(uuid.NewV7()), OwnerID: owner, ParentID: parentID, Name: name, Kind: "folder",
+	})
+	if isUniqueViolation(err) {
+		return store.Node{}, errf("NAME_CONFLICT", "同名文件或文件夹已存在")
+	}
+	if err != nil {
+		return store.Node{}, err
+	}
+	if err := recordActs(ctx, qtx, owner, nodeAct(OpMkdir, n, actDetail{})); err != nil {
+		return store.Node{}, err
+	}
+	return n, tx.Commit(ctx)
 }
 
 func (s *Nodes) Rename(ctx context.Context, owner, id uuid.UUID, name string) (store.Node, error) {
@@ -252,11 +290,25 @@ func (s *Nodes) Rename(ctx context.Context, owner, id uuid.UUID, name string) (s
 	if err := validateName(name); err != nil {
 		return store.Node{}, err
 	}
-	n, err := s.q.RenameNode(ctx, store.RenameNodeParams{ID: id, OwnerID: owner, Name: name})
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return store.Node{}, err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+	n, err := qtx.RenameNode(ctx, store.RenameNodeParams{ID: id, OwnerID: owner, Name: name})
 	if isUniqueViolation(err) {
 		return store.Node{}, errf("NAME_CONFLICT", "同名文件或文件夹已存在")
 	}
-	return n, err
+	if err != nil {
+		return store.Node{}, err
+	}
+	if cur.Name != n.Name {
+		if err := recordActs(ctx, qtx, owner, nodeAct(OpRename, n, actDetail{OldName: cur.Name, NewName: n.Name})); err != nil {
+			return store.Node{}, err
+		}
+	}
+	return n, tx.Commit(ctx)
 }
 
 func (s *Nodes) Move(ctx context.Context, owner uuid.UUID, ids []uuid.UUID, target *uuid.UUID) ([]store.Node, error) {
@@ -274,6 +326,7 @@ func (s *Nodes) Move(ctx context.Context, owner uuid.UUID, ids []uuid.UUID, targ
 	qtx := s.q.WithTx(tx)
 
 	out := make([]store.Node, 0, len(ids))
+	var acts []actItem
 	for _, id := range ids {
 		prev, err := s.Get(ctx, owner, id)
 		if err != nil {
@@ -306,11 +359,24 @@ func (s *Nodes) Move(ctx context.Context, owner uuid.UUID, ids []uuid.UUID, targ
 			}
 		}
 		out = append(out, n)
+		if !sameParent(prev.ParentID, target) {
+			acts = append(acts, nodeAct(OpMove, n, actDetail{From: &actPlace{Parent: prev.ParentID}, To: &actPlace{Parent: target}}))
+		}
+	}
+	if err := recordActs(ctx, qtx, owner, acts...); err != nil {
+		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+func sameParent(a, b *uuid.UUID) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }
 
 const maxCopyNodes = 10000
@@ -411,6 +477,7 @@ func (s *Nodes) Copy(ctx context.Context, owner uuid.UUID, ids []uuid.UUID, targ
 
 	newIDs := make([]uuid.UUID, len(entries))
 	out := make([]store.Node, 0, len(rootIdx))
+	var acts []actItem
 	for i, e := range entries {
 		var parent *uuid.UUID
 		if e.parent == -1 {
@@ -434,6 +501,14 @@ func (s *Nodes) Copy(ctx context.Context, owner uuid.UUID, ids []uuid.UUID, targ
 				return nil, err
 			}
 		}
+		if e.parent == -1 {
+			src := ids[len(acts)]
+			files, bytes := copyTotals(entries, i)
+			acts = append(acts, nodeAct(OpCopy, n, actDetail{Source: &src, Files: files, Bytes: bytes}))
+		}
+	}
+	if err := recordActs(ctx, qtx, owner, acts...); err != nil {
+		return nil, err
 	}
 	if total > 0 {
 		if err := qtx.AddUsedBytes(ctx, store.AddUsedBytesParams{ID: owner, UsedBytes: total}); err != nil {
@@ -457,6 +532,20 @@ func (s *Nodes) Copy(ctx context.Context, owner uuid.UUID, ids []uuid.UUID, targ
 		out = append(out, n)
 	}
 	return out, nil
+}
+
+// copyTotals 清单里从第 root 项(一个复制的顶层)开始、到下一个顶层之前的文件数与字节。
+func copyTotals(entries []copyEntry, root int) (files, bytes int64) {
+	for i := root; i < len(entries); i++ {
+		if i > root && entries[i].parent == -1 {
+			break
+		}
+		if entries[i].kind == "file" {
+			files++
+			bytes += entries[i].size
+		}
+	}
+	return files, bytes
 }
 
 // collectSubtree 深度优先收集活跃子树,parentIdx 是父项在清单中的下标,base 是本批的起始下标。
@@ -499,6 +588,7 @@ func (s *Nodes) PurgeExpiredTrash(ctx context.Context, ttl time.Duration) (int, 
 	for _, r := range rows {
 		byOwner[r.OwnerID] = append(byOwner[r.OwnerID], r.ID)
 	}
+	ctx = WithActor(ctx, Actor{Kind: ActorSystem, Label: "回收站到期清理"})
 	purged := 0
 	for owner, ids := range byOwner {
 		if err := s.Purge(ctx, owner, ids); err != nil {
@@ -512,53 +602,101 @@ func (s *Nodes) PurgeExpiredTrash(ctx context.Context, ttl time.Duration) (int, 
 // Delete 把节点(整棵子树)移进回收站。任何一个 id 不存在或不属于 owner 就整批返回 ErrNotFound、一个都不删,
 // 与 rename/move/restore 一致;已在回收站里的节点再删一次是空操作。
 func (s *Nodes) Delete(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) error {
+	nodes := make([]store.Node, 0, len(ids))
 	for _, id := range ids {
-		if _, err := s.Get(ctx, owner, id); err != nil {
+		n, err := s.Get(ctx, owner, id)
+		if err != nil {
 			return err
+		}
+		nodes = append(nodes, n)
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+	var acts []actItem
+	for _, n := range nodes {
+		res, err := qtx.SoftDeleteSubtree(ctx, store.SoftDeleteSubtreeParams{ID: n.ID, OwnerID: owner})
+		if err != nil {
+			return err
+		}
+		if err := qtx.MarkAncestorsStale(ctx, n.ID); err != nil {
+			return err
+		}
+		// 已在回收站里的(或随同批里的上级一起进去了的)不再记一笔
+		if res.Nodes > 0 {
+			acts = append(acts, nodeAct(OpDelete, n, actDetail{Files: res.Files, Bytes: res.Bytes}))
 		}
 	}
-	for _, id := range ids {
-		if err := s.q.SoftDeleteSubtree(ctx, store.SoftDeleteSubtreeParams{ID: id, OwnerID: owner}); err != nil {
-			return err
-		}
-		if err := s.q.MarkAncestorsStale(ctx, id); err != nil {
-			return err
-		}
+	if err := recordActs(ctx, qtx, owner, acts...); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	if len(acts) > 0 {
+		s.checkMassDelete(ctx, owner)
 	}
 	return nil
 }
 
 func (s *Nodes) Restore(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) ([]store.Node, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
 	out := make([]store.Node, 0, len(ids))
+	var acts []actItem
 	for _, id := range ids {
-		n, err := s.Get(ctx, owner, id)
+		n, err := qtx.GetNode(ctx, id)
+		if errors.Is(err, pgx.ErrNoRows) || err == nil && n.OwnerID != owner {
+			return nil, ErrNotFound
+		}
 		if err != nil {
 			return nil, err
 		}
+		wasDeleted := n.DeletedAt.Valid
 		// 原位置已有同名活跃节点 → 先给要还原的改名
-		exists, err := s.q.SiblingNameExists(ctx, store.SiblingNameExistsParams{
+		exists, err := qtx.SiblingNameExists(ctx, store.SiblingNameExistsParams{
 			OwnerID: owner, ParentID: n.ParentID, Name: n.Name,
 		})
 		if err != nil {
 			return nil, err
 		}
-		if exists {
+		if exists && wasDeleted {
 			fresh := timestampedName(n.Name)
-			if err := s.q.RenameNodeAnyState(ctx, store.RenameNodeAnyStateParams{ID: id, OwnerID: owner, Name: fresh}); err != nil {
+			if err := qtx.RenameNodeAnyState(ctx, store.RenameNodeAnyStateParams{ID: id, OwnerID: owner, Name: fresh}); err != nil {
 				return nil, err
 			}
 		}
-		if err := s.q.RestoreSubtree(ctx, store.RestoreSubtreeParams{ID: id, OwnerID: owner}); err != nil {
+		if err := qtx.RestoreSubtree(ctx, store.RestoreSubtreeParams{ID: id, OwnerID: owner}); err != nil {
 			return nil, err
 		}
-		if err := s.q.MarkAncestorsStale(ctx, id); err != nil {
+		if err := qtx.MarkAncestorsStale(ctx, id); err != nil {
 			return nil, err
 		}
-		restored, err := s.Get(ctx, owner, id)
+		restored, err := qtx.GetNode(ctx, id)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, restored)
+		if wasDeleted {
+			d := actDetail{}
+			if restored.Name != n.Name {
+				d.OldName, d.NewName = n.Name, restored.Name
+			}
+			acts = append(acts, nodeAct(OpRestore, restored, d))
+		}
+	}
+	if err := recordActs(ctx, qtx, owner, acts...); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -571,7 +709,16 @@ func (s *Nodes) Purge(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) err
 	defer tx.Rollback(ctx)
 	qtx := s.q.WithTx(tx)
 	var blobIDs []uuid.UUID
+	type purged struct {
+		node  store.Node
+		blobs []uuid.UUID
+	}
+	var roots []purged
 	for _, id := range ids {
+		n, err := qtx.GetNode(ctx, id)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
 		// 标脏在删之前:行删掉后就爬不了父链了
 		if err := qtx.MarkAncestorsStale(ctx, id); err != nil {
 			return err
@@ -580,25 +727,43 @@ func (s *Nodes) Purge(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) err
 		if err != nil {
 			return err
 		}
+		var mine []uuid.UUID
 		for _, b := range got {
 			if b != nil {
 				blobIDs = append(blobIDs, *b)
+				mine = append(mine, *b)
 			}
 		}
+		if n.ID != uuid.Nil && n.OwnerID == owner {
+			roots = append(roots, purged{node: n, blobs: mine})
+		}
+	}
+	bySize := map[uuid.UUID]int64{}
+	if len(blobIDs) > 0 {
+		sizes, err := qtx.GetBlobSizes(ctx, blobIDs)
+		if err != nil {
+			return err
+		}
+		for _, r := range sizes {
+			bySize[r.ID] = r.Size
+		}
+	}
+	acts := make([]actItem, 0, len(roots))
+	for _, r := range roots {
+		d := actDetail{Files: int64(len(r.blobs))}
+		for _, b := range r.blobs {
+			d.Bytes += bySize[b]
+		}
+		acts = append(acts, nodeAct(OpPurge, r.node, d))
+	}
+	if err := recordActs(ctx, qtx, owner, acts...); err != nil {
+		return err
 	}
 	if len(blobIDs) > 0 {
 		if err := qtx.DecrementBlobRefs(ctx, blobIDs); err != nil {
 			return err
 		}
 		// used_bytes 是逻辑记账:同 blob 被引用两次要扣两次,按出现次数累加
-		sizes, err := qtx.GetBlobSizes(ctx, blobIDs)
-		if err != nil {
-			return err
-		}
-		bySize := make(map[uuid.UUID]int64, len(sizes))
-		for _, r := range sizes {
-			bySize[r.ID] = r.Size
-		}
 		var total int64
 		for _, id := range blobIDs {
 			total += bySize[id]
@@ -619,6 +784,54 @@ func (s *Nodes) PurgeTrash(ctx context.Context, owner uuid.UUID) error {
 		return nil
 	}
 	return s.Purge(ctx, owner, roots)
+}
+
+// ---- 大量删除提醒(doc/23 二.3) ----
+
+const (
+	massDeleteWindow = 10 * time.Minute
+	massDeleteFiles  = 200
+	massDeleteBytes  = 2 << 30
+)
+
+// unattended 不需要人在场的来源:WebDAV 客户端、Agent、图床工具。网页和 App 上的删除是自己点的,不提醒。
+func unattended(kind string) bool {
+	return kind == ActorWebDAV || kind == ActorAgent || kind == ActorImg
+}
+
+var actorKindLabel = map[string]string{ActorWebDAV: "WebDAV", ActorAgent: "Agent", ActorImg: "图床密钥"}
+
+// checkMassDelete 同一个凭据 10 分钟内删进回收站 ≥ 200 个文件或 ≥ 2 GiB 时提醒,每小时最多一次。
+// 在自己的(子)事务里查和写:出错不影响已经提交的删除。
+func (s *Nodes) checkMassDelete(ctx context.Context, owner uuid.UUID) {
+	a := ActorFrom(ctx)
+	if s.notify == nil || !unattended(a.Kind) {
+		return
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return
+	}
+	defer tx.Rollback(ctx)
+	since := time.Now().Add(-massDeleteWindow)
+	sum, err := s.q.WithTx(tx).SumRecentDeletes(ctx, store.SumRecentDeletesParams{
+		OwnerID: owner, ActorKind: a.Kind, ActorRef: a.Ref, At: tstz(since),
+	})
+	if err != nil || sum.Files < massDeleteFiles && sum.Bytes < massDeleteBytes {
+		return
+	}
+	who := a.Label
+	if who == "" {
+		who = actorKindLabel[a.Kind]
+	}
+	s.notify.NotifyTx(ctx, tx, owner, Event{
+		Kind: EvMassDelete, Level: LvAlert,
+		Title:    fmt.Sprintf("%s(%s)10 分钟内删除了 %d 个文件", who, actorKindLabel[a.Kind], sum.Files),
+		Body:     fmt.Sprintf("共 %s,都还在回收站里。点开看是哪些,可以一键撤回;不是你的操作就去吊销这个凭据。", humanBytes(sum.Bytes)),
+		Target:   &Target{Kind: TgActivity, ID: a.Kind + ":" + a.Ref, ParentID: since.UTC().Format(time.RFC3339)},
+		GroupKey: "mass_delete:" + a.Kind + ":" + a.Ref, Once: time.Hour,
+	})
+	_ = tx.Commit(ctx)
 }
 
 // ---- 内部 ----

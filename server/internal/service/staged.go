@@ -102,6 +102,9 @@ func (s *Uploads) commitStagedOnce(ctx context.Context, f StagedFile) (*store.No
 	if err := attachChatMessage(ctx, q, f.Owner, f.Parent, n.ID); err != nil {
 		return nil, err
 	}
+	if err := recordActs(ctx, q, f.Owner, fileAct(OpUpload, n, f.Size)); err != nil {
+		return nil, err
+	}
 	// 派生物触发与节点同一个事务落库,重启也丢不了
 	if err := q.EnqueueTask(ctx, store.EnqueueTaskParams{ID: uuid.Must(uuid.NewV7()), Kind: "verify_hash", BlobID: blob.ID}); err != nil {
 		return nil, err
@@ -134,6 +137,20 @@ func (s *Uploads) CreateFolderIn(ctx context.Context, owner uuid.UUID, parent *u
 		return n, nil
 	}
 	return nil, errf("NAME_CONFLICT", "目标位置同名文件夹变动太频繁,稍后重试")
+}
+
+// EnsurePath 从根开始逐层找到或建出 segs 这条路径,返回最后一层(segs 为空 = 根目录)。
+func (s *Uploads) EnsurePath(ctx context.Context, owner uuid.UUID, segs []string) (*uuid.UUID, error) {
+	var parent *uuid.UUID
+	for _, seg := range segs {
+		n, err := s.EnsureFolderIn(ctx, owner, parent, seg)
+		if err != nil {
+			return nil, err
+		}
+		id := n.ID
+		parent = &id
+	}
+	return parent, nil
 }
 
 // EnsureFolderIn 找到或建出 parent 下名为 name 的子文件夹(解压时还原包里的目录结构);

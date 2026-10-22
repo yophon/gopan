@@ -70,7 +70,7 @@ func withBasicAuth(next http.Handler, ap *service.AppPasswords, trustedProxies [
 			return
 		}
 		ip := httpx.ClientIPFrom(r, trustedProxies)
-		owner, err := ap.Authenticate(r.Context(), user, pass, ip)
+		owner, actor, err := ap.AuthenticateActor(r.Context(), user, pass, ip)
 		if err != nil {
 			status := http.StatusUnauthorized
 			if errors.Is(err, service.ErrRateLimited) {
@@ -88,6 +88,7 @@ func withBasicAuth(next http.Handler, ap *service.AppPasswords, trustedProxies [
 		_ = rc.SetWriteDeadline(time.Time{})
 		ctx := context.WithValue(r.Context(), keyOwner, owner)
 		ctx = service.WithChatSource(ctx, service.ChatSourceWebDAV)
+		ctx = service.WithBatch(service.WithActor(ctx, actor)) // 一次 WebDAV 请求(MOVE = 移动 + 改名)算一批
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -214,14 +215,12 @@ func (b *Backend) Mkdir(ctx context.Context, name string, _ os.FileMode) error {
 		return err
 	}
 	// WebDAV 语义要求精确名:冲突就是 405,不做 Web 端的自动改名
-	_, err = b.q.CreateNode(ctx, store.CreateNodeParams{
-		ID: uuid.Must(uuid.NewV7()), OwnerID: owner, ParentID: parent,
-		Name: leaf, Kind: "folder",
-	})
-	if isUnique(err) {
+	_, err = b.nodes.CreateFolderExact(ctx, owner, parent, leaf)
+	var se *service.Error
+	if errors.As(err, &se) && se.Code == "NAME_CONFLICT" {
 		return os.ErrExist
 	}
-	return err
+	return mapServiceErr(err)
 }
 
 func (b *Backend) RemoveAll(ctx context.Context, name string) error {
