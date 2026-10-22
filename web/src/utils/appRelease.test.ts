@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { detectVisitor, fetchAndroidRelease, releaseDate } from './appRelease'
+import { dayLabel, detectVisitor, fetchAndroidRelease } from './appRelease'
 
 const UA = {
   androidChrome:
@@ -58,10 +58,19 @@ describe('fetchAndroidRelease', () => {
   })
 })
 
-describe('releaseDate', () => {
+describe('dayLabel', () => {
+  const now = new Date(2026, 9, 22, 12)
+  it('更新日志的日期按字面取,今年的不写年份', () => {
+    expect(dayLabel('2026-10-22', now)).toBe('10月22日')
+    expect(dayLabel('2026-07-02', now)).toBe('7月2日')
+    expect(dayLabel('2025-12-31', now)).toBe('2025年12月31日')
+  })
+  it('RFC3339 换成本地日期', () => {
+    expect(dayLabel('2026-10-22T05:00:00+08:00', now)).toMatch(/^10月2[12]日$/)
+  })
   it('无效与空给空串', () => {
-    expect(releaseDate('')).toBe('')
-    expect(releaseDate('nope')).toBe('')
-    expect(releaseDate('2026-10-22T05:00:00+08:00')).toMatch(/^2026-10-2[12]$/)
+    expect(dayLabel('', now)).toBe('')
+    expect(dayLabel(null, now)).toBe('')
+    expect(dayLabel('nope', now)).toBe('')
   })
 })

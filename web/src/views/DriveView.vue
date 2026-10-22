@@ -971,8 +971,26 @@ function onContextExtract(to: boolean) {
 </template>
 
 <style scoped>
+/* 面包屑当页面标题用:当前目录黑色加粗,上级灰色 */
 .breadcrumb {
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+  font-size: 20px;
+  line-height: 1.4;
+}
+.breadcrumb :deep(.el-breadcrumb__inner) {
+  color: var(--gp-ink-3);
+  font-weight: 700;
+}
+.breadcrumb :deep(.el-breadcrumb__inner.is-link:hover) {
+  color: var(--gp-ink);
+}
+.breadcrumb :deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) {
+  color: var(--gp-ink);
+}
+.breadcrumb :deep(.el-breadcrumb__separator) {
+  margin: 0 8px;
+  color: var(--el-border-color-darker);
+  font-weight: 400;
 }
 .toolbar {
   display: flex;
@@ -1063,6 +1081,10 @@ function onContextExtract(to: boolean) {
 
 /* 手机:工具栏可换行,多选时给底部操作栏留出空间 */
 @media (max-width: 767px) {
+  .breadcrumb {
+    margin-bottom: 14px;
+    font-size: 17px;
+  }
   .toolbar.mobile {
     flex-wrap: wrap;
     gap: 8px;

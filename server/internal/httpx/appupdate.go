@@ -154,10 +154,10 @@ func AppLanding(dist fs.FS, releaseDir string) http.Handler {
 			return
 		}
 		title := "gopan 云盘 · 安卓 App 与网页版"
-		desc := "放在自己服务器上的网盘,网页版打开即用。"
+		desc := "网页版打开即用。"
 		if releaseDir != "" {
 			if rel, err := readAndroidRelease(releaseDir); err == nil {
-				desc = fmt.Sprintf("放在自己服务器上的网盘。安卓 App %s(%.1f MB),网页版打开即用。",
+				desc = fmt.Sprintf("安卓 App %s(%.1f MB),网页版打开即用。",
 					rel.VersionName, float64(rel.Size)/(1<<20))
 			}
 		}

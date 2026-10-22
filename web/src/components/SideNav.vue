@@ -22,6 +22,7 @@ import {
   VideoPlay,
 } from '@element-plus/icons-vue'
 
+import BrandLogo from '@/components/BrandLogo.vue'
 import { request } from '@/api/client'
 import { MeDocument } from '@/api/gen/graphql'
 import { useAuthStore } from '@/stores/auth'
@@ -83,7 +84,7 @@ const quotaStatus = computed(() => {
 <template>
   <div class="side-nav">
     <div class="brand">
-      <span>gopan 云盘</span>
+      <BrandLogo />
       <el-badge :value="unread" :max="99" :hidden="unread === 0" class="bell-badge">
         <el-button
           link
@@ -193,9 +194,8 @@ const quotaStatus = computed(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 20px 16px 12px;
-  font-size: 18px;
-  font-weight: 600;
+  padding: 22px 18px 16px 20px;
+  font-size: 19px;
 }
 .bell-btn {
   font-size: 18px;
@@ -211,69 +211,103 @@ const quotaStatus = computed(() => {
   display: flex;
   align-items: center;
   gap: 5px;
-  margin: 0 8px;
-  padding: 10px 12px;
+  height: 38px;
+  margin: 1px 10px;
+  padding: 0 12px;
   border: none;
-  border-radius: 6px;
+  border-radius: 10px;
   background: transparent;
-  color: var(--el-text-color-regular);
+  color: var(--gp-ink-2);
+  font: inherit;
   font-size: 14px;
   text-align: left;
   text-decoration: none;
   cursor: pointer;
 }
 .nav-extra:hover {
-  background: var(--el-fill-color-light);
+  background: var(--gp-panel);
+  color: var(--gp-ink);
 }
 .nav-extra .el-icon {
   margin-right: 5px;
   font-size: 18px;
 }
 .search-input {
-  padding: 0 12px 8px;
+  padding: 0 12px 10px;
 }
+.search-input :deep(.el-input__wrapper) {
+  border-radius: 999px;
+  background: var(--gp-panel);
+  box-shadow: none;
+}
+.search-input :deep(.el-input__wrapper.is-focus) {
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--gp-ink) inset;
+}
+/* 菜单项做成圆角块:选中是暖灰底加粗,不再是蓝字 */
 .menu {
+  --el-menu-bg-color: transparent;
+  --el-menu-item-height: 38px;
+  --el-menu-base-level-padding: 12px;
+  --el-menu-text-color: var(--gp-ink-2);
+  --el-menu-active-color: var(--gp-ink);
+  --el-menu-hover-text-color: var(--gp-ink);
+  --el-menu-hover-bg-color: var(--gp-panel);
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   border-right: none;
 }
+.menu :deep(.el-menu-item) {
+  margin: 1px 10px;
+  border-radius: 10px;
+}
+.menu :deep(.el-menu-item.is-active) {
+  background: var(--gp-panel-2);
+  font-weight: 600;
+}
 .quota-area {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 4px 8px 0;
-  padding: 8px 8px 6px;
-  border-radius: 6px;
+  margin: 6px 10px 0;
+  padding: 10px 10px 8px;
+  border-radius: 10px;
   color: inherit;
   text-decoration: none;
 }
 .quota-area:hover,
 .quota-area.active {
-  background: var(--el-fill-color-light);
+  background: var(--gp-panel);
 }
 .quota-text {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--el-text-color-secondary);
 }
 .quota-more {
-  color: var(--el-color-primary);
+  color: var(--gp-ink);
+  font-weight: 600;
 }
 .user-area {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 16px 12px;
+  margin-top: 8px;
+  padding: 12px 16px 14px 22px;
+  border-top: 1px solid var(--el-border-color-lighter);
 }
 .username {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--el-text-color-regular);
+  color: var(--gp-ink);
+  font-size: 14px;
+  font-weight: 600;
 }
 .user-actions {
   display: flex;

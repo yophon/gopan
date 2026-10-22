@@ -405,7 +405,7 @@ const dead = computed(
 
     <footer class="visitor-footer">
       <el-icon><Link /></el-icon>
-      由 gopan 自部署云盘提供分享服务
+      由 gopan 云盘提供分享服务
     </footer>
 
     <PreviewModal v-if="guestToken" :guest-token="guestToken" />

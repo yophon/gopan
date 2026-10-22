@@ -1,14 +1,14 @@
 {
   "name": "gopan 云盘",
   "short_name": "gopan",
-  "description": "自部署云盘:分片直传、秒传、断点续传、在线预览、分享与 WebDAV。",
+  "description": "分片直传、秒传、断点续传、在线预览、分享与 WebDAV。",
   "lang": "zh-CN",
   "start_url": "/drive",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#ffffff",
-  "theme_color": "#409eff",
+  "theme_color": "#ffffff",
   "share_target": {
     "action": "/chat/share",
     "method": "POST",

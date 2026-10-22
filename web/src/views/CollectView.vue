@@ -413,7 +413,7 @@ const deadlineText = computed(() =>
 
     <footer class="collect-footer">
       <el-icon><Link /></el-icon>
-      由 gopan 自部署云盘提供收集服务
+      由 gopan 云盘提供收集服务
     </footer>
   </div>
 </template>

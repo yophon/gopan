@@ -49,11 +49,20 @@ export function detectVisitor(ua: string, maxTouchPoints = 0): Visitor {
   return { android, ios, inAppBrowser, harmonyNext, desktop: !mobile }
 }
 
-/** RFC3339 → 本地日期 YYYY-MM-DD;空或无效返回空串 */
-export function releaseDate(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+/**
+ * 「10月22日」式的日期,不是今年的带上年份。接受 YYYY-MM-DD(更新日志里的写法,按字面取,
+ * 不经时区换算)或 RFC3339(安装包发布时间,换成本地日期);空或无效返回空串。
+ */
+export function dayLabel(s: string | null | undefined, now: Date = new Date()): string {
+  if (!s) return ''
+  let y: number, m: number, d: number
+  const plain = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
+  if (plain) {
+    ;[y, m, d] = [Number(plain[1]), Number(plain[2]), Number(plain[3])]
+  } else {
+    const t = new Date(s)
+    if (Number.isNaN(t.getTime())) return ''
+    ;[y, m, d] = [t.getFullYear(), t.getMonth() + 1, t.getDate()]
+  }
+  return y === now.getFullYear() ? `${m}月${d}日` : `${y}年${m}月${d}日`
 }

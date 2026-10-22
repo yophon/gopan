@@ -16,6 +16,7 @@ import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import AppPasswordsDialog from '@/components/AppPasswordsDialog.vue'
 import MCPAccessDialog from '@/components/MCPAccessDialog.vue'
 import SideNav from '@/components/SideNav.vue'
+import BrandLogo from '@/components/BrandLogo.vue'
 import NotificationDrawer from '@/components/notify/NotificationDrawer.vue'
 import RecentPlaysDialog from '@/components/RecentPlaysDialog.vue'
 import MiniPlayer from '@/components/player/MiniPlayer.vue'
@@ -105,7 +106,7 @@ async function onLogout() {
           aria-label="打开导航"
           @click="navOpen = true"
         />
-        <span class="topbar-title">gopan 云盘</span>
+        <span class="topbar-title"><BrandLogo /></span>
         <el-badge :value="unread" :max="99" :hidden="unread === 0" class="topbar-badge">
           <el-button
             text
@@ -157,6 +158,7 @@ async function onLogout() {
 }
 .aside {
   border-right: 1px solid var(--el-border-color-light);
+  background: var(--el-fill-color-extra-light);
 }
 .body {
   min-width: 0;
@@ -177,8 +179,8 @@ async function onLogout() {
 }
 .topbar-title {
   flex: 1;
-  font-size: 16px;
-  font-weight: 600;
+  padding-left: 4px;
+  font-size: 18px;
 }
 .topbar-badge :deep(.el-badge__content.is-fixed) {
   /* 默认向右平移整个角标宽度,两位数时会顶出屏幕右边:收在按钮里面 */

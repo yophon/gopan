@@ -1,0 +1,202 @@
+/*
+ * gopan 的视觉:白底、墨黑、暖灰,一点信号橙。网页端与发布页 /app 共用这一份。
+ *
+ * --gp-* 是自己的设计变量,页面里直接用;下面再把 Element Plus 的变量整体换掉,
+ * 组件里照旧写 var(--el-color-primary) 之类即可。主色是墨黑:实心按钮、选中、进度、
+ * 焦点框都跟着变黑。信号橙不进 Element,只用在大数字、角标、小圆点这类点缀上
+ * (对白底 3.5:1,不拿来写正文)。
+ *
+ * 必须在 element-plus/dist/index.css 之后引入:组件级变量(.el-dialog 等)同权重,靠先后覆盖。
+ */
+
+:root {
+  --gp-ink: #121212;
+  --gp-ink-2: #55534e;
+  --gp-ink-3: #6f6c66;
+  --gp-panel: #f3f2ee;
+  --gp-panel-2: #e9e7e1;
+  --gp-line: #e6e4de;
+  --gp-accent: #f2541b;
+  --gp-font: Inter, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', sans-serif;
+  --gp-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  --el-font-family: var(--gp-font);
+
+  /* 主色与状态色;light-N 按暖白 #fbfaf7 混出来,灰都偏暖 */
+  --el-color-primary: #121212;
+  --el-color-primary-light-3: #585857;
+  --el-color-primary-light-5: #878685;
+  --el-color-primary-light-7: #b5b4b2;
+  --el-color-primary-light-8: #dcdad4;
+  --el-color-primary-light-9: #efeee9;
+  --el-color-primary-dark-2: #000000;
+  --el-color-success: #1d8a4e;
+  --el-color-success-light-3: #60ac81;
+  --el-color-success-light-5: #8cc2a3;
+  --el-color-success-light-7: #b8d8c4;
+  --el-color-success-light-8: #cfe4d5;
+  --el-color-success-light-9: #e5efe6;
+  --el-color-success-dark-2: #176e3e;
+  --el-color-warning: #b86e0c;
+  --el-color-warning-light-3: #cc9853;
+  --el-color-warning-light-5: #dab482;
+  --el-color-warning-light-7: #e7d0b0;
+  --el-color-warning-light-8: #eedec8;
+  --el-color-warning-light-9: #f4ece0;
+  --el-color-warning-dark-2: #93580a;
+  --el-color-danger: #d92d3a;
+  --el-color-danger-light-3: #e36b73;
+  --el-color-danger-light-5: #ea9499;
+  --el-color-danger-light-7: #f1bdbe;
+  --el-color-danger-light-8: #f4d1d1;
+  --el-color-danger-light-9: #f8e6e4;
+  --el-color-danger-dark-2: #ae242e;
+  --el-color-error: #d92d3a;
+  --el-color-error-light-3: #e36b73;
+  --el-color-error-light-5: #ea9499;
+  --el-color-error-light-7: #f1bdbe;
+  --el-color-error-light-8: #f4d1d1;
+  --el-color-error-light-9: #f8e6e4;
+  --el-color-error-dark-2: #ae242e;
+  --el-color-info: #6f6c66;
+  --el-color-info-light-3: #999792;
+  --el-color-info-light-5: #b5b3af;
+  --el-color-info-light-7: #d1cfcb;
+  --el-color-info-light-8: #dfdeda;
+  --el-color-info-light-9: #edece9;
+  --el-color-info-dark-2: #595652;
+
+  /* 文字、边框、填充、底色:从 Element 的冷灰换成暖灰 */
+  --el-text-color-primary: #121212;
+  --el-text-color-regular: #3f3d39;
+  --el-text-color-secondary: #6f6c66;
+  --el-text-color-placeholder: #9a968e;
+  --el-text-color-disabled: #bdb9b0;
+  --el-border-color: #dedbd3;
+  --el-border-color-light: #e6e4de;
+  --el-border-color-lighter: #ecebe6;
+  --el-border-color-extra-light: #f3f2ee;
+  --el-border-color-dark: #d6d3ca;
+  --el-border-color-darker: #cfcbc1;
+  --el-fill-color: #efeee9;
+  --el-fill-color-light: #f3f2ee;
+  --el-fill-color-lighter: #f8f7f4;
+  --el-fill-color-extra-light: #fbfaf8;
+  --el-fill-color-dark: #e9e7e1;
+  --el-fill-color-darker: #e3e1da;
+  --el-fill-color-blank: #ffffff;
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #f7f6f3;
+  --el-bg-color-overlay: #ffffff;
+  --el-mask-color: rgba(255, 255, 255, 0.86);
+  --el-overlay-color-lighter: rgba(18, 18, 18, 0.36);
+
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 6px;
+  --el-border-radius-round: 999px;
+
+  --el-box-shadow: 0 12px 32px -8px rgba(18, 18, 18, 0.16), 0 2px 6px rgba(18, 18, 18, 0.05);
+  --el-box-shadow-light: 0 8px 24px -8px rgba(18, 18, 18, 0.16), 0 1px 3px rgba(18, 18, 18, 0.05);
+  --el-box-shadow-lighter: 0 2px 10px -2px rgba(18, 18, 18, 0.1);
+  --el-box-shadow-dark: 0 16px 40px -10px rgba(18, 18, 18, 0.28);
+}
+
+body {
+  font-family: var(--gp-font);
+  color: var(--el-text-color-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--gp-accent);
+  color: #fff;
+}
+
+/* ---------- Element 组件的细调 ---------- */
+
+/* 墨黑主按钮:默认的悬停色是 light-3,对黑色来说太浅,只稍微提亮 */
+.el-button--primary {
+  --el-button-hover-bg-color: #2e2d2b;
+  --el-button-hover-border-color: #2e2d2b;
+  --el-button-active-bg-color: #000;
+  --el-button-active-border-color: #000;
+}
+.el-button {
+  --el-button-font-weight: 600;
+}
+
+.el-dialog {
+  --el-dialog-border-radius: 16px;
+  --el-dialog-padding-primary: 20px;
+}
+.el-dialog__title {
+  font-weight: 700;
+}
+.el-message-box {
+  --el-messagebox-border-radius: 16px;
+  --el-messagebox-padding-primary: 20px;
+}
+.el-message-box__title {
+  font-weight: 700;
+}
+.el-card {
+  --el-card-border-radius: 14px;
+}
+.el-popper {
+  --el-popper-border-radius: 10px;
+}
+.el-tag {
+  --el-tag-border-radius: 6px;
+}
+.el-message {
+  border-radius: 10px;
+}
+
+/* 通知角标用信号橙,和危险操作的红色分开(角标默认就是 danger 类型) */
+.el-badge {
+  --el-badge-bg-color: var(--gp-accent);
+}
+.el-badge__content--danger {
+  background-color: var(--gp-accent);
+}
+
+/* 表头不要再一层灰:字小一点、颜色淡一点就够了 */
+.el-table {
+  --el-table-header-text-color: var(--gp-ink-3);
+}
+.el-table th.el-table__cell {
+  font-weight: 600;
+}
+
+/* ---------- 文件夹记号:页签 + 面板(发布页、登录页) ---------- */
+
+.gp-folder {
+  --gp-r: 32px;
+  --gp-tr: 20px;
+  position: relative;
+  border-radius: 0 var(--gp-r) var(--gp-r) var(--gp-r);
+  background: var(--gp-folder-bg, var(--gp-panel));
+}
+.gp-folder-tab {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: var(--gp-tr) var(--gp-tr) 0 0;
+  background: var(--gp-folder-bg, var(--gp-panel));
+  white-space: nowrap;
+}
+/* 页签右下角的内凹圆角 */
+.gp-folder-tab::after {
+  content: '';
+  position: absolute;
+  left: 100%;
+  bottom: 0;
+  width: var(--gp-tr);
+  height: var(--gp-tr);
+  background: radial-gradient(circle at 100% 0, transparent calc(var(--gp-tr) - 0.5px), var(--gp-folder-bg, var(--gp-panel)) var(--gp-tr));
+}

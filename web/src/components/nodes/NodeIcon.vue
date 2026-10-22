@@ -35,6 +35,11 @@ const boxStyle = computed(() => ({ width: `${props.size}px`, height: `${props.si
     loading="lazy"
     @error="thumbFailed = true"
   />
+  <!-- 文件夹:实心的暖灰文件夹,与发布页的文件夹记号一致 -->
+  <svg v-else-if="node.kind === 'FOLDER'" class="node-folder" viewBox="0 0 34 29" :style="boxStyle" aria-hidden="true">
+    <path d="M1 4a3 3 0 0 1 3-3h7.2a2 2 0 0 1 1.5.7L15.4 4H30a3 3 0 0 1 3 3v18a3 3 0 0 1-3 3H4a3 3 0 0 1-3-3z" fill="#e3dfd5" />
+    <path d="M1 9.5h32V25a3 3 0 0 1-3 3H4a3 3 0 0 1-3-3z" fill="#cfc9bc" />
+  </svg>
   <el-icon v-else class="node-icon" :style="boxStyle">
     <component :is="fileIcon(node)" />
   </el-icon>
@@ -43,12 +48,17 @@ const boxStyle = computed(() => ({ width: `${props.size}px`, height: `${props.si
 <style scoped>
 .node-thumb {
   flex: none;
-  border-radius: 4px;
+  border-radius: 6px;
   object-fit: cover;
   background: var(--el-fill-color-light);
 }
 .node-icon {
   flex: none;
-  color: var(--el-color-primary);
+  color: var(--gp-ink-2);
+}
+.node-folder {
+  flex: none;
+  padding: 1px;
+  box-sizing: border-box;
 }
 </style>

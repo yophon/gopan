@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 
+import BrandLogo from '@/components/BrandLogo.vue'
 import { useAuthStore } from '@/stores/auth'
 import { errorText } from '@/api/errors'
 
@@ -95,119 +96,163 @@ async function submitRegister() {
 
 <template>
   <div class="login-page">
-    <el-card class="login-card">
-      <h1 class="title">gopan 云盘</h1>
-      <p v-if="!idReady">正在连接账号服务…</p>
-      <template v-else-if="idIssuer && !legacy">
-        <p>使用 Yophon ID 打开你的文件。</p>
-        <el-button type="primary" class="submit-btn" @click="identityLogin">使用 Yophon ID 登录</el-button>
-        <el-button link class="submit-btn" @click="legacy=true">其他账号使用密码登录</el-button>
-      </template>
-      <el-tabs v-else v-model="activeTab" stretch>
-        <el-tab-pane label="登录" name="login">
-          <el-form
-            ref="loginFormRef"
-            :model="loginForm"
-            :rules="loginRules"
-            label-position="top"
-            @submit.prevent="submitLogin"
-          >
-            <el-form-item label="用户名" prop="username">
-              <el-input v-model="loginForm.username" autocomplete="username" />
-            </el-form-item>
-            <el-form-item label="密码" prop="password">
-              <el-input
-                v-model="loginForm.password"
-                type="password"
-                show-password
-                autocomplete="current-password"
-                @keyup.enter="submitLogin"
-              />
-            </el-form-item>
-            <el-button
-              type="primary"
-              class="submit-btn"
-              :loading="submitting"
-              native-type="submit"
-            >
-              登录
-            </el-button>
-          </el-form>
-        </el-tab-pane>
+    <div class="login-box">
+      <section class="gp-folder login-folder">
+        <span class="gp-folder-tab"><BrandLogo /></span>
+        <div class="login-body">
+          <h1 class="title">登录</h1>
+          <p v-if="!idReady" class="muted">正在连接账号服务…</p>
+          <template v-else-if="idIssuer && !legacy">
+            <el-button type="primary" class="submit-btn" @click="identityLogin">使用 Yophon ID 登录</el-button>
+            <el-button link class="legacy-btn" @click="legacy=true">其他账号使用密码登录</el-button>
+          </template>
+          <el-tabs v-else v-model="activeTab" stretch>
+            <el-tab-pane label="登录" name="login">
+              <el-form
+                ref="loginFormRef"
+                :model="loginForm"
+                :rules="loginRules"
+                label-position="top"
+                @submit.prevent="submitLogin"
+              >
+                <el-form-item label="用户名" prop="username">
+                  <el-input v-model="loginForm.username" autocomplete="username" />
+                </el-form-item>
+                <el-form-item label="密码" prop="password">
+                  <el-input
+                    v-model="loginForm.password"
+                    type="password"
+                    show-password
+                    autocomplete="current-password"
+                    @keyup.enter="submitLogin"
+                  />
+                </el-form-item>
+                <el-button
+                  type="primary"
+                  class="submit-btn"
+                  :loading="submitting"
+                  native-type="submit"
+                >
+                  登录
+                </el-button>
+              </el-form>
+            </el-tab-pane>
 
-        <el-tab-pane label="注册" name="register">
-          <el-form
-            ref="registerFormRef"
-            :model="registerForm"
-            :rules="registerRules"
-            label-position="top"
-            @submit.prevent="submitRegister"
-          >
-            <el-form-item label="用户名" prop="username">
-              <el-input v-model="registerForm.username" autocomplete="username" />
-            </el-form-item>
-            <el-form-item label="密码" prop="password">
-              <el-input
-                v-model="registerForm.password"
-                type="password"
-                show-password
-                autocomplete="new-password"
-              />
-            </el-form-item>
-            <el-form-item label="确认密码" prop="confirm">
-              <el-input
-                v-model="registerForm.confirm"
-                type="password"
-                show-password
-                autocomplete="new-password"
-                @keyup.enter="submitRegister"
-              />
-            </el-form-item>
-            <el-button
-              type="primary"
-              class="submit-btn"
-              :loading="submitting"
-              native-type="submit"
-            >
-              注册
-            </el-button>
-          </el-form>
-        </el-tab-pane>
-      </el-tabs>
-    </el-card>
-    <router-link to="/app" class="app-link">安卓 App · 功能介绍 · 更新日志</router-link>
+            <el-tab-pane label="注册" name="register">
+              <el-form
+                ref="registerFormRef"
+                :model="registerForm"
+                :rules="registerRules"
+                label-position="top"
+                @submit.prevent="submitRegister"
+              >
+                <el-form-item label="用户名" prop="username">
+                  <el-input v-model="registerForm.username" autocomplete="username" />
+                </el-form-item>
+                <el-form-item label="密码" prop="password">
+                  <el-input
+                    v-model="registerForm.password"
+                    type="password"
+                    show-password
+                    autocomplete="new-password"
+                  />
+                </el-form-item>
+                <el-form-item label="确认密码" prop="confirm">
+                  <el-input
+                    v-model="registerForm.confirm"
+                    type="password"
+                    show-password
+                    autocomplete="new-password"
+                    @keyup.enter="submitRegister"
+                  />
+                </el-form-item>
+                <el-button
+                  type="primary"
+                  class="submit-btn"
+                  :loading="submitting"
+                  native-type="submit"
+                >
+                  注册
+                </el-button>
+              </el-form>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+      </section>
+      <router-link to="/app" class="app-link">安卓 App 与更新日志</router-link>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .login-page {
-  height: 100%;
+  min-height: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 16px;
   align-items: center;
   justify-content: center;
-  background-color: var(--el-fill-color-light);
+  padding: calc(72px + var(--sat)) 16px calc(32px + var(--sab));
+  box-sizing: border-box;
+  background: var(--el-bg-color);
 }
-.login-card {
-  width: min(380px, 92vw);
+.login-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  width: min(400px, 100%);
+}
+.login-folder {
+  --gp-r: 28px;
+  --gp-tr: 18px;
+  width: 100%;
+}
+.login-folder .gp-folder-tab {
+  height: 42px;
+  padding: 0 20px;
+  color: var(--gp-ink);
+  font-size: 16px;
+}
+.login-body {
+  padding: 36px 32px 32px;
 }
 .title {
-  margin: 0 0 16px;
-  text-align: center;
-  font-size: 22px;
-  font-weight: 600;
+  margin: 0 0 28px;
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+}
+.muted {
+  margin: 0;
+  color: var(--gp-ink-3);
 }
 .submit-btn {
   width: 100%;
-  margin-top: 8px;
+  height: 48px;
+  margin: 8px 0 0;
+  border-radius: 999px;
+  font-size: 15px;
+}
+.legacy-btn {
+  width: 100%;
+  margin: 16px 0 0 !important;
+  color: var(--gp-ink-2);
 }
 .app-link {
-  color: var(--el-text-color-secondary);
+  color: var(--gp-ink-3);
   font-size: 13px;
   text-decoration: none;
 }
 .app-link:hover {
-  color: var(--el-color-primary);
+  color: var(--gp-ink);
+}
+
+@media (max-width: 767px) {
+  .login-body {
+    padding: 28px 22px 24px;
+  }
+  .title {
+    font-size: 34px;
+  }
 }
 </style>
