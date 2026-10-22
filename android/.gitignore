@@ -8,7 +8,7 @@ build/
 captures/
 .cxx/
 
-# 本机配置与签名(签名密码见 D:/user/yophon/releases/gopan/README.md)
+# 本机配置与签名(签名密码记在仓库外发布目录的 README 里)
 local.properties
 keystore.properties
 *.jks

@@ -84,7 +84,7 @@ cd android
 ## 发布流程(维护者)
 
 1. 改版本:`android/app/build.gradle.kts` 的 `versionCode`(只增不减,3.0.0 是 30100)与 `versionName`;在仓库根目录 `CHANGELOG.md` 最上面写这一版(用的人看得懂的话,格式见文件开头)。网页与 App 同号发布,发布页 `/app` 与 App 里的「更新日志」都显示它;GitHub Release 的说明从这一段复制,再补上部署注意事项与安装包信息。
-2. 出包:`android/keystore.properties` 指向仓库外的发布密钥(`D:/user/yophon/releases/gopan/gopan-release.jks`),然后不带任何 `-P` 覆盖:
+2. 出包:`android/keystore.properties` 指向仓库外发布目录里的发布密钥(`gopan-release.jks`),然后不带任何 `-P` 覆盖:
 
    ```bash
    cd android && ./gradlew --no-daemon :app:assembleRelease     # app/build/outputs/apk/release/app-release.apk
