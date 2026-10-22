@@ -237,12 +237,13 @@ class ClipReaderViewModel @Inject constructor(
         }
     }
 
-    /** 删除:那篇 .md 移进回收站(图片文件夹不动,回收站里一起还原也方便) */
+    /** 删除:那篇 .md 和它的图片文件夹一起移进回收站 */
     fun delete() {
         if (_state.value.busy) return
         _state.update { it.copy(busy = true) }
+        val ids = listOfNotNull(nodeId, _state.value.clip?.assetsId)
         viewModelScope.launch {
-            gopanResult { nodes.delete(listOf(nodeId)) }
+            gopanResult { nodes.delete(ids) }
                 .onSuccess {
                     _state.update { it.copy(busy = false) }
                     _effects.trySend(ClipReaderEffect.Message(UiText.Res(R.string.clips_msg_deleted)))

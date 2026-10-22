@@ -37,6 +37,8 @@ data class Clip(
     val nodeId: String? = null,
     val nodeName: String? = null,
     val parentId: String? = null,
+    /** 旁边存图片的「标题.assets」文件夹;删剪藏时一起删 */
+    val assetsId: String? = null,
     val words: Int = 0,
     val images: Int = 0,
     val readAt: String? = null,
@@ -113,6 +115,7 @@ internal fun ClipFields.toDomain() = Clip(
     nodeId = node?.id,
     nodeName = node?.name,
     parentId = node?.parentId,
+    assetsId = assets?.id,
     words = words,
     images = images,
     readAt = readAt,
