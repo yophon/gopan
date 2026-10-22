@@ -50,6 +50,9 @@ sealed interface PreviewContent {
 
     data class Pdf(val file: File) : PreviewContent
 
+    /** Markdown:渲染好的页面(WebView 打开 /md/{id},doc/23 五.2);可切回文本 */
+    data object Markdown : PreviewContent
+
     /** [loadingMore] 正在拉下一段;[moreError] 上次「继续加载」失败的原因 */
     data class Text(val content: TextContent, val loadingMore: Boolean = false, val moreError: String? = null) : PreviewContent
 
@@ -71,6 +74,15 @@ data class PreviewPageState(val info: PreviewInfo? = null, val content: PreviewC
     /** 正在看的是大图派生,还有原图可看 */
     val canShowOriginal: Boolean
         get() = (content as? PreviewContent.Image)?.original == false && info?.contentUrl != null
+
+    /** Markdown:顶栏的「看源文件 / 渲染显示」切换;null = 不是能渲染的 .md(或还在加载) */
+    val markdownRendered: Boolean?
+        get() = when {
+            info?.markdown != true -> null
+            content is PreviewContent.Markdown -> true
+            content is PreviewContent.Text -> false
+            else -> null
+        }
 }
 
 /**
@@ -91,6 +103,9 @@ class PreviewPage(
     private val attached = MutableStateFlow(false)
     private var job: Job? = null
     private var officeRequested = false
+
+    /** Markdown 切到源文件时读出来的文本(切回来再切过去不重新读) */
+    private var markdownSource: PreviewContent.Text? = null
 
     /** 第一次取用时开始加载 */
     fun start() {
@@ -139,6 +154,30 @@ class PreviewPage(
         }
     }
 
+    /** Markdown:切到源文件(第一次才读文本;地址过期时换一次地址再试) */
+    fun showMarkdownSource() {
+        if (_state.value.content != PreviewContent.Markdown) return
+        markdownSource?.let { return set(it) }
+        job?.cancel()
+        set(PreviewContent.Loading)
+        job = scope.launch {
+            var result = _state.value.info?.contentUrl?.let { url -> gopanResult { repo.fetchText(url) } }
+            if (result == null || result.isFailure) {
+                result = freshContentUrl()?.let { url -> gopanResult { repo.fetchText(url) } } ?: result
+            }
+            result?.onSuccess { set(PreviewContent.Text(it)) }?.onFailure { set(PreviewContent.Error(it.message ?: "文本加载失败")) }
+                ?: set(PreviewContent.Error("文本加载失败"))
+        }
+    }
+
+    /** Markdown:从源文件切回渲染 */
+    fun showMarkdownRendered() {
+        val text = _state.value.content as? PreviewContent.Text ?: return
+        if (_state.value.info?.markdown != true) return
+        markdownSource = text
+        set(PreviewContent.Markdown)
+    }
+
     /** 图片:换成原图(网页端的「查看原图」) */
     fun showOriginal() {
         val info = _state.value.info ?: return
@@ -159,6 +198,7 @@ class PreviewPage(
 
     private fun load() {
         job?.cancel()
+        markdownSource = null
         set(PreviewContent.Loading)
         job = scope.launch {
             val info = gopanResult { repo.preview(nodeId) }.getOrElse {
@@ -187,7 +227,9 @@ class PreviewPage(
                 val url = info.contentUrl ?: return set(PreviewContent.Unsupported)
                 downloadPdf(url, info.contentKey)
             }
+            // 能渲染的 .md 默认渲染着看,文本等切到源文件时再读
             PreviewKind.TEXT -> {
+                if (info.markdown) return set(PreviewContent.Markdown)
                 val url = info.contentUrl ?: return set(PreviewContent.Unsupported)
                 gopanResult { repo.fetchText(url) }.fold(
                     onSuccess = { set(PreviewContent.Text(it)) },

@@ -24,6 +24,8 @@ import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.ContentCut
+import androidx.compose.material.icons.outlined.RssFeed
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.GridView
@@ -123,6 +125,8 @@ fun AccountScreen(
     onOpenNotifications: () -> Unit = {},
     onOpenActivity: () -> Unit = {},
     onOpenSpace: () -> Unit = {},
+    onOpenFeeds: () -> Unit = {},
+    onOpenClips: () -> Unit = {},
     viewModel: AccountViewModel = hiltViewModel(),
     updates: UpdateViewModel = hiltViewModel(),
     crashes: CrashLogViewModel = hiltViewModel(),
@@ -178,6 +182,8 @@ fun AccountScreen(
         ),
         onOpenActivity = onOpenActivity,
         onOpenSpace = onOpenSpace,
+        onOpenFeeds = onOpenFeeds,
+        onOpenClips = onOpenClips,
     )
     update.phase?.let { UpdateDialog(it, updates) }
 }
@@ -211,6 +217,8 @@ internal fun AccountContent(
     notifications: NotificationsEntry? = null,
     onOpenActivity: () -> Unit = {},
     onOpenSpace: () -> Unit = {},
+    onOpenFeeds: () -> Unit = {},
+    onOpenClips: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showThemeDialog by rememberSaveable { mutableStateOf(false) }
@@ -278,6 +286,8 @@ internal fun AccountContent(
                     notifications = notifications,
                     onOpenActivity = onOpenActivity,
                     onOpenSpace = onOpenSpace,
+                    onOpenFeeds = onOpenFeeds,
+                    onOpenClips = onOpenClips,
                 )
             }
         }
@@ -359,6 +369,8 @@ private fun AccountList(
     notifications: NotificationsEntry? = null,
     onOpenActivity: () -> Unit = {},
     onOpenSpace: () -> Unit = {},
+    onOpenFeeds: () -> Unit = {},
+    onOpenClips: () -> Unit = {},
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item("header") { AccountHeader(user = user, usage = usage, onClick = onOpenSpace) }
@@ -405,6 +417,27 @@ private fun AccountList(
                 title = stringResource(R.string.account_item_transfer_settings),
                 supporting = stringResource(R.string.account_item_transfer_settings_hint),
                 onClick = onOpenTransferSettings,
+            )
+        }
+
+        // 订阅与剪藏(doc/23 四、五)
+        item("content") { SectionTitle(stringResource(R.string.feeds_section)) }
+        item("feeds") {
+            SettingItem(
+                icon = Icons.Outlined.RssFeed,
+                title = stringResource(R.string.feeds_title),
+                supporting = stringResource(R.string.feeds_entry_hint),
+                onClick = onOpenFeeds,
+                modifier = Modifier.testTag("account_feeds"),
+            )
+        }
+        item("clips") {
+            SettingItem(
+                icon = Icons.Outlined.ContentCut,
+                title = stringResource(R.string.clips_title),
+                supporting = stringResource(R.string.clips_entry_hint),
+                onClick = onOpenClips,
+                modifier = Modifier.testTag("account_clips"),
             )
         }
 
@@ -598,6 +631,7 @@ private fun SettingItem(
     icon: ImageVector,
     title: String,
     onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
     supporting: String? = null,
     value: String? = null,
 ) {
@@ -615,7 +649,7 @@ private fun SettingItem(
                 }
             }
         },
-        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
+        modifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier,
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
 }

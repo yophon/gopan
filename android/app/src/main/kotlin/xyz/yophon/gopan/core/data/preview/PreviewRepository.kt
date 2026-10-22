@@ -59,6 +59,8 @@ data class PreviewInfo(
     val subtitles: List<SubtitleTrack> = emptyList(),
     /** 播放进度(音视频、PDF);没记过为 null */
     val progress: PlayProgress? = null,
+    /** .md 且不超过 2 MB:能渲染着看(GET /md/{id},doc/23 五.2);kind 仍是 TEXT */
+    val markdown: Boolean = false,
 ) {
     /** 内容寻址的缓存 key:同内容的文件(不同名字、不同目录)共用 */
     val contentKey: String get() = sha256 ?: "$nodeId@${updatedAt.orEmpty()}"
@@ -116,6 +118,7 @@ class DefaultPreviewRepository @Inject constructor(
                 SubtitleTrack(it.nodeId, it.name, it.label, it.lang, it.default, subtitleUrl(config.baseUrl, it.nodeId))
             },
             progress = n.playProgress?.playProgressFields?.toDomain(),
+            markdown = p.markdown,
         )
     }
 

@@ -63,6 +63,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import xyz.yophon.gopan.feature.notifications.NotificationsEntryViewModel
 import xyz.yophon.gopan.feature.notifications.NotificationsLogic
 import xyz.yophon.gopan.feature.media.MiniPlayerBar
+import xyz.yophon.gopan.feature.clips.ClipOpenViewModel
 
 /** 底部 tab 定义;顺序即显示顺序 */
 private class MainTab(
@@ -132,6 +133,15 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
             }
             null -> Unit
         }
+    }
+
+    // 系统分享「剪藏到 gopan」后点了「打开」:进阅读页(doc/23 五.3)
+    val clipOpen: ClipOpenViewModel = hiltViewModel()
+    val clipNode by clipOpen.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(clipNode) {
+        val nodeId = clipNode ?: return@LaunchedEffect
+        navController.navigate(Routes.ClipReader(nodeId = nodeId)) { launchSingleTop = true }
+        clipOpen.consume(nodeId)
     }
 
     Row(Modifier.fillMaxSize()) {

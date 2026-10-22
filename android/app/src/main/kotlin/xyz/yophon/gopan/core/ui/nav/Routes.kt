@@ -120,4 +120,26 @@ object Routes {
 
     @Serializable
     data object Licenses
+
+    // ---- 订阅与剪藏(doc/23 四、五):「我的」里进 ----
+    @Serializable
+    data object Feeds
+
+    /** 贴地址添加订阅 */
+    @Serializable
+    data object FeedAdd
+
+    /** 一个订阅的条目;[title] 只是数据回来前的顶栏 */
+    @Serializable
+    data class FeedDetail(val feedId: String, val title: String = "")
+
+    @Serializable
+    data object Clips
+
+    /**
+     * 剪藏的阅读页:渲染那篇 .md([nodeId]);[clipId] 为空时按节点查是哪篇剪藏(系统分享剪藏后点「打开」)。
+     * [title] 只是数据回来前的顶栏
+     */
+    @Serializable
+    data class ClipReader(val nodeId: String, val clipId: String? = null, val title: String = "")
 }

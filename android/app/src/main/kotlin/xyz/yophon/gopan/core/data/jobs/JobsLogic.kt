@@ -1,6 +1,8 @@
 package xyz.yophon.gopan.core.data.jobs
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
+import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.network.toGopanException
 import xyz.yophon.gopan.core.ui.format.formatBytes
@@ -41,6 +43,11 @@ fun jobPercent(job: BackgroundJob): Int? {
     if (job.kind == JobKind.EXTRACT_ARCHIVE && filesTotal != null && filesTotal > 0) {
         return minOf(100, (job.filesDone.toLong() * 100 / filesTotal).toInt())
     }
+    // 剪藏:网页一次读完(字节数没有意义),只有存图片时有进度(下不了的图片也算走过了)
+    if (job.kind == JobKind.CLIP_URL) {
+        if (filesTotal == null || filesTotal <= 0) return null
+        return minOf(100, ((job.filesDone + job.filesSkipped).toLong() * 100 / filesTotal).toInt())
+    }
     val bytesTotal = job.bytesTotal
     if (bytesTotal != null && bytesTotal > 0) return minOf(100L, job.bytesDone * 100 / bytesTotal).toInt()
     return null
@@ -52,6 +59,8 @@ fun jobStatusText(job: BackgroundJob, speedBps: Long? = null): String = when (jo
     JobStatus.RUNNING -> if (job.kind == JobKind.EXTRACT_ARCHIVE) {
         val total = job.filesTotal?.takeIf { it > 0 }?.let { " / $it" }.orEmpty()
         "解压中 ${job.filesDone}$total 个文件"
+    } else if (job.kind == JobKind.CLIP_URL) {
+        job.filesTotal?.takeIf { it > 0 }?.let { "正在存图片 ${job.filesDone + job.filesSkipped} / $it" } ?: "正在提取正文"
     } else {
         val total = job.bytesTotal?.takeIf { it > 0 }?.let { " / ${formatBytes(it)}" }.orEmpty()
         val speed = speedBps?.takeIf { it > 0 }?.let { " · ${formatBytes(it)}/s" }.orEmpty()
@@ -63,10 +72,24 @@ fun jobStatusText(job: BackgroundJob, speedBps: Long? = null): String = when (jo
             val skipped = if (job.filesSkipped > 0) ",跳过 ${job.filesSkipped} 个" else ""
             "已解压 ${job.filesDone} 个文件$skipped"
         }
+        // 没认出正文时(CLIP_FALLBACK)服务端在 errorMessage 里说明存的是整页文字
+        job.kind == JobKind.CLIP_URL -> {
+            val note = job.errorMessage?.takeIf { it.isNotEmpty() }?.let { " · $it" }
+                ?: if (job.filesDone > 0) " · ${job.filesDone} 张图片" else ""
+            "已剪藏$note"
+        }
         else -> "已完成 · ${formatBytes(job.bytesDone)}"
     }
     JobStatus.FAILED -> job.errorMessage?.takeIf { it.isNotEmpty() } ?: "失败"
     JobStatus.CANCELED -> "已取消"
+}
+
+/** 列表上的类型标签:离线下载 / 解压 / 剪藏 */
+@StringRes
+fun jobKindLabel(kind: JobKind): Int = when (kind) {
+    JobKind.FETCH_URL -> R.string.jobs_kind_fetch
+    JobKind.EXTRACT_ARCHIVE -> R.string.jobs_kind_extract
+    JobKind.CLIP_URL -> R.string.jobs_kind_clip
 }
 
 /** 「打开所在位置」去哪个文件夹;[folderId] 为 null 是根目录 */

@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.NodeKind
 import xyz.yophon.gopan.core.data.jobs.JobKind
+import xyz.yophon.gopan.core.data.jobs.jobKindLabel
 import xyz.yophon.gopan.core.data.jobs.JobStatus
 import xyz.yophon.gopan.core.data.jobs.isActive
 import xyz.yophon.gopan.core.data.jobs.isRetryable
@@ -55,7 +56,7 @@ import xyz.yophon.gopan.feature.drive.fileCategory
 import xyz.yophon.gopan.feature.drive.icon
 import xyz.yophon.gopan.feature.drive.tint
 
-/** 「后台任务」栏:离线下载与解压(服务端执行,关掉 App 也继续) */
+/** 「后台任务」栏:离线下载、解压与剪藏(服务端执行,关掉 App 也继续) */
 @Composable
 internal fun JobsTab(state: JobsUiState, viewModel: JobsViewModel) {
     when {
@@ -83,6 +84,8 @@ private fun JobItem(row: JobRow, viewModel: JobsViewModel) {
     val category = when (job.kind) {
         JobKind.EXTRACT_ARCHIVE -> FileCategory.ARCHIVE
         JobKind.FETCH_URL -> fileCategory(NodeKind.FILE, job.title, null)
+        // 剪藏的产物是一篇 .md
+        JobKind.CLIP_URL -> FileCategory.TEXT
     }
     val statusColor = when {
         job.status == JobStatus.FAILED -> MaterialTheme.colorScheme.error
@@ -102,7 +105,7 @@ private fun JobItem(row: JobRow, viewModel: JobsViewModel) {
             Spacer(Modifier.size(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    KindTag(stringResource(if (job.kind == JobKind.EXTRACT_ARCHIVE) R.string.jobs_kind_extract else R.string.jobs_kind_fetch))
+                    KindTag(stringResource(jobKindLabel(job.kind)))
                     Spacer(Modifier.size(6.dp))
                     Text(
                         job.title,

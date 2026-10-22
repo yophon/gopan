@@ -6,4 +6,13 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
+
+    <!-- 剪藏分享卡片(ClipShareActivity):窗口透明,遮罩与卡片由 Compose 画,下面露出分享来源的应用。
+         父主题随深浅取 values / values-night 里的 Theme.Gopan -->
+    <style name="Theme.Gopan.Sheet" parent="Theme.Gopan">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+    </style>
 </resources>

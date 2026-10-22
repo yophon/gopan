@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 订阅(doc/23 四):「我的 → 订阅」列表、添加、条目 -->
+<resources>
+    <string name="feeds_section">订阅与剪藏</string>
+    <string name="feeds_title">订阅</string>
+    <string name="feeds_entry_hint">RSS、播客、GitHub Releases,有新内容自动存进网盘</string>
+    <string name="feeds_add">添加订阅</string>
+    <string name="feeds_empty">还没有订阅</string>
+    <string name="feeds_empty_hint">贴一个 RSS / 播客地址,或 GitHub 仓库(owner/repo),有新内容自动下进网盘</string>
+    <string name="feeds_web_hint">过滤关键词、保留条数、检查间隔与 OPML 导入导出在网页上改</string>
+
+    <string name="feeds_kind_rss">RSS</string>
+    <string name="feeds_kind_podcast">播客</string>
+    <string name="feeds_kind_github">GitHub</string>
+
+    <string name="feeds_mode_download">下载附件</string>
+    <string name="feeds_mode_clip">剪藏正文</string>
+    <string name="feeds_mode_none">只记录</string>
+    <string name="feeds_mode_download_desc">播客的音频、视频,GitHub Release 里匹配的文件,自动下进网盘</string>
+    <string name="feeds_mode_clip_desc">文章正文存成 Markdown,图片一起存</string>
+    <string name="feeds_mode_none_desc">只列出来,想要哪条手动下</string>
+
+    <string name="feeds_state_new">新</string>
+    <string name="feeds_state_skipped">已跳过</string>
+    <string name="feeds_state_queued">处理中</string>
+    <string name="feeds_state_done">已完成</string>
+    <string name="feeds_state_failed">失败</string>
+
+    <string name="feeds_updated">最后更新 %1$s</string>
+    <string name="feeds_never_updated">还没有内容</string>
+    <string name="feeds_paused">已暂停</string>
+    <string name="feeds_new_count">%1$d 条新内容</string>
+    <string name="feeds_error">检查失败:%1$s</string>
+
+    <!-- 添加 -->
+    <string name="feeds_add_url">地址</string>
+    <string name="feeds_add_url_hint">RSS / Atom 地址,或 GitHub 仓库(owner/repo)</string>
+    <string name="feeds_add_preview">预览</string>
+    <string name="feeds_add_podcast">看起来是播客,建议「下载附件」</string>
+    <string name="feeds_add_mode">处理方式</string>
+    <string name="feeds_add_asset_pattern">只下这些文件</string>
+    <string name="feeds_add_asset_pattern_hint">文件名通配,如 *.apk、*linux-amd64*;留空 = 全部</string>
+    <string name="feeds_add_latest">最近的条目</string>
+    <string name="feeds_add_no_items">还没有条目</string>
+    <string name="feeds_add_defaults">存到「/订阅/%1$s」,每 6 小时检查一次;第一次只处理最新 1 条,更早的列在条目里,想要哪条手动下。</string>
+    <string name="feeds_add_submit">订阅</string>
+    <string name="feeds_add_url_changed">地址改了,先预览一次</string>
+
+    <!-- 详情 -->
+    <string name="feeds_detail_check">立即检查</string>
+    <string name="feeds_detail_pause">暂停</string>
+    <string name="feeds_detail_resume">恢复</string>
+    <string name="feeds_detail_open_folder">打开存放的文件夹</string>
+    <string name="feeds_detail_unsubscribe">退订</string>
+    <string name="feeds_unsubscribe_title">退订「%1$s」?</string>
+    <string name="feeds_unsubscribe_text">不再检查这个订阅;已经下好的文件不动。</string>
+    <string name="feeds_unsubscribe_confirm">退订</string>
+    <string name="feeds_detail_folder">存到「%1$s」</string>
+    <string name="feeds_detail_folder_missing">存放的文件夹不在了,订阅已暂停;在网页上换一个文件夹</string>
+    <string name="feeds_detail_checked">上次检查 %1$s</string>
+    <string name="feeds_detail_never_checked">还没检查过</string>
+    <string name="feeds_detail_items">条目</string>
+    <string name="feeds_detail_no_items">还没有条目</string>
+    <string name="feeds_item_download">下载</string>
+    <string name="feeds_item_clip">剪藏</string>
+    <string name="feeds_item_open">打开</string>
+
+    <string name="feeds_msg_checked">检查完了</string>
+    <string name="feeds_msg_paused">已暂停,不再自动检查</string>
+    <string name="feeds_msg_resumed">已恢复</string>
+    <string name="feeds_msg_unsubscribed">已退订</string>
+    <string name="feeds_msg_queued">已加入后台任务</string>
+</resources>

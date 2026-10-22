@@ -17,7 +17,8 @@ import xyz.yophon.gopan.graphql.type.JobKind as GqlJobKind
 import xyz.yophon.gopan.graphql.type.JobStatus as GqlJobStatus
 import xyz.yophon.gopan.graphql.type.NodeKind as GqlNodeKind
 
-enum class JobKind { FETCH_URL, EXTRACT_ARCHIVE }
+/** 离线下载 / 解压 / 剪藏(doc/23 五:抓网页存成 Markdown,产物是那篇 .md) */
+enum class JobKind { FETCH_URL, EXTRACT_ARCHIVE, CLIP_URL }
 
 enum class JobStatus { QUEUED, RUNNING, DONE, FAILED, CANCELED }
 
@@ -114,7 +115,11 @@ class ApolloJobsRepository @Inject constructor(private val apollo: ApolloClient)
 
 internal fun BackgroundJobFields.toDomain() = BackgroundJob(
     id = id,
-    kind = if (kind == GqlJobKind.EXTRACT_ARCHIVE) JobKind.EXTRACT_ARCHIVE else JobKind.FETCH_URL,
+    kind = when (kind) {
+        GqlJobKind.EXTRACT_ARCHIVE -> JobKind.EXTRACT_ARCHIVE
+        GqlJobKind.CLIP_URL -> JobKind.CLIP_URL
+        else -> JobKind.FETCH_URL
+    },
     status = when (status) {
         GqlJobStatus.QUEUED -> JobStatus.QUEUED
         GqlJobStatus.RUNNING -> JobStatus.RUNNING

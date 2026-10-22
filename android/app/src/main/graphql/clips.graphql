@@ -1,0 +1,68 @@
+# 剪藏(doc/23 五):网页正文存成 Markdown。阅读用 GET /md/{node.id}?token=<access>(WebView,关掉 JavaScript)。
+# 按站点筛选、剪藏文件夹的设置(clipSites / clipPrefs)在网页上,App 不取。
+
+fragment ClipFields on Clip {
+  id
+  url
+  title
+  site
+  byline
+  excerpt
+  publishedAt
+  node {
+    id
+    name
+    parentId
+  }
+  words
+  images
+  readAt
+  createdAt
+}
+
+query Clips($unreadOnly: Boolean, $cursor: String) {
+  clips(unreadOnly: $unreadOnly, cursor: $cursor) {
+    items {
+      ...ClipFields
+    }
+    nextCursor
+  }
+}
+
+query Clip($id: ID!) {
+  clip(id: $id) {
+    ...ClipFields
+  }
+}
+
+# 某篇 .md 是不是剪藏(预览里显示来源条);不是为 null
+query NodeClip($nodeId: ID!) {
+  nodeClip(nodeId: $nodeId) {
+    ...ClipFields
+  }
+}
+
+# 剪过且没要求重新剪:existing 是已有的那篇;否则 job 是新建的剪藏任务
+mutation ClipUrl($url: String!, $force: Boolean) {
+  clipUrl(url: $url, force: $force) {
+    job {
+      ...BackgroundJobFields
+    }
+    existing {
+      ...ClipFields
+    }
+  }
+}
+
+mutation MarkClipRead($id: ID!, $read: Boolean) {
+  markClipRead(id: $id, read: $read) {
+    ...ClipFields
+  }
+}
+
+# 剪藏分享页轮询任务进度(片段与「后台任务」栏同一个)
+query ClipJob($id: ID!) {
+  job(id: $id) {
+    ...BackgroundJobFields
+  }
+}

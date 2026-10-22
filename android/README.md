@@ -110,6 +110,9 @@ app/src/main/kotlin/xyz/yophon/gopan/
   core/data/activity/            动态与撤回(doc/23 二):ActivityRepository(列表与筛选、来源、撤回预览、撤回)、ActivityModule
   core/data/space/               空间分析(doc/23 三):SpaceRepository(总览、文件夹逐层、大文件、很久没动、重复文件、空文件夹、
                                  没人用的分享 / 直链 / 收集链接及吊销)、SpaceModule;清理走 NodesRepository.delete / purgeTrash
+  core/data/feeds/               订阅(doc/23 四):FeedsRepository(列表、预览、新建、暂停 / 恢复(带上全部现有设置)、退订、立即检查、单条下载 / 剪藏)
+  core/data/clips/               剪藏(doc/23 五):ClipsRepository(列表、按节点查剪藏、clipUrl、标已读、剪藏任务轮询)
+  core/data/markdown/            MarkdownUrls:/md/{节点} 渲染页地址(token 现取,快过期先刷新)、MarkdownLinks(WebView 里点链接留在里面 / 交给浏览器 / 拦下)
   core/documents/                系统「文件」App 里的 gopan,见下文「DocumentsProvider」:GopanDocumentsProvider、DocumentCache(按需下载的读缓存)、
                                  PendingDocuments(别的应用写进来的新文件 → 上传队列)、DocumentsModule(登出时清理、登录态变化时刷新根目录)
   core/app/                      UpdateRepository(站点发布的安装包:检查、下载、校验)、CrashLog(未捕获异常写本地日志)
@@ -160,6 +163,11 @@ app/src/main/kotlin/xyz/yophon/gopan/
   feature/preview/               全屏预览(PreviewScreen:翻页器、顶栏、沉浸)与平板侧栏(PreviewPane);PreviewViewModel(会话列表、最近 6 页)、
                                  PreviewPage(单页加载与 Office 轮询)、PreviewPages(各类型的页面)、PdfDocument(PdfRenderer 串行封装)、
                                  PlaybackService(音频后台播放的 Media3 会话服务:队列、按需解析地址、进度上报)、MediaControllers
+  feature/feeds/                 「我的 → 订阅」:列表、添加(贴地址 → 预览 → 选方式)、详情(条目分页、处理中时轮询、立即检查、暂停、退订);
+                                 FeedsLogic(标签、能做的操作、轮询合并)、FeedsGraph(订阅与剪藏的导航,挂在「我的」图里)
+  feature/clips/                 「我的 → 剪藏」列表与阅读页(停留 3 秒自动已读)、MarkdownView(WebView:关 JavaScript、不碰本地文件)、
+                                 ClipShareActivity(系统分享「剪藏到 gopan」,manifest 里的 activity-alias .ClipShareTarget 指过来)、
+                                 预览里 Markdown 页的 MarkdownPageViewModel(剪藏来源条)
   feature/media/                 影音的纯逻辑(MediaLogic:续播、进度文案、队列、下一集、跟随翻页)、最近播放(RecentPlaysScreen / ViewModel,
                                  文件页菜单进)、迷你播放条(MiniPlayer,MainScaffold 底部导航上面)
 app/src/test/kotlin/             JVM 单测;testutil/ 里有假 gopan 服务端(FakeGopanServer:Login/Refresh/Me/Logout/ChangePassword 与票据入口)

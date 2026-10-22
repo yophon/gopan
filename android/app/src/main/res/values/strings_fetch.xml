@@ -26,5 +26,6 @@
     <string name="jobs_empty_desc">离线下载和解压在服务器上进行,关掉 App 也不影响</string>
     <string name="jobs_kind_fetch">离线下载</string>
     <string name="jobs_kind_extract">解压</string>
+    <string name="jobs_kind_clip">剪藏</string>
     <string name="jobs_action_locate">打开所在位置</string>
 </resources>

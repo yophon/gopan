@@ -54,6 +54,8 @@ query NodePreview($id: ID!) {
       contentUrl
       status
       durationSec
+      # .md 且不超过 2 MB:默认渲染着看(GET /md/{id}),可切回文本(doc/23 五.2)
+      markdown
       subtitles {
         nodeId
         name

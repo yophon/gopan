@@ -18,10 +18,12 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -242,6 +244,10 @@ private fun PreviewBody(onBack: () -> Unit, viewModel: PreviewViewModel, session
                 title = info?.name ?: currentItem.name,
                 subtitle = listOf(position, size).filter { it.isNotEmpty() }.joinToString(" · "),
                 canShowOriginal = currentState.canShowOriginal,
+                markdownRendered = currentState.markdownRendered,
+                onToggleMarkdown = {
+                    if (currentState.markdownRendered == true) currentPage.showMarkdownSource() else currentPage.showMarkdownRendered()
+                },
                 closeIcon = pane,
                 onBack = onBack,
                 onDownload = viewModel::download,
@@ -308,6 +314,7 @@ private fun PreviewPageHost(
             onPageSettled = { p, count -> viewModel.reportPdf(item.nodeId, p, count) },
         )
         is PreviewContent.Text -> TextPage(c, onLoadMore = page::loadMoreText)
+        PreviewContent.Markdown -> MarkdownPreviewPage(item.nodeId)
         PreviewContent.OfficeConverting -> OfficeConvertingPage()
         PreviewContent.OfficeUnavailable -> MessagePanel(
             Icons.Outlined.Description,
@@ -347,6 +354,9 @@ private fun PreviewTopBar(
     title: String,
     subtitle: String,
     canShowOriginal: Boolean,
+    /** Markdown 的「看源文件 / 渲染显示」:true 正在看渲染的,false 正在看源文件,null 不显示 */
+    markdownRendered: Boolean?,
+    onToggleMarkdown: () -> Unit,
     closeIcon: Boolean,
     onBack: () -> Unit,
     onDownload: () -> Unit,
@@ -390,6 +400,15 @@ private fun PreviewTopBar(
                         maxLines = 1,
                         modifier = Modifier.testTag("preview_subtitle"),
                     )
+                }
+            }
+            if (markdownRendered != null) {
+                IconButton(onClick = onToggleMarkdown, modifier = Modifier.testTag("preview_markdown_toggle")) {
+                    if (markdownRendered) {
+                        Icon(Icons.Outlined.Code, contentDescription = stringResource(R.string.md_show_source), tint = OnPreview)
+                    } else {
+                        Icon(Icons.AutoMirrored.Outlined.Article, contentDescription = stringResource(R.string.md_show_rendered), tint = OnPreview)
+                    }
                 }
             }
             IconButton(onClick = onDownload, modifier = Modifier.testTag("preview_download")) {

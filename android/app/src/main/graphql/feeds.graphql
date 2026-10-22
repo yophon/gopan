@@ -1,0 +1,119 @@
+# 订阅(doc/23 四):RSS / Atom / 播客 / GitHub Releases。App 里只有列表、添加、条目、立即检查、暂停、退订;
+# 编辑过滤与保留条数、OPML 导入导出在网页上(这里不取 exportOpml / importOpml)。
+
+fragment FeedFields on Feed {
+  id
+  kind
+  url
+  title
+  siteUrl
+  folder {
+    id
+    name
+  }
+  mode
+  includeWords
+  excludeWords
+  assetPattern
+  prerelease
+  keepLast
+  intervalMinutes
+  enabled
+  lastCheckedAt
+  lastOkAt
+  lastError
+  failCount
+  nextCheckAt
+  createdAt
+  itemCount
+  newCount
+  latestAt
+}
+
+fragment FeedItemFields on FeedItem {
+  id
+  title
+  url
+  enclosureUrl
+  enclosureType
+  enclosureSize
+  publishedAt
+  state
+  error
+  node {
+    id
+    name
+    kind
+    parentId
+  }
+  jobId
+  createdAt
+}
+
+query Feeds {
+  feeds {
+    ...FeedFields
+  }
+}
+
+query Feed($id: ID!) {
+  feed(id: $id) {
+    ...FeedFields
+  }
+}
+
+query FeedItems($feedId: ID!, $cursor: String) {
+  feedItems(feedId: $feedId, cursor: $cursor) {
+    items {
+      ...FeedItemFields
+    }
+    nextCursor
+  }
+}
+
+query PreviewFeed($url: String!, $assetPattern: String) {
+  previewFeed(url: $url, assetPattern: $assetPattern) {
+    kind
+    url
+    title
+    siteUrl
+    podcast
+    suggestedMode
+    items {
+      title
+      url
+      enclosureUrl
+      enclosureSize
+      publishedAt
+    }
+  }
+}
+
+mutation CreateFeed($input: FeedInput!) {
+  createFeed(input: $input) {
+    ...FeedFields
+  }
+}
+
+# 修改时没给的字段按零值处理(不是「不变」):调用方要把订阅现有的值全部带上
+mutation UpdateFeed($id: ID!, $input: FeedInput!) {
+  updateFeed(id: $id, input: $input) {
+    ...FeedFields
+  }
+}
+
+mutation DeleteFeed($id: ID!) {
+  deleteFeed(id: $id)
+}
+
+mutation RefreshFeed($id: ID!) {
+  refreshFeed(id: $id) {
+    ...FeedFields
+  }
+}
+
+mutation FetchFeedItem($itemId: ID!, $mode: FeedMode!) {
+  fetchFeedItem(itemId: $itemId, mode: $mode) {
+    ...FeedItemFields
+  }
+}

@@ -108,7 +108,7 @@ class ApolloMediaRepositoryTest {
         handlers["NodePreview"] = {
             """{"data":{"node":{"__typename":"Node","id":"v","parentId":"p","name":"电影.mkv","kind":"FILE","size":10,"mime":"video/x-matroska",""" +
                 """"sha256":"abc","updatedAt":"2026-10-14T00:00:00Z","preview":{"__typename":"PreviewInfo","kind":"VIDEO","thumbUrl":null,""" +
-                """"largeUrl":"https://s3/poster","contentUrl":"https://s3/v","status":null,"durationSec":6120,"subtitles":[""" +
+                """"largeUrl":"https://s3/poster","contentUrl":"https://s3/v","status":null,"durationSec":6120,"markdown":false,"subtitles":[""" +
                 """{"__typename":"SubtitleTrack","nodeId":"s1","name":"电影.zh.srt","label":"简体中文","lang":"zh-Hans","default":true},""" +
                 """{"__typename":"SubtitleTrack","nodeId":"s2","name":"电影.en.srt","label":"English","lang":"en","default":false}]},""" +
                 """"playProgress":${progressJson(1395.0, 6120.0)}}}}"""

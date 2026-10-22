@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 剪藏与 Markdown(doc/23 五):「我的 → 剪藏」、阅读页、系统分享「剪藏到 gopan」、预览里的 Markdown -->
+<resources>
+    <string name="clips_title">剪藏</string>
+    <string name="clips_entry_hint">网页正文存成 Markdown;在浏览器里分享网址就能存</string>
+    <string name="clips_filter_all">全部</string>
+    <string name="clips_filter_unread">未读</string>
+    <string name="clips_empty">还没有剪藏</string>
+    <string name="clips_empty_unread">没有未读的剪藏</string>
+    <string name="clips_empty_hint">在浏览器里点「分享」,选「剪藏到 gopan」:网页正文连同图片存成 Markdown</string>
+    <string name="clips_unread">未读</string>
+
+    <!-- 阅读页 -->
+    <string name="clips_mark_read">标记已读</string>
+    <string name="clips_mark_unread">标记未读</string>
+    <string name="clips_open_original">打开原网页</string>
+    <string name="clips_delete">删除</string>
+    <string name="clips_delete_title">删除这篇剪藏?</string>
+    <string name="clips_delete_text">「%1$s」移进回收站,30 天内可以还原。</string>
+    <string name="clips_msg_read">已标记为已读</string>
+    <string name="clips_msg_unread">已标记为未读</string>
+    <string name="clips_msg_deleted">已移进回收站</string>
+    <string name="clips_msg_no_app">没有能打开这个链接的应用</string>
+
+    <!-- 系统分享 -->
+    <string name="clip_share_label">剪藏到 gopan</string>
+    <string name="clip_share_no_url">分享的内容里没有网址</string>
+    <string name="clip_share_no_url_hint">从浏览器分享网页时选「剪藏到 gopan」;要存文字或文件请用「发到传输助手」</string>
+    <string name="clip_share_need_login">还没登录 gopan</string>
+    <string name="clip_share_need_login_hint">登录后再分享一次</string>
+    <string name="clip_share_open_app">打开 gopan</string>
+    <string name="clip_share_submitting">正在提交…</string>
+    <string name="clip_share_existing">已经剪过</string>
+    <string name="clip_share_existing_hint">%1$s剪过这篇;要按现在的网页重新存一份吗?</string>
+    <string name="clip_share_reclip">重新剪藏</string>
+    <string name="clip_share_running">正在剪藏…</string>
+    <string name="clip_share_background_hint">关掉也会在服务器上剪完,存进「剪藏」文件夹</string>
+    <string name="clip_share_slow">还没剪完,可以先关掉;剪好后在「我的 → 剪藏」里看</string>
+    <string name="clip_share_done">已剪藏</string>
+    <string name="clip_share_failed">剪藏失败</string>
+    <string name="clip_share_open">打开</string>
+    <string name="clip_share_finish">完成</string>
+    <string name="clip_share_close">关闭</string>
+
+    <!-- 预览里的 Markdown -->
+    <string name="md_show_source">看源文件</string>
+    <string name="md_show_rendered">渲染显示</string>
+    <string name="md_load_failed">页面没加载出来</string>
+    <string name="md_clip_from">剪藏自 %1$s</string>
+    <string name="md_read">已读</string>
+</resources>

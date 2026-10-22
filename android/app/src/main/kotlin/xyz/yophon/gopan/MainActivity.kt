@@ -19,11 +19,12 @@ import xyz.yophon.gopan.core.share.IncomingShareStore
 import xyz.yophon.gopan.core.share.NavRequest
 import xyz.yophon.gopan.core.transfer.AppVisibility
 import xyz.yophon.gopan.core.ui.theme.GopanTheme
+import xyz.yophon.gopan.feature.clips.ClipOpenRequests
 import javax.inject.Inject
 
 /**
  * 唯一的 Activity:主题 + 按登录态切换的根导航。
- * 还负责接住外部入口:系统分享(SEND / SEND_MULTIPLE → 传输助手)与通知点按(→ 传输列表)。
+ * 还负责接住外部入口:系统分享(SEND / SEND_MULTIPLE → 传输助手)、通知点按(→ 传输列表)与剪藏分享页的「打开」。
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -33,6 +34,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var navRequests: AppNavRequests
+
+    @Inject
+    lateinit var clipOpens: ClipOpenRequests
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -91,6 +95,8 @@ class MainActivity : ComponentActivity() {
         when (intent.getStringExtra(EXTRA_OPEN)) {
             OPEN_TRANSFERS -> navRequests.post(NavRequest.OPEN_TRANSFERS)
             OPEN_NOTIFICATIONS -> navRequests.post(NavRequest.OPEN_NOTIFICATIONS)
+            // 系统分享「剪藏到 gopan」剪好后点「打开」:进那篇的阅读页
+            OPEN_CLIP -> intent.getStringExtra(EXTRA_NODE_ID)?.let(clipOpens::post)
         }
     }
 
@@ -99,6 +105,10 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_OPEN = "xyz.yophon.gopan.OPEN"
         const val OPEN_TRANSFERS = "transfers"
         const val OPEN_NOTIFICATIONS = "notifications"
+        const val OPEN_CLIP = "clip"
+
+        /** OPEN_CLIP 带的那篇剪藏(.md 的节点 id) */
+        const val EXTRA_NODE_ID = "xyz.yophon.gopan.NODE_ID"
 
         // 与 androidx.activity 默认值一致
         private val LIGHT_SCRIM = Color.argb(0xe6, 0xFF, 0xFF, 0xFF)

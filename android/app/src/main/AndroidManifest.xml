@@ -59,6 +59,30 @@
             </intent-filter>
         </activity>
 
+        <!-- 系统分享菜单的「剪藏到 gopan」(doc/23 五.3):压在浏览器上的半透明卡片,剪完回浏览器。
+             本身不接 Intent,由下面的 activity-alias 带着自己的名字和图标出现在分享菜单里(只接 text/plain,
+             没有网址时卡片里说明);上面「发到传输助手」的入口不变。taskAffinity 为空:分享方带 NEW_TASK 启动时
+             也不会把 gopan 已开着的任务拉到前面,关掉卡片直接回到浏览器 -->
+        <activity
+            android:name=".feature.clips.ClipShareActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Gopan.Sheet"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode" />
+        <activity-alias
+            android:name=".ClipShareTarget"
+            android:exported="true"
+            android:icon="@mipmap/ic_clip_share"
+            android:label="@string/clip_share_label"
+            android:targetActivity=".feature.clips.ClipShareActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- 拍照落点与「用其他应用打开」交给其它应用时用的 content:// -->
         <provider
             android:name="androidx.core.content.FileProvider"
