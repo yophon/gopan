@@ -20,7 +20,10 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.auth.SessionStore
+import xyz.yophon.gopan.core.data.CachedPage
 import xyz.yophon.gopan.core.data.NodesRepository
+import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.notifications.AppNotification
 import xyz.yophon.gopan.core.data.notifications.NotificationsRepository
 import xyz.yophon.gopan.core.data.notifications.UnreadNotifications
@@ -72,6 +75,7 @@ class NotificationsViewModel @Inject constructor(
     private val sessionStore: SessionStore,
     private val sharesTab: SharesTabRequest,
     private val transfersTab: TransfersTabRequest,
+    private val cache: ScreenCache,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NotificationsUiState())
@@ -85,7 +89,14 @@ class NotificationsViewModel @Inject constructor(
     private var loadedOnce = false
 
     init {
-        load(silent = false)
+        // 上次看到的那一页先画出来,再静默刷新
+        val cached = cache[cacheKey(unreadOnly = false)]
+        if (cached != null) _state.update { it.copy(status = ListStatus.Content, items = cached.items, nextCursor = cached.nextCursor) }
+        // 缓存跟着列表走(标已读、清空也算);「全部」「只看未读」各存一份
+        cache.mirrorKeyed(viewModelScope, _state) { s ->
+            if (s.status == ListStatus.Content) cacheKey(s.unreadOnly) to CachedPage(s.items, s.nextCursor) else null
+        }
+        load(silent = cached != null)
     }
 
     fun refresh() {
@@ -102,8 +113,17 @@ class NotificationsViewModel @Inject constructor(
 
     fun setUnreadOnly(value: Boolean) {
         if (_state.value.unreadOnly == value) return
-        _state.update { it.copy(unreadOnly = value, items = emptyList(), nextCursor = null) }
-        load(silent = false)
+        // 换筛选与换数据一次写进状态:中间不能出现"新筛选 + 空列表 + Content",否则会被当成空页写进缓存
+        val cached = cache[cacheKey(value)]
+        _state.update {
+            it.copy(
+                unreadOnly = value,
+                items = cached?.items.orEmpty(),
+                nextCursor = cached?.nextCursor,
+                status = if (cached != null) ListStatus.Content else ListStatus.Loading,
+            )
+        }
+        load(silent = cached != null)
     }
 
     /** 换成第一页;进行中的翻页作废 */
@@ -207,6 +227,8 @@ class NotificationsViewModel @Inject constructor(
     private fun navigate(nav: NotificationNav) {
         _effects.trySend(NotificationsEffect.Navigate(nav))
     }
+
+    private fun cacheKey(unreadOnly: Boolean) = ScreenKey<CachedPage<AppNotification>>("notifications?unread=$unreadOnly")
 
     fun markAllRead() {
         if (_state.value.busy) return

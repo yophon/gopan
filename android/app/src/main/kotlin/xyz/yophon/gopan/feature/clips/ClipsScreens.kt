@@ -68,7 +68,7 @@ import xyz.yophon.gopan.core.data.clips.Clip
 import xyz.yophon.gopan.core.ui.components.ConfirmDialog
 import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.components.ErrorState
-import xyz.yophon.gopan.core.ui.components.LoadingState
+import xyz.yophon.gopan.core.ui.components.ListSkeleton
 import xyz.yophon.gopan.core.ui.format.formatRelativeTime
 import xyz.yophon.gopan.core.ui.rememberSystemActions
 import xyz.yophon.gopan.feature.drive.FullPage
@@ -121,7 +121,7 @@ fun ClipsScreen(onBack: () -> Unit, onOpen: (Clip) -> Unit, viewModel: ClipsView
             }
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = viewModel::refresh, modifier = Modifier.fillMaxSize()) {
                 when (val status = state.status) {
-                    ListStatus.Loading -> LoadingState()
+                    ListStatus.Loading -> ListSkeleton()
                     is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
                     ListStatus.Content -> if (state.items.isEmpty()) {
                         FullPage {

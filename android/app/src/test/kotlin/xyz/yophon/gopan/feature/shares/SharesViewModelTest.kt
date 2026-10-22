@@ -2,6 +2,7 @@ package xyz.yophon.gopan.feature.shares
 
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -9,6 +10,9 @@ import org.junit.Rule
 import org.junit.Test
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.AppConfig
+import xyz.yophon.gopan.core.auth.SessionStore
+import xyz.yophon.gopan.core.auth.UserSummary
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.shares.Share
 import xyz.yophon.gopan.core.data.shares.ShareVisit
 import xyz.yophon.gopan.core.data.shares.SharesRepository
@@ -26,7 +30,11 @@ class FakeSharesRepository : SharesRepository {
     val revoked = mutableListOf<String>()
     val created = mutableListOf<Triple<String, String?, Instant?>>()
 
+    /** 非空时 myShares 先等它:测"先显示缓存、联网还在路上" */
+    var listGate: CompletableDeferred<Unit>? = null
+
     override suspend fun myShares(): List<Share> {
+        listGate?.await()
         failList?.let { throw it }
         return shares.toList()
     }
@@ -61,7 +69,7 @@ class SharesViewModelTest {
     @Test
     fun `lists shares newest first and builds the visitor link`() = runTest {
         repo.shares = mutableListOf(share("a", createdAt = "2026-10-01T00:00:00Z"), share("b", createdAt = "2026-10-12T00:00:00Z"))
-        val vm = SharesViewModel(repo, testConfig)
+        val vm = SharesViewModel(repo, testConfig, ScreenCache(SessionStore()))
         advanceUntilIdle()
         val s = vm.state.value
         assertThat(s.status).isEqualTo(ListStatus.Content)
@@ -72,7 +80,7 @@ class SharesViewModelTest {
     @Test
     fun `revoking removes the share, and one already gone counts as revoked`() = runTest {
         repo.shares = mutableListOf(share("a"), share("b"))
-        val vm = SharesViewModel(repo, testConfig)
+        val vm = SharesViewModel(repo, testConfig, ScreenCache(SessionStore()))
         advanceUntilIdle()
 
         vm.effects.test {
@@ -92,7 +100,7 @@ class SharesViewModelTest {
     fun `a failed revoke keeps the share and says why`() = runTest {
         repo.shares = mutableListOf(share("a"))
         repo.failRevoke = GopanException(GopanErrors.NETWORK, "网络连接失败")
-        val vm = SharesViewModel(repo, testConfig)
+        val vm = SharesViewModel(repo, testConfig, ScreenCache(SessionStore()))
         advanceUntilIdle()
         vm.effects.test {
             vm.revoke(vm.state.value.items.single())
@@ -105,7 +113,7 @@ class SharesViewModelTest {
     @Test
     fun `a failed refresh keeps the list on screen`() = runTest {
         repo.shares = mutableListOf(share("a"))
-        val vm = SharesViewModel(repo, testConfig)
+        val vm = SharesViewModel(repo, testConfig, ScreenCache(SessionStore()))
         advanceUntilIdle()
         repo.failList = GopanException(GopanErrors.NETWORK, "网络连接失败")
         vm.effects.test {
@@ -118,9 +126,31 @@ class SharesViewModelTest {
     }
 
     @Test
+    fun `a second visit shows the last list at once, including local revokes, then refreshes`() = runTest {
+        val cache = ScreenCache(SessionStore().apply { setSignedIn("t", UserSummary("u1", "alice", 0, 0, false)) })
+        repo.shares = mutableListOf(share("a"), share("gone"))
+        val first = SharesViewModel(repo, testConfig, cache)
+        advanceUntilIdle()
+        first.revoke(first.state.value.items.first { it.id == "gone" })
+        advanceUntilIdle()
+
+        repo.shares = mutableListOf(share("a"), share("b", createdAt = "2026-10-15T00:00:00Z"))
+        val gate = CompletableDeferred<Unit>()
+        repo.listGate = gate
+        val vm = SharesViewModel(repo, testConfig, cache)
+        // 联网还没回来:上次的列表(去掉了刚取消的那个)已经在
+        assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("a")
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("b", "a").inOrder()
+    }
+
+    @Test
     fun `the first load failing shows an error page`() = runTest {
         repo.failList = GopanException(GopanErrors.NETWORK, "网络连接失败")
-        val vm = SharesViewModel(repo, testConfig)
+        val vm = SharesViewModel(repo, testConfig, ScreenCache(SessionStore()))
         advanceUntilIdle()
         assertThat(vm.state.value.status).isEqualTo(ListStatus.Error("网络连接失败"))
     }

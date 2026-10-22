@@ -1,5 +1,6 @@
 package xyz.yophon.gopan.core.data.space
 
+import kotlinx.coroutines.CompletableDeferred
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodeKind
 import xyz.yophon.gopan.core.network.GopanErrors
@@ -7,7 +8,8 @@ import xyz.yophon.gopan.core.network.GopanException
 
 /**
  * 内存版空间仓库:各个清单直接给;重复文件按 [duplicatePageSize] 分页(offset 即下标)。
- * [failNext] 置上时下一次调用抛 NETWORK;[calls] 记下每次调用。
+ * [failNext] 置上时下一次调用抛 NETWORK;[gate] 非空时每次调用先等它(测"先显示缓存、服务端还没回"的中间态);
+ * [calls] 记下每次调用。
  */
 class FakeSpaceRepository : SpaceRepository {
     var overview = SpaceOverview(
@@ -23,10 +25,12 @@ class FakeSpaceRepository : SpaceRepository {
     var duplicatePageSize = 50
     var idle = SpaceIdle(emptyList(), emptyList(), emptyList())
     var failNext = false
+    @Volatile var gate: CompletableDeferred<Unit>? = null
     val calls = mutableListOf<String>()
 
-    private fun record(call: String) {
+    private suspend fun record(call: String) {
         calls += call
+        gate?.await()
         if (failNext) {
             failNext = false
             throw GopanException(GopanErrors.NETWORK, "网络连接失败,请检查网络后重试")

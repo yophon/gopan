@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.auth.SessionStore
+import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.admin.AdminOverview
 import xyz.yophon.gopan.core.data.admin.AdminRepository
 import xyz.yophon.gopan.core.data.admin.AdminUser
@@ -67,6 +69,7 @@ sealed interface AdminEffect {
 class AdminViewModel @Inject constructor(
     private val repo: AdminRepository,
     sessionStore: SessionStore,
+    cache: ScreenCache,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AdminUiState())
@@ -78,7 +81,11 @@ class AdminViewModel @Inject constructor(
     val selfId: String? = sessionStore.currentUser?.id
 
     init {
-        load(silent = false)
+        // 上次的概览与用户列表先画出来,再静默刷新
+        val cached = cache[CACHE_KEY]
+        if (cached != null) _state.update { it.copy(status = ListStatus.Content, users = cached.first, overview = cached.second) }
+        cache.mirror(viewModelScope, CACHE_KEY, _state) { s -> (s.users to s.overview).takeIf { s.status == ListStatus.Content } }
+        load(silent = cached != null)
     }
 
     fun refresh() {
@@ -198,6 +205,9 @@ class AdminViewModel @Inject constructor(
 
     companion object {
         const val GB = 1L shl 30
+
+        /** 用户列表(已排序)+ 概览 */
+        val CACHE_KEY = ScreenKey<Pair<List<AdminUser>, AdminOverview?>>("admin")
 
         /** 「3」「2.5」→ GB 数;空、非数字、≤ 0 返回 null */
         fun parseGb(text: String): Double? = text.trim().toDoubleOrNull()?.takeIf { it > 0 && it.isFinite() }

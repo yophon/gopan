@@ -38,6 +38,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import xyz.yophon.gopan.core.share.NavRequest
 import xyz.yophon.gopan.core.ui.nav.Routes
+import xyz.yophon.gopan.core.ui.nav.navEnter
+import xyz.yophon.gopan.core.ui.nav.navExit
 import xyz.yophon.gopan.feature.drive.ifResumed
 import xyz.yophon.gopan.feature.transfers.TransfersScreen
 import xyz.yophon.gopan.feature.account.accountGraph
@@ -187,6 +189,8 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
                 // innerPadding 已含状态栏与底部栏高度;再把这部分 insets 标记为已消费,
                 // tab 内页面的 TopAppBar / Scaffold 无论用默认 insets 还是零 insets 都不会出现双倍留白
                 modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
+                enterTransition = navEnter,
+                exitTransition = navExit,
             ) {
                 driveGraph(navController, onOpenPreview)
                 chatGraph(navController, onOpenPreview)

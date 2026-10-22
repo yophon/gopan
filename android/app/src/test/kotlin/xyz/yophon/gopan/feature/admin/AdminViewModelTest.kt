@@ -10,6 +10,7 @@ import org.junit.Test
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.auth.SessionStore
 import xyz.yophon.gopan.core.auth.UserSummary
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.admin.AdminOverview
 import xyz.yophon.gopan.core.data.admin.AdminRepository
 import xyz.yophon.gopan.core.data.admin.AdminUser
@@ -69,7 +70,7 @@ class AdminViewModelTest {
 
     @Test
     fun `loads users (admins first) and the overview`() = runTest {
-        val vm = AdminViewModel(repo, store)
+        val vm = AdminViewModel(repo, store, ScreenCache(SessionStore()))
         advanceUntilIdle()
         val s = vm.state.value
         assertThat(s.status).isEqualTo(ListStatus.Content)
@@ -78,8 +79,25 @@ class AdminViewModelTest {
     }
 
     @Test
+    fun `coming back shows the cached overview and users at once and then the fresh ones`() = runTest {
+        val cache = ScreenCache(store)
+        AdminViewModel(repo, store, cache)
+        advanceUntilIdle()
+
+        repo.users += AdminUser("u2", "carol", isAdmin = false, disabled = false, quotaBytes = 1L shl 30, usedBytes = 0, createdAt = "")
+        val vm = AdminViewModel(repo, store, cache)
+        // 联网的那次还没跑:上次的概览与用户已经在了
+        assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
+        assertThat(vm.state.value.users.map { it.username }).containsExactly("admin", "bob").inOrder()
+        assertThat(vm.state.value.overview?.failedTasks).isEqualTo(3)
+
+        advanceUntilIdle()
+        assertThat(vm.state.value.users.map { it.username }).containsExactly("admin", "bob", "carol").inOrder()
+    }
+
+    @Test
     fun `creating a user validates input and converts gb to bytes`() = runTest {
-        val vm = AdminViewModel(repo, store)
+        val vm = AdminViewModel(repo, store, ScreenCache(SessionStore()))
         advanceUntilIdle()
         vm.show(AdminDialog.Create)
         vm.createUser("x", "12345678", "1")
@@ -98,7 +116,7 @@ class AdminViewModelTest {
     @Test
     fun `a server error stays on the dialog`() = runTest {
         repo.createError = GopanException(GopanErrors.USERNAME_TAKEN, "用户名已被占用")
-        val vm = AdminViewModel(repo, store)
+        val vm = AdminViewModel(repo, store, ScreenCache(SessionStore()))
         advanceUntilIdle()
         vm.show(AdminDialog.Create)
         vm.createUser("bob", "12345678", "1")
@@ -109,7 +127,7 @@ class AdminViewModelTest {
 
     @Test
     fun `quota, disable and reset`() = runTest {
-        val vm = AdminViewModel(repo, store)
+        val vm = AdminViewModel(repo, store, ScreenCache(SessionStore()))
         advanceUntilIdle()
         val bob = vm.state.value.users.first { it.username == "bob" }
         vm.setQuota(bob, "abc")
@@ -129,7 +147,7 @@ class AdminViewModelTest {
 
     @Test
     fun `retrying failed tasks reports how many`() = runTest {
-        val vm = AdminViewModel(repo, store)
+        val vm = AdminViewModel(repo, store, ScreenCache(SessionStore()))
         advanceUntilIdle()
         vm.effects.test {
             vm.retryFailedTasks()

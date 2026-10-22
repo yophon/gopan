@@ -31,6 +31,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.core.data.Node
+import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.chat.ChatMessage
 import xyz.yophon.gopan.core.data.chat.ChatRepository
 import xyz.yophon.gopan.core.network.gopanResult
@@ -109,6 +111,7 @@ class ChatViewModel @Inject constructor(
     private val shareInbox: ShareInbox,
     private val connectivity: Connectivity,
     private val previews: PreviewSessionStore,
+    private val cache: ScreenCache,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -144,6 +147,17 @@ class ChatViewModel @Inject constructor(
     private var initialDone = false
 
     init {
+        // 启动时预取(或上次)的最新一页先画出来,不等首次轮询;首次刷新照常合并
+        cache[LATEST_CACHE_KEY]?.let { latest ->
+            _state.update {
+                it.copy(
+                    messages = latest,
+                    loading = false,
+                    hasMoreOlder = latest.size >= ChatRepository.LATEST_LIMIT,
+                    latestText = ChatLogic.latestText(latest),
+                )
+            }
+        }
         viewModelScope.launch {
             val saved = runCatching { prefs.chatDraft.first() }.getOrDefault("")
             if (_draft.value.isEmpty() && saved.isNotEmpty()) replaceDraft(saved)
@@ -204,6 +218,7 @@ class ChatViewModel @Inject constructor(
             val first = !initialDone
             initialDone = true
             val visibleLatest = latest.filter { it.id !in tombstones }
+            cache.put(LATEST_CACHE_KEY, visibleLatest)
             var added = 0
             _state.update { s ->
                 val base = s.copy(loading = false, loadError = null, offline = !connectivity.online.value, latestText = ChatLogic.latestText(visibleLatest))
@@ -566,6 +581,9 @@ class ChatViewModel @Inject constructor(
     }
 
     companion object {
+        /** 最新一页([ChatRepository.LATEST_LIMIT] 条,升序);启动预取也写这里 */
+        val LATEST_CACHE_KEY = ScreenKey<List<ChatMessage>>("chat.latest")
+
         const val POLL_INTERVAL_MS = 2_000L
         const val SEARCH_DEBOUNCE_MS = 300L
         const val HIGHLIGHT_MS = 1_500L

@@ -14,6 +14,7 @@ import org.junit.Test
 import xyz.yophon.gopan.core.AppConfig
 import xyz.yophon.gopan.core.auth.SessionStore
 import xyz.yophon.gopan.core.auth.UserSummary
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.clips.FakeClipsRepository
 import xyz.yophon.gopan.core.data.markdown.MarkdownUrls
 import xyz.yophon.gopan.core.network.RefreshOutcome
@@ -42,7 +43,7 @@ class ClipsViewModelsTest {
     @Test
     fun `list filters unread`() = runTest {
         repo.clips = listOf(FakeClipsRepository.clip("a"), FakeClipsRepository.clip("b", read = true))
-        val vm = ClipsViewModel(repo)
+        val vm = ClipsViewModel(repo, ScreenCache(SessionStore()))
         advanceUntilIdle()
         assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
         assertThat(vm.state.value.items.map { it.id }).containsExactly("a", "b").inOrder()
@@ -51,6 +52,28 @@ class ClipsViewModelsTest {
         advanceUntilIdle()
         assertThat(vm.state.value.items.map { it.id }).containsExactly("a")
         assertThat(repo.calls.last()).isEqualTo("clips(unread=true,null)")
+    }
+
+    @Test
+    fun `list keeps a snapshot per filter`() = runTest {
+        val cache = ScreenCache(SessionStore().apply { setSignedIn("t", UserSummary("u1", "me", 0, 0, false)) })
+        repo.clips = listOf(FakeClipsRepository.clip("a"), FakeClipsRepository.clip("b", read = true))
+        val vm = ClipsViewModel(repo, cache)
+        advanceUntilIdle()
+        vm.setUnreadOnly(true)
+        advanceUntilIdle()
+
+        // 换筛选时清空的那一下不会被当成「未读」的快照
+        assertThat(cache[ClipsViewModel.cacheKey(false)]?.items?.map { it.id }).containsExactly("a", "b").inOrder()
+        assertThat(cache[ClipsViewModel.cacheKey(true)]?.items?.map { it.id }).containsExactly("a")
+
+        // 切回「全部」:快照先画出来
+        repo.clips = emptyList()
+        vm.setUnreadOnly(false)
+        assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("a", "b").inOrder()
+        advanceUntilIdle()
+        assertThat(vm.state.value.items).isEmpty()
     }
 
     private fun reader(clipId: String? = "a") = ClipReaderViewModel(

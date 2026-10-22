@@ -64,7 +64,7 @@ import xyz.yophon.gopan.core.data.links.LinkStatus
 import xyz.yophon.gopan.core.data.links.toLinkText
 import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.components.ErrorState
-import xyz.yophon.gopan.core.ui.components.LoadingState
+import xyz.yophon.gopan.core.ui.components.ListSkeleton
 import xyz.yophon.gopan.core.ui.exposeTestTags
 import xyz.yophon.gopan.core.ui.rememberSystemActions
 import xyz.yophon.gopan.feature.drive.FullPage
@@ -107,7 +107,7 @@ fun DirectLinksTab(viewModel: DirectLinksViewModel, snackbar: SnackbarHostState)
 
     PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = viewModel::refresh, modifier = Modifier.fillMaxSize()) {
         when (val status = state.status) {
-            ListStatus.Loading -> LoadingState()
+            ListStatus.Loading -> ListSkeleton()
             is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
             ListStatus.Content -> if (state.items.isEmpty()) {
                 FullPage {

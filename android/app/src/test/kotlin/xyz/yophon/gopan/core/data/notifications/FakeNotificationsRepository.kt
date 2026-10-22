@@ -1,5 +1,6 @@
 package xyz.yophon.gopan.core.data.notifications
 
+import kotlinx.coroutines.CompletableDeferred
 import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
 
@@ -13,6 +14,9 @@ class FakeNotificationsRepository : NotificationsRepository {
     var failNext = false
     val calls = mutableListOf<String>()
 
+    /** 非空时 list 先等它:测"先显示缓存、联网还在路上" */
+    var listGate: CompletableDeferred<Unit>? = null
+
     private fun maybeFail() {
         if (failNext) {
             failNext = false
@@ -22,6 +26,7 @@ class FakeNotificationsRepository : NotificationsRepository {
 
     override suspend fun list(cursor: String?, unreadOnly: Boolean): NotificationPage {
         calls += "list($cursor,$unreadOnly)"
+        listGate?.await()
         maybeFail()
         val all = if (unreadOnly) items.filter { !it.read } else items
         val start = cursor?.toInt() ?: 0

@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.data.CachedPage
+import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.links.DirectLink
 import xyz.yophon.gopan.core.data.links.DirectLinksRepository
 import xyz.yophon.gopan.core.data.links.LinkStatus
@@ -45,6 +48,9 @@ data class DirectLinksUiState(
     val busy: Set<String> = emptySet(),
 )
 
+/** 「直链」标签的快照:已加载的直链 + 总数 */
+data class DirectLinksSnapshot(val page: CachedPage<DirectLink>, val total: Int)
+
 sealed interface DirectLinksEffect {
     data class Message(val text: UiText) : DirectLinksEffect
 
@@ -60,6 +66,7 @@ sealed interface DirectLinksEffect {
 class DirectLinksViewModel @Inject constructor(
     private val repo: DirectLinksRepository,
     private val tabRequest: SharesTabRequest,
+    private val cache: ScreenCache,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(DirectLinksUiState())
@@ -80,6 +87,9 @@ class DirectLinksViewModel @Inject constructor(
 
     init {
         checkEnabled()
+        cache.mirror(viewModelScope, CACHE_KEY, _state) { s ->
+            DirectLinksSnapshot(CachedPage(s.items, s.nextCursor), s.total).takeIf { s.status == ListStatus.Content }
+        }
     }
 
     fun checkEnabled() {
@@ -104,10 +114,25 @@ class DirectLinksViewModel @Inject constructor(
 
     fun retry() = load(silent = false)
 
+    /** 非静默加载时有快照(上次看过、或启动时预取的):先画快照,联网按静默刷新处理 */
     private fun load(silent: Boolean) {
         loadJob?.cancel()
         moreJob?.cancel()
-        _state.update { it.copy(status = if (silent) it.status else ListStatus.Loading, loadingMore = false, loadMoreError = null) }
+        val cached = if (silent) null else cache[CACHE_KEY]
+        _state.update {
+            if (cached != null) {
+                it.copy(
+                    status = ListStatus.Content,
+                    items = cached.page.items,
+                    total = cached.total,
+                    nextCursor = cached.page.nextCursor,
+                    loadingMore = false,
+                    loadMoreError = null,
+                )
+            } else {
+                it.copy(status = if (silent) it.status else ListStatus.Loading, loadingMore = false, loadMoreError = null)
+            }
+        }
         loadJob = viewModelScope.launch {
             gopanResult { repo.myLinks(cursor = null) }
                 .onSuccess { page ->
@@ -210,6 +235,10 @@ class DirectLinksViewModel @Inject constructor(
                 DirectLinksEffect.Message(if (ok) UiText.Res(R.string.links_msg_revoked) else UiText.Plain(result.exceptionOrNull()?.message ?: "吊销失败")),
             )
         }
+    }
+
+    companion object {
+        val CACHE_KEY = ScreenKey<DirectLinksSnapshot>("direct-links")
     }
 }
 

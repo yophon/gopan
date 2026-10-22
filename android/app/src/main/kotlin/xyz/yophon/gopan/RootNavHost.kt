@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -27,8 +28,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import xyz.yophon.gopan.core.auth.AuthState
+import xyz.yophon.gopan.core.ui.components.AfterDelay
+import xyz.yophon.gopan.core.ui.components.LOADING_INDICATOR_DELAY_MS
 import xyz.yophon.gopan.core.ui.nav.LocalOpenArchive
 import xyz.yophon.gopan.core.ui.nav.Routes
+import xyz.yophon.gopan.core.ui.nav.navEnter
+import xyz.yophon.gopan.core.ui.nav.navExit
 import xyz.yophon.gopan.feature.archive.ArchiveScreen
 import xyz.yophon.gopan.feature.drive.ifResumed
 import xyz.yophon.gopan.feature.login.loginGraph
@@ -59,7 +64,7 @@ fun RootNavHost(authState: AuthState) {
             { route -> navController.currentBackStackEntry?.ifResumed { navController.navigate(route) } }
         }
         CompositionLocalProvider(LocalOpenArchive provides openArchive) {
-            NavHost(navController = navController, startDestination = Routes.Startup) {
+            NavHost(navController = navController, startDestination = Routes.Startup, enterTransition = navEnter, exitTransition = navExit) {
                 composable<Routes.Startup> { StartupScreen() }
                 loginGraph(navController)
                 composable<Routes.Main> { entry ->
@@ -116,7 +121,10 @@ private fun StartupScreen() {
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
-            CircularProgressIndicator()
+            // 有缓存用户时启动页只闪过几十毫秒(读加密存储),转圈晚点出现,免得一闪
+            Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                AfterDelay(LOADING_INDICATOR_DELAY_MS) { CircularProgressIndicator() }
+            }
         }
     }
 }

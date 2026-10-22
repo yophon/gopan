@@ -16,7 +16,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.data.CachedPage
 import xyz.yophon.gopan.core.data.NodesRepository
+import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.activity.Activity
 import xyz.yophon.gopan.core.data.activity.ActivityActor
 import xyz.yophon.gopan.core.data.activity.ActivityQuery
@@ -80,6 +83,7 @@ class ActivityViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repo: ActivityRepository,
     private val nodes: NodesRepository,
+    private val cache: ScreenCache,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
@@ -95,7 +99,22 @@ class ActivityViewModel @Inject constructor(
     private var loadedOnce = false
 
     init {
-        load(silent = false)
+        // 上次看到的(同一筛选下的)第一页与来源条先画出来,再静默刷新
+        val cached = cache[cacheKey(_state.value.query)]
+        val actors = cache[ACTORS_KEY]
+        _state.update {
+            it.copy(
+                status = if (cached != null) ListStatus.Content else it.status,
+                items = cached?.items ?: it.items,
+                nextCursor = cached?.nextCursor,
+                actors = actors ?: it.actors,
+            )
+        }
+        // 缓存跟着列表走(撤回后的刷新也算);每种筛选各存一份
+        cache.mirrorKeyed(viewModelScope, _state) { s ->
+            if (s.status == ListStatus.Content) cacheKey(s.query) to CachedPage(s.items, s.nextCursor) else null
+        }
+        load(silent = cached != null)
         loadActors()
     }
 
@@ -115,7 +134,10 @@ class ActivityViewModel @Inject constructor(
     private fun loadActors() {
         viewModelScope.launch {
             gopanResult { repo.actors() }
-                .onSuccess { actors -> _state.update { it.copy(actors = actors) } }
+                .onSuccess { actors ->
+                    cache.put(ACTORS_KEY, actors)
+                    _state.update { it.copy(actors = actors) }
+                }
                 .onFailure { Timber.w("来源列表拉取失败:%s", it.message) }
         }
     }
@@ -176,8 +198,18 @@ class ActivityViewModel @Inject constructor(
 
     private fun setQuery(query: ActivityQuery) {
         if (query == _state.value.query) return
-        _state.update { it.copy(query = query, items = emptyList(), nextCursor = null, expanded = emptySet()) }
-        load(silent = false)
+        // 换筛选与换数据一次写进状态:中间不能出现"新筛选 + 空列表 + Content",否则会被当成空页写进缓存
+        val cached = cache[cacheKey(query)]
+        _state.update {
+            it.copy(
+                query = query,
+                items = cached?.items.orEmpty(),
+                nextCursor = cached?.nextCursor,
+                expanded = emptySet(),
+                status = if (cached != null) ListStatus.Content else ListStatus.Loading,
+            )
+        }
+        load(silent = cached != null)
     }
 
     fun toggleGroup(batchId: String) {
@@ -267,5 +299,11 @@ class ActivityViewModel @Inject constructor(
         /** 路由参数名(Routes.Activity 的字段名) */
         const val ACTOR_ARG = "actor"
         const val SINCE_ARG = "since"
+
+        val ACTORS_KEY = ScreenKey<List<ActorSummary>>("activity-actors")
+
+        /** 第一页按筛选各存一份 */
+        fun cacheKey(query: ActivityQuery) =
+            ScreenKey<CachedPage<Activity>>("activity?actor=${query.actorKind}:${query.actorRef.orEmpty()}&since=${query.since.orEmpty()}")
     }
 }

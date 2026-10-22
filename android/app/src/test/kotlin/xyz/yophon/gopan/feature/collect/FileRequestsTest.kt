@@ -10,8 +10,10 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.auth.SessionStore
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodeKind
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.collect.FileRequest
 import xyz.yophon.gopan.core.data.collect.FileRequestForm
 import xyz.yophon.gopan.core.data.collect.FileRequestUpload
@@ -217,7 +219,7 @@ class FileRequestsViewModelTest {
     @Test
     fun `lists links newest first with the visitor link and the text to send`() = runTest {
         repo.requests = mutableListOf(request("a", createdAt = "2026-10-01T00:00:00Z"), request("b", createdAt = "2026-10-12T00:00:00Z"))
-        val vm = FileRequestsViewModel(repo, testConfig)
+        val vm = FileRequestsViewModel(repo, testConfig, ScreenCache(SessionStore()))
         advanceUntilIdle()
         val s = vm.state.value
         assertThat(s.status).isEqualTo(ListStatus.Content)
@@ -230,7 +232,7 @@ class FileRequestsViewModelTest {
     @Test
     fun `ending a link removes it with the web message, and one already gone counts as ended`() = runTest {
         repo.requests = mutableListOf(request("a"), request("b"))
-        val vm = FileRequestsViewModel(repo, testConfig)
+        val vm = FileRequestsViewModel(repo, testConfig, ScreenCache(SessionStore()))
         advanceUntilIdle()
 
         vm.effects.test {
@@ -249,7 +251,7 @@ class FileRequestsViewModelTest {
     fun `a failed revoke keeps the link and says why`() = runTest {
         repo.requests = mutableListOf(request("a"))
         repo.failRevoke = GopanException(GopanErrors.NETWORK, "网络连接失败")
-        val vm = FileRequestsViewModel(repo, testConfig)
+        val vm = FileRequestsViewModel(repo, testConfig, ScreenCache(SessionStore()))
         advanceUntilIdle()
         vm.effects.test {
             vm.revoke(vm.state.value.items.single())
@@ -263,7 +265,7 @@ class FileRequestsViewModelTest {
     @Test
     fun `a failed refresh keeps the list, the first load failing shows an error page`() = runTest {
         repo.failList = GopanException(GopanErrors.NETWORK, "网络连接失败")
-        val vm = FileRequestsViewModel(repo, testConfig)
+        val vm = FileRequestsViewModel(repo, testConfig, ScreenCache(SessionStore()))
         advanceUntilIdle()
         assertThat(vm.state.value.status).isEqualTo(ListStatus.Error("网络连接失败"))
 
@@ -286,7 +288,7 @@ class FileRequestsViewModelTest {
     @Test
     fun `coming back refreshes silently and picks up new uploads`() = runTest {
         repo.requests = mutableListOf(request("a"))
-        val vm = FileRequestsViewModel(repo, testConfig)
+        val vm = FileRequestsViewModel(repo, testConfig, ScreenCache(SessionStore()))
         advanceUntilIdle()
         repo.requests = mutableListOf(request("a", fileCount = 1, totalBytes = 10, uploaderCount = 1, newCount = 1))
         vm.onResumed()
@@ -298,7 +300,7 @@ class FileRequestsViewModelTest {
     @Test
     fun `opening the records clears the new badge, and a saved edit replaces the row`() = runTest {
         repo.requests = mutableListOf(request("a", newCount = 4), request("b", newCount = 1, createdAt = "2026-10-01T00:00:00Z"))
-        val vm = FileRequestsViewModel(repo, testConfig)
+        val vm = FileRequestsViewModel(repo, testConfig, ScreenCache(SessionStore()))
         advanceUntilIdle()
         vm.openedUploads(vm.state.value.items.first { it.id == "a" })
         assertThat(vm.state.value.items.map { it.newCount }).containsExactly(0, 1).inOrder()
@@ -551,7 +553,7 @@ class FileRequestUploadsViewModelTest {
     private val repo = FakeFileRequestsRepository()
 
     private fun vm(newCount: Int = 0, handle: SavedStateHandle = SavedStateHandle(mapOf("requestId" to "r1", "title" to "收作业", "newCount" to newCount))) =
-        FileRequestUploadsViewModel(handle, repo)
+        FileRequestUploadsViewModel(handle, repo, ScreenCache(SessionStore()))
 
     @Test
     fun `opening with new uploads marks them seen, without new ones it does not`() = runTest {

@@ -139,6 +139,75 @@ class SessionManagerTest {
     }
 
     @Test
+    fun `bootstrap with a cached user signs in before the refresh lands`() = runBlocking {
+        h.sessionManager.loginWithPassword("alice", "secret")
+        val restarted = TestHarness(server, secureStore = h.secureStore)
+        try {
+            server.refreshDelayMs = 400
+            val booting = async { restarted.sessionManager.bootstrap() }
+            delay(150)
+            // 还没等到 refresh:已经按上次的用户进了主界面,token 暂时为空
+            assertThat(restarted.store.state.value).isEqualTo(AuthState.SignedIn(alice))
+            assertThat(restarted.store.accessToken).isNull()
+
+            booting.await()
+            assertThat(restarted.store.accessToken).isEqualTo("t2")
+        } finally {
+            restarted.close()
+        }
+    }
+
+    @Test
+    fun `bootstrap with a cached user whose session was revoked ends signed out`() = runBlocking {
+        h.sessionManager.loginWithPassword("alice", "secret")
+        val restarted = TestHarness(server, secureStore = h.secureStore)
+        try {
+            server.refreshOk = false
+            restarted.sessionManager.bootstrap()
+            assertThat(restarted.store.state.value).isEqualTo(AuthState.SignedOut)
+            assertThat(restarted.cookieJar.hasCookie("gopan_rt")).isFalse()
+        } finally {
+            restarted.close()
+        }
+    }
+
+    @Test
+    fun `bootstrap without a cached user waits for the refresh and signs out when offline`() = runBlocking {
+        h.sessionManager.loginWithPassword("alice", "secret")
+        h.secureStore.put(SessionManager.KEY_LAST_USER, null)
+        val restarted = TestHarness(server, secureStore = h.secureStore)
+        try {
+            server.close()
+            restarted.sessionManager.bootstrap()
+            assertThat(restarted.store.state.value).isEqualTo(AuthState.SignedOut)
+            // 只是联系不上,不是被拒:cookie 留着,下次启动还能续登
+            assertThat(restarted.cookieJar.hasCookie("gopan_rt")).isTrue()
+        } finally {
+            restarted.close()
+        }
+    }
+
+    @Test
+    fun `a request without a token waits for the startup refresh instead of bouncing off UNAUTHENTICATED`() = runBlocking {
+        h.sessionManager.loginWithPassword("alice", "secret")
+        val restarted = TestHarness(server, secureStore = h.secureStore)
+        try {
+            server.refreshDelayMs = 300
+            val booting = async { restarted.sessionManager.bootstrap() }
+            delay(100)
+            val me = restarted.apollo.query(MeQuery()).execute().requireData().me.userFields.username
+            booting.await()
+
+            assertThat(me).isEqualTo("alice")
+            assertThat(server.refreshCount.get()).isEqualTo(1)
+            // 一次就带着新 token 成功,没有先吃一个 UNAUTHENTICATED 再重放
+            assertThat(server.meCount.get()).isEqualTo(1)
+        } finally {
+            restarted.close()
+        }
+    }
+
+    @Test
     fun `logout clears everything even though the server already forgot the cookie`() = runBlocking {
         h.sessionManager.loginWithPassword("alice", "secret")
 

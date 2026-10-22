@@ -1,5 +1,6 @@
 package xyz.yophon.gopan.feature.drive
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,10 +54,24 @@ class FakeNodesRepository : NodesRepository {
     var lastOrder: Pair<DriveSortOrder, Boolean>? = null
         private set
 
+    /** 非空时 firstPage 联网前等它:测"先显示缓存、联网还在路上"的中间态 */
+    @Volatile var firstPageGate: CompletableDeferred<Unit>? = null
+
+    /** 非空时 firstPage 联网抛它(NOT_FOUND 这类不回退缓存的错误) */
+    @Volatile var firstPageError: GopanException? = null
+
+    override suspend fun cachedFirstPage(parentId: String?, order: DriveSortOrder, desc: Boolean): Listing? {
+        calls += "cachedFirstPage($parentId)"
+        val cached = cache[parentId] ?: return null
+        return Listing(cached.copy(nextCursor = null), fromCache = true, fetchedAt = 1_000L)
+    }
+
     override suspend fun firstPage(parentId: String?, order: DriveSortOrder, desc: Boolean): Listing {
         firstPageCalls++
         lastOrder = order to desc
         calls += "firstPage($parentId)"
+        firstPageGate?.await()
+        firstPageError?.let { throw it }
         if (networkDown) {
             val error = GopanException(GopanErrors.NETWORK, "网络连接失败,请检查网络后重试")
             val cached = cache[parentId] ?: throw error

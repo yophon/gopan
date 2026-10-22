@@ -20,7 +20,8 @@ import javax.inject.Inject
 
 /**
  * 主界面的全局事务:外部入口的跳转请求(系统分享 → 传输助手、通知 → 传输列表),
- * 以及"用其他应用打开"的下载完成后弹选择器(App 在前台时;在后台时由结果通知负责)。
+ * 以及"用其他应用打开"的下载完成后弹选择器(App 在前台时;在后台时由结果通知负责);
+ * 进来时启动 [StartupPrefetch]。
  */
 @HiltViewModel
 class MainScaffoldViewModel @Inject constructor(
@@ -30,6 +31,7 @@ class MainScaffoldViewModel @Inject constructor(
     private val openRequests: OpenRequests,
     private val opener: FileOpener,
     private val tabRequest: TransfersTabRequest,
+    prefetch: StartupPrefetch,
 ) : ViewModel() {
 
     val navRequest: StateFlow<NavRequest?> = navRequests.request
@@ -40,6 +42,8 @@ class MainScaffoldViewModel @Inject constructor(
     fun requestJobsTab() = tabRequest.requestJobs()
 
     init {
+        // 文件页在加载自己的列表,另外几个 tab 的首屏这时并行取回来
+        prefetch.start()
         viewModelScope.launch {
             engine.events.collect { event ->
                 when (event) {

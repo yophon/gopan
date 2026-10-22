@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.media.MediaRepository
 import xyz.yophon.gopan.core.data.media.RecentPlay
 import xyz.yophon.gopan.core.network.gopanResult
@@ -46,6 +48,7 @@ sealed interface RecentPlaysEffect {
 class RecentPlaysViewModel @Inject constructor(
     private val media: MediaRepository,
     private val sessions: PreviewSessionStore,
+    cache: ScreenCache,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(RecentPlaysUiState())
@@ -59,7 +62,11 @@ class RecentPlaysViewModel @Inject constructor(
     private var resumedOnce = false
 
     init {
-        load(LoadMode.INITIAL)
+        // 上次的列表先画出来,再静默刷新;「移出」也跟着写进缓存
+        val cached = cache[CACHE_KEY]
+        if (cached != null) _state.update { it.copy(items = cached, status = ListStatus.Content) }
+        cache.mirror(viewModelScope, CACHE_KEY, _state) { s -> s.items.takeIf { s.status == ListStatus.Content } }
+        load(if (cached != null) LoadMode.SILENT else LoadMode.INITIAL)
     }
 
     private enum class LoadMode { INITIAL, REFRESH, SILENT }
@@ -149,5 +156,6 @@ class RecentPlaysViewModel @Inject constructor(
 
     private companion object {
         const val REFRESH_AFTER_PREVIEW_MS = 1_000L
+        val CACHE_KEY = ScreenKey<List<RecentPlay>>("recent-plays")
     }
 }

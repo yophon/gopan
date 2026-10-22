@@ -38,6 +38,11 @@ object DataModule {
         repo.clearMemory()
         cache.clear()
     }
+
+    /** 登出 / 会话失效:各页面的首屏快照一并清掉(本来就按用户隔离,这里只是不让它留在内存里) */
+    @Provides
+    @IntoSet
+    fun provideScreenCacheSignOutHook(cache: ScreenCache): SignOutHook = SignOutHook { cache.clear() }
 }
 
 @Module

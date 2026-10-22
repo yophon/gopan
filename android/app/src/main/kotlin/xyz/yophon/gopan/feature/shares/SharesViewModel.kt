@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.AppConfig
+import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.shares.Share
 import xyz.yophon.gopan.core.data.shares.ShareVisit
 import xyz.yophon.gopan.core.data.shares.SharesRepository
@@ -44,6 +46,7 @@ sealed interface SharesEffect {
 class SharesViewModel @Inject constructor(
     private val repo: SharesRepository,
     private val config: AppConfig,
+    cache: ScreenCache,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SharesUiState())
@@ -56,7 +59,11 @@ class SharesViewModel @Inject constructor(
     private var loadedOnce = false
 
     init {
-        load(silent = false)
+        // 上次的列表(或启动时预取的)先画出来,再静默刷新
+        val cached = cache[CACHE_KEY]
+        if (cached != null) _state.update { it.copy(status = ListStatus.Content, items = cached) }
+        cache.mirror(viewModelScope, CACHE_KEY, _state) { s -> s.items.takeIf { s.status == ListStatus.Content } }
+        load(silent = cached != null)
     }
 
     fun url(share: Share): String = config.shareUrl(share.token)
@@ -118,6 +125,8 @@ class SharesViewModel @Inject constructor(
     }
 
     companion object {
+        val CACHE_KEY = ScreenKey<List<Share>>("shares")
+
         /** 新建的在前(与网页端一致:服务端按创建时间倒序,这里再保证一次) */
         fun sortShares(items: List<Share>): List<Share> = items.sortedByDescending { it.createdAt }
     }
@@ -131,6 +140,7 @@ data class VisitsUiState(val status: ListStatus = ListStatus.Loading, val items:
 class ShareVisitsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repo: SharesRepository,
+    private val cache: ScreenCache,
 ) : ViewModel() {
     val shareId: String = requireNotNull(savedStateHandle.get<String>("shareId"))
     val shareName: String = savedStateHandle.get<String>("name").orEmpty()
@@ -138,16 +148,23 @@ class ShareVisitsViewModel @Inject constructor(
     private val _state = MutableStateFlow(VisitsUiState())
     val state: StateFlow<VisitsUiState> = _state.asStateFlow()
 
+    private val cacheKey = ScreenKey<List<ShareVisit>>("share-visits/$shareId")
+
     init {
         load()
     }
 
+    /** 看过的明细先画出来再刷新;刷新失败而手上有数据时保留数据 */
     fun load() {
-        _state.update { it.copy(status = ListStatus.Loading) }
+        val cached = cache[cacheKey]
+        _state.update { if (cached != null) it.copy(status = ListStatus.Content, items = cached) else it.copy(status = ListStatus.Loading) }
         viewModelScope.launch {
             gopanResult { repo.visits(shareId) }
-                .onSuccess { items -> _state.update { it.copy(status = ListStatus.Content, items = items) } }
-                .onFailure { e -> _state.update { it.copy(status = ListStatus.Error(e.message ?: "加载失败")) } }
+                .onSuccess { items ->
+                    cache.put(cacheKey, items)
+                    _state.update { it.copy(status = ListStatus.Content, items = items) }
+                }
+                .onFailure { e -> if (cached == null) _state.update { it.copy(status = ListStatus.Error(e.message ?: "加载失败")) } }
         }
     }
 }

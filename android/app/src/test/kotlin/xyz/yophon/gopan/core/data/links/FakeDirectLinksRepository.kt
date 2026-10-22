@@ -1,5 +1,6 @@
 package xyz.yophon.gopan.core.data.links
 
+import kotlinx.coroutines.CompletableDeferred
 import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
 
@@ -10,6 +11,9 @@ class FakeDirectLinksRepository : DirectLinksRepository {
     var pageSize = 30
     var failNext = false
     val calls = mutableListOf<String>()
+
+    /** 非空时 myLinks() 等它再回:测"先显示快照、联网还在路上"的中间态 */
+    var linksGate: CompletableDeferred<Unit>? = null
 
     /** 已经删掉(查不到)的直链 id:link() 抛 NOT_FOUND */
     val missing = mutableSetOf<String>()
@@ -32,6 +36,7 @@ class FakeDirectLinksRepository : DirectLinksRepository {
 
     override suspend fun myLinks(cursor: String?): DirectLinkPage {
         calls += "myLinks($cursor)"
+        linksGate?.await()
         maybeFail()
         val start = cursor?.toInt() ?: 0
         val end = minOf(links.size, start + pageSize)

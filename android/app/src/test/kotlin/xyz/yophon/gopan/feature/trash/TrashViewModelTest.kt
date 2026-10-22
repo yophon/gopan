@@ -6,6 +6,9 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
+import xyz.yophon.gopan.core.auth.SessionStore
+import xyz.yophon.gopan.core.auth.UserSummary
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.feature.drive.FakeNodesRepository
 import xyz.yophon.gopan.feature.drive.FakeNodesRepository.Companion.file
 import xyz.yophon.gopan.feature.drive.FakeNodesRepository.Companion.page
@@ -23,7 +26,7 @@ class TrashViewModelTest {
     @Test
     fun `loads and pages the trash`() = runTest {
         repo.trashPages = listOf(page(file("a"), nextCursor = "1", total = 2), page(file("b"), total = 2))
-        val vm = TrashViewModel(repo)
+        val vm = TrashViewModel(repo, ScreenCache(SessionStore()))
         advanceUntilIdle()
 
         assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
@@ -37,11 +40,29 @@ class TrashViewModelTest {
     }
 
     @Test
+    fun `coming back shows the cached trash at once and then the fresh one`() = runTest {
+        val cache = ScreenCache(SessionStore().apply { setSignedIn("t", UserSummary("u1", "alice", 0, 0, false)) })
+        repo.trashPages = listOf(page(file("a")))
+        TrashViewModel(repo, cache)
+        advanceUntilIdle()
+
+        repo.trashPages = listOf(page(file("b"), file("a")))
+        val vm = TrashViewModel(repo, cache)
+        // 联网的那次还没跑:上次的列表已经在了,剩余天数按现在算
+        assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("a")
+        assertThat(vm.state.value.nowMillis).isGreaterThan(0L)
+
+        advanceUntilIdle()
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("b", "a").inOrder()
+    }
+
+    @Test
     fun `restore and purge go through the repository and reload`() = runTest {
         val a = file("a")
         val b = file("b")
         repo.trashPages = listOf(page(a, b))
-        val vm = TrashViewModel(repo)
+        val vm = TrashViewModel(repo, ScreenCache(SessionStore()))
         advanceUntilIdle()
 
         vm.restore(listOf("a"))
@@ -65,7 +86,7 @@ class TrashViewModelTest {
     @Test
     fun `emptying the trash needs two confirmations`() = runTest {
         repo.trashPages = listOf(page(file("a")))
-        val vm = TrashViewModel(repo)
+        val vm = TrashViewModel(repo, ScreenCache(SessionStore()))
         advanceUntilIdle()
 
         vm.requestPurgeAll()

@@ -51,7 +51,7 @@ import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.ui.components.ConfirmDialog
 import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.components.ErrorState
-import xyz.yophon.gopan.core.ui.components.LoadingState
+import xyz.yophon.gopan.core.ui.components.ListSkeleton
 import xyz.yophon.gopan.core.ui.format.formatBytes
 import xyz.yophon.gopan.core.ui.format.formatRelativeTime
 import xyz.yophon.gopan.feature.drive.FullPage
@@ -104,7 +104,7 @@ fun TrashScreen(
                 .fillMaxSize(),
         ) {
             when (val status = state.status) {
-                ListStatus.Loading -> LoadingState()
+                ListStatus.Loading -> ListSkeleton()
                 is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
                 ListStatus.Content -> if (state.items.isEmpty()) {
                     FullPage {

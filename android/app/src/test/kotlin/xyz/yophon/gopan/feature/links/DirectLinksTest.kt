@@ -1,6 +1,7 @@
 package xyz.yophon.gopan.feature.links
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -9,6 +10,9 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.auth.SessionStore
+import xyz.yophon.gopan.core.auth.UserSummary
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.links.DirectLink
 import xyz.yophon.gopan.core.data.links.FakeDirectLinksRepository
 import xyz.yophon.gopan.core.data.links.FakeDirectLinksRepository.Companion.link
@@ -112,7 +116,7 @@ class DirectLinksTest {
     fun `list loads when the tab is first shown and pages on`() = runTest {
         repo.pageSize = 2
         repo.links = (1..3).map { link("l$it") }
-        val vm = DirectLinksViewModel(repo, tabRequest)
+        val vm = DirectLinksViewModel(repo, tabRequest, ScreenCache(SessionStore()))
         advanceUntilIdle()
         assertThat(vm.state.value.enabled).isTrue()
         assertThat(repo.calls.none { it.startsWith("myLinks") }).isTrue()
@@ -128,9 +132,35 @@ class DirectLinksTest {
     }
 
     @Test
+    fun `list - after a revisit the tab shows the last links at once, then the fresh ones`() = runTest {
+        val cache = ScreenCache(SessionStore().apply { setSignedIn("t", UserSummary("u1", "alice", 0, 0, false)) })
+        repo.links = listOf(link("l1"))
+        val first = DirectLinksViewModel(repo, tabRequest, cache)
+        first.onShown()
+        advanceUntilIdle()
+
+        repo.links = listOf(link("l2"), link("l1"))
+        val gate = CompletableDeferred<Unit>()
+        repo.linksGate = gate
+        val second = DirectLinksViewModel(repo, tabRequest, cache)
+        second.onShown()
+        advanceUntilIdle()
+        with(second.state.value) {
+            assertThat(status).isEqualTo(ListStatus.Content)
+            assertThat(items.map { it.id }).containsExactly("l1")
+            assertThat(total).isEqualTo(1)
+        }
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertThat(second.state.value.items.map { it.id }).containsExactly("l2", "l1").inOrder()
+        assertThat(second.state.value.total).isEqualTo(2)
+    }
+
+    @Test
     fun `pause, resume and revoke update the list`() = runTest {
         repo.links = listOf(link("l1"), link("l2"))
-        val vm = DirectLinksViewModel(repo, tabRequest)
+        val vm = DirectLinksViewModel(repo, tabRequest, ScreenCache(SessionStore()))
         val effects = mutableListOf<DirectLinksEffect>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.effects.collect { effects += it } }
         vm.onShown()
@@ -161,7 +191,7 @@ class DirectLinksTest {
     fun `focus opens a link from the list, or fetches one that is not on the first page`() = runTest {
         repo.pageSize = 1
         repo.links = listOf(link("l1"), link("l2"))
-        val vm = DirectLinksViewModel(repo, tabRequest)
+        val vm = DirectLinksViewModel(repo, tabRequest, ScreenCache(SessionStore()))
         val effects = mutableListOf<DirectLinksEffect>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.effects.collect { effects += it } }
 
@@ -190,7 +220,7 @@ class DirectLinksTest {
 
     @Test
     fun `tab requests are exposed and consumed`() = runTest {
-        val vm = DirectLinksViewModel(repo, tabRequest)
+        val vm = DirectLinksViewModel(repo, tabRequest, ScreenCache(SessionStore()))
         tabRequest.request(SharesTab.LINKS, "l1")
         val target = vm.pendingTab.value!!
         assertThat(target.linkId).isEqualTo("l1")
@@ -201,7 +231,7 @@ class DirectLinksTest {
     @Test
     fun `list load failure without data shows the error page`() = runTest {
         repo.links = listOf(link("l1"))
-        val vm = DirectLinksViewModel(repo, tabRequest)
+        val vm = DirectLinksViewModel(repo, tabRequest, ScreenCache(SessionStore()))
         advanceUntilIdle()
         repo.failNext = true
         vm.onShown()

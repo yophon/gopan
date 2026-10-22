@@ -8,6 +8,9 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.auth.SessionStore
+import xyz.yophon.gopan.core.auth.UserSummary
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodeKind
 import xyz.yophon.gopan.core.data.media.FakeMediaRepository
@@ -35,7 +38,7 @@ class RecentPlaysViewModelTest {
     @Test
     fun `loads the unfinished plays`() = runTest {
         repo.recent = listOf(play("a"), play("b"))
-        val vm = RecentPlaysViewModel(repo, sessions)
+        val vm = RecentPlaysViewModel(repo, sessions, ScreenCache(SessionStore()))
         assertThat(vm.state.value.status).isEqualTo(ListStatus.Loading)
         advanceUntilIdle()
         assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
@@ -43,9 +46,26 @@ class RecentPlaysViewModelTest {
     }
 
     @Test
+    fun `coming back shows the cached plays at once and then the fresh ones`() = runTest {
+        val cache = ScreenCache(SessionStore().apply { setSignedIn("t", UserSummary("u1", "alice", 0, 0, false)) })
+        repo.recent = listOf(play("a"), play("b"))
+        RecentPlaysViewModel(repo, sessions, cache)
+        advanceUntilIdle()
+
+        repo.recent = listOf(play("b"))
+        val vm = RecentPlaysViewModel(repo, sessions, cache)
+        // 联网的那次还没跑:上次的列表已经在了
+        assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
+        assertThat(vm.state.value.items.map { it.node.id }).containsExactly("a", "b").inOrder()
+
+        advanceUntilIdle()
+        assertThat(vm.state.value.items.map { it.node.id }).containsExactly("b")
+    }
+
+    @Test
     fun `a failed first load shows an error that can be retried`() = runTest {
         repo.recentError = GopanException(GopanErrors.NETWORK, "网络连接失败")
-        val vm = RecentPlaysViewModel(repo, sessions)
+        val vm = RecentPlaysViewModel(repo, sessions, ScreenCache(SessionStore()))
         advanceUntilIdle()
         assertThat(vm.state.value.status).isEqualTo(ListStatus.Error("网络连接失败"))
         repo.recentError = null
@@ -58,7 +78,7 @@ class RecentPlaysViewModelTest {
     @Test
     fun `coming back from the preview refreshes quietly`() = runTest {
         repo.recent = listOf(play("a"), play("b"))
-        val vm = RecentPlaysViewModel(repo, sessions)
+        val vm = RecentPlaysViewModel(repo, sessions, ScreenCache(SessionStore()))
         advanceUntilIdle()
         vm.onResumed() // 刚打开
         // 看完了 a:回来时它不在了
@@ -73,7 +93,7 @@ class RecentPlaysViewModelTest {
     @Test
     fun `opening a play previews just that file`() = runTest {
         repo.recent = listOf(play("a"), play("b"))
-        val vm = RecentPlaysViewModel(repo, sessions)
+        val vm = RecentPlaysViewModel(repo, sessions, ScreenCache(SessionStore()))
         advanceUntilIdle()
         vm.effects.test {
             vm.open(vm.state.value.items[1])
@@ -85,7 +105,7 @@ class RecentPlaysViewModelTest {
     @Test
     fun `removing clears the progress and drops the row`() = runTest {
         repo.recent = listOf(play("a"), play("b"))
-        val vm = RecentPlaysViewModel(repo, sessions)
+        val vm = RecentPlaysViewModel(repo, sessions, ScreenCache(SessionStore()))
         advanceUntilIdle()
         vm.effects.test {
             vm.remove(vm.state.value.items[0])
@@ -100,7 +120,7 @@ class RecentPlaysViewModelTest {
     fun `a failed removal puts the row back where it was`() = runTest {
         repo.recent = listOf(play("a"), play("b"), play("c"))
         repo.clearError = GopanException(GopanErrors.NETWORK, "网络连接失败")
-        val vm = RecentPlaysViewModel(repo, sessions)
+        val vm = RecentPlaysViewModel(repo, sessions, ScreenCache(SessionStore()))
         advanceUntilIdle()
         vm.effects.test {
             vm.remove(vm.state.value.items[1])

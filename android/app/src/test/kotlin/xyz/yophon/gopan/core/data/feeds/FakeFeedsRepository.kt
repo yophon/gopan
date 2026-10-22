@@ -1,5 +1,6 @@
 package xyz.yophon.gopan.core.data.feeds
 
+import kotlinx.coroutines.CompletableDeferred
 import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
 
@@ -11,6 +12,9 @@ class FakeFeedsRepository : FeedsRepository {
     private var lastItems: List<FeedItem> = emptyList()
     var preview: FeedPreview? = null
     var nextError: GopanException? = null
+
+    /** 非空时 feeds() 等它再回:测"先显示快照、联网还在路上"的中间态 */
+    var feedsGate: CompletableDeferred<Unit>? = null
 
     /** setEnabled 收到的订阅(检查是否带上了全部设置) */
     var lastUpdated: Pair<Feed, Boolean>? = null
@@ -24,6 +28,7 @@ class FakeFeedsRepository : FeedsRepository {
 
     override suspend fun feeds(): List<Feed> {
         calls += "feeds"
+        feedsGate?.await()
         fail()
         return feeds
     }

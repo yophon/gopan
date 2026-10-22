@@ -70,6 +70,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.AppConfig
+import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.collect.FileRequest
 import xyz.yophon.gopan.core.data.collect.FileRequestsRepository
 import xyz.yophon.gopan.core.network.GopanErrors
@@ -77,7 +79,7 @@ import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.network.gopanResult
 import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.components.ErrorState
-import xyz.yophon.gopan.core.ui.components.LoadingState
+import xyz.yophon.gopan.core.ui.components.ListSkeleton
 import xyz.yophon.gopan.core.ui.exposeTestTags
 import xyz.yophon.gopan.core.ui.format.formatBytes
 import xyz.yophon.gopan.core.ui.format.formatTime
@@ -133,6 +135,7 @@ sealed interface FileRequestsEffect {
 class FileRequestsViewModel @Inject constructor(
     private val repo: FileRequestsRepository,
     private val config: AppConfig,
+    cache: ScreenCache,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FileRequestsUiState())
@@ -145,7 +148,11 @@ class FileRequestsViewModel @Inject constructor(
     private var loadedOnce = false
 
     init {
-        load(silent = false)
+        // 上次的列表先画出来,再静默刷新
+        val cached = cache[CACHE_KEY]
+        if (cached != null) _state.update { it.copy(status = ListStatus.Content, items = cached) }
+        cache.mirror(viewModelScope, CACHE_KEY, _state) { s -> s.items.takeIf { s.status == ListStatus.Content } }
+        load(silent = cached != null)
     }
 
     fun url(request: FileRequest): String = config.collectUrl(request.token)
@@ -221,6 +228,8 @@ class FileRequestsViewModel @Inject constructor(
     }
 
     companion object {
+        val CACHE_KEY = ScreenKey<List<FileRequest>>("file-requests")
+
         /** 新建的在前(服务端已按创建时间倒序,这里再保证一次) */
         fun sortRequests(items: List<FileRequest>): List<FileRequest> = items.sortedByDescending { it.createdAt }
     }
@@ -261,7 +270,7 @@ fun FileRequestsTab(
 
     PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = viewModel::refresh, modifier = Modifier.fillMaxSize()) {
         when (val status = state.status) {
-            ListStatus.Loading -> LoadingState()
+            ListStatus.Loading -> ListSkeleton()
             is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
             ListStatus.Content -> if (state.items.isEmpty()) {
                 FullPage {

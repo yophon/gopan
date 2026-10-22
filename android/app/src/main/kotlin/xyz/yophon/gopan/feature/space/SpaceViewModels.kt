@@ -16,7 +16,10 @@ import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodesRepository
+import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.space.DuplicateGroup
+import xyz.yophon.gopan.core.data.space.DuplicatePage
 import xyz.yophon.gopan.core.data.space.SpaceCategory
 import xyz.yophon.gopan.core.data.space.SpaceFile
 import xyz.yophon.gopan.core.data.space.SpaceFolderLevel
@@ -33,6 +36,8 @@ import javax.inject.Inject
 /*
  * 「我的 → 空间」(doc/23 三.1)的各个标签,一个标签一个 ViewModel(都挂在空间页的导航条目上,切标签不丢)。
  * 第一次切到某个标签才建它的 ViewModel、才查;别处改过网盘(NodesRepository.version 变了)后回到这个标签静默重查。
+ * 每个标签上次的结果留在 ScreenCache 里:再进空间页先画出来,同时静默重查(键固定的标签用 mirror 跟着状态写,
+ * 键随状态变的——文件夹按层、大文件按类型筛选——在拿到数据和本地改动后显式写)。
  * 清理一律移进回收站(NodesRepository.delete,30 天内能还原、记进动态)。
  */
 
@@ -48,7 +53,10 @@ internal fun openNav(node: Node): NotificationNav.Drive =
     NotificationsLogic.refineNodeNav(NotificationNav.Drive(folderId = node.parentId, previewId = node.id), node.isFolder)
 
 /** 各标签共用:状态、静默重查、一次性提示 */
-abstract class SpaceTabViewModel(protected val nodes: NodesRepository) : ViewModel() {
+abstract class SpaceTabViewModel(
+    protected val nodes: NodesRepository,
+    protected val cache: ScreenCache,
+) : ViewModel() {
     protected val _effects = Channel<SpaceEffect>(Channel.BUFFERED)
     val effects: Flow<SpaceEffect> = _effects.receiveAsFlow()
 
@@ -105,7 +113,8 @@ data class SpaceOverviewUiState(
 class SpaceOverviewViewModel @Inject constructor(
     private val repo: SpaceRepository,
     nodes: NodesRepository,
-) : SpaceTabViewModel(nodes) {
+    cache: ScreenCache,
+) : SpaceTabViewModel(nodes, cache) {
 
     private val _state = MutableStateFlow(SpaceOverviewUiState())
     val state: StateFlow<SpaceOverviewUiState> = _state.asStateFlow()
@@ -113,6 +122,7 @@ class SpaceOverviewViewModel @Inject constructor(
     override val status: ListStatus get() = _state.value.status
 
     init {
+        cache.mirror(viewModelScope, CACHE_KEY, _state) { s -> s.overview.takeIf { s.status == ListStatus.Content } }
         load(silent = false)
     }
 
@@ -122,7 +132,12 @@ class SpaceOverviewViewModel @Inject constructor(
     }
 
     override suspend fun fetch(silent: Boolean) {
-        if (!silent) _state.update { it.copy(status = ListStatus.Loading) }
+        // 上次的总览先画出来,再静默重查
+        val cached = if (silent) null else cache[CACHE_KEY]
+        when {
+            cached != null -> _state.update { it.copy(status = ListStatus.Content, overview = cached) }
+            !silent -> _state.update { it.copy(status = ListStatus.Loading) }
+        }
         gopanResult { repo.overview() }
             .onSuccess { o -> _state.update { it.copy(status = ListStatus.Content, overview = o, refreshing = false) } }
             .onFailure { e ->
@@ -160,6 +175,10 @@ class SpaceOverviewViewModel @Inject constructor(
                 }
         }
     }
+
+    companion object {
+        val CACHE_KEY = ScreenKey<SpaceOverview>("space/overview")
+    }
 }
 
 // ---------- 文件夹 ----------
@@ -183,7 +202,8 @@ data class SpaceFoldersUiState(
 class SpaceFoldersViewModel @Inject constructor(
     private val repo: SpaceRepository,
     nodes: NodesRepository,
-) : SpaceTabViewModel(nodes) {
+    cache: ScreenCache,
+) : SpaceTabViewModel(nodes, cache) {
 
     private val _state = MutableStateFlow(SpaceFoldersUiState())
     val state: StateFlow<SpaceFoldersUiState> = _state.asStateFlow()
@@ -200,12 +220,21 @@ class SpaceFoldersViewModel @Inject constructor(
     }
 
     override suspend fun fetch(silent: Boolean) {
-        if (!silent) _state.update { it.copy(status = ListStatus.Loading, level = null) }
         val parentId = _state.value.stack.last().id
+        val key = levelKey(parentId)
+        // 看过的这一层(下钻、返回上一层都算)先画出来,再静默重查
+        val cached = if (silent) null else cache[key]
+        when {
+            cached != null -> _state.update { it.copy(status = ListStatus.Content, level = cached) }
+            !silent -> _state.update { it.copy(status = ListStatus.Loading, level = null) }
+        }
         gopanResult { repo.folders(parentId) }
-            .onSuccess { level -> _state.update { it.copy(status = ListStatus.Content, level = level, refreshing = false) } }
+            .onSuccess { level ->
+                cache.put(key, level)
+                _state.update { it.copy(status = ListStatus.Content, level = level, refreshing = false) }
+            }
             .onFailure { e ->
-                if (silent && _state.value.level != null) {
+                if ((silent || cached != null) && _state.value.level != null) {
                     _state.update { it.copy(refreshing = false) }
                     message(UiText.Plain(errorText(e)))
                 } else {
@@ -227,6 +256,8 @@ class SpaceFoldersViewModel @Inject constructor(
         load(silent = false)
         return true
     }
+
+    private fun levelKey(parentId: String?) = ScreenKey<SpaceFolderLevel>("space/folders/${parentId.orEmpty()}")
 }
 
 // ---------- 可勾选的文件列表:大文件、很久没动、空文件夹 ----------
@@ -247,7 +278,7 @@ data class SpaceFilesUiState(
 }
 
 /** 一张可勾选的清单:勾选后移进回收站 */
-abstract class SpaceFilesViewModel(nodes: NodesRepository) : SpaceTabViewModel(nodes) {
+abstract class SpaceFilesViewModel(nodes: NodesRepository, cache: ScreenCache) : SpaceTabViewModel(nodes, cache) {
 
     protected val _state = MutableStateFlow(SpaceFilesUiState())
     val state: StateFlow<SpaceFilesUiState> = _state.asStateFlow()
@@ -256,20 +287,30 @@ abstract class SpaceFilesViewModel(nodes: NodesRepository) : SpaceTabViewModel(n
 
     protected abstract suspend fun query(): List<SpaceFile>
 
+    /** 这张清单当前的缓存键(大文件按类型筛选分开存) */
+    protected abstract fun cacheKey(): ScreenKey<List<SpaceFile>>
+
     fun refresh() {
         _state.update { it.copy(refreshing = true) }
         load(silent = true)
     }
 
     override suspend fun fetch(silent: Boolean) {
-        if (!silent) _state.update { it.copy(status = ListStatus.Loading) }
+        val key = cacheKey()
+        // 上次的清单先画出来,再静默重查
+        val cached = if (silent) null else cache[key]
+        when {
+            cached != null -> _state.update { it.copy(status = ListStatus.Content, items = cached) }
+            !silent -> _state.update { it.copy(status = ListStatus.Loading) }
+        }
         gopanResult { query() }
             .onSuccess { items ->
+                cache.put(key, items)
                 val ids = items.mapTo(HashSet()) { it.node.id }
                 _state.update { it.copy(status = ListStatus.Content, items = items, selection = it.selection intersect ids, refreshing = false) }
             }
             .onFailure { e ->
-                if (silent && _state.value.status == ListStatus.Content) {
+                if ((silent || cached != null) && _state.value.status == ListStatus.Content) {
                     _state.update { it.copy(refreshing = false) }
                     message(UiText.Plain(errorText(e)))
                 } else {
@@ -312,6 +353,8 @@ abstract class SpaceFilesViewModel(nodes: NodesRepository) : SpaceTabViewModel(n
                     _state.update { st ->
                         st.copy(deleting = false, confirmDelete = false, items = st.items.filterNot { it.node.id in gone }, selection = emptySet())
                     }
+                    // 删掉的不留在缓存里,下次进来不会先闪出来
+                    if (_state.value.status == ListStatus.Content) cache.put(cacheKey(), _state.value.items)
                     message(UiText.Res(R.string.space_msg_deleted, ids.size))
                 }
                 .onFailure { e ->
@@ -327,12 +370,15 @@ abstract class SpaceFilesViewModel(nodes: NodesRepository) : SpaceTabViewModel(n
 class LargeFilesViewModel @Inject constructor(
     private val repo: SpaceRepository,
     nodes: NodesRepository,
-) : SpaceFilesViewModel(nodes) {
+    cache: ScreenCache,
+) : SpaceFilesViewModel(nodes, cache) {
     init {
         load(silent = false)
     }
 
     override suspend fun query(): List<SpaceFile> = repo.largeFiles(_state.value.category)
+
+    override fun cacheKey() = ScreenKey<List<SpaceFile>>("space/large/${_state.value.category?.name ?: "ALL"}")
 
     fun setCategory(category: SpaceCategory?) {
         if (_state.value.category == category) return
@@ -346,12 +392,19 @@ class LargeFilesViewModel @Inject constructor(
 class StaleFilesViewModel @Inject constructor(
     private val repo: SpaceRepository,
     nodes: NodesRepository,
-) : SpaceFilesViewModel(nodes) {
+    cache: ScreenCache,
+) : SpaceFilesViewModel(nodes, cache) {
     init {
         load(silent = false)
     }
 
     override suspend fun query(): List<SpaceFile> = repo.staleFiles()
+
+    override fun cacheKey() = CACHE_KEY
+
+    companion object {
+        val CACHE_KEY = ScreenKey<List<SpaceFile>>("space/stale")
+    }
 }
 
 /** 空文件夹:子树里一个文件都没有的(只列最上面一层) */
@@ -359,12 +412,19 @@ class StaleFilesViewModel @Inject constructor(
 class EmptyFoldersViewModel @Inject constructor(
     private val repo: SpaceRepository,
     nodes: NodesRepository,
-) : SpaceFilesViewModel(nodes) {
+    cache: ScreenCache,
+) : SpaceFilesViewModel(nodes, cache) {
     init {
         load(silent = false)
     }
 
     override suspend fun query(): List<SpaceFile> = repo.emptyFolders()
+
+    override fun cacheKey() = CACHE_KEY
+
+    companion object {
+        val CACHE_KEY = ScreenKey<List<SpaceFile>>("space/empty-folders")
+    }
 }
 
 // ---------- 重复文件 ----------
@@ -391,7 +451,8 @@ data class DuplicatesUiState(
 class DuplicatesViewModel @Inject constructor(
     private val repo: SpaceRepository,
     nodes: NodesRepository,
-) : SpaceTabViewModel(nodes) {
+    cache: ScreenCache,
+) : SpaceTabViewModel(nodes, cache) {
 
     private val _state = MutableStateFlow(DuplicatesUiState())
     val state: StateFlow<DuplicatesUiState> = _state.asStateFlow()
@@ -401,6 +462,8 @@ class DuplicatesViewModel @Inject constructor(
     private var moreJob: Job? = null
 
     init {
+        // 只存组与翻页位置,勾选不存(恢复时回到默认勾选)
+        cache.mirror(viewModelScope, CACHE_KEY, _state) { s -> DuplicatePage(s.groups, s.nextOffset).takeIf { s.status == ListStatus.Content } }
         load(silent = false)
     }
 
@@ -412,7 +475,19 @@ class DuplicatesViewModel @Inject constructor(
     /** 从第一页重来,勾选回到默认(删过之后组都变了) */
     override suspend fun fetch(silent: Boolean) {
         moreJob?.cancel()
-        if (!silent) _state.update { it.copy(status = ListStatus.Loading) }
+        // 上次看到的组先画出来,再静默从第一页重查
+        val cached = if (silent) null else cache[CACHE_KEY]
+        when {
+            cached != null -> _state.update {
+                it.copy(
+                    status = ListStatus.Content,
+                    groups = cached.items,
+                    nextOffset = cached.nextOffset,
+                    selection = SpaceLogic.defaultDuplicateSelection(cached.items),
+                )
+            }
+            !silent -> _state.update { it.copy(status = ListStatus.Loading) }
+        }
         _state.update { it.copy(loadingMore = false, loadMoreError = null) }
         gopanResult { repo.duplicates(offset = 0) }
             .onSuccess { page ->
@@ -427,7 +502,7 @@ class DuplicatesViewModel @Inject constructor(
                 }
             }
             .onFailure { e ->
-                if (silent && _state.value.status == ListStatus.Content) {
+                if ((silent || cached != null) && _state.value.status == ListStatus.Content) {
                     _state.update { it.copy(refreshing = false) }
                     message(UiText.Plain(errorText(e)))
                 } else {
@@ -496,6 +571,10 @@ class DuplicatesViewModel @Inject constructor(
                 }
         }
     }
+
+    companion object {
+        val CACHE_KEY = ScreenKey<DuplicatePage>("space/duplicates")
+    }
 }
 
 // ---------- 分享与直链 ----------
@@ -527,7 +606,8 @@ data class SpaceIdleUiState(
 class SpaceIdleViewModel @Inject constructor(
     private val repo: SpaceRepository,
     nodes: NodesRepository,
-) : SpaceTabViewModel(nodes) {
+    cache: ScreenCache,
+) : SpaceTabViewModel(nodes, cache) {
 
     private val _state = MutableStateFlow(SpaceIdleUiState())
     val state: StateFlow<SpaceIdleUiState> = _state.asStateFlow()
@@ -535,6 +615,7 @@ class SpaceIdleViewModel @Inject constructor(
     override val status: ListStatus get() = _state.value.status
 
     init {
+        cache.mirror(viewModelScope, CACHE_KEY, _state) { s -> s.idle.takeIf { s.status == ListStatus.Content } }
         load(silent = false)
     }
 
@@ -544,11 +625,16 @@ class SpaceIdleViewModel @Inject constructor(
     }
 
     override suspend fun fetch(silent: Boolean) {
-        if (!silent) _state.update { it.copy(status = ListStatus.Loading) }
+        // 上次的清单先画出来,再静默重查
+        val cached = if (silent) null else cache[CACHE_KEY]
+        when {
+            cached != null -> _state.update { it.copy(status = ListStatus.Content, idle = cached) }
+            !silent -> _state.update { it.copy(status = ListStatus.Loading) }
+        }
         gopanResult { repo.idle() }
             .onSuccess { idle -> _state.update { it.copy(status = ListStatus.Content, idle = idle, refreshing = false) } }
             .onFailure { e ->
-                if (silent && _state.value.idle != null) {
+                if ((silent || cached != null) && _state.value.idle != null) {
                     _state.update { it.copy(refreshing = false) }
                     message(UiText.Plain(errorText(e)))
                 } else {
@@ -601,5 +687,9 @@ class SpaceIdleViewModel @Inject constructor(
                 message(UiText.Plain(e.message ?: "操作失败"))
             }
         }
+    }
+
+    companion object {
+        val CACHE_KEY = ScreenKey<SpaceIdle>("space/idle")
     }
 }

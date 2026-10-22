@@ -29,6 +29,12 @@ sealed interface RefreshOutcome {
 /** 由 SessionManager 实现;拦截器通过 dagger.Lazy 引用以打破 ApolloClient ↔ SessionManager 的依赖环 */
 interface TokenRefresher {
     suspend fun refreshAfterUnauthenticated(staleToken: String?): RefreshOutcome
+
+    /**
+     * 发业务请求前取 token:内存里有就用;已登录但还没有(启动时先用缓存用户进来、断网启动)就先等那次单飞 refresh,
+     * 省掉"不带 token 发出 → UNAUTHENTICATED → 刷新 → 重放"多出来的一个来回。拿不到返回 null,请求照常不带 token 发出。
+     */
+    suspend fun accessTokenForRequest(): String? = null
 }
 
 /**
@@ -49,7 +55,7 @@ class AuthInterceptor @Inject constructor(
             emitAll(chain.proceed(request))
             return@flow
         }
-        val token = store.accessToken
+        val token = store.accessToken ?: refresher.get().accessTokenForRequest()
         val first = chain.proceed(request.withBearer(token)).single()
         if (!first.isUnauthenticated()) {
             emit(first)

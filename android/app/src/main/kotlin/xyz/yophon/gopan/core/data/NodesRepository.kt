@@ -31,6 +31,12 @@ interface NodesRepository {
      */
     suspend fun firstPage(parentId: String?, order: DriveSortOrder, desc: Boolean): Listing
 
+    /**
+     * 只读本地:这个目录缓存的首页(按 [order] / [desc] 重排),没有就 null。不联网、不抛错。
+     * 列表页进来先拿它画出来,再用 [firstPage] 联网刷新(stale-while-revalidate)。
+     */
+    suspend fun cachedFirstPage(parentId: String?, order: DriveSortOrder, desc: Boolean): Listing? = null
+
     /** 目录分页(任意游标),不碰缓存 */
     suspend fun children(parentId: String?, cursor: String?, order: DriveSortOrder, desc: Boolean): NodePage
 
@@ -74,7 +80,7 @@ interface NodesRepository {
 @Immutable
 data class Listing(
     val page: NodePage,
-    /** true:来自本地缓存(请求失败回退),内容可能过时 */
+    /** true:来自本地缓存(请求失败回退,或 [NodesRepository.cachedFirstPage]),内容可能过时 */
     val fromCache: Boolean,
     /** 数据的拉取时刻(epoch 毫秒);缓存时是当初写缓存的时刻 */
     val fetchedAt: Long,

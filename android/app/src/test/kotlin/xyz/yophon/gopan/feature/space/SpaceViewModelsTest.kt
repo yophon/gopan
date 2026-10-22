@@ -1,6 +1,7 @@
 package xyz.yophon.gopan.feature.space
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -10,8 +11,11 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.auth.SessionStore
+import xyz.yophon.gopan.core.auth.UserSummary
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodeKind
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.space.FakeSpaceRepository
 import xyz.yophon.gopan.core.data.space.FakeSpaceRepository.Companion.group
 import xyz.yophon.gopan.core.data.space.FakeSpaceRepository.Companion.spaceFile
@@ -35,6 +39,11 @@ class SpaceViewModelsTest {
     private val repo = FakeSpaceRepository()
     private val nodes = FakeNodesRepository()
 
+    /** 没登录:缓存读不到也写不进,各标签按原来的方式加载 */
+    private val noCache = ScreenCache(SessionStore())
+
+    private fun signedInCache() = ScreenCache(SessionStore().apply { setSignedIn("t", UserSummary("u1", "alice", 0, 0, false)) })
+
     private fun <T : SpaceTabViewModel> vmTest(create: () -> T, block: suspend TestScope.(T, List<SpaceEffect>) -> Unit) = runTest {
         val vm = create()
         val effects = mutableListOf<SpaceEffect>()
@@ -48,7 +57,7 @@ class SpaceViewModelsTest {
     // ---- 总览 ----
 
     @Test
-    fun `overview loads and purging the trash confirms first`() = vmTest({ SpaceOverviewViewModel(repo, nodes) }) { vm, effects ->
+    fun `overview loads and purging the trash confirms first`() = vmTest({ SpaceOverviewViewModel(repo, nodes, noCache) }) { vm, effects ->
         assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
         assertThat(vm.state.value.overview?.trashBytes).isEqualTo(100)
 
@@ -65,7 +74,7 @@ class SpaceViewModelsTest {
     }
 
     @Test
-    fun `overview reloads when the drive changed elsewhere`() = vmTest({ SpaceOverviewViewModel(repo, nodes) }) { vm, _ ->
+    fun `overview reloads when the drive changed elsewhere`() = vmTest({ SpaceOverviewViewModel(repo, nodes, noCache) }) { vm, _ ->
         vm.onShown()
         advanceUntilIdle()
         assertThat(repo.calls.count { it == "overview" }).isEqualTo(1)
@@ -73,6 +82,26 @@ class SpaceViewModelsTest {
         vm.onShown()
         advanceUntilIdle()
         assertThat(repo.calls.count { it == "overview" }).isEqualTo(2)
+    }
+
+    @Test
+    fun `overview seen before shows at once while it reloads`() = runTest {
+        val cache = signedInCache()
+        SpaceOverviewViewModel(repo, nodes, cache)
+        advanceUntilIdle()
+
+        repo.overview = repo.overview.copy(trashFiles = 0, trashBytes = 0)
+        val gate = CompletableDeferred<Unit>()
+        repo.gate = gate
+        val vm = SpaceOverviewViewModel(repo, nodes, cache)
+        advanceUntilIdle()
+        // 服务端还没回:上次的总览已经画出来
+        assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
+        assertThat(vm.state.value.overview?.trashBytes).isEqualTo(100)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertThat(vm.state.value.overview?.trashBytes).isEqualTo(0)
     }
 
     // ---- 文件夹 ----
@@ -84,7 +113,7 @@ class SpaceViewModelsTest {
     fun `folders drill down and back up`() {
         repo.levels[null] = SpaceFolderLevel("/", listOf(folder("a")), 0, 0)
         repo.levels["a"] = SpaceFolderLevel("/名a", listOf(folder("b", "a")), 2, 20)
-        vmTest({ SpaceFoldersViewModel(repo, nodes) }) { vm, effects ->
+        vmTest({ SpaceFoldersViewModel(repo, nodes, noCache) }) { vm, effects ->
             assertThat(vm.state.value.canGoUp).isFalse()
             vm.enter(vm.state.value.level!!.folders.single())
             advanceUntilIdle()
@@ -102,6 +131,29 @@ class SpaceViewModelsTest {
         }
     }
 
+    @Test
+    fun `a folder level seen before shows at once when going back up`() = runTest {
+        repo.levels[null] = SpaceFolderLevel("/", listOf(folder("a")), 0, 0)
+        repo.levels["a"] = SpaceFolderLevel("/名a", listOf(folder("b", "a")), 2, 20)
+        val vm = SpaceFoldersViewModel(repo, nodes, signedInCache())
+        advanceUntilIdle()
+        vm.enter(vm.state.value.level!!.folders.single())
+        advanceUntilIdle()
+
+        val gate = CompletableDeferred<Unit>()
+        repo.gate = gate
+        assertThat(vm.up()).isTrue()
+        advanceUntilIdle()
+        // 返回上一层不出整页加载:先画缓存,重查还在路上
+        assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
+        assertThat(vm.state.value.level?.path).isEqualTo("/")
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertThat(vm.state.value.level?.path).isEqualTo("/")
+        assertThat(repo.calls).containsExactly("folders(null)", "folders(a)", "folders(null)").inOrder()
+    }
+
     // ---- 大文件 ----
 
     @Test
@@ -111,7 +163,7 @@ class SpaceViewModelsTest {
             spaceFile("i1", 500, category = SpaceCategory.IMAGE),
             spaceFile("v2", 300, category = SpaceCategory.VIDEO),
         )
-        vmTest({ LargeFilesViewModel(repo, nodes) }) { vm, effects ->
+        vmTest({ LargeFilesViewModel(repo, nodes, noCache) }) { vm, effects ->
             assertThat(vm.state.value.items).hasSize(3)
             vm.setCategory(SpaceCategory.VIDEO)
             advanceUntilIdle()
@@ -142,7 +194,7 @@ class SpaceViewModelsTest {
     @Test
     fun `select all toggles and a failed delete keeps the list`() {
         repo.empty = listOf(spaceFile("d1", folder = true), spaceFile("d2", folder = true))
-        vmTest({ EmptyFoldersViewModel(repo, nodes) }) { vm, effects ->
+        vmTest({ EmptyFoldersViewModel(repo, nodes, noCache) }) { vm, effects ->
             vm.selectAll()
             assertThat(vm.state.value.allSelected).isTrue()
             nodes.nextMutationError = xyz.yophon.gopan.core.network.GopanException("NETWORK", "网络连接失败")
@@ -163,7 +215,7 @@ class SpaceViewModelsTest {
     fun `duplicates default to keeping the earliest, page and delete`() {
         repo.duplicatePageSize = 1
         repo.duplicates = listOf(group("s1", 100, "a1", "a2", "a3"), group("s2", 10, "b1", "b2"))
-        vmTest({ DuplicatesViewModel(repo, nodes) }) { vm, effects ->
+        vmTest({ DuplicatesViewModel(repo, nodes, noCache) }) { vm, effects ->
             assertThat(vm.state.value.groups.map { it.sha256 }).containsExactly("s1")
             assertThat(vm.state.value.selection).containsExactly("a2", "a3")
             assertThat(vm.state.value.nextOffset).isEqualTo(1)
@@ -193,7 +245,7 @@ class SpaceViewModelsTest {
     @Test
     fun `clearing duplicate selection deletes nothing`() {
         repo.duplicates = listOf(group("s1", 100, "a1", "a2"))
-        vmTest({ DuplicatesViewModel(repo, nodes) }) { vm, _ ->
+        vmTest({ DuplicatesViewModel(repo, nodes, noCache) }) { vm, _ ->
             vm.clearSelection()
             vm.requestDelete()
             assertThat(vm.state.value.confirmDelete).isFalse()
@@ -209,7 +261,7 @@ class SpaceViewModelsTest {
             links = listOf(IdleLink("l1", "n2", "a.png", null, "2025-01-01T00:00:00Z", "2025-02-01T00:00:00Z", 7, expired = false)),
             requests = listOf(IdleRequest("r1", "收作业", "f1", "2026-09-01T00:00:00Z", "2026-08-01T00:00:00Z")),
         )
-        vmTest({ SpaceIdleViewModel(repo, nodes) }) { vm, effects ->
+        vmTest({ SpaceIdleViewModel(repo, nodes, noCache) }) { vm, effects ->
             vm.requestRevoke(IdleRevoke.Link("l1", "a.png"))
             assertThat(vm.state.value.confirm).isEqualTo(IdleRevoke.Link("l1", "a.png"))
             vm.dismissRevoke()
@@ -235,7 +287,7 @@ class SpaceViewModelsTest {
     @Test
     fun `load failure shows an error and retry recovers`() {
         repo.failNext = true
-        vmTest({ StaleFilesViewModel(repo, nodes) }) { vm, _ ->
+        vmTest({ StaleFilesViewModel(repo, nodes, noCache) }) { vm, _ ->
             assertThat(vm.state.value.status).isInstanceOf(ListStatus.Error::class.java)
             vm.retry()
             advanceUntilIdle()

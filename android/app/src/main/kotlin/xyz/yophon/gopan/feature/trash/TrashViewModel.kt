@@ -14,8 +14,11 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.data.CachedPage
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodesRepository
+import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.mergePages
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.network.gopanResult
@@ -60,6 +63,7 @@ data class TrashUiState(
 @HiltViewModel
 class TrashViewModel @Inject constructor(
     private val repo: NodesRepository,
+    cache: ScreenCache,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(TrashUiState())
@@ -73,7 +77,15 @@ class TrashViewModel @Inject constructor(
     private var loadMoreJob: Job? = null
 
     init {
-        load(LoadMode.INITIAL)
+        // 上次看到的列表先画出来(剩余天数按现在算),再静默刷新
+        val cached = cache[CACHE_KEY]
+        if (cached != null) {
+            _state.update {
+                it.copy(items = cached.items, nextCursor = cached.nextCursor, status = ListStatus.Content, nowMillis = System.currentTimeMillis())
+            }
+        }
+        cache.mirror(viewModelScope, CACHE_KEY, _state) { s -> CachedPage(s.items, s.nextCursor).takeIf { s.status == ListStatus.Content } }
+        load(if (cached != null) LoadMode.SILENT else LoadMode.INITIAL)
     }
 
     private enum class LoadMode { INITIAL, REFRESH, SILENT }
@@ -83,7 +95,8 @@ class TrashViewModel @Inject constructor(
     fun refresh() = load(LoadMode.REFRESH)
 
     fun onResumed() {
-        if (_state.value.status != ListStatus.Content) return
+        // 先画了缓存、首次联网还在路上时不另起一次
+        if (_state.value.status != ListStatus.Content || loadJob?.isActive == true) return
         if (loadedVersion != repo.version.value) load(LoadMode.SILENT)
     }
 
@@ -229,5 +242,9 @@ class TrashViewModel @Inject constructor(
                 _messages.trySend(UiText.Plain(ge.message ?: ge.code))
             }
         }
+    }
+
+    companion object {
+        val CACHE_KEY = ScreenKey<CachedPage<Node>>("trash")
     }
 }

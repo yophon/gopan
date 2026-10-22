@@ -60,6 +60,8 @@ data class DriveUiState(
     val fromCache: Boolean = false,
     val fetchedAt: Long = 0L,
     val offlineMessage: String? = null,
+    /** 进来先画的是本地缓存、首次联网还在路上:不算离线(不出离线提示),界面顶上一条细进度 */
+    val revalidating: Boolean = false,
     val sort: DriveSort = DriveSort(),
     val viewMode: DriveViewMode = DriveViewMode.LIST,
     val selection: Set<String> = emptySet(),
@@ -152,7 +154,7 @@ class DriveViewModel @Inject constructor(
 
     fun onResumed() {
         val s = _state.value
-        if (s.status != ListStatus.Content) return
+        if (s.status != ListStatus.Content || s.revalidating) return
         if (loadedVersion != repo.version.value || (!s.fromCache && isStale(s.fetchedAt))) load(LoadMode.SILENT)
     }
 
@@ -176,20 +178,39 @@ class DriveViewModel @Inject constructor(
         loadMoreJob?.cancel()
         loadJob = viewModelScope.launch {
             val sort = _state.value.sort
+            // 第一次进这个目录:本地有缓存就先画出来,联网结果回来再换掉,不出整页加载
+            val first = mode == LoadMode.INITIAL && _state.value.status == ListStatus.Loading && _state.value.items.isEmpty()
+            val cached = if (first) repo.cachedFirstPage(parentId, sort.order, sort.desc) else null
             _state.update {
-                it.copy(
-                    status = if (mode == LoadMode.INITIAL) ListStatus.Loading else it.status,
-                    isRefreshing = mode == LoadMode.REFRESH,
-                    isLoadingMore = false,
-                    loadMoreError = null,
-                )
+                if (cached != null) {
+                    it.copy(
+                        items = cached.page.items,
+                        total = cached.page.total,
+                        nextCursor = null,
+                        status = ListStatus.Content,
+                        fromCache = true,
+                        fetchedAt = cached.fetchedAt,
+                        offlineMessage = null,
+                        revalidating = true,
+                        isRefreshing = false,
+                        isLoadingMore = false,
+                        loadMoreError = null,
+                    )
+                } else {
+                    it.copy(
+                        status = if (mode == LoadMode.INITIAL) ListStatus.Loading else it.status,
+                        isRefreshing = mode == LoadMode.REFRESH,
+                        isLoadingMore = false,
+                        loadMoreError = null,
+                    )
+                }
             }
             val result = gopanResult { repo.firstPage(parentId, sort.order, sort.desc) }
             result.onSuccess { listing ->
                 val current = _state.value
                 if (listing.fromCache && mode != LoadMode.INITIAL && current.items.isNotEmpty() && !current.fromCache) {
                     // 刷新失败而手上已有联网拿到的列表(可能已翻了好几页):保留它,只提示,不用缓存的首页覆盖
-                    _state.update { it.copy(isRefreshing = false) }
+                    _state.update { it.copy(isRefreshing = false, revalidating = false) }
                     if (mode == LoadMode.REFRESH) message(UiText.Plain(listing.error?.message ?: OFFLINE_FALLBACK_MESSAGE))
                     return@onSuccess
                 }
@@ -202,6 +223,7 @@ class DriveViewModel @Inject constructor(
                         nextCursor = listing.page.nextCursor,
                         status = ListStatus.Content,
                         isRefreshing = false,
+                        revalidating = false,
                         fromCache = listing.fromCache,
                         fetchedAt = listing.fetchedAt,
                         offlineMessage = listing.error?.message,
@@ -219,10 +241,18 @@ class DriveViewModel @Inject constructor(
                 val ge = e as? GopanException ?: e.toGopanException()
                 val message = ge.message ?: ge.code
                 _state.update {
+                    // 先画了缓存的首次加载也按首次处理:目录不存在、没权限这类错误不能停在过时的缓存上
                     if (mode == LoadMode.INITIAL || it.items.isEmpty()) {
-                        it.copy(status = ListStatus.Error(message), isRefreshing = false, items = emptyList(), nextCursor = null)
+                        it.copy(
+                            status = ListStatus.Error(message),
+                            isRefreshing = false,
+                            revalidating = false,
+                            items = emptyList(),
+                            nextCursor = null,
+                            fromCache = false,
+                        )
                     } else {
-                        it.copy(isRefreshing = false)
+                        it.copy(isRefreshing = false, revalidating = false)
                     }
                 }
                 if (mode != LoadMode.INITIAL && _state.value.items.isNotEmpty()) message(UiText.Plain(message))

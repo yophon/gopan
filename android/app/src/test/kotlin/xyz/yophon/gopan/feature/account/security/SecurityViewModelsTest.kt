@@ -10,6 +10,7 @@ import org.junit.Test
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.auth.SessionStore
 import xyz.yophon.gopan.core.auth.UserSummary
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.security.AccessRoot
 import xyz.yophon.gopan.core.data.security.ApiKey
 import xyz.yophon.gopan.core.data.security.AppPassword
@@ -100,6 +101,11 @@ class SecurityViewModelsTest {
     private val repo = FakeSecurityRepository()
     private val store = SessionStore()
 
+    /** 没登录:缓存读不到也写不进,各页按原来的方式加载 */
+    private val noCache = ScreenCache(SessionStore())
+
+    private fun signedInCache() = ScreenCache(SessionStore().apply { setSignedIn("t", UserSummary("u1", "alice", 0, 0, false)) })
+
     private fun signIn(admin: Boolean) = store.setSignedIn("t", UserSummary("u1", "alice", 0, 0, admin))
 
     @Test
@@ -110,7 +116,7 @@ class SecurityViewModelsTest {
             session("me", current = true, lastSeen = "2026-10-10T00:00:00Z"),
             session("pc", lastSeen = "2026-10-14T08:00:00Z"),
         )
-        val vm = DevicesViewModel(repo)
+        val vm = DevicesViewModel(repo, noCache)
         advanceUntilIdle()
         assertThat(vm.state.value.items.map { it.familyId }).containsExactly("me", "pc", "phone", "old").inOrder()
     }
@@ -118,7 +124,7 @@ class SecurityViewModelsTest {
     @Test
     fun `revoking another device marks it inactive, this device cannot be revoked here`() = runTest {
         repo.sessions = mutableListOf(session("me", current = true), session("pc"))
-        val vm = DevicesViewModel(repo)
+        val vm = DevicesViewModel(repo, noCache)
         advanceUntilIdle()
         vm.effects.test {
             vm.revoke(vm.state.value.items.first { it.familyId == "me" })
@@ -132,9 +138,48 @@ class SecurityViewModelsTest {
     }
 
     @Test
+    fun `devices seen before show at once while the list refreshes`() = runTest {
+        val cache = signedInCache()
+        repo.sessions = mutableListOf(session("me", current = true))
+        DevicesViewModel(repo, cache)
+        advanceUntilIdle()
+
+        repo.sessions = mutableListOf(session("me", current = true), session("pc"))
+        val vm = DevicesViewModel(repo, cache)
+        // 还没去服务端:上次的列表已经在了,不出整页加载
+        assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
+        assertThat(vm.state.value.items.map { it.familyId }).containsExactly("me")
+
+        advanceUntilIdle()
+        assertThat(vm.state.value.items.map { it.familyId }).containsExactly("me", "pc").inOrder()
+    }
+
+    @Test
+    fun `agent credentials and the audit log seen before show at once`() = runTest {
+        val cache = signedInCache()
+        repo.keys = mutableListOf(ApiKey("k1", "cli", listOf("files:read"), "2026-10-14T00:00:00Z", null))
+        repo.auditPages = ArrayDeque(listOf(listOf(audit(2), audit(1))))
+        val first = AgentViewModel(repo, testConfig, store, cache)
+        advanceUntilIdle()
+        first.selectTab(AgentTab.AUDIT)
+        advanceUntilIdle()
+        first.revokeKey(first.state.value.keys.single())
+        advanceUntilIdle()
+
+        val vm = AgentViewModel(repo, testConfig, store, cache)
+        with(vm.state.value) {
+            assertThat(status).isEqualTo(ListStatus.Content)
+            // 本地吊销过的不会再闪出来
+            assertThat(keys).isEmpty()
+            assertThat(auditStatus).isEqualTo(ListStatus.Content)
+            assertThat(audit.map { it.id }).containsExactly(2L, 1L).inOrder()
+        }
+    }
+
+    @Test
     fun `a new app password is shown once and the list refreshes`() = runTest {
         signIn(admin = false)
-        val vm = AppPasswordsViewModel(repo, testConfig, store)
+        val vm = AppPasswordsViewModel(repo, testConfig, store, noCache)
         advanceUntilIdle()
         assertThat(vm.davUrl).isEqualTo("https://drive.example/dav")
         assertThat(vm.username).isEqualTo("alice")
@@ -154,7 +199,7 @@ class SecurityViewModelsTest {
     @Test
     fun `api keys are created with scopes in option order, only admins can switch to admin scopes`() = runTest {
         signIn(admin = false)
-        val vm = AgentViewModel(repo, testConfig, store)
+        val vm = AgentViewModel(repo, testConfig, store, noCache)
         advanceUntilIdle()
         assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
         assertThat(vm.endpoint).isEqualTo("https://drive.example/mcp")
@@ -178,7 +223,7 @@ class SecurityViewModelsTest {
     @Test
     fun `admins switching to an admin key reset the scopes to admin read`() = runTest {
         signIn(admin = true)
-        val vm = AgentViewModel(repo, testConfig, store)
+        val vm = AgentViewModel(repo, testConfig, store, noCache)
         advanceUntilIdle()
         vm.setAdminKey(true)
         assertThat(vm.state.value.scopes).containsExactly("admin:read")
@@ -189,7 +234,7 @@ class SecurityViewModelsTest {
     fun `access roots take a path, empty clears the scope, an error stays on the dialog`() = runTest {
         signIn(admin = false)
         repo.keys = mutableListOf(ApiKey("k1", "CI", listOf("files:read"), "t", null))
-        val vm = AgentViewModel(repo, testConfig, store)
+        val vm = AgentViewModel(repo, testConfig, store, noCache)
         advanceUntilIdle()
 
         vm.editRoot("k1", CredentialType.API_KEY, "CI")
@@ -219,7 +264,7 @@ class SecurityViewModelsTest {
     fun `audit loads lazily and pages back until a short page`() = runTest {
         signIn(admin = false)
         repo.auditPages = ArrayDeque(listOf((100L downTo 51L).map(::audit), (50L downTo 41L).map(::audit)))
-        val vm = AgentViewModel(repo, testConfig, store)
+        val vm = AgentViewModel(repo, testConfig, store, noCache)
         advanceUntilIdle()
         assertThat(repo.auditCalls).isEmpty()
 
@@ -243,7 +288,7 @@ class SecurityViewModelsTest {
     fun `revoking a grant removes it`() = runTest {
         signIn(admin = false)
         repo.grants = mutableListOf(OAuthGrant("g1", "Claude", listOf("files:read"), "t", "t"))
-        val vm = AgentViewModel(repo, testConfig, store)
+        val vm = AgentViewModel(repo, testConfig, store, noCache)
         advanceUntilIdle()
         vm.revokeGrant(vm.state.value.grants.single())
         advanceUntilIdle()

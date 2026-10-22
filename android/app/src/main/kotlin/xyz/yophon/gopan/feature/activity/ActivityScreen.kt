@@ -87,7 +87,7 @@ import xyz.yophon.gopan.core.data.activity.Activity
 import xyz.yophon.gopan.core.data.activity.ActivityAction
 import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.components.ErrorState
-import xyz.yophon.gopan.core.ui.components.LoadingState
+import xyz.yophon.gopan.core.ui.components.ListSkeleton
 import xyz.yophon.gopan.feature.drive.FullPage
 import xyz.yophon.gopan.feature.drive.ListStatus
 import xyz.yophon.gopan.feature.drive.LoadMoreFooter
@@ -159,7 +159,7 @@ fun ActivityScreen(
             FilterBar(state, viewModel)
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = viewModel::refresh, modifier = Modifier.fillMaxSize()) {
                 when (val status = state.status) {
-                    ListStatus.Loading -> LoadingState()
+                    ListStatus.Loading -> ListSkeleton()
                     is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
                     ListStatus.Content -> if (state.items.isEmpty()) {
                         FullPage {

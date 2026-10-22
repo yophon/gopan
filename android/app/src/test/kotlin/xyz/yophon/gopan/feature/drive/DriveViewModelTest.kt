@@ -3,6 +3,7 @@ package xyz.yophon.gopan.feature.drive
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -125,6 +126,70 @@ class DriveViewModelTest {
         vm.loadMore()
         advanceUntilIdle()
         assertThat(repo.calls.filter { it.startsWith("children") }).isEmpty()
+    }
+
+    @Test
+    fun `a cached folder shows at once and the network listing replaces it`() = runTest {
+        repo.cache[null] = page(file("old"))
+        repo.listings[null] = listOf(page(file("old"), file("new"), nextCursor = "1", total = 3))
+        val gate = CompletableDeferred<Unit>()
+        repo.firstPageGate = gate
+
+        val vm = viewModel()
+        advanceUntilIdle()
+        // 联网还没回来:缓存已经画出来,不算离线
+        with(vm.state.value) {
+            assertThat(status).isEqualTo(ListStatus.Content)
+            assertThat(items.map { it.id }).containsExactly("old")
+            assertThat(fromCache).isTrue()
+            assertThat(revalidating).isTrue()
+            assertThat(offlineMessage).isNull()
+        }
+        // 这时回到前台不另起一次加载
+        vm.onResumed()
+        advanceUntilIdle()
+        assertThat(repo.firstPageCalls).isEqualTo(1)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        with(vm.state.value) {
+            assertThat(items.map { it.id }).containsExactly("old", "new").inOrder()
+            assertThat(fromCache).isFalse()
+            assertThat(revalidating).isFalse()
+            assertThat(nextCursor).isEqualTo("1")
+        }
+        assertThat(repo.firstPageCalls).isEqualTo(1)
+    }
+
+    @Test
+    fun `a cached folder offline ends on the cache with the banner`() = runTest {
+        repo.cache[null] = page(file("cached"))
+        repo.networkDown = true
+
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        with(vm.state.value) {
+            assertThat(items.map { it.id }).containsExactly("cached")
+            assertThat(fromCache).isTrue()
+            assertThat(revalidating).isFalse()
+            assertThat(offlineMessage).contains("网络")
+        }
+    }
+
+    @Test
+    fun `a cached folder that is gone on the server turns into the error page`() = runTest {
+        repo.cache[null] = page(file("cached"))
+        repo.firstPageError = GopanException(GopanErrors.NOT_FOUND, "对象不存在或已被删除")
+
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        with(vm.state.value) {
+            assertThat(status).isInstanceOf(ListStatus.Error::class.java)
+            assertThat(items).isEmpty()
+            assertThat(revalidating).isFalse()
+        }
     }
 
     @Test

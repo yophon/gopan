@@ -71,6 +71,7 @@ import xyz.yophon.gopan.core.data.shares.Share
 import xyz.yophon.gopan.core.data.shares.ShareVisit
 import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.components.ErrorState
+import xyz.yophon.gopan.core.ui.components.ListSkeleton
 import xyz.yophon.gopan.core.ui.components.LoadingState
 import xyz.yophon.gopan.core.ui.format.describeUserAgent
 import xyz.yophon.gopan.core.ui.format.formatTime
@@ -183,7 +184,7 @@ fun SharesScreen(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     when (val status = state.status) {
-                        ListStatus.Loading -> LoadingState()
+                        ListStatus.Loading -> ListSkeleton()
                         is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
                         ListStatus.Content -> if (state.items.isEmpty()) {
                             FullPage {

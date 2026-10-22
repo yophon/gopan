@@ -131,6 +131,22 @@ class NodesRepositoryImplTest {
     }
 
     @Test
+    fun `cachedFirstPage reads the cache without touching the network`() = runBlocking {
+        val small = node("s", "small.txt", size = 1)
+        val big = node("b", "big.bin", size = 999)
+        cache.put("u1", "p", CachedListing(listOf(small, big), total = 2, order = DriveSortOrder.NAME, desc = false, fetchedAt = 7L))
+
+        val listing = repo.cachedFirstPage("p", DriveSortOrder.SIZE, desc = true)
+
+        assertThat(listing?.fromCache).isTrue()
+        assertThat(listing?.error).isNull()
+        assertThat(listing?.fetchedAt).isEqualTo(7L)
+        assertThat(listing?.page?.items?.map { it.id }).containsExactly("b", "s").inOrder()
+        assertThat(repo.cachedFirstPage("never-cached", DriveSortOrder.NAME, false)).isNull()
+        assertThat(requests).isEmpty()
+    }
+
+    @Test
     fun `firstPage does not fall back for NOT_FOUND or when nothing is cached`() = runBlocking {
         cache.put("u1", "gone", CachedListing(listOf(node("x", "x")), 1, DriveSortOrder.NAME, false, 1L))
         handlers["Children"] = { """{"errors":[{"message":"对象不存在","extensions":{"code":"NOT_FOUND"}}],"data":null}""" }

@@ -105,7 +105,7 @@ import xyz.yophon.gopan.core.data.feeds.FeedPreview
 import xyz.yophon.gopan.core.ui.components.ConfirmDialog
 import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.components.ErrorState
-import xyz.yophon.gopan.core.ui.components.LoadingState
+import xyz.yophon.gopan.core.ui.components.ListSkeleton
 import xyz.yophon.gopan.core.ui.format.formatBytes
 import xyz.yophon.gopan.core.ui.format.formatRelativeTime
 import xyz.yophon.gopan.core.ui.format.formatTime
@@ -196,7 +196,7 @@ fun FeedsScreen(
     ) { padding ->
         PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = viewModel::refresh, modifier = Modifier.padding(padding).fillMaxSize()) {
             when (val status = state.status) {
-                ListStatus.Loading -> LoadingState()
+                ListStatus.Loading -> ListSkeleton()
                 is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
                 ListStatus.Content -> if (state.feeds.isEmpty()) {
                     FullPage {
@@ -523,7 +523,7 @@ fun FeedDetailScreen(
     ) { padding ->
         PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = viewModel::refresh, modifier = Modifier.padding(padding).fillMaxSize()) {
             when (val status = state.status) {
-                ListStatus.Loading -> LoadingState()
+                ListStatus.Loading -> ListSkeleton()
                 is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
                 ListStatus.Content -> if (feed != null) FeedDetailList(feed, state, viewModel, onOpenNode)
             }

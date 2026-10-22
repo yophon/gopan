@@ -31,7 +31,7 @@ import javax.inject.Singleton
 
 /**
  * Apollo 实现。缓存策略:只缓存目录首页(无游标),按 (当前用户, parentId) 一条;
- * 联网成功就覆盖写,请求失败且错误属于"暂时拿不到"的那类才回退缓存。
+ * 联网成功就覆盖写;列表页进来先读它([cachedFirstPage])再联网,请求失败且错误属于"暂时拿不到"的那类时也回退它。
  * 另外在内存里记住最近见过的文件夹(id → Node),面包屑绝大多数时候不用再查服务端。
  */
 @Singleton
@@ -57,17 +57,7 @@ class NodesRepositoryImpl @Inject constructor(
             children(parentId, null, order, desc)
         } catch (e: GopanException) {
             if (uid == null || !e.allowsCacheFallback) throw e
-            val cached = runCatching { cache.get(uid, parentId) }
-                .onFailure { Timber.w(it, "读列表缓存失败") }
-                .getOrNull() ?: throw e
-            cached.items.forEach(::remember)
-            val items = if (cached.order == order && cached.desc == desc) cached.items else sortNodes(cached.items, order, desc)
-            return Listing(
-                page = NodePage(items = items, nextCursor = null, total = cached.total),
-                fromCache = true,
-                fetchedAt = cached.fetchedAt,
-                error = e,
-            )
+            return cachedListing(uid, parentId, order, desc)?.copy(error = e) ?: throw e
         }
         val now = System.currentTimeMillis()
         if (uid != null) {
@@ -75,6 +65,24 @@ class NodesRepositoryImpl @Inject constructor(
                 .onFailure { Timber.w(it, "写列表缓存失败") }
         }
         return Listing(page = page, fromCache = false, fetchedAt = now)
+    }
+
+    override suspend fun cachedFirstPage(parentId: String?, order: DriveSortOrder, desc: Boolean): Listing? {
+        val uid = userId ?: return null
+        return cachedListing(uid, parentId, order, desc)
+    }
+
+    private suspend fun cachedListing(uid: String, parentId: String?, order: DriveSortOrder, desc: Boolean): Listing? {
+        val cached = runCatching { cache.get(uid, parentId) }
+            .onFailure { Timber.w(it, "读列表缓存失败") }
+            .getOrNull() ?: return null
+        cached.items.forEach(::remember)
+        val items = if (cached.order == order && cached.desc == desc) cached.items else sortNodes(cached.items, order, desc)
+        return Listing(
+            page = NodePage(items = items, nextCursor = null, total = cached.total),
+            fromCache = true,
+            fetchedAt = cached.fetchedAt,
+        )
     }
 
     override suspend fun children(parentId: String?, cursor: String?, order: DriveSortOrder, desc: Boolean): NodePage {

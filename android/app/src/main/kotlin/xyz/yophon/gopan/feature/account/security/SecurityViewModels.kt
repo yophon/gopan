@@ -18,6 +18,8 @@ import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.AppConfig
 import xyz.yophon.gopan.core.auth.SessionStore
+import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.security.AccessRoot
 import xyz.yophon.gopan.core.data.security.ApiKey
 import xyz.yophon.gopan.core.data.security.AppPassword
@@ -65,13 +67,20 @@ data class DevicesUiState(
 
 /** 登录设备:当前账号的会话(一族 refresh token 一行),可吊销本机以外的 */
 @HiltViewModel
-class DevicesViewModel @Inject constructor(private val repo: SecurityRepository) : SecurityListViewModel() {
+class DevicesViewModel @Inject constructor(
+    private val repo: SecurityRepository,
+    cache: ScreenCache,
+) : SecurityListViewModel() {
     private val _state = MutableStateFlow(DevicesUiState())
     val state: StateFlow<DevicesUiState> = _state.asStateFlow()
     private var job: Job? = null
 
     init {
-        load(silent = false)
+        // 上次的列表先画出来,再静默刷新
+        val cached = cache[CACHE_KEY]
+        if (cached != null) _state.update { it.copy(status = ListStatus.Content, items = cached) }
+        cache.mirror(viewModelScope, CACHE_KEY, _state) { s -> s.items.takeIf { s.status == ListStatus.Content } }
+        load(silent = cached != null)
     }
 
     fun refresh() {
@@ -114,6 +123,8 @@ class DevicesViewModel @Inject constructor(private val repo: SecurityRepository)
     }
 
     companion object {
+        val CACHE_KEY = ScreenKey<List<DeviceSession>>("security/devices")
+
         /** 本机在最前,再是有效的(最近活动倒序),失效的放最后 */
         fun sortSessions(items: List<DeviceSession>): List<DeviceSession> =
             items.sortedWith(compareByDescending<DeviceSession> { it.current }.thenByDescending { it.active }.thenByDescending { it.lastSeenAt })
@@ -138,6 +149,7 @@ class AppPasswordsViewModel @Inject constructor(
     private val repo: SecurityRepository,
     private val config: AppConfig,
     sessionStore: SessionStore,
+    cache: ScreenCache,
 ) : SecurityListViewModel() {
     private val _state = MutableStateFlow(AppPasswordsUiState())
     val state: StateFlow<AppPasswordsUiState> = _state.asStateFlow()
@@ -146,7 +158,11 @@ class AppPasswordsViewModel @Inject constructor(
     val username: String = sessionStore.currentUser?.username.orEmpty()
 
     init {
-        load(silent = false)
+        // 上次的列表先画出来,再静默刷新(刚生成的明文不存)
+        val cached = cache[CACHE_KEY]
+        if (cached != null) _state.update { it.copy(status = ListStatus.Content, items = cached) }
+        cache.mirror(viewModelScope, CACHE_KEY, _state) { s -> s.items.takeIf { s.status == ListStatus.Content } }
+        load(silent = cached != null)
     }
 
     fun refresh() {
@@ -202,6 +218,10 @@ class AppPasswordsViewModel @Inject constructor(
             if (result.okOrGone()) say(UiText.Res(R.string.app_passwords_msg_revoked)) else sayError(result.exceptionOrNull()!!, "吊销失败")
         }
     }
+
+    companion object {
+        val CACHE_KEY = ScreenKey<List<AppPassword>>("security/app-passwords")
+    }
 }
 
 // ---------------- Agent 接入 ----------------
@@ -256,6 +276,7 @@ class AgentViewModel @Inject constructor(
     private val repo: SecurityRepository,
     private val config: AppConfig,
     sessionStore: SessionStore,
+    cache: ScreenCache,
 ) : SecurityListViewModel() {
     private val _state = MutableStateFlow(AgentUiState())
     val state: StateFlow<AgentUiState> = _state.asStateFlow()
@@ -267,7 +288,14 @@ class AgentViewModel @Inject constructor(
     private var auditLoaded = false
 
     init {
-        load(silent = false)
+        // 上次的凭据、目录范围与操作记录先画出来,再静默刷新(操作记录仍等切到那个标签才查;刚建的明文不存)
+        cache[CACHE_KEY]?.let { (keys, grants, roots) ->
+            _state.update { it.copy(status = ListStatus.Content, keys = keys, grants = grants, roots = roots) }
+        }
+        cache[AUDIT_CACHE_KEY]?.let { audit -> _state.update { it.copy(audit = audit, auditStatus = ListStatus.Content) } }
+        cache.mirror(viewModelScope, CACHE_KEY, _state) { s -> Triple(s.keys, s.grants, s.roots).takeIf { s.status == ListStatus.Content } }
+        cache.mirror(viewModelScope, AUDIT_CACHE_KEY, _state) { s -> s.audit.takeIf { s.auditStatus == ListStatus.Content } }
+        load(silent = _state.value.status == ListStatus.Content)
     }
 
     fun refresh() {
@@ -418,5 +446,10 @@ class AgentViewModel @Inject constructor(
                     if (!reset || _state.value.audit.isNotEmpty()) sayError(e, "加载失败")
                 }
         }
+    }
+
+    companion object {
+        val CACHE_KEY = ScreenKey<Triple<List<ApiKey>, List<OAuthGrant>, List<AccessRoot>>>("security/agent")
+        val AUDIT_CACHE_KEY = ScreenKey<List<AuditEvent>>("security/agent-audit")
     }
 }

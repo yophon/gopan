@@ -1,6 +1,7 @@
 package xyz.yophon.gopan.feature.notifications
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -12,6 +13,7 @@ import org.junit.Test
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.auth.SessionStore
 import xyz.yophon.gopan.core.auth.UserSummary
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.notifications.FakeNotificationsRepository
 import xyz.yophon.gopan.core.data.notifications.FakeNotificationsRepository.Companion.notification
 import xyz.yophon.gopan.core.data.notifications.NotificationTarget
@@ -36,9 +38,12 @@ class NotificationsViewModelTest {
     private val session = SessionStore().apply { setSignedIn("t", UserSummary("u1", "alice", 0, 0, isAdmin = false)) }
     private val sharesTab = SharesTabRequest()
     private val transfersTab = TransfersTabRequest()
+    private val cache = ScreenCache(session)
+
+    private fun newViewModel() = NotificationsViewModel(repo, unread, nodes, session, sharesTab, transfersTab, cache)
 
     private fun vmTest(block: suspend TestScope.(NotificationsViewModel, List<NotificationsEffect>) -> Unit) = runTest {
-        val vm = NotificationsViewModel(repo, unread, nodes, session, sharesTab, transfersTab)
+        val vm = newViewModel()
         val effects = mutableListOf<NotificationsEffect>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.effects.collect { effects += it } }
         advanceUntilIdle()
@@ -59,6 +64,50 @@ class NotificationsViewModelTest {
             assertThat(vm.state.value.hasUnread).isTrue()
             assertThat(unread.count.value).isEqualTo(2)
         }
+    }
+
+    @Test
+    fun `coming back shows the cached page at once and then the fresh one`() = runTest {
+        repo.items = listOf(notification("n1"), notification("n2"))
+        newViewModel()
+        advanceUntilIdle()
+
+        repo.items = listOf(notification("n0"), notification("n1"), notification("n2"))
+        val gate = CompletableDeferred<Unit>()
+        repo.listGate = gate
+        val vm = newViewModel()
+        advanceUntilIdle()
+        // 联网还没回来:上次那一页已经在了,不是整页加载
+        assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("n1", "n2").inOrder()
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("n0", "n1", "n2").inOrder()
+    }
+
+    @Test
+    fun `switching to unread only uses its own cached page`() = runTest {
+        repo.items = listOf(notification("n1"), notification("n2", read = true))
+        val first = newViewModel()
+        advanceUntilIdle()
+        first.setUnreadOnly(true)
+        advanceUntilIdle()
+        assertThat(first.state.value.items.map { it.id }).containsExactly("n1")
+
+        val gate = CompletableDeferred<Unit>()
+        repo.listGate = gate
+        val vm = newViewModel()
+        advanceUntilIdle()
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("n1", "n2").inOrder()
+        vm.setUnreadOnly(true)
+        advanceUntilIdle()
+        // 「只看未读」的缓存是单独一份,不会把全部列表当成未读列表显示
+        assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("n1")
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("n1")
     }
 
     @Test

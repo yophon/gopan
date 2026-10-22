@@ -67,6 +67,10 @@ class SessionManager @Inject constructor(
     private var bootstrapStarted = false
     private val epoch = AtomicLong(0)
 
+    /** 上次 refresh 因网络失败而无法判定的时刻(epoch 毫秒);成功后归零 */
+    @Volatile
+    private var lastUnavailableAt = 0L
+
     /** 通知服务端吊销用:不带 CookieJar(手工带上要吊销的那枚 cookie,响应里的删除指令也不会误伤新会话) */
     private val revokeClient: OkHttpClient by lazy { okHttpClient.newBuilder().cookieJar(CookieJar.NO_COOKIES).build() }
 
@@ -81,26 +85,26 @@ class SessionManager @Inject constructor(
 
     /**
      * 启动续登:没有 cookie 直接 SignedOut;有 cookie 就 refresh。
-     * refresh 因网络失败(或 [BOOTSTRAP_TIMEOUT_MS] 内没有结果)而无法判定时,用上次缓存的用户进入 SignedIn(token 为空),
-     * 这样断网或服务端无响应也能马上打开 App 看缓存列表;那次 refresh 仍在后台继续,落地后自动更新登录态。
+     * 有上次缓存的用户时不等网络:先用它进入 SignedIn(token 为空),主界面立刻画出来(目录先显示本地缓存),
+     * refresh 接着在这里跑——成功换上 token;被拒清会话回登录页;断网保持现状,首个业务请求联网后再刷新。
+     * 没有缓存的用户才停在启动页等 refresh,最多 [BOOTSTRAP_TIMEOUT_MS],超时或断网按未登录处理(cookie 保留)。
      */
     suspend fun bootstrap() {
         if (store.state.value !is AuthState.Loading) return
-        val hasCookie = withContext(Dispatchers.IO) { cookieJar.hasCookie(REFRESH_COOKIE) }
+        val (hasCookie, cached) = withContext(Dispatchers.IO) { cookieJar.hasCookie(REFRESH_COOKIE) to loadCachedUser() }
         if (!hasCookie) {
             clearLocal()
             return
         }
-        val result = withTimeoutOrNull(BOOTSTRAP_TIMEOUT_MS) { refreshInternal() } ?: RefreshResult.UNAVAILABLE
-        when (result) {
-            RefreshResult.OK -> Unit
-            RefreshResult.REJECTED -> Unit // refreshInternal 已清会话
-            RefreshResult.UNAVAILABLE -> {
-                if (store.state.value !is AuthState.Loading) return // 后台那次 refresh 已经先落地
-                val cached = withContext(Dispatchers.IO) { loadCachedUser() }
-                if (cached != null) store.setSignedIn(null, cached) else store.setSignedOut()
-            }
+        if (cached != null) {
+            if (store.state.value !is AuthState.Loading) return
+            store.setSignedIn(null, cached)
+            refreshInternal()
+            return
         }
+        val result = withTimeoutOrNull(BOOTSTRAP_TIMEOUT_MS) { refreshInternal() } ?: RefreshResult.UNAVAILABLE
+        // 后台那次 refresh 可能已经先落地(OK / REJECTED 都已写好登录态)
+        if (result == RefreshResult.UNAVAILABLE && store.state.value is AuthState.Loading) store.setSignedOut()
     }
 
     suspend fun loginWithPassword(username: String, password: String) {
@@ -125,6 +129,15 @@ class SessionManager @Inject constructor(
 
     /** 单飞刷新:并发调用共享同一次请求。成功 true;服务端拒绝(已清会话)或网络失败 false。 */
     suspend fun refresh(): Boolean = refreshInternal() == RefreshResult.OK
+
+    override suspend fun accessTokenForRequest(): String? {
+        store.accessToken?.let { return it }
+        if (store.state.value !is AuthState.SignedIn) return null
+        // 刚因网络失败刷新不成:别让每个请求都先白等一次刷新(连不上服务端时每次要等到超时)
+        if (System.currentTimeMillis() - lastUnavailableAt < UNAVAILABLE_COOLDOWN_MS) return null
+        refreshInternal()
+        return store.accessToken
+    }
 
     override suspend fun refreshAfterUnauthenticated(staleToken: String?): RefreshOutcome {
         // 已登出:不再用残留的 cookie 去刷新(否则后台请求会把刚登出的会话刷回来)
@@ -187,6 +200,7 @@ class SessionManager @Inject constructor(
                     } catch (e: Throwable) {
                         if (e !is CancellationException) Timber.w(e, "refresh 异常")
                     } finally {
+                        lastUnavailableAt = if (result == RefreshResult.UNAVAILABLE) System.currentTimeMillis() else 0L
                         synchronized(lock) { if (inFlight === created) inFlight = null }
                         created.result.complete(result)
                     }
@@ -295,8 +309,11 @@ class SessionManager @Inject constructor(
         const val REFRESH_COOKIE = "gopan_rt"
         const val KEY_LAST_USER = "last_user"
 
-        /** 启动续登最多等这么久,超时按"暂时联系不上"处理,先进入离线可用的已登录态 */
+        /** 没有缓存用户时启动页最多等 refresh 这么久,超时按未登录处理 */
         const val BOOTSTRAP_TIMEOUT_MS = 8_000L
+
+        /** refresh 因网络失败后的这段时间里,业务请求不再先等一次刷新,直接不带 token 发出 */
+        const val UNAVAILABLE_COOLDOWN_MS = 5_000L
 
         /** 登出时等在途 refresh 落地的上限 */
         const val LOGOUT_REFRESH_WAIT_MS = 15_000L

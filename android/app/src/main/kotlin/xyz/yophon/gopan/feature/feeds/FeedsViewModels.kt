@@ -16,7 +16,10 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.data.CachedPage
 import xyz.yophon.gopan.core.data.NodesRepository
+import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.feeds.Feed
 import xyz.yophon.gopan.core.data.feeds.FeedItem
 import xyz.yophon.gopan.core.data.feeds.FeedItemState
@@ -40,7 +43,10 @@ data class FeedsUiState(
 
 /** 「我的 → 订阅」:全部订阅(服务端按创建先后排好,每人最多 100 个,不分页) */
 @HiltViewModel
-class FeedsViewModel @Inject constructor(private val repo: FeedsRepository) : ViewModel() {
+class FeedsViewModel @Inject constructor(
+    private val repo: FeedsRepository,
+    cache: ScreenCache,
+) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedsUiState())
     val state: StateFlow<FeedsUiState> = _state.asStateFlow()
@@ -52,7 +58,11 @@ class FeedsViewModel @Inject constructor(private val repo: FeedsRepository) : Vi
     private var loadedOnce = false
 
     init {
-        load(silent = false)
+        // 上次的列表先画出来,再静默刷新
+        val cached = cache[CACHE_KEY]
+        if (cached != null) _state.update { it.copy(status = ListStatus.Content, feeds = cached) }
+        cache.mirror(viewModelScope, CACHE_KEY, _state) { s -> s.feeds.takeIf { s.status == ListStatus.Content } }
+        load(silent = cached != null)
     }
 
     fun refresh() {
@@ -86,6 +96,10 @@ class FeedsViewModel @Inject constructor(private val repo: FeedsRepository) : Vi
                     }
                 }
         }
+    }
+
+    companion object {
+        val CACHE_KEY = ScreenKey<List<Feed>>("feeds")
     }
 }
 
@@ -196,6 +210,9 @@ data class FeedDetailUiState(
     val submitting: Set<String> = emptySet(),
 )
 
+/** 详情页的快照:订阅信息 + 已加载的条目 */
+data class FeedDetailSnapshot(val feed: Feed, val page: CachedPage<FeedItem>)
+
 sealed interface FeedDetailEffect {
     data class Message(val text: UiText) : FeedDetailEffect
 
@@ -212,9 +229,11 @@ class FeedDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repo: FeedsRepository,
     private val nodes: NodesRepository,
+    private val cache: ScreenCache,
 ) : ViewModel() {
 
     private val feedId: String = requireNotNull(savedStateHandle.get<String>("feedId")) { "缺少 feedId" }
+    private val cacheKey = ScreenKey<FeedDetailSnapshot>("feed/$feedId")
 
     private val _state = MutableStateFlow(FeedDetailUiState())
     val state: StateFlow<FeedDetailUiState> = _state.asStateFlow()
@@ -229,7 +248,18 @@ class FeedDetailViewModel @Inject constructor(
     private var loadedOnce = false
 
     init {
-        load(silent = false)
+        // 看过的订阅先画上次的信息与条目,再静默刷新
+        val cached = cache[cacheKey]
+        if (cached != null) {
+            _state.update {
+                it.copy(feed = cached.feed, status = ListStatus.Content, items = cached.page.items, nextCursor = cached.page.nextCursor)
+            }
+        }
+        cache.mirror(viewModelScope, cacheKey, _state) { s ->
+            val feed = s.feed
+            if (s.status == ListStatus.Content && feed != null) FeedDetailSnapshot(feed, CachedPage(s.items, s.nextCursor)) else null
+        }
+        load(silent = cached != null)
     }
 
     fun refresh() {
@@ -357,6 +387,7 @@ class FeedDetailViewModel @Inject constructor(
         viewModelScope.launch {
             gopanResult { repo.delete(feedId) }
                 .onSuccess {
+                    cache.remove(cacheKey)
                     _state.update { it.copy(busy = false) }
                     send(UiText.Res(R.string.feeds_msg_unsubscribed))
                     _effects.trySend(FeedDetailEffect.Closed)

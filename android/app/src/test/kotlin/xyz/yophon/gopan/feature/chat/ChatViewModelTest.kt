@@ -12,6 +12,9 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
+import xyz.yophon.gopan.core.auth.SessionStore
+import xyz.yophon.gopan.core.auth.UserSummary
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.chat.ChatMessage
 import xyz.yophon.gopan.core.data.chat.ChatRepository
 import xyz.yophon.gopan.core.network.GopanErrors
@@ -41,7 +44,9 @@ class ChatViewModelTest {
     }
     private var vm: ChatViewModel? = null
 
-    private fun viewModel() = ChatViewModel(repo, transfers, prefs, inbox, net, PreviewSessionStore()).also { vm = it }
+    private var cache = ScreenCache(SessionStore())
+
+    private fun viewModel() = ChatViewModel(repo, transfers, prefs, inbox, net, PreviewSessionStore(), cache).also { vm = it }
 
     /**
      * 轮询循环跑在测试调度器上:测试体结束前必须停掉,否则 runTest 收尾时永远等不到空闲。
@@ -75,6 +80,27 @@ class ChatViewModelTest {
         advanceTimeBy(10_000)
         runCurrent()
         assertThat(repo.latestCalls).isEqualTo(calls)
+    }
+
+    @Test
+    fun `the latest page cached by an earlier load shows before the first poll`() = runTest {
+        cache = ScreenCache(SessionStore().apply { setSignedIn("t", UserSummary("u1", "alice", 0, 0, false)) })
+        cache.put(ChatViewModel.LATEST_CACHE_KEY, listOf(msg("1"), msg("2")))
+        val vm = viewModel()
+        try {
+            // 还没可见、没轮询:预取的那页已经在,不出整页加载
+            assertThat(vm.state.value.loading).isFalse()
+            assertThat(vm.state.value.messages.map { it.id }).containsExactly("000001", "000002").inOrder()
+
+            repo.messages += listOf(msg("1"), msg("2"), msg("3"))
+            vm.setVisible(true)
+            runCurrent()
+            assertThat(vm.state.value.messages.map { it.id }).containsExactly("000001", "000002", "000003").inOrder()
+            assertThat(cache[ChatViewModel.LATEST_CACHE_KEY]?.map { it.id }).containsExactly("000001", "000002", "000003").inOrder()
+        } finally {
+            vm.setVisible(false)
+            runCurrent()
+        }
     }
 
     @Test

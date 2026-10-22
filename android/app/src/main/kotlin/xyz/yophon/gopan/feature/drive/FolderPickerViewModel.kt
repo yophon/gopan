@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodesRepository
 import xyz.yophon.gopan.core.data.mergePages
+import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.network.gopanResult
 import xyz.yophon.gopan.core.network.toGopanException
@@ -86,7 +87,12 @@ class FolderPickerViewModel @Inject constructor(
         loadMoreJob?.cancel()
         val parentId = _state.value.current.id
         loadJob = viewModelScope.launch {
-            _state.update { it.copy(status = ListStatus.Loading, folders = emptyList(), nextCursor = null, isLoadingMore = false) }
+            // 文件页缓存过这个目录:先拿里面的文件夹画出来(文件夹总排在首页最前面),联网结果回来再换
+            val cached = repo.cachedFirstPage(parentId, DriveSortOrder.NAME, false)?.page?.items?.pickFolders()
+            _state.update {
+                if (cached != null) it.copy(status = ListStatus.Content, folders = cached, nextCursor = null, isLoadingMore = false)
+                else it.copy(status = ListStatus.Loading, folders = emptyList(), nextCursor = null, isLoadingMore = false)
+            }
             gopanResult { repo.children(parentId, null, DriveSortOrder.NAME, false) }
                 .onSuccess { page ->
                     _state.update {
@@ -95,7 +101,10 @@ class FolderPickerViewModel @Inject constructor(
                 }
                 .onFailure { e ->
                     val ge = e as? GopanException ?: e.toGopanException()
-                    _state.update { it.copy(status = ListStatus.Error(ge.message ?: ge.code)) }
+                    // 断网之类而手上有缓存:留着缓存;目录没了这类错误照样出错误页
+                    if (cached == null || ge.code == GopanErrors.NOT_FOUND) {
+                        _state.update { it.copy(status = ListStatus.Error(ge.message ?: ge.code), folders = emptyList()) }
+                    }
                 }
         }
     }

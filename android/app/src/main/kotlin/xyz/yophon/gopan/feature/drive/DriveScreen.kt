@@ -61,6 +61,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -98,9 +99,12 @@ import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.prefs.DriveSort
 import xyz.yophon.gopan.core.prefs.DriveSortOrder
 import xyz.yophon.gopan.core.prefs.DriveViewMode
+import xyz.yophon.gopan.core.ui.components.AfterDelay
 import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.components.ErrorState
-import xyz.yophon.gopan.core.ui.components.LoadingState
+import xyz.yophon.gopan.core.ui.components.GridSkeleton
+import xyz.yophon.gopan.core.ui.components.LOADING_INDICATOR_DELAY_MS
+import xyz.yophon.gopan.core.ui.components.ListSkeleton
 import xyz.yophon.gopan.core.ui.format.formatRelativeTime
 import xyz.yophon.gopan.core.ui.transfer.rememberTransferPermissions
 import xyz.yophon.gopan.core.ui.transfer.rememberUploadPickers
@@ -528,20 +532,28 @@ private fun OverflowMenu(onOpenTrash: () -> Unit, onOpenTransfers: () -> Unit, o
 private fun DriveContent(state: DriveUiState, viewModel: DriveViewModel, modifier: Modifier = Modifier) {
     PullToRefreshBox(isRefreshing = state.isRefreshing, onRefresh = viewModel::refresh, modifier = modifier) {
         when (val status = state.status) {
-            ListStatus.Loading -> LoadingState()
+            ListStatus.Loading -> if (state.viewMode == DriveViewMode.LIST) ListSkeleton() else GridSkeleton()
             is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
             ListStatus.Content -> Column(modifier = Modifier.fillMaxSize()) {
-                if (state.fromCache) OfflineBanner(fetchedAt = state.fetchedAt, onRetry = viewModel::refresh)
-                when {
-                    state.items.isEmpty() -> FullPage {
-                        EmptyState(
-                            title = stringResource(R.string.drive_empty_title),
-                            description = stringResource(R.string.drive_empty_desc),
-                            icon = Icons.Outlined.FolderOpen,
-                        )
+                // 先显示缓存、联网还没回来时不算离线:不出提示条,只在顶上压一条细进度
+                if (state.fromCache && !state.revalidating) OfflineBanner(fetchedAt = state.fetchedAt, onRetry = viewModel::refresh)
+                Box(modifier = Modifier.weight(1f)) {
+                    when {
+                        state.items.isEmpty() -> FullPage {
+                            EmptyState(
+                                title = stringResource(R.string.drive_empty_title),
+                                description = stringResource(R.string.drive_empty_desc),
+                                icon = Icons.Outlined.FolderOpen,
+                            )
+                        }
+                        state.viewMode == DriveViewMode.LIST -> NodeList(state, viewModel)
+                        else -> NodeGrid(state, viewModel)
                     }
-                    state.viewMode == DriveViewMode.LIST -> NodeList(state, viewModel)
-                    else -> NodeGrid(state, viewModel)
+                    if (state.revalidating) {
+                        AfterDelay(LOADING_INDICATOR_DELAY_MS) {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().testTag("drive_revalidating"))
+                        }
+                    }
                 }
             }
         }

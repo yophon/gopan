@@ -1,5 +1,6 @@
 package xyz.yophon.gopan.core.data.activity
 
+import kotlinx.coroutines.CompletableDeferred
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
@@ -14,6 +15,9 @@ class FakeActivityRepository : ActivityRepository {
     var pageSize = 50
     var failNext = false
     val calls = mutableListOf<String>()
+
+    /** 非空时 list 先等它:测"先显示缓存、联网还在路上" */
+    var listGate: CompletableDeferred<Unit>? = null
 
     /** 预览与撤回的结果;默认:选中的都能撤 */
     var outcomeFor: (UndoTarget) -> UndoOutcome = { target ->
@@ -41,6 +45,7 @@ class FakeActivityRepository : ActivityRepository {
 
     override suspend fun list(query: ActivityQuery, cursor: String?): ActivityPage {
         calls += "list(${query.actorKind},${query.actorRef},${query.since},$cursor)"
+        listGate?.await()
         maybeFail()
         val all = items.filter { matches(it, query) }
         val start = cursor?.toInt() ?: 0

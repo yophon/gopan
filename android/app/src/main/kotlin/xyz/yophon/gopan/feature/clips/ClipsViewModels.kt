@@ -17,7 +17,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.data.CachedPage
 import xyz.yophon.gopan.core.data.NodesRepository
+import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.clips.Clip
 import xyz.yophon.gopan.core.data.clips.ClipsRepository
 import xyz.yophon.gopan.core.data.markdown.MarkdownUrls
@@ -43,7 +46,10 @@ data class ClipsUiState(
 
 /** 「我的 → 剪藏」:新的在前,分页;全部 / 未读 */
 @HiltViewModel
-class ClipsViewModel @Inject constructor(private val repo: ClipsRepository) : ViewModel() {
+class ClipsViewModel @Inject constructor(
+    private val repo: ClipsRepository,
+    private val cache: ScreenCache,
+) : ViewModel() {
 
     private val _state = MutableStateFlow(ClipsUiState())
     val state: StateFlow<ClipsUiState> = _state.asStateFlow()
@@ -56,6 +62,10 @@ class ClipsViewModel @Inject constructor(private val repo: ClipsRepository) : Vi
     private var loadedOnce = false
 
     init {
+        // 「全部」「未读」各存一份,哪个看过就先画哪个
+        cache.mirrorKeyed(viewModelScope, _state) { s ->
+            if (s.status == ListStatus.Content) cacheKey(s.unreadOnly) to CachedPage(s.items, s.nextCursor) else null
+        }
         load(silent = false)
     }
 
@@ -73,15 +83,24 @@ class ClipsViewModel @Inject constructor(private val repo: ClipsRepository) : Vi
 
     fun setUnreadOnly(value: Boolean) {
         if (_state.value.unreadOnly == value) return
-        _state.update { it.copy(unreadOnly = value, items = emptyList(), nextCursor = null) }
+        // 换筛选的同一步就离开 Content,免得空列表被当成新筛选的快照存起来
+        _state.update { it.copy(unreadOnly = value, items = emptyList(), nextCursor = null, status = ListStatus.Loading) }
         load(silent = false)
     }
 
+    /** 非静默加载时这个筛选有快照:先画快照,联网按静默刷新处理(失败保留快照、只提示) */
     private fun load(silent: Boolean) {
         loadJob?.cancel()
         moreJob?.cancel()
-        _state.update { it.copy(status = if (silent) it.status else ListStatus.Loading, loadingMore = false, loadMoreError = null) }
         val unreadOnly = _state.value.unreadOnly
+        val cached = if (silent) null else cache[cacheKey(unreadOnly)]
+        _state.update {
+            if (cached != null) {
+                it.copy(status = ListStatus.Content, items = cached.items, nextCursor = cached.nextCursor, loadingMore = false, loadMoreError = null)
+            } else {
+                it.copy(status = if (silent) it.status else ListStatus.Loading, loadingMore = false, loadMoreError = null)
+            }
+        }
         loadJob = viewModelScope.launch {
             gopanResult { repo.clips(unreadOnly, cursor = null) }
                 .onSuccess { page ->
@@ -115,6 +134,10 @@ class ClipsViewModel @Inject constructor(private val repo: ClipsRepository) : Vi
                 }
                 .onFailure { e -> _state.update { it.copy(loadingMore = false, loadMoreError = e.message ?: "加载失败") } }
         }
+    }
+
+    companion object {
+        fun cacheKey(unreadOnly: Boolean) = ScreenKey<CachedPage<Clip>>("clips?unread=$unreadOnly")
     }
 }
 

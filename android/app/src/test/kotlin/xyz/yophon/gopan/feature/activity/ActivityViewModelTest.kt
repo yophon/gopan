@@ -2,6 +2,7 @@ package xyz.yophon.gopan.feature.activity
 
 import androidx.lifecycle.SavedStateHandle
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -11,6 +12,9 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.auth.SessionStore
+import xyz.yophon.gopan.core.auth.UserSummary
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.activity.ActivityAction
 import xyz.yophon.gopan.core.data.activity.ActorKind
 import xyz.yophon.gopan.core.data.activity.ActorSummary
@@ -34,12 +38,15 @@ class ActivityViewModelTest {
 
     private val repo = FakeActivityRepository()
     private val nodes = FakeNodesRepository()
+    private val cache = ScreenCache(SessionStore().apply { setSignedIn("t", UserSummary("u1", "alice", 0, 0, false)) })
+
+    private fun newViewModel(args: Map<String, Any?> = emptyMap()) = ActivityViewModel(SavedStateHandle(args), repo, nodes, cache)
 
     private fun vmTest(
         args: Map<String, Any?> = emptyMap(),
         block: suspend TestScope.(ActivityViewModel, List<ActivityEffect>) -> Unit,
     ) = runTest {
-        val vm = ActivityViewModel(SavedStateHandle(args), repo, nodes)
+        val vm = newViewModel(args)
         val effects = mutableListOf<ActivityEffect>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.effects.collect { effects += it } }
         advanceUntilIdle()
@@ -61,6 +68,45 @@ class ActivityViewModelTest {
             // 没按来源筛:不能「全部撤回」
             assertThat(s.canUndoAll).isFalse()
         }
+    }
+
+    @Test
+    fun `coming back shows the cached page and actors at once and then the fresh page`() = runTest {
+        repo.items = listOf(activity("2"), activity("1"))
+        repo.actors = listOf(ActorSummary(ANDROID, 2, "2026-10-21T10:00:00Z"))
+        newViewModel()
+        advanceUntilIdle()
+
+        repo.items = listOf(activity("3"), activity("2"), activity("1"))
+        val gate = CompletableDeferred<Unit>()
+        repo.listGate = gate
+        val vm = newViewModel()
+        advanceUntilIdle()
+        // 联网还没回来:上次那一页和来源条已经在了
+        assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("2", "1").inOrder()
+        assertThat(vm.state.value.actors).hasSize(1)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("3", "2", "1").inOrder()
+    }
+
+    @Test
+    fun `a filter without its own cache starts from loading, not from the other filter's page`() = runTest {
+        repo.items = listOf(activity("2", actor = RCLONE), activity("1", actor = ANDROID))
+        newViewModel()
+        advanceUntilIdle()
+
+        val gate = CompletableDeferred<Unit>()
+        repo.listGate = gate
+        val vm = newViewModel(mapOf(ActivityViewModel.ACTOR_ARG to "webdav:ap-9"))
+        advanceUntilIdle()
+        assertThat(vm.state.value.status).isEqualTo(ListStatus.Loading)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("2")
     }
 
     @Test

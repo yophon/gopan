@@ -50,12 +50,15 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.data.CachedPage
+import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.collect.FileRequestUpload
 import xyz.yophon.gopan.core.data.collect.FileRequestsRepository
 import xyz.yophon.gopan.core.network.gopanResult
 import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.components.ErrorState
-import xyz.yophon.gopan.core.ui.components.LoadingState
+import xyz.yophon.gopan.core.ui.components.ListSkeleton
 import xyz.yophon.gopan.core.ui.format.describeUserAgent
 import xyz.yophon.gopan.core.ui.format.formatBytes
 import xyz.yophon.gopan.core.ui.format.formatTime
@@ -87,9 +90,11 @@ data class FileRequestUploadsUiState(
 class FileRequestUploadsViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val repo: FileRequestsRepository,
+    private val cache: ScreenCache,
 ) : ViewModel() {
     val requestId: String = requireNotNull(savedStateHandle.get<String>("requestId"))
     val title: String = savedStateHandle.get<String>("title").orEmpty()
+    private val cacheKey = ScreenKey<CachedPage<FileRequestUpload>>("file-request-uploads/$requestId")
 
     private val _state = MutableStateFlow(FileRequestUploadsUiState())
     val state: StateFlow<FileRequestUploadsUiState> = _state.asStateFlow()
@@ -107,6 +112,7 @@ class FileRequestUploadsViewModel @Inject constructor(
             savedStateHandle[KEY_MARKED] = true
             viewModelScope.launch { gopanResult { repo.markSeen(requestId) } }
         }
+        cache.mirror(viewModelScope, cacheKey, _state) { s -> CachedPage(s.items, s.nextCursor).takeIf { s.status == ListStatus.Content } }
         load(silent = false)
     }
 
@@ -117,12 +123,17 @@ class FileRequestUploadsViewModel @Inject constructor(
 
     fun retry() = load(silent = false)
 
-    /** 换成第一页(首次进入、下拉刷新、重试);进行中的翻页作废 */
+    /** 换成第一页(首次进入、下拉刷新、重试);进行中的翻页作废。非静默时有快照就先画快照,联网按静默刷新处理 */
     private fun load(silent: Boolean) {
         loadJob?.cancel()
         moreJob?.cancel()
+        val cached = if (silent) null else cache[cacheKey]
         _state.update {
-            it.copy(status = if (silent) it.status else ListStatus.Loading, loadingMore = false, loadMoreError = null)
+            if (cached != null) {
+                it.copy(status = ListStatus.Content, items = cached.items, nextCursor = cached.nextCursor, loadingMore = false, loadMoreError = null)
+            } else {
+                it.copy(status = if (silent) it.status else ListStatus.Loading, loadingMore = false, loadMoreError = null)
+            }
         }
         loadJob = viewModelScope.launch {
             gopanResult { repo.uploads(requestId, cursor = null) }
@@ -217,7 +228,7 @@ fun FileRequestUploadsScreen(
             modifier = Modifier.padding(padding).fillMaxSize(),
         ) {
             when (val status = state.status) {
-                ListStatus.Loading -> LoadingState()
+                ListStatus.Loading -> ListSkeleton()
                 is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
                 ListStatus.Content -> if (state.items.isEmpty()) {
                     FullPage {

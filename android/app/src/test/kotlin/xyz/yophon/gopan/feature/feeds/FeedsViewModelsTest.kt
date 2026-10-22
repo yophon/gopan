@@ -2,6 +2,7 @@ package xyz.yophon.gopan.feature.feeds
 
 import androidx.lifecycle.SavedStateHandle
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -12,6 +13,9 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.auth.SessionStore
+import xyz.yophon.gopan.core.auth.UserSummary
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.feeds.FakeFeedsRepository
 import xyz.yophon.gopan.core.data.feeds.Feed
 import xyz.yophon.gopan.core.data.feeds.FeedItem
@@ -45,6 +49,31 @@ class FeedsViewModelsTest {
         keepLast = 5,
         intervalMinutes = 720,
     )
+
+    // ---- 列表 ----
+
+    @Test
+    fun `list - a second visit shows the last list at once, then the fresh one`() = runTest {
+        val cache = ScreenCache(SessionStore().apply { setSignedIn("t", UserSummary("u1", "alice", 0, 0, false)) })
+        repo.feeds = listOf(podcast)
+        val first = FeedsViewModel(repo, cache)
+        advanceUntilIdle()
+        assertThat(first.state.value.feeds).containsExactly(podcast)
+
+        val newer = podcast.copy(id = "f2", title = "新订阅")
+        repo.feeds = listOf(podcast, newer)
+        val gate = CompletableDeferred<Unit>()
+        repo.feedsGate = gate
+        val second = FeedsViewModel(repo, cache)
+        advanceUntilIdle()
+        // 联网还没回来:上次的列表已经画出来了
+        assertThat(second.state.value.status).isEqualTo(ListStatus.Content)
+        assertThat(second.state.value.feeds).containsExactly(podcast)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertThat(second.state.value.feeds).containsExactly(podcast, newer).inOrder()
+    }
 
     // ---- 添加 ----
 
@@ -99,7 +128,7 @@ class FeedsViewModelsTest {
 
     // ---- 详情 ----
 
-    private fun detail(): FeedDetailViewModel = FeedDetailViewModel(SavedStateHandle(mapOf("feedId" to "f1")), repo, nodes)
+    private fun detail(): FeedDetailViewModel = FeedDetailViewModel(SavedStateHandle(mapOf("feedId" to "f1")), repo, nodes, ScreenCache(SessionStore()))
 
     @Test
     fun `detail loads the feed and its items`() = runTest {
