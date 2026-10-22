@@ -394,6 +394,72 @@ extend type Mutation {
   - `GET /sub/{nodeId}?token=<access>`(或 Bearer 头):字幕转 WebVTT;错误同 `/arc` 的 JSON。
   - `POST /api/img/upload`:`Authorization: Bearer <图床密钥或登录凭证>`,multipart(第一个文件)或原始请求体(`?name=`);成功 `{url, markdown, html, bbcode, name, size, node_id, link_id}`,失败 `{error: {code, message}}`:401、403(密钥没有 img:upload)、415 `UNSUPPORTED_TYPE`、413 `TOO_LARGE`、507 `QUOTA_EXCEEDED`、429 `RATE_LIMITED`、503 `BUSY`。
 
+## 动态、空间、订阅与剪藏(v3.5)
+
+```graphql
+type Activity { id, at, actor: ActivityActor!, batchId, action: MKDIR|UPLOAD|OVERWRITE|RENAME|MOVE|COPY|DELETE|RESTORE|PURGE|EXTRACT,
+                nodeId, node, nodeKind, name, parentPath, fromPath, toPath, oldName, newName, files, bytes, note,
+                undoOf, undoneAt, undoable }
+type ActivityActor { kind: WEB|ANDROID|WEBDAV|AGENT|IMG|COLLECT|JOB|FEED|CLIP|SYSTEM, ref, label }
+input ActivityFilter { actorKind, actorRef, actions, nodeId, batchId, since, until }
+input UndoSelection { ids, batchId, filter }            # 三选一
+type UndoResult { done, failed, items: [UndoItem!]! }    # UndoItem { activity, ok, reason }
+type SpaceOverview { usedBytes, quotaBytes, trashFiles, trashBytes, byType: [SpaceCategory!]!, duplicateGroups, duplicateBytes }
+type SpaceFile { node, path, category: IMAGE|VIDEO|AUDIO|DOCUMENT|ARCHIVE|TEXT|OTHER }
+type Feed { id, kind: RSS|GITHUB, url, title, siteUrl, folder, mode: DOWNLOAD|CLIP|NONE, includeWords, excludeWords,
+            assetPattern, prerelease, keepLast, intervalMinutes, enabled, lastCheckedAt, lastOkAt, lastError, failCount,
+            nextCheckAt, createdAt, itemCount, newCount, latestAt }
+type FeedItem { id, title, url, enclosureUrl, enclosureType, enclosureSize, publishedAt, state: NEW|SKIPPED|QUEUED|DONE|FAILED,
+                error, node, jobId, createdAt }
+type Clip { id, url, title, site, byline, excerpt, publishedAt, node, words, images, readAt, createdAt }
+type ClipResult { job: Job, existing: Clip }
+type PreviewInfo { …, markdown: Boolean! }             # .md 且 ≤ 2 MB;kind 仍是 TEXT
+
+extend type Query {
+  activities(filter: ActivityFilter, cursor: String, limit: Int = 50): ActivityPage!
+  activityActors: [ActivityActorSummary!]!
+  undoPreview(selection: UndoSelection!): UndoResult!  # 不改任何东西
+  spaceOverview: SpaceOverview!
+  spaceFolders(parentId: ID): SpaceFolderLevel!
+  spaceLargeFiles(category: FileCategory, limit: Int = 100): [SpaceFile!]!
+  spaceStaleFiles(days: Int = 365, minSize: Int64 = 104857600, limit: Int = 100): [SpaceFile!]!
+  spaceDuplicates(offset: Int = 0, limit: Int = 50): DuplicatePage!
+  spaceEmptyFolders(limit: Int = 200): [SpaceFile!]!
+  spaceIdle: SpaceIdle!
+  adminStorage: AdminStorage!
+  feeds: [Feed!]!
+  feed(id: ID!): Feed!
+  feedItems(feedId: ID!, cursor: String): FeedItemPage!
+  previewFeed(url: String!, assetPattern: String, prerelease: Boolean = false): FeedPreview!
+  exportOpml: String!
+  clips(unreadOnly: Boolean = false, site: String, cursor: String): ClipPage!
+  clipSites: [ClipSite!]!
+  clip(id: ID!): Clip!
+  nodeClip(nodeId: ID!): Clip
+  clipPrefs: ClipPrefs!
+}
+extend type Mutation {
+  undoActivities(selection: UndoSelection!): UndoResult!
+  createFeed(input: FeedInput!): Feed!                # 先抓一次,地址不对当场报错
+  updateFeed(id: ID!, input: FeedInput!): Feed!
+  deleteFeed(id: ID!): Boolean!
+  refreshFeed(id: ID!): Feed!                          # 同步,最多 20 秒
+  fetchFeedItem(itemId: ID!, mode: FeedMode!): FeedItem!
+  importOpml(opml: String!): OpmlImportResult!
+  clipUrl(url: String!, html: String, force: Boolean = false): ClipResult!
+  markClipRead(id: ID!, read: Boolean = true): Clip!
+  setClipPrefs(input: ClipPrefsInput!): ClipPrefs!
+}
+```
+
+- 动态游标 `o` 为 `ACTIVITY`(id 倒序);`filter` 撤回至少给来源、时间或文件(`INVALID_INPUT`),一次最多 1000 条。撤不了的放在 `items[].reason`,不报错。
+- 空间分析的清理不另设变更:进回收站用 `deleteNodes`,清空回收站 `purgeTrash`,吊销用 `revokeShare` / `revokeLink` / `revokeFileRequest`。`adminStorage` 只给管理员(`FORBIDDEN`)。
+- 订阅:`FEED_EXISTS`(重复)、`TOO_MANY_FEEDS`(100 个)、`FETCH_DISABLED`(本站关了离线下载,订阅与剪藏一起关)、`NOT_A_FEED`、`GITHUB_NOT_FOUND`、`GITHUB_RATE_LIMITED`。GitHub 仓库写 `owner/repo` 或 github.com 链接都行。
+- 剪藏:同一个地址剪过、那篇还在时返回 `existing`;`html` 最大 5 MB(`TOO_LARGE`)。剪藏任务是 `Job`(`kind: CLIP_URL`),结果节点是那篇 `.md`。
+- 不走 GraphQL 的:
+  - `GET /md/{nodeId}?token=<access>[&theme=light|dark]`:Markdown 渲染成一页 HTML(CSP sandbox、`X-Frame-Options: SAMEORIGIN`);错误也是一页 HTML(401 / 404 / 413 超过 2 MB / 415 不是 Markdown)。
+  - `GET /md/{nodeId}/f?p=<相对路径>&token=<access>`:那篇里的相对路径,按 .md 所在文件夹解析;图片与文件 302 到签名地址(大图给 2048 缩略图),`.md` 302 到它自己的渲染页。分享访客出不了分享范围。
+
 ## 版本策略
 
 v1 不做 schema 版本化;字段只加不删,废弃用 `@deprecated`。前端 codegen 在 CI 里跑,schema 不兼容改动直接编译失败暴露。

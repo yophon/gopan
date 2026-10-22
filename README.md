@@ -19,7 +19,7 @@
 | ![预览](doc/assets/preview.png) | ![分享访客页](doc/assets/share.png) |
 -->
 
-当前阶段:**v3.4.0——影音(同名外挂字幕、跨设备续播、文件夹连播)、通知(站内铃铛 + Webhook / ntfy / Bark / Telegram 推送)、直链与图床(永久公开地址、PicGo / ShareX 上传,每次访问记账、有流量上限和盗刷提醒)**;安卓原生 App 同步支持。上一版 v3.3 是离线下载与压缩包。
+当前阶段:**v3.5.0——动态与撤回(每次改动都记来源,能单条、整批或按来源撤回,WebDAV / Agent 大量删除提醒)、空间分析(类型分布、大文件、重复文件、空文件夹,文件列表改成自然顺序)、订阅(RSS / 播客 / GitHub Releases 自动下载)、剪藏(网页存成 Markdown,网盘里直接渲染)**;安卓原生 App 同步支持。上一版 v3.4 是影音、通知、直链与图床。
 
 ## 架构
 
@@ -37,9 +37,9 @@ flowchart LR
     subgraph Gopan["gopan · Go 单二进制"]
         GQL["gqlgen"] --> Service["service 业务层"]
         MCP["Remote MCP · OAuth server"] --> Service
-        REST["HTTP:/dav · /pack · /arc · /x/:token · /sub · /api/img · /s/:token · /api/app · /healthz"] --> Service
+        REST["HTTP:/dav · /pack · /arc · /x/:token · /sub · /md · /api/img · /s/:token · /api/app · /healthz"] --> Service
         Worker["worker pool<br/>缩略图 · 转 PDF · hash 校验 · 文字提取 · 压缩包目录 · GC"]
-        Jobs["后台任务 runner<br/>离线下载 · 解压"]
+        Jobs["后台任务 runner<br/>离线下载 · 解压 · 剪藏 · 订阅"]
         Embed["embed 前端静态资源"]
     end
 
@@ -50,7 +50,7 @@ flowchart LR
     Worker --> FF["ffmpeg(exec)"]
     Worker --> PT["pdftotext(exec)"]
     Jobs --> MinIO
-    Jobs -. "离线下载(挡内网)" .-> Web(("外部网站"))
+    Jobs -. "离线下载 · 订阅 · 剪藏(挡内网)" .-> Web(("外部网站"))
     Service -. "推送(挡内网)" .-> Push(("ntfy · Bark · Telegram · Webhook"))
 ```
 
@@ -102,6 +102,7 @@ Agent 接入与远程 MCP 工具见 [docs/MCP.md](./docs/MCP.md)。
 | [20 · 收集文件与内容搜索计划](./doc/20-收集文件与内容搜索计划.md) | 匿名收集链接(访客只写不读)、中文内容搜索(二元切词 + 原生全文索引)、P0 安全前置与里程碑 |
 | [21 · 离线下载与压缩包计划](./doc/21-离线下载与压缩包计划.md) | 后台任务底座、离线下载防 SSRF 与断线续传、压缩包目录索引 / 预览 / 解压的上限与里程碑 |
 | [22 · 影音、通知与图床计划](./doc/22-影音通知与图床计划.md) | 媒体类型补全、字幕 / 续播 / 连播,通知合并与推送投递,直链中转与审计检测、图床接口与 GPS 抹除 |
+| [23 · 动态、空间、订阅与剪藏计划](./doc/23-动态空间订阅剪藏计划.md) | 改动的来源与撤回、大量删除提醒,空间分析与自然顺序,RSS / 播客 / GitHub 订阅,网页剪藏与服务端 Markdown 渲染 |
 
 ## 实现回顾
 

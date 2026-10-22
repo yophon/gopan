@@ -132,11 +132,13 @@ OAuth 与 API Key 共用以下权限：
 | `create_link` | `shares:write` | 给一个文件生成(或取回已有的)永久公开直链,图片可直接嵌进网页 / Markdown;返回 `url` 与 `markdown`,带拍摄位置的照片标 `has_gps`。每次访问都记账、有每日流量上限,支持幂等键 |
 | `list_links` | `shares:read` | 列出有效直链与访问次数、流量,新的在前,游标分页 |
 | `revoke_link` | `shares:write` | 立即吊销直链(之后返回 404),支持幂等键 |
+| `clip_url` | `files:upload` | 剪藏:服务器在后台把网页正文存成 Markdown(图片下到旁边的 `.assets` 文件夹)放进用户的剪藏文件夹;返回任务(`get_job` 等到 done,`result_node_id` 是那篇 .md,用 `read_text` 读),同一个地址剪过时返回 `existing`(`force` 重新剪)。目录限定凭据不可用,支持幂等键 |
+| `list_activity` | `audit:read` | 网盘的动态:网页、安卓 App、WebDAV、Agent、收集链接、后台任务的每次改动(谁、何时、什么操作、哪个文件、在哪),新的在前;可按来源、操作、时间或单个节点筛,`before_id` 翻页。撤回只能由用户在网页 / App 上点。目录限定凭据只看得到根目录里的节点 |
 | `list_audit` | `audit:read` | 分页读取 MCP 操作记录 |
 | `chat_send` | `chat:write` | 发送文本或已保存的文件节点到「我的设备」会话 |
 | `chat_list` | `chat:read` | 分页读取「我的设备」会话消息（升序） |
 
-文件与会话接口共 41 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
+文件与会话接口共 43 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
 
 ### 我的设备会话
 
