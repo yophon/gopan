@@ -155,6 +155,23 @@ class NotificationsViewModelTest {
     }
 
     @Test
+    fun `mass delete alert opens the activity list filtered, feed goes to the feed`() {
+        repo.items = listOf(
+            notification("a", target = NotificationTarget(NotificationTargetKind.ACTIVITY, "webdav:ap-9", "2026-10-21T00:00:00Z")),
+            notification("f", target = NotificationTarget(NotificationTargetKind.FEED, "feed1")),
+        )
+        vmTest { vm, effects ->
+            vm.state.value.items.forEach(vm::open)
+            advanceUntilIdle()
+            assertThat(effects.navs()).containsExactly(
+                NotificationNav.Activity(actor = "webdav:ap-9", since = "2026-10-21T00:00:00Z"),
+                NotificationNav.Feed("feed1"),
+            ).inOrder()
+            assertThat(unread.count.value).isEqualTo(0)
+        }
+    }
+
+    @Test
     fun `admin targets are ignored for non-admins and notifications without targets only get read`() {
         repo.items = listOf(
             notification("a", target = NotificationTarget(NotificationTargetKind.ADMIN)),

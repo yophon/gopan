@@ -86,6 +86,19 @@ class ApolloNotificationsRepositoryTest {
     }
 
     @Test
+    fun `activity and feed targets are mapped`() = runBlocking {
+        handlers["Notifications"] = {
+            """{"data":{"notifications":{"__typename":"NotificationPage","items":[
+              ${json("n1", level = "ALERT", target = """{"__typename":"NotificationTarget","kind":"ACTIVITY","id":"webdav:ap-9","parentId":"2026-10-21T00:00:00Z"}""")},
+              ${json("n2", level = "INFO", target = """{"__typename":"NotificationTarget","kind":"FEED","id":"f1","parentId":null}""")}
+            ],"nextCursor":null}}}"""
+        }
+        val (n1, n2) = repo.list(cursor = null, unreadOnly = false).items
+        assertThat(n1.target).isEqualTo(NotificationTarget(NotificationTargetKind.ACTIVITY, "webdav:ap-9", "2026-10-21T00:00:00Z"))
+        assertThat(n2.target).isEqualTo(NotificationTarget(NotificationTargetKind.FEED, "f1"))
+    }
+
+    @Test
     fun `mark read sends null for all and a list for some`() = runBlocking {
         handlers["MarkNotificationsRead"] = { vars ->
             val ids = vars["ids"]

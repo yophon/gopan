@@ -54,6 +54,28 @@ class NotificationsLogicTest {
     }
 
     @Test
+    fun `activity target opens the activity list filtered by source and time`() {
+        // 大量删除提醒:id = 来源(kind:ref),parentId = 从什么时候起
+        assertThat(NotificationsLogic.navFor(t(NotificationTargetKind.ACTIVITY, "webdav:ap-9", "2026-10-21T00:00:00Z"), false))
+            .isEqualTo(NotificationNav.Activity(actor = "webdav:ap-9", since = "2026-10-21T00:00:00Z"))
+        assertThat(NotificationsLogic.navFor(t(NotificationTargetKind.ACTIVITY), false)).isEqualTo(NotificationNav.Activity())
+        assertThat(NotificationsLogic.navFor(t(NotificationTargetKind.ACTIVITY, " "), false)).isEqualTo(NotificationNav.Activity())
+        // 筛选参数与动态页的解析对得上
+        val nav = NotificationsLogic.navFor(t(NotificationTargetKind.ACTIVITY, "agent:oauth:g1", "2026-10-21T00:00:00Z"), false)
+            as NotificationNav.Activity
+        val query = xyz.yophon.gopan.feature.activity.ActivityLogic.queryFor(nav.actor, nav.since)
+        assertThat(query.actorKind).isEqualTo(xyz.yophon.gopan.core.data.activity.ActorKind.AGENT)
+        assertThat(query.actorRef).isEqualTo("oauth:g1")
+        assertThat(query.since).isEqualTo("2026-10-21T00:00:00Z")
+    }
+
+    @Test
+    fun `feed target goes to the feed`() {
+        assertThat(NotificationsLogic.navFor(t(NotificationTargetKind.FEED, "f1"), false)).isEqualTo(NotificationNav.Feed("f1"))
+        assertThat(NotificationsLogic.navFor(t(NotificationTargetKind.FEED), false)).isEqualTo(NotificationNav.Feed(null))
+    }
+
+    @Test
     fun `admin target only for admins, no target goes nowhere`() {
         assertThat(NotificationsLogic.navFor(t(NotificationTargetKind.ADMIN), isAdmin = true)).isEqualTo(NotificationNav.Admin)
         assertThat(NotificationsLogic.navFor(t(NotificationTargetKind.ADMIN), isAdmin = false)).isNull()

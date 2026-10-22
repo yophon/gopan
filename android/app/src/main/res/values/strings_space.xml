@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 空间分析(feature.space,doc/23 三)的文案;类型名与占比在 SpaceLogic 里(要单测) -->
+<resources>
+    <string name="space_title">空间</string>
+    <string name="space_entry_hint">空间花在哪:按类型、按文件夹,清理大文件、重复文件、空文件夹</string>
+
+    <string name="space_tab_overview">总览</string>
+    <string name="space_tab_folders">文件夹</string>
+    <string name="space_tab_large">大文件</string>
+    <string name="space_tab_duplicates">重复文件</string>
+    <string name="space_tab_stale">很久没动</string>
+    <string name="space_tab_empty">空文件夹</string>
+    <string name="space_tab_idle">分享与直链</string>
+
+    <!-- 总览 -->
+    <string name="space_by_type">按类型</string>
+    <string name="space_category_value">%1$d 个 · %2$s · %3$s</string>
+    <string name="space_trash">回收站</string>
+    <string name="space_trash_desc">%1$d 个文件,%2$s(占已用 %3$s),彻底删除或到期后才释放配额</string>
+    <string name="space_trash_open">查看</string>
+    <string name="space_trash_purge">清空</string>
+    <string name="space_trash_purge_text">回收站里的 %1$d 个文件(%2$s)会被永久删除,无法找回。</string>
+    <string name="space_duplicates_desc">%1$d 组,删掉多余的能省 %2$s</string>
+    <string name="space_duplicates_none">没有重复文件</string>
+    <string name="space_duplicates_show">去看看</string>
+    <string name="space_dedupe_note">服务器上同一份内容本来只存一份,删重复文件省的是你的配额,不是服务器磁盘。</string>
+
+    <!-- 文件夹 -->
+    <string name="space_folders_up">上一层</string>
+    <string name="space_folders_loose">直接放在这里的文件</string>
+    <string name="space_folders_empty">这一层没有文件夹</string>
+    <string name="space_folder_value">%1$s · %2$s · %3$d 个文件</string>
+    <string name="space_folder_stale">%1$s(统计更新中,可能滞后)</string>
+    <string name="space_open_in_drive">在文件页打开</string>
+
+    <!-- 可勾选的清单 -->
+    <string name="space_large_all">全部类型</string>
+    <string name="space_large_hint">最大的前 100 个文件,勾选后移进回收站(30 天内能还原)</string>
+    <string name="space_large_none">没有文件</string>
+    <string name="space_stale_hint">一年以上没改过、不小于 100 MB 的文件(不记访问,只能按修改时间看)</string>
+    <string name="space_stale_value">%1$s · %2$s 改过 · %3$s</string>
+    <string name="space_stale_none">没有很久没动的大文件</string>
+    <string name="space_empty_hint">子树里一个文件都没有的文件夹(收集链接、订阅、传输助手用着的不算)</string>
+    <string name="space_empty_none">没有空文件夹</string>
+    <string name="space_count">共 %1$d 项</string>
+    <string name="space_select_none">全不选</string>
+    <string name="space_selected">已选 %1$d 项,%2$s</string>
+    <string name="space_action_delete">移进回收站</string>
+    <string name="space_delete_title">移进回收站</string>
+    <string name="space_delete_text">所选 %1$d 项(%2$s)会移进回收站,30 天内能还原,也能在「动态」里撤回。</string>
+    <string name="space_msg_deleted">已移进回收站 %1$d 项</string>
+
+    <!-- 重复文件 -->
+    <string name="space_dup_hint">每组默认留最早的一份,勾上的会移进回收站。</string>
+    <string name="space_dup_group">%1$d 份,每份 %2$s,只留一份能省 %3$s</string>
+    <string name="space_dup_earliest">最早</string>
+    <string name="space_dup_selected">已选 %1$d 项,能省 %2$s</string>
+    <string name="space_dup_all_copies">有 %1$d 组的每一份都勾上了,删掉后这份内容只剩回收站里的。</string>
+
+    <!-- 分享与直链 -->
+    <string name="space_idle_hint">已过期的、或 90 天没人访问的分享与直链;已过期的收集链接</string>
+    <string name="space_idle_none">没有要清理的分享与直链</string>
+    <string name="space_idle_shares">分享</string>
+    <string name="space_idle_links">直链</string>
+    <string name="space_idle_requests">收集链接</string>
+    <string name="space_idle_expired">%1$s 已过期</string>
+    <string name="space_idle_last_visit">上次访问 %1$s</string>
+    <string name="space_idle_never">%1$s 建的,一直没人访问</string>
+    <string name="space_idle_link_hits">共 %1$d 次,上次 %2$s</string>
+</resources>

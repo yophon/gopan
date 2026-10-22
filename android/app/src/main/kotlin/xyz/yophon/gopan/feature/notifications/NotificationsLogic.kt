@@ -35,6 +35,12 @@ sealed interface NotificationNav {
     /** 「我的」(图床密钥在网页上管,App 里没有对应页面) */
     data object Account : NotificationNav
 
+    /** 「我的 → 动态」,按来源([actor] = kind:ref)和时间([since])筛好(大量删除提醒点进来,doc/23 二.3) */
+    data class Activity(val actor: String? = null, val since: String? = null) : NotificationNav
+
+    /** 订阅(有新内容 / 检查失败);[feedId] 为空 = 订阅列表 */
+    data class Feed(val feedId: String? = null) : NotificationNav
+
     data object Admin : NotificationNav
 }
 
@@ -74,6 +80,8 @@ object NotificationsLogic {
                 else -> NotificationNav.Account
             }
             NotificationTargetKind.ADMIN -> if (isAdmin) NotificationNav.Admin else null
+            NotificationTargetKind.ACTIVITY -> NotificationNav.Activity(actor = target.id?.takeIf { it.isNotBlank() }, since = target.parentId)
+            NotificationTargetKind.FEED -> NotificationNav.Feed(target.id?.takeIf { it.isNotBlank() })
         }
     }
 

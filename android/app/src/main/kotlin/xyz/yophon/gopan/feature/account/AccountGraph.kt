@@ -13,11 +13,13 @@ import xyz.yophon.gopan.feature.admin.AdminScreen
 import xyz.yophon.gopan.feature.drive.ifResumed
 import xyz.yophon.gopan.feature.about.CrashLogScreen
 import xyz.yophon.gopan.feature.about.LicensesScreen
+import xyz.yophon.gopan.feature.activity.ActivityScreen
 import xyz.yophon.gopan.feature.notifications.NotificationNav
 import xyz.yophon.gopan.feature.notifications.NotificationsScreen
+import xyz.yophon.gopan.feature.space.SpaceScreen
 
 /**
- * 「我的」tab 的嵌套图:账户页(改密对话框在页内)、站内通知、登录设备、WebDAV 应用密码、Agent 接入、管理端(仅管理员可见)。
+ * 「我的」tab 的嵌套图:账户页(改密对话框在页内)、站内通知、动态、空间、登录设备、WebDAV 应用密码、Agent 接入、管理端(仅管理员可见)。
  * 回收站页属于文件线(driveGraph 里的 [Routes.Trash]),这里只负责导航过去;
  * 通知点开后去的文件夹 / 预览 / 「分享」tab / 传输列表同样只是导航过去([onOpenPreview] 由主界面给)。
  */
@@ -34,6 +36,21 @@ fun NavGraphBuilder.accountGraph(navController: NavController, onOpenPreview: (n
                 onOpenCrashLogs = { entry.ifResumed { navController.navigate(Routes.CrashLogs) } },
                 onOpenLicenses = { entry.ifResumed { navController.navigate(Routes.Licenses) } },
                 onOpenNotifications = { entry.ifResumed { navController.navigate(Routes.Notifications) { launchSingleTop = true } } },
+                onOpenActivity = { entry.ifResumed { navController.navigate(Routes.Activity()) } },
+                onOpenSpace = { entry.ifResumed { navController.navigate(Routes.Space) { launchSingleTop = true } } },
+            )
+        }
+        composable<Routes.Activity> { entry ->
+            ActivityScreen(
+                onBack = { entry.ifResumed { navController.popBackStack() } },
+                onOpen = { nav -> entry.ifResumed { navController.navigateFor(nav, onOpenPreview) } },
+            )
+        }
+        composable<Routes.Space> { entry ->
+            SpaceScreen(
+                onBack = { entry.ifResumed { navController.popBackStack() } },
+                onOpen = { nav -> entry.ifResumed { navController.navigateFor(nav, onOpenPreview) } },
+                onOpenTrash = { entry.ifResumed { navController.navigate(Routes.Trash) } },
             )
         }
         composable<Routes.Notifications> { entry ->
@@ -72,5 +89,8 @@ private fun NavController.navigateFor(nav: NotificationNav, onOpenPreview: (Stri
         NotificationNav.Agent -> navigate(Routes.AgentCredentials)
         NotificationNav.Admin -> navigate(Routes.Admin)
         NotificationNav.Account -> if (!popBackStack(Routes.Account, inclusive = false)) navigate(Routes.Account)
+        is NotificationNav.Activity -> navigate(Routes.Activity(actor = nav.actor, since = nav.since))
+        // 订阅页还没有时回「我的」(订阅的入口在那里)
+        is NotificationNav.Feed -> if (!popBackStack(Routes.Account, inclusive = false)) navigate(Routes.Account)
     }
 }

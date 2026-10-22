@@ -22,11 +22,12 @@ import xyz.yophon.gopan.graphql.type.NotificationTargetKind as GqlTargetKind
 enum class NotificationLevel { INFO, WARN, ALERT }
 
 /** 点开通知跳到哪(与 GraphQL NotificationTargetKind 同名) */
-enum class NotificationTargetKind { NODE, FILE_REQUEST, LINK, JOBS, SESSIONS, CREDENTIALS, ADMIN }
+enum class NotificationTargetKind { NODE, FILE_REQUEST, LINK, JOBS, SESSIONS, CREDENTIALS, ADMIN, ACTIVITY, FEED }
 
 /**
  * NODE:[id] 是文件 / 文件夹,[parentId] 是所在文件夹(null = 根目录);FILE_REQUEST / LINK:[id] 是收集链接 / 直链;
- * CREDENTIALS:[id] 是凭据种类(webdav / mcp / img);其余没有 id
+ * CREDENTIALS:[id] 是凭据种类(webdav / mcp / img);ACTIVITY:[id] 是来源(kind:ref),[parentId] 是从什么时候起(RFC 3339);
+ * FEED:[id] 是订阅(可能为空);其余没有 id
  */
 @Immutable
 data class NotificationTarget(val kind: NotificationTargetKind, val id: String? = null, val parentId: String? = null)
@@ -105,6 +106,8 @@ internal fun InboxNotificationFields.toDomain() = AppNotification(
             GqlTargetKind.SESSIONS -> NotificationTargetKind.SESSIONS
             GqlTargetKind.CREDENTIALS -> NotificationTargetKind.CREDENTIALS
             GqlTargetKind.ADMIN -> NotificationTargetKind.ADMIN
+            GqlTargetKind.ACTIVITY -> NotificationTargetKind.ACTIVITY
+            GqlTargetKind.FEED -> NotificationTargetKind.FEED
             // 新版服务端加了目标而 App 没跟上:当作没有目标,点了只标已读
             else -> null
         }

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 动态与撤回(feature.activity,doc/23 二)的文案;操作、来源、撤回结果这些拼出来的句子在 ActivityLogic 里(要单测) -->
+<resources>
+    <string name="activity_title">动态</string>
+    <string name="activity_entry_hint">谁在什么时候改了哪个文件,移动、改名、删除、新建能撤回</string>
+
+    <string name="activity_filter_all">全部来源</string>
+    <string name="activity_clear_since">去掉时间段</string>
+
+    <string name="activity_action_undo">撤回</string>
+    <string name="activity_action_undo_group">撤回这一组</string>
+    <string name="activity_action_undo_all">全部撤回</string>
+    <string name="activity_group_expand">展开</string>
+    <string name="activity_group_collapse">收起</string>
+
+    <string name="activity_tag_undone">已撤回</string>
+    <string name="activity_tag_undo_of">撤回操作</string>
+    <string name="activity_tag_not_undoable">不可撤回</string>
+
+    <string name="activity_empty">还没有动态</string>
+    <string name="activity_empty_filtered">这个来源没有改动</string>
+    <string name="activity_empty_hint">网页、App、WebDAV、Agent、收集链接、后台任务对网盘的改动都记在这里,保留 90 天</string>
+
+    <string name="activity_confirm_title_group">撤回这一组</string>
+    <string name="activity_confirm_title_all">全部撤回</string>
+    <string name="activity_confirm_hint">从新到旧逐条撤回;撤回本身也会记进动态,想恢复再对它撤回即可。</string>
+    <string name="activity_confirm_button">撤回 %1$d 项</string>
+
+    <string name="activity_msg_node_gone">这个文件已经不在网盘里了(在回收站里或已彻底删除)</string>
+</resources>

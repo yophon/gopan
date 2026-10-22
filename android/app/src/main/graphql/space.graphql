@@ -1,0 +1,101 @@
+# 空间分析(doc/23 三):全是现算的只读查询;清理走已有的 deleteNodes / purgeTrash / revokeShare / revokeLink /
+# revokeFileRequest(进回收站、记进动态)。管理端的 adminStorage App 不取。
+
+fragment SpaceFileFields on SpaceFile {
+  node {
+    ...NodeItem
+  }
+  path
+  category
+}
+
+query SpaceOverview {
+  spaceOverview {
+    usedBytes
+    quotaBytes
+    trashFiles
+    trashBytes
+    byType {
+      category
+      files
+      bytes
+    }
+    duplicateGroups
+    duplicateBytes
+  }
+}
+
+query SpaceFolders($parentId: ID) {
+  spaceFolders(parentId: $parentId) {
+    path
+    folders {
+      ...NodeItem
+    }
+    looseFiles
+    looseBytes
+  }
+}
+
+query SpaceLargeFiles($category: FileCategory, $limit: Int) {
+  spaceLargeFiles(category: $category, limit: $limit) {
+    ...SpaceFileFields
+  }
+}
+
+query SpaceStaleFiles($days: Int, $minSize: Int64, $limit: Int) {
+  spaceStaleFiles(days: $days, minSize: $minSize, limit: $limit) {
+    ...SpaceFileFields
+  }
+}
+
+query SpaceDuplicates($offset: Int, $limit: Int) {
+  spaceDuplicates(offset: $offset, limit: $limit) {
+    items {
+      sha256
+      size
+      copies
+      files {
+        ...SpaceFileFields
+      }
+    }
+    nextOffset
+  }
+}
+
+query SpaceEmptyFolders($limit: Int) {
+  spaceEmptyFolders(limit: $limit) {
+    ...SpaceFileFields
+  }
+}
+
+query SpaceIdle {
+  spaceIdle {
+    shares {
+      id
+      nodeId
+      name
+      kind
+      expiresAt
+      createdAt
+      lastVisitAt
+      expired
+    }
+    links {
+      id
+      nodeId
+      name
+      expiresAt
+      createdAt
+      lastHitAt
+      hits
+      expired
+    }
+    requests {
+      id
+      title
+      folderId
+      expiresAt
+      createdAt
+    }
+  }
+}

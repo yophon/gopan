@@ -104,6 +104,17 @@ object Routes {
     @Serializable
     data object Notifications
 
+    /**
+     * 动态(doc/23 二):「我的」进来不带参数;大量删除提醒点进来时按来源([actor] = kind:ref)
+     * 和时间([since],RFC 3339)筛好
+     */
+    @Serializable
+    data class Activity(val actor: String? = null, val since: String? = null)
+
+    /** 空间分析(doc/23 三):「我的」的入口与用量条进来 */
+    @Serializable
+    data object Space
+
     @Serializable
     data object CrashLogs
 

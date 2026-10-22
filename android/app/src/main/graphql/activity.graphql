@@ -1,0 +1,80 @@
+# 动态与撤回(doc/23 二)。按来源撤回(filter)只在「全部撤回」用:通知点进来、已按来源筛好的时候。
+# 片段名要在整个 service 里唯一:ActivityFields / UndoOutcomeFields。
+
+fragment ActivityFields on Activity {
+  id
+  at
+  actor {
+    kind
+    ref
+    label
+  }
+  batchId
+  action
+  nodeId
+  node {
+    ...NodeItem
+  }
+  nodeKind
+  name
+  parentPath
+  fromPath
+  toPath
+  oldName
+  newName
+  files
+  bytes
+  note
+  undoOf
+  undoneAt
+  undoable
+}
+
+fragment UndoOutcomeFields on UndoResult {
+  done
+  failed
+  items {
+    activity {
+      id
+      name
+      action
+    }
+    ok
+    reason
+  }
+}
+
+query Activities($filter: ActivityFilter, $cursor: String, $limit: Int) {
+  activities(filter: $filter, cursor: $cursor, limit: $limit) {
+    items {
+      ...ActivityFields
+    }
+    nextCursor
+  }
+}
+
+# 筛选用的来源:近 90 天出现过的,最近活跃的在前
+query ActivityActors {
+  activityActors {
+    actor {
+      kind
+      ref
+      label
+    }
+    total
+    lastAt
+  }
+}
+
+# 撤回前先看:会撤回哪些、哪些撤不了(不改任何东西)
+query UndoPreview($selection: UndoSelection!) {
+  undoPreview(selection: $selection) {
+    ...UndoOutcomeFields
+  }
+}
+
+mutation UndoActivities($selection: UndoSelection!) {
+  undoActivities(selection: $selection) {
+    ...UndoOutcomeFields
+  }
+}

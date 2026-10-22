@@ -27,7 +27,9 @@ import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
@@ -119,6 +121,8 @@ fun AccountScreen(
     onOpenCrashLogs: () -> Unit,
     onOpenLicenses: () -> Unit,
     onOpenNotifications: () -> Unit = {},
+    onOpenActivity: () -> Unit = {},
+    onOpenSpace: () -> Unit = {},
     viewModel: AccountViewModel = hiltViewModel(),
     updates: UpdateViewModel = hiltViewModel(),
     crashes: CrashLogViewModel = hiltViewModel(),
@@ -172,6 +176,8 @@ fun AccountScreen(
             },
             onFixPermission = fixPermission,
         ),
+        onOpenActivity = onOpenActivity,
+        onOpenSpace = onOpenSpace,
     )
     update.phase?.let { UpdateDialog(it, updates) }
 }
@@ -203,6 +209,8 @@ internal fun AccountContent(
     onOpenCrashLogs: () -> Unit = {},
     onOpenLicenses: () -> Unit = {},
     notifications: NotificationsEntry? = null,
+    onOpenActivity: () -> Unit = {},
+    onOpenSpace: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showThemeDialog by rememberSaveable { mutableStateOf(false) }
@@ -268,6 +276,8 @@ internal fun AccountContent(
                     onOpenLicenses = onOpenLicenses,
                     onLogoutClick = { showLogoutConfirm = true },
                     notifications = notifications,
+                    onOpenActivity = onOpenActivity,
+                    onOpenSpace = onOpenSpace,
                 )
             }
         }
@@ -347,13 +357,32 @@ private fun AccountList(
     onOpenLicenses: () -> Unit,
     onLogoutClick: () -> Unit,
     notifications: NotificationsEntry? = null,
+    onOpenActivity: () -> Unit = {},
+    onOpenSpace: () -> Unit = {},
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        item("header") { AccountHeader(user = user, usage = usage) }
+        item("header") { AccountHeader(user = user, usage = usage, onClick = onOpenSpace) }
 
         if (notifications != null) notificationsSection(notifications)
 
         item("storage") { SectionTitle(stringResource(R.string.account_section_storage)) }
+        // 空间分析与动态(doc/23 二、三)
+        item("space") {
+            SettingItem(
+                icon = Icons.Outlined.PieChart,
+                title = stringResource(R.string.space_title),
+                supporting = stringResource(R.string.space_entry_hint),
+                onClick = onOpenSpace,
+            )
+        }
+        item("activity") {
+            SettingItem(
+                icon = Icons.Outlined.History,
+                title = stringResource(R.string.activity_title),
+                supporting = stringResource(R.string.activity_entry_hint),
+                onClick = onOpenActivity,
+            )
+        }
         item("trash") {
             SettingItem(
                 icon = Icons.Outlined.DeleteOutline,
@@ -477,11 +506,13 @@ private fun AccountList(
     }
 }
 
+/** 头部:用户名与用量;点一下进「空间」看空间花在哪 */
 @Composable
-private fun AccountHeader(user: UserSummary, usage: UsageSummary) {
+private fun AccountHeader(user: UserSummary, usage: UsageSummary, onClick: () -> Unit) {
     Surface(
+        onClick = onClick,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).testTag("account_usage"),
         shape = MaterialTheme.shapes.large,
     ) {
         Column(modifier = Modifier.padding(20.dp)) {

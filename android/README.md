@@ -107,6 +107,9 @@ app/src/main/kotlin/xyz/yophon/gopan/
   core/data/notifications/       站内通知(doc/22 三):NotificationsRepository(列表 / 未读数 / 标已读 / 清空)、UnreadNotifications(角标计数)、NotificationsModule
   core/data/links/               直链(doc/22 四):DirectLinksRepository(开关(本次登录缓存)、我的直链、生成、暂停、吊销;站内路径拼服务端地址)、
                                  LinkFormats(链接 / Markdown / HTML 的写法,纯函数)
+  core/data/activity/            动态与撤回(doc/23 二):ActivityRepository(列表与筛选、来源、撤回预览、撤回)、ActivityModule
+  core/data/space/               空间分析(doc/23 三):SpaceRepository(总览、文件夹逐层、大文件、很久没动、重复文件、空文件夹、
+                                 没人用的分享 / 直链 / 收集链接及吊销)、SpaceModule;清理走 NodesRepository.delete / purgeTrash
   core/documents/                系统「文件」App 里的 gopan,见下文「DocumentsProvider」:GopanDocumentsProvider、DocumentCache(按需下载的读缓存)、
                                  PendingDocuments(别的应用写进来的新文件 → 上传队列)、DocumentsModule(登出时清理、登录态变化时刷新根目录)
   core/app/                      UpdateRepository(站点发布的安装包:检查、下载、校验)、CrashLog(未捕获异常写本地日志)
@@ -148,6 +151,10 @@ app/src/main/kotlin/xyz/yophon/gopan/
   feature/notifications/         「我的 → 通知」:NotificationsScreen / NotificationsViewModel(按天分组、只看未读、全部已读、清空、点开跳转)、
                                  NotificationsLogic(目标 → 页面、分组,纯函数)、NotificationsEntryViewModel(角标轮询、系统通知开关)、NotificationPermission
   feature/links/                 直链:CopyLink(文件页 / 搜索页「复制直链」与格式对话框)、DirectLinksTab / DirectLinksViewModel(「分享」tab 的「直链」标签)
+  feature/activity/              「我的 → 动态」:ActivityScreen / ActivityViewModel(按天分组、同一批折叠、按来源筛、单条 / 整批 / 按来源撤回,
+                                 整批先预览;大量删除提醒点进来按来源和时间筛好)、ActivityLogic(文案、分组、撤回提示、通知目标里的来源,纯函数)
+  feature/space/                 「我的 → 空间」(用量条也能点进来):SpaceScreen 七个标签,一个标签一个 ViewModel(SpaceViewModels);
+                                 SpaceLogic(类型名、占比、文件夹分布、重复文件默认勾选,纯函数)
   feature/admin/                 管理端:AdminScreen(概览卡片、失败任务重排、用户列表与操作对话框)/ AdminViewModel
   feature/about/                 UpdateDialog(检查 / 下载 / 交给系统安装器)、CrashLogScreen(查看、导出、删除)、LicensesScreen(依赖与许可证全文)
   feature/preview/               全屏预览(PreviewScreen:翻页器、顶栏、沉浸)与平板侧栏(PreviewPane);PreviewViewModel(会话列表、最近 6 页)、
