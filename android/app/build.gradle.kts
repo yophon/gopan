@@ -40,8 +40,8 @@ android {
         applicationId = "xyz.yophon.gopan"
         minSdk = 26
         targetSdk = 36
-        versionCode = 30500
-        versionName = "3.5.0"
+        versionCode = 30501
+        versionName = "3.5.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // AppAuth 的 RedirectUriReceiverActivity 由库 manifest 合并,这里只给 scheme;
