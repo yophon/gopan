@@ -240,7 +240,7 @@ func (c *Clips) runClip(ctx context.Context, j *Jobs, run *jobRun) (*uuid.UUID, 
 	}
 	if _, err := c.q.CreateClip(ctx, store.CreateClipParams{
 		ID: uuid.Must(uuid.NewV7()), OwnerID: owner, Url: p.URL, Title: truncateRunes(art.Title, 300), Site: truncateRunes(art.Site, 100),
-		Byline: truncateRunes(art.Byline, 100), Excerpt: art.Excerpt, PublishedAt: pub, NodeID: md.ID,
+		Byline: truncateRunes(art.Byline, 100), Excerpt: art.Excerpt, PublishedAt: pub, NodeID: md.ID, AssetsID: assetsID(assets),
 		Words: int32(art.Words), Images: int32(imgCount),
 	}); err != nil {
 		return nil, err
@@ -256,6 +256,13 @@ func (c *Clips) runClip(ctx context.Context, j *Jobs, run *jobRun) (*uuid.UUID, 
 		run.warning = errf("CLIP_FALLBACK", "没认出正文,存的是整页文字")
 	}
 	return &md.ID, nil
+}
+
+func assetsID(n *store.Node) *uuid.UUID {
+	if n == nil {
+		return nil
+	}
+	return &n.ID
 }
 
 // fetchPage 抓网页(≤ 5 MB,只收 HTML,跟随跳转),转成 UTF-8;返回最终地址。

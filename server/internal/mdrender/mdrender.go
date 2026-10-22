@@ -80,10 +80,10 @@ func (r *rewriter) Transform(doc *ast.Document, _ text.Reader, _ parser.Context)
 		}
 		switch v := n.(type) {
 		case *ast.Image:
+			// 不懒加载:图片地址带的是当次的访问令牌(15 分钟),读得久了再滚到的图会取不到
 			if dst := r.rewrite(string(v.Destination), true); dst != "" {
 				v.Destination = []byte(dst)
 			}
-			v.SetAttributeString("loading", []byte("lazy"))
 		case *ast.Link:
 			dest := string(v.Destination)
 			if isExternal(dest) {

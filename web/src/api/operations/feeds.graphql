@@ -11,6 +11,7 @@ fragment FeedFields on Feed {
     parentId
     name
   }
+  folderPath
   mode
   includeWords
   excludeWords

@@ -920,7 +920,7 @@ func TestClipLifecycle(t *testing.T) {
 		t.Fatalf("folder contents = %+v %v", assets, err)
 	}
 	clips, _, err := f.clips.List(t.Context(), f.owner, false, "", nil)
-	if err != nil || len(clips) != 1 || clips[0].Site != "测试站" || clips[0].Images != 1 || clips[0].ReadAt.Valid {
+	if err != nil || len(clips) != 1 || clips[0].Site != "测试站" || clips[0].Images != 1 || clips[0].ReadAt.Valid || clips[0].AssetsID == nil || *clips[0].AssetsID != assets.Items[0].ID {
 		t.Fatalf("clips = %+v %v", clips, err)
 	}
 	// 动态:来源剪藏,md 与 assets 两条一批

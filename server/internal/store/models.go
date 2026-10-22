@@ -105,6 +105,7 @@ type Clip struct {
 	Excerpt     string
 	PublishedAt pgtype.Timestamptz
 	NodeID      uuid.UUID
+	AssetsID    *uuid.UUID
 	Words       int32
 	Images      int32
 	ReadAt      pgtype.Timestamptz

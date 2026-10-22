@@ -786,6 +786,14 @@ func (s *Nodes) PurgeTrash(ctx context.Context, owner uuid.UUID) error {
 	return s.Purge(ctx, owner, roots)
 }
 
+// Path 属主自己的节点从根开始的路径(如 /订阅/某播客)。
+func (s *Nodes) Path(ctx context.Context, owner, id uuid.UUID) (string, error) {
+	if _, err := s.Get(ctx, owner, id); err != nil {
+		return "", err
+	}
+	return s.q.NodePath(ctx, id)
+}
+
 // ---- 大量删除提醒(doc/23 二.3) ----
 
 const (

@@ -99,7 +99,8 @@ async function onDelete() {
   const c = clip.value
   if (!c?.node) return
   try {
-    await ElMessageBox.confirm(`「${c.node.name}」会移进回收站,可以在回收站还原。图片文件夹(.assets)不动。`, '删除这篇剪藏?', {
+    const withAssets = c.assets ? `和图片文件夹「${c.assets.name}」` : ''
+    await ElMessageBox.confirm(`「${c.node.name}」${withAssets}会移进回收站,可以在回收站还原。`, '删除这篇剪藏?', {
       confirmButtonText: '删除',
       cancelButtonText: '取消',
       type: 'warning',
@@ -108,7 +109,7 @@ async function onDelete() {
     return
   }
   try {
-    await request(DeleteNodesDocument, { ids: [c.node.id] })
+    await request(DeleteNodesDocument, { ids: c.assets ? [c.node.id, c.assets.id] : [c.node.id] })
     ElMessage.success('已放入回收站')
     visible.value = false
     refreshLists()

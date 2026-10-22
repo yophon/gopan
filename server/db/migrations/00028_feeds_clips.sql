@@ -64,6 +64,7 @@ CREATE TABLE clips (
     excerpt      text NOT NULL DEFAULT '',
     published_at timestamptz,
     node_id      uuid NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+    assets_id    uuid REFERENCES nodes(id) ON DELETE SET NULL,  -- 旁边存图片的「标题.assets」文件夹
     words        int NOT NULL DEFAULT 0,
     images       int NOT NULL DEFAULT 0,
     read_at      timestamptz,

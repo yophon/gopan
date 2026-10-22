@@ -362,7 +362,7 @@ func (r *Resolver) spaceIdle(ctx context.Context) (*SpaceIdle, error) {
 	out := &SpaceIdle{Shares: []*IdleShare{}, Links: []*IdleLink{}, Requests: []*IdleRequest{}}
 	for _, s := range idle.Shares {
 		out.Shares = append(out.Shares, &IdleShare{
-			ID: s.ID.String(), NodeID: s.NodeID.String(), Name: s.Name,
+			ID: s.ID.String(), Token: s.Token, NodeID: s.NodeID.String(), Name: s.Name,
 			Kind:      NodeKind(map[string]string{"file": "FILE", "folder": "FOLDER"}[s.Kind]),
 			ExpiresAt: optTime(s.ExpiresAt.Valid, s.ExpiresAt.Time), CreatedAt: s.CreatedAt.Time,
 			LastVisitAt: optTime(s.LastVisitAt.Valid, s.LastVisitAt.Time),
@@ -657,8 +657,31 @@ func gqlClip(c store.Clip) *Clip {
 		ID: c.ID.String(), URL: c.Url, Title: c.Title, Site: c.Site, Byline: c.Byline, Excerpt: c.Excerpt,
 		PublishedAt: optTime(c.PublishedAt.Valid, c.PublishedAt.Time), Words: int(c.Words), Images: int(c.Images),
 		ReadAt: optTime(c.ReadAt.Valid, c.ReadAt.Time), CreatedAt: c.CreatedAt.Time,
-		OwnerID: c.OwnerID.String(), NodeID: c.NodeID.String(),
+		OwnerID: c.OwnerID.String(), NodeID: c.NodeID.String(), AssetsID: idStr(c.AssetsID),
 	}
+}
+
+func idStr(id *uuid.UUID) string {
+	if id == nil {
+		return ""
+	}
+	return id.String()
+}
+
+func (r *Resolver) feedFolderPath(ctx context.Context, obj *Feed) (*string, error) {
+	if obj.FolderID == "" {
+		return nil, nil
+	}
+	owner, err1 := uuid.Parse(obj.OwnerID)
+	id, err2 := uuid.Parse(obj.FolderID)
+	if err1 != nil || err2 != nil {
+		return nil, nil
+	}
+	p, err := r.Nodes.Path(ctx, owner, id)
+	if err != nil {
+		return nil, nil
+	}
+	return &p, nil
 }
 
 func (r *Resolver) listClips(ctx context.Context, unreadOnly *bool, site, cursor *string) (*ClipPage, error) {

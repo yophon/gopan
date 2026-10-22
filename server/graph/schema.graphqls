@@ -813,6 +813,8 @@ type DuplicatePage {
 
 type IdleShare {
   id: ID!
+  # 分享链接是 /s/{token}
+  token: String!
   nodeId: ID!
   name: String!
   kind: NodeKind!
@@ -882,6 +884,8 @@ type Feed {
   siteUrl: String!
   # 存到哪;被彻底删除后为 null(订阅已暂停)
   folder: Node
+  # 存放文件夹的完整路径(如 /订阅/某播客);没有文件夹时为 null
+  folderPath: String
   mode: FeedMode!
   # 标题关键词,逗号分隔:含任一 include(空 = 不限)且不含任何 exclude
   includeWords: String!
@@ -989,6 +993,8 @@ type Clip {
   publishedAt: Time
   # 那篇 .md;阅读用 /md/{node.id}?token=<access>
   node: Node
+  # 旁边存图片的「<标题>.assets」文件夹(删剪藏时一起删);没有图片或已不在时为 null
+  assets: Node
   words: Int!
   images: Int!
   readAt: Time

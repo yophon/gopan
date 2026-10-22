@@ -54,9 +54,19 @@ func (r *clipResolver) Node(ctx context.Context, obj *Clip) (*Node, error) {
 	return r.activeNode(ctx, obj.OwnerID, obj.NodeID)
 }
 
+// Assets is the resolver for the assets field.
+func (r *clipResolver) Assets(ctx context.Context, obj *Clip) (*Node, error) {
+	return r.activeNode(ctx, obj.OwnerID, obj.AssetsID)
+}
+
 // Folder is the resolver for the folder field.
 func (r *feedResolver) Folder(ctx context.Context, obj *Feed) (*Node, error) {
 	return r.activeNode(ctx, obj.OwnerID, obj.FolderID)
+}
+
+// FolderPath is the resolver for the folderPath field.
+func (r *feedResolver) FolderPath(ctx context.Context, obj *Feed) (*string, error) {
+	return r.feedFolderPath(ctx, obj)
 }
 
 // Node is the resolver for the node field.

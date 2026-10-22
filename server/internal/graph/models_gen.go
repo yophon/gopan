@@ -169,10 +169,13 @@ type Clip struct {
 	Excerpt     string     `json:"excerpt"`
 	PublishedAt *time.Time `json:"publishedAt,omitempty"`
 	Node        *Node      `json:"node,omitempty"`
+	Assets      *Node      `json:"assets,omitempty"`
 	Words       int        `json:"words"`
 	Images      int        `json:"images"`
 	ReadAt      *time.Time `json:"readAt,omitempty"`
 	CreatedAt   time.Time  `json:"createdAt"`
+	// 由转换器置位,供 assets 字段 resolver 取节点
+	AssetsID string `json:"-"`
 	// 由转换器置位,供 node 字段 resolver 取节点
 	NodeID string `json:"-"`
 	// 由转换器置位
@@ -296,6 +299,7 @@ type Feed struct {
 	Title           string     `json:"title"`
 	SiteURL         string     `json:"siteUrl"`
 	Folder          *Node      `json:"folder,omitempty"`
+	FolderPath      *string    `json:"folderPath,omitempty"`
 	Mode            FeedMode   `json:"mode"`
 	IncludeWords    string     `json:"includeWords"`
 	ExcludeWords    string     `json:"excludeWords"`
@@ -455,6 +459,7 @@ type IdleRequest struct {
 
 type IdleShare struct {
 	ID          string     `json:"id"`
+	Token       string     `json:"token"`
 	NodeID      string     `json:"nodeId"`
 	Name        string     `json:"name"`
 	Kind        NodeKind   `json:"kind"`

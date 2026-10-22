@@ -87,6 +87,7 @@ function removeRequest(r: { id: string; title: string }) {
                 <template v-if="s.expiresAt"> · {{ s.expired ? '过期于' : '到' }} {{ formatTime(s.expiresAt).slice(0, 10) }}</template>
               </span>
             </div>
+            <el-button size="small" link type="primary" tag="a" :href="`/s/${s.token}`" target="_blank">打开</el-button>
             <el-button size="small" type="danger" plain @click="revokeShare(s)">吊销</el-button>
           </li>
         </ul>

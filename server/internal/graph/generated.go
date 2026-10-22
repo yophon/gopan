@@ -181,6 +181,7 @@ type ComplexityRoot struct {
 	}
 
 	Clip struct {
+		Assets      func(childComplexity int) int
 		Byline      func(childComplexity int) int
 		CreatedAt   func(childComplexity int) int
 		Excerpt     func(childComplexity int) int
@@ -299,6 +300,7 @@ type ComplexityRoot struct {
 		ExcludeWords    func(childComplexity int) int
 		FailCount       func(childComplexity int) int
 		Folder          func(childComplexity int) int
+		FolderPath      func(childComplexity int) int
 		ID              func(childComplexity int) int
 		IncludeWords    func(childComplexity int) int
 		IntervalMinutes func(childComplexity int) int
@@ -431,6 +433,7 @@ type ComplexityRoot struct {
 		LastVisitAt func(childComplexity int) int
 		Name        func(childComplexity int) int
 		NodeID      func(childComplexity int) int
+		Token       func(childComplexity int) int
 	}
 
 	Job struct {
@@ -961,9 +964,11 @@ type ChatMessageResolver interface {
 }
 type ClipResolver interface {
 	Node(ctx context.Context, obj *Clip) (*Node, error)
+	Assets(ctx context.Context, obj *Clip) (*Node, error)
 }
 type FeedResolver interface {
 	Folder(ctx context.Context, obj *Feed) (*Node, error)
+	FolderPath(ctx context.Context, obj *Feed) (*string, error)
 }
 type FeedItemResolver interface {
 	Node(ctx context.Context, obj *FeedItem) (*Node, error)
@@ -1705,6 +1710,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ChatMessage.Source(childComplexity), true
 
+	case "Clip.assets":
+		if e.ComplexityRoot.Clip.Assets == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Clip.Assets(childComplexity), true
 	case "Clip.byline":
 		if e.ComplexityRoot.Clip.Byline == nil {
 			break
@@ -2175,6 +2186,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Feed.Folder(childComplexity), true
+	case "Feed.folderPath":
+		if e.ComplexityRoot.Feed.FolderPath == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Feed.FolderPath(childComplexity), true
 	case "Feed.id":
 		if e.ComplexityRoot.Feed.ID == nil {
 			break
@@ -2780,6 +2797,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.IdleShare.NodeID(childComplexity), true
+	case "IdleShare.token":
+		if e.ComplexityRoot.IdleShare.Token == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IdleShare.Token(childComplexity), true
 
 	case "Job.attempts":
 		if e.ComplexityRoot.Job.Attempts == nil {
@@ -6482,6 +6505,8 @@ type DuplicatePage {
 
 type IdleShare {
   id: ID!
+  # 分享链接是 /s/{token}
+  token: String!
   nodeId: ID!
   name: String!
   kind: NodeKind!
@@ -6551,6 +6576,8 @@ type Feed {
   siteUrl: String!
   # 存到哪;被彻底删除后为 null(订阅已暂停)
   folder: Node
+  # 存放文件夹的完整路径(如 /订阅/某播客);没有文件夹时为 null
+  folderPath: String
   mode: FeedMode!
   # 标题关键词,逗号分隔:含任一 include(空 = 不限)且不含任何 exclude
   includeWords: String!
@@ -6658,6 +6685,8 @@ type Clip {
   publishedAt: Time
   # 那篇 .md;阅读用 /md/{node.id}?token=<access>
   node: Node
+  # 旁边存图片的「<标题>.assets」文件夹(删剪藏时一起删);没有图片或已不在时为 null
+  assets: Node
   words: Int!
   images: Int!
   readAt: Time
@@ -7253,6 +7282,8 @@ func (ec *executionContext) childFields_Clip(ctx context.Context, field graphql.
 		return ec.fieldContext_Clip_publishedAt(ctx, field)
 	case "node":
 		return ec.fieldContext_Clip_node(ctx, field)
+	case "assets":
+		return ec.fieldContext_Clip_assets(ctx, field)
 	case "words":
 		return ec.fieldContext_Clip_words(ctx, field)
 	case "images":
@@ -7473,6 +7504,8 @@ func (ec *executionContext) childFields_Feed(ctx context.Context, field graphql.
 		return ec.fieldContext_Feed_siteUrl(ctx, field)
 	case "folder":
 		return ec.fieldContext_Feed_folder(ctx, field)
+	case "folderPath":
+		return ec.fieldContext_Feed_folderPath(ctx, field)
 	case "mode":
 		return ec.fieldContext_Feed_mode(ctx, field)
 	case "includeWords":
@@ -7723,6 +7756,8 @@ func (ec *executionContext) childFields_IdleShare(ctx context.Context, field gra
 	switch field.Name {
 	case "id":
 		return ec.fieldContext_IdleShare_id(ctx, field)
+	case "token":
+		return ec.fieldContext_IdleShare_token(ctx, field)
 	case "nodeId":
 		return ec.fieldContext_IdleShare_nodeId(ctx, field)
 	case "name":
@@ -13133,6 +13168,38 @@ func (ec *executionContext) fieldContext_Clip_node(_ context.Context, field grap
 	return fc, nil
 }
 
+func (ec *executionContext) _Clip_assets(ctx context.Context, field graphql.CollectedField, obj *Clip) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Clip_assets(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Clip().Assets(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Node) graphql.Marshaler {
+			return ec.marshalONode2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNode(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Clip_assets(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Clip",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Node(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Clip_words(ctx context.Context, field graphql.CollectedField, obj *Clip) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -14803,6 +14870,29 @@ func (ec *executionContext) fieldContext_Feed_folder(_ context.Context, field gr
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Feed_folderPath(ctx context.Context, field graphql.CollectedField, obj *Feed) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Feed_folderPath(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Feed().FolderPath(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Feed_folderPath(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Feed", field, true, true, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _Feed_mode(ctx context.Context, field graphql.CollectedField, obj *Feed) (ret graphql.Marshaler) {
@@ -16973,6 +17063,29 @@ func (ec *executionContext) _IdleShare_id(ctx context.Context, field graphql.Col
 }
 func (ec *executionContext) fieldContext_IdleShare_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("IdleShare", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _IdleShare_token(ctx context.Context, field graphql.CollectedField, obj *IdleShare) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IdleShare_token(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Token, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_IdleShare_token(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IdleShare", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _IdleShare_nodeId(ctx context.Context, field graphql.CollectedField, obj *IdleShare) (ret graphql.Marshaler) {
@@ -31188,6 +31301,44 @@ func (ec *executionContext) _Clip(ctx context.Context, sel ast.SelectionSet, obj
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "assets":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Clip_assets(ctx, field, obj)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "words":
 			out.Values[i] = ec._Clip_words(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -31995,6 +32146,44 @@ func (ec *executionContext) _Feed(ctx context.Context, sel ast.SelectionSet, obj
 					}
 				}()
 				res = ec._Feed_folder(ctx, field, obj)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "folderPath":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Feed_folderPath(ctx, field, obj)
 				if res == graphql.RequiredNull {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -32876,6 +33065,11 @@ func (ec *executionContext) _IdleShare(ctx context.Context, sel ast.SelectionSet
 			out.Values[i] = graphql.MarshalString("IdleShare")
 		case "id":
 			out.Values[i] = ec._IdleShare_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "token":
+			out.Values[i] = ec._IdleShare_token(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

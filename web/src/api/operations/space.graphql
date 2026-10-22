@@ -88,6 +88,7 @@ query SpaceIdle {
   spaceIdle {
     shares {
       id
+      token
       nodeId
       name
       kind

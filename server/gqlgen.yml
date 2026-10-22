@@ -73,6 +73,8 @@ models:
     fields:
       folder:
         resolver: true
+      folderPath:
+        resolver: true
   FeedItem:
     extraFields:
       OwnerID:
@@ -92,8 +94,13 @@ models:
       NodeID:
         type: string
         description: "由转换器置位,供 node 字段 resolver 取节点"
+      AssetsID:
+        type: string
+        description: "由转换器置位,供 assets 字段 resolver 取节点"
     fields:
       node:
+        resolver: true
+      assets:
         resolver: true
   ID:
     model: github.com/99designs/gqlgen/graphql.String

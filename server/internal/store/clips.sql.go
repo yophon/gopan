@@ -26,9 +26,9 @@ func (q *Queries) CountUnreadClips(ctx context.Context, ownerID uuid.UUID) (int6
 
 const createClip = `-- name: CreateClip :one
 
-INSERT INTO clips (id, owner_id, url, title, site, byline, excerpt, published_at, node_id, words, images)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, owner_id, url, title, site, byline, excerpt, published_at, node_id, words, images, read_at, created_at
+INSERT INTO clips (id, owner_id, url, title, site, byline, excerpt, published_at, node_id, assets_id, words, images)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+RETURNING id, owner_id, url, title, site, byline, excerpt, published_at, node_id, assets_id, words, images, read_at, created_at
 `
 
 type CreateClipParams struct {
@@ -41,6 +41,7 @@ type CreateClipParams struct {
 	Excerpt     string
 	PublishedAt pgtype.Timestamptz
 	NodeID      uuid.UUID
+	AssetsID    *uuid.UUID
 	Words       int32
 	Images      int32
 }
@@ -57,6 +58,7 @@ func (q *Queries) CreateClip(ctx context.Context, arg CreateClipParams) (Clip, e
 		arg.Excerpt,
 		arg.PublishedAt,
 		arg.NodeID,
+		arg.AssetsID,
 		arg.Words,
 		arg.Images,
 	)
@@ -71,6 +73,7 @@ func (q *Queries) CreateClip(ctx context.Context, arg CreateClipParams) (Clip, e
 		&i.Excerpt,
 		&i.PublishedAt,
 		&i.NodeID,
+		&i.AssetsID,
 		&i.Words,
 		&i.Images,
 		&i.ReadAt,
@@ -80,7 +83,7 @@ func (q *Queries) CreateClip(ctx context.Context, arg CreateClipParams) (Clip, e
 }
 
 const findClipByURL = `-- name: FindClipByURL :one
-SELECT c.id, c.owner_id, c.url, c.title, c.site, c.byline, c.excerpt, c.published_at, c.node_id, c.words, c.images, c.read_at, c.created_at FROM clips c JOIN nodes n ON n.id = c.node_id
+SELECT c.id, c.owner_id, c.url, c.title, c.site, c.byline, c.excerpt, c.published_at, c.node_id, c.assets_id, c.words, c.images, c.read_at, c.created_at FROM clips c JOIN nodes n ON n.id = c.node_id
 WHERE c.owner_id = $1 AND c.url = $2 AND n.deleted_at IS NULL
 ORDER BY c.created_at DESC
 LIMIT 1
@@ -105,6 +108,7 @@ func (q *Queries) FindClipByURL(ctx context.Context, arg FindClipByURLParams) (C
 		&i.Excerpt,
 		&i.PublishedAt,
 		&i.NodeID,
+		&i.AssetsID,
 		&i.Words,
 		&i.Images,
 		&i.ReadAt,
@@ -114,7 +118,7 @@ func (q *Queries) FindClipByURL(ctx context.Context, arg FindClipByURLParams) (C
 }
 
 const getClip = `-- name: GetClip :one
-SELECT id, owner_id, url, title, site, byline, excerpt, published_at, node_id, words, images, read_at, created_at FROM clips WHERE id = $1 AND owner_id = $2
+SELECT id, owner_id, url, title, site, byline, excerpt, published_at, node_id, assets_id, words, images, read_at, created_at FROM clips WHERE id = $1 AND owner_id = $2
 `
 
 type GetClipParams struct {
@@ -135,6 +139,7 @@ func (q *Queries) GetClip(ctx context.Context, arg GetClipParams) (Clip, error) 
 		&i.Excerpt,
 		&i.PublishedAt,
 		&i.NodeID,
+		&i.AssetsID,
 		&i.Words,
 		&i.Images,
 		&i.ReadAt,
@@ -144,7 +149,7 @@ func (q *Queries) GetClip(ctx context.Context, arg GetClipParams) (Clip, error) 
 }
 
 const getClipByNode = `-- name: GetClipByNode :one
-SELECT id, owner_id, url, title, site, byline, excerpt, published_at, node_id, words, images, read_at, created_at FROM clips WHERE node_id = $1 AND owner_id = $2
+SELECT id, owner_id, url, title, site, byline, excerpt, published_at, node_id, assets_id, words, images, read_at, created_at FROM clips WHERE node_id = $1 AND owner_id = $2
 `
 
 type GetClipByNodeParams struct {
@@ -165,6 +170,7 @@ func (q *Queries) GetClipByNode(ctx context.Context, arg GetClipByNodeParams) (C
 		&i.Excerpt,
 		&i.PublishedAt,
 		&i.NodeID,
+		&i.AssetsID,
 		&i.Words,
 		&i.Images,
 		&i.ReadAt,
@@ -221,7 +227,7 @@ func (q *Queries) ListClipSites(ctx context.Context, ownerID uuid.UUID) ([]ListC
 }
 
 const listClips = `-- name: ListClips :many
-SELECT c.id, c.owner_id, c.url, c.title, c.site, c.byline, c.excerpt, c.published_at, c.node_id, c.words, c.images, c.read_at, c.created_at FROM clips c JOIN nodes n ON n.id = c.node_id
+SELECT c.id, c.owner_id, c.url, c.title, c.site, c.byline, c.excerpt, c.published_at, c.node_id, c.assets_id, c.words, c.images, c.read_at, c.created_at FROM clips c JOIN nodes n ON n.id = c.node_id
 WHERE c.owner_id = $1 AND n.deleted_at IS NULL
   AND (NOT $2::boolean OR c.read_at IS NULL)
   AND ($3::text = '' OR c.site = $3::text)
@@ -267,6 +273,7 @@ func (q *Queries) ListClips(ctx context.Context, arg ListClipsParams) ([]Clip, e
 			&i.Excerpt,
 			&i.PublishedAt,
 			&i.NodeID,
+			&i.AssetsID,
 			&i.Words,
 			&i.Images,
 			&i.ReadAt,
@@ -309,7 +316,7 @@ func (q *Queries) SetClipPrefs(ctx context.Context, arg SetClipPrefsParams) (Cli
 const setClipRead = `-- name: SetClipRead :one
 UPDATE clips SET read_at = CASE WHEN $1::boolean THEN COALESCE(read_at, now()) ELSE NULL END
 WHERE id = $2 AND owner_id = $3
-RETURNING id, owner_id, url, title, site, byline, excerpt, published_at, node_id, words, images, read_at, created_at
+RETURNING id, owner_id, url, title, site, byline, excerpt, published_at, node_id, assets_id, words, images, read_at, created_at
 `
 
 type SetClipReadParams struct {
@@ -331,6 +338,7 @@ func (q *Queries) SetClipRead(ctx context.Context, arg SetClipReadParams) (Clip,
 		&i.Excerpt,
 		&i.PublishedAt,
 		&i.NodeID,
+		&i.AssetsID,
 		&i.Words,
 		&i.Images,
 		&i.ReadAt,

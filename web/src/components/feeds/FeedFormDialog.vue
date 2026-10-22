@@ -74,7 +74,7 @@ function reset() {
   Object.assign(form, {
     title: f?.title ?? '',
     folderId: null,
-    folderText: f ? (f.folder ? f.folder.name : '') : '',
+    folderText: f ? (f.folderPath ?? f.folder?.name ?? '') : '',
     mode: f?.mode ?? 'NONE',
     includeWords: f?.includeWords ?? '',
     excludeWords: f?.excludeWords ?? '',
