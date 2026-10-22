@@ -36,6 +36,7 @@ query NodePreview($id: ID!) {
       contentUrl
       status
       durationSec
+      markdown
       subtitles {
         nodeId
         name

@@ -46,6 +46,21 @@ describe('notificationRoute', () => {
       query: { panel: 'mcp' },
     })
   })
+  it('动态:带上来源和起始时间,和服务端的推送链接一致', () => {
+    expect(
+      notificationRoute({ kind: 'ACTIVITY', id: 'webdav:3f2a', parentId: '2026-10-21T08:00:00Z' }),
+    ).toEqual({ path: '/activity', query: { actor: 'webdav:3f2a', since: '2026-10-21T08:00:00Z' } })
+    // Agent 的 ref 自己带冒号(api_key:…),原样放进去,页面按第一个冒号拆
+    expect(notificationRoute({ kind: 'ACTIVITY', id: 'agent:api_key:9', parentId: null })).toEqual({
+      path: '/activity',
+      query: { actor: 'agent:api_key:9' },
+    })
+    expect(notificationRoute({ kind: 'ACTIVITY' })).toEqual({ path: '/activity' })
+  })
+  it('订阅:有 id 打开那个订阅的详情', () => {
+    expect(notificationRoute({ kind: 'FEED', id: 'f1' })).toEqual({ path: '/feeds', query: { id: 'f1' } })
+    expect(notificationRoute({ kind: 'FEED', id: null })).toEqual({ path: '/feeds' })
+  })
   it('没有目标', () => {
     expect(notificationRoute(null)).toBeNull()
     expect(notificationRoute(undefined)).toBeNull()

@@ -1,11 +1,12 @@
 import { formatBytes } from '@/utils/format'
 
-/** 后台任务(离线下载、解压)的展示口径。纯函数,单测直接引。 */
+/** 后台任务(离线下载、解压、剪藏)的展示口径。纯函数,单测直接引。 */
 
 export type JobStatusValue = 'QUEUED' | 'RUNNING' | 'DONE' | 'FAILED' | 'CANCELED'
+export type JobKindValue = 'FETCH_URL' | 'EXTRACT_ARCHIVE' | 'CLIP_URL'
 
 export interface JobLike {
-  kind: 'FETCH_URL' | 'EXTRACT_ARCHIVE'
+  kind: JobKindValue
   status: JobStatusValue
   bytesDone: number
   bytesTotal?: number | null
@@ -17,6 +18,13 @@ export interface JobLike {
 }
 
 export const MAX_FETCH_URLS = 10
+
+/** 列表上任务名前的小标签 */
+export const jobKindLabel: Record<JobKindValue, string> = {
+  FETCH_URL: '离线下载',
+  EXTRACT_ARCHIVE: '解压',
+  CLIP_URL: '剪藏',
+}
 
 export function isActiveJob(j: { status: JobStatusValue }): boolean {
   return j.status === 'QUEUED' || j.status === 'RUNNING'
@@ -39,6 +47,11 @@ export function jobPercent(j: JobLike): number | null {
   if (j.kind === 'EXTRACT_ARCHIVE' && j.filesTotal) {
     return Math.min(100, Math.floor((j.filesDone / j.filesTotal) * 100))
   }
+  // 剪藏按图片算(每张要么下好要么跳过);没有图片时只有「抓网页 → 转换」,没法给百分比
+  if (j.kind === 'CLIP_URL') {
+    if (!j.filesTotal) return null
+    return Math.min(100, Math.floor(((j.filesDone + j.filesSkipped) / j.filesTotal) * 100))
+  }
   if (j.bytesTotal) return Math.min(100, Math.floor((j.bytesDone / j.bytesTotal) * 100))
   return null
 }
@@ -53,6 +66,9 @@ export function jobStatusText(j: JobLike, speedBps?: number): string {
         const total = j.filesTotal ? ` / ${j.filesTotal}` : ''
         return `解压中 ${j.filesDone}${total} 个文件`
       }
+      if (j.kind === 'CLIP_URL') {
+        return j.filesTotal ? `剪藏中,图片 ${j.filesDone + j.filesSkipped} / ${j.filesTotal}` : '剪藏中'
+      }
       const done = formatBytes(j.bytesDone)
       const total = j.bytesTotal ? ` / ${formatBytes(j.bytesTotal)}` : ''
       const speed = speedBps && speedBps > 0 ? ` · ${formatBytes(speedBps)}/s` : ''
@@ -63,6 +79,11 @@ export function jobStatusText(j: JobLike, speedBps?: number): string {
       if (j.kind === 'EXTRACT_ARCHIVE') {
         const skipped = j.filesSkipped > 0 ? `,跳过 ${j.filesSkipped} 个` : ''
         return `已解压 ${j.filesDone} 个文件${skipped}`
+      }
+      if (j.kind === 'CLIP_URL') {
+        if (j.errorCode && j.errorMessage) return `已存好,但${j.errorMessage}`
+        const skipped = j.filesSkipped > 0 ? `,${j.filesSkipped} 张没下下来(保留原地址)` : ''
+        return j.filesDone > 0 ? `已存好 · ${j.filesDone} 张图片${skipped}` : `已存好${skipped}`
       }
       return `已完成 · ${formatBytes(j.bytesDone)}`
     }

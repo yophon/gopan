@@ -1,0 +1,133 @@
+# ---------- 订阅(doc/23 四) ----------
+
+fragment FeedFields on Feed {
+  id
+  kind
+  url
+  title
+  siteUrl
+  folder {
+    id
+    parentId
+    name
+  }
+  mode
+  includeWords
+  excludeWords
+  assetPattern
+  prerelease
+  keepLast
+  intervalMinutes
+  enabled
+  lastCheckedAt
+  lastOkAt
+  lastError
+  failCount
+  nextCheckAt
+  createdAt
+  itemCount
+  newCount
+  latestAt
+}
+
+fragment FeedItemFields on FeedItem {
+  id
+  title
+  url
+  enclosureUrl
+  enclosureType
+  enclosureSize
+  publishedAt
+  state
+  error
+  node {
+    id
+    parentId
+    name
+    kind
+  }
+  jobId
+  createdAt
+}
+
+query Feeds {
+  feeds {
+    ...FeedFields
+  }
+}
+
+query Feed($id: ID!) {
+  feed(id: $id) {
+    ...FeedFields
+  }
+}
+
+query FeedItems($feedId: ID!, $cursor: String) {
+  feedItems(feedId: $feedId, cursor: $cursor) {
+    items {
+      ...FeedItemFields
+    }
+    nextCursor
+  }
+}
+
+query PreviewFeed($url: String!, $assetPattern: String, $prerelease: Boolean) {
+  previewFeed(url: $url, assetPattern: $assetPattern, prerelease: $prerelease) {
+    kind
+    url
+    title
+    siteUrl
+    podcast
+    suggestedMode
+    items {
+      title
+      url
+      enclosureUrl
+      enclosureSize
+      publishedAt
+    }
+  }
+}
+
+query ExportOpml {
+  exportOpml
+}
+
+mutation CreateFeed($input: FeedInput!) {
+  createFeed(input: $input) {
+    ...FeedFields
+  }
+}
+
+mutation UpdateFeed($id: ID!, $input: FeedInput!) {
+  updateFeed(id: $id, input: $input) {
+    ...FeedFields
+  }
+}
+
+mutation DeleteFeed($id: ID!) {
+  deleteFeed(id: $id)
+}
+
+mutation RefreshFeed($id: ID!) {
+  refreshFeed(id: $id) {
+    ...FeedFields
+  }
+}
+
+mutation FetchFeedItem($itemId: ID!, $mode: FeedMode!) {
+  fetchFeedItem(itemId: $itemId, mode: $mode) {
+    ...FeedItemFields
+  }
+}
+
+mutation ImportOpml($opml: String!) {
+  importOpml(opml: $opml) {
+    added
+    existed
+    failed {
+      url
+      reason
+    }
+  }
+}

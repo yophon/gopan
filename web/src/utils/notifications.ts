@@ -8,6 +8,8 @@ export type NotificationTargetKindValue =
   | 'SESSIONS'
   | 'CREDENTIALS'
   | 'ADMIN'
+  | 'ACTIVITY'
+  | 'FEED'
 
 export interface TargetLike {
   kind: NotificationTargetKindValue
@@ -22,8 +24,9 @@ export interface RouteTarget {
 
 /**
  * 点开通知跳到哪。推送消息里的链接(ntfy / Bark / Telegram 在浏览器里打开)也是这几个地址,
- * 页面加载时同样要认:/drive?open=、/drive?panel=、/shares?tab=&id=。
+ * 页面加载时同样要认:/drive?open=、/drive?panel=、/shares?tab=&id=、/activity?actor=&since=、/feeds?id=。
  * CREDENTIALS 的 id 是凭据类型:webdav / mcp / img。
+ * ACTIVITY(大量删除提醒,doc/23 二.3)的 id 是来源(kind:ref),parentId 是从什么时候起(RFC 3339)。
  */
 export function notificationRoute(t: TargetLike | null | undefined): RouteTarget | null {
   if (!t) return null
@@ -45,6 +48,14 @@ export function notificationRoute(t: TargetLike | null | undefined): RouteTarget
       return { path: '/drive', query: { panel: 'mcp' } }
     case 'ADMIN':
       return { path: '/admin' }
+    case 'ACTIVITY': {
+      const query: Record<string, string> = {}
+      if (t.id) query.actor = t.id
+      if (t.parentId) query.since = t.parentId
+      return Object.keys(query).length ? { path: '/activity', query } : { path: '/activity' }
+    }
+    case 'FEED':
+      return t.id ? { path: '/feeds', query: { id: t.id } } : { path: '/feeds' }
     default:
       return null
   }

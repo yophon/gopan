@@ -1,0 +1,78 @@
+# ---------- 动态与撤回(doc/23 二) ----------
+
+fragment ActivityFields on Activity {
+  id
+  at
+  actor {
+    kind
+    ref
+    label
+  }
+  batchId
+  action
+  nodeId
+  node {
+    id
+    parentId
+    name
+    kind
+  }
+  nodeKind
+  name
+  parentPath
+  fromPath
+  toPath
+  oldName
+  newName
+  files
+  bytes
+  note
+  undoOf
+  undoneAt
+  undoable
+}
+
+query Activities($filter: ActivityFilter, $cursor: String, $limit: Int) {
+  activities(filter: $filter, cursor: $cursor, limit: $limit) {
+    items {
+      ...ActivityFields
+    }
+    nextCursor
+  }
+}
+
+query ActivityActors {
+  activityActors {
+    actor {
+      kind
+      ref
+      label
+    }
+    total
+    lastAt
+  }
+}
+
+fragment UndoResultFields on UndoResult {
+  done
+  failed
+  items {
+    activity {
+      ...ActivityFields
+    }
+    ok
+    reason
+  }
+}
+
+query UndoPreview($selection: UndoSelection!) {
+  undoPreview(selection: $selection) {
+    ...UndoResultFields
+  }
+}
+
+mutation UndoActivities($selection: UndoSelection!) {
+  undoActivities(selection: $selection) {
+    ...UndoResultFields
+  }
+}

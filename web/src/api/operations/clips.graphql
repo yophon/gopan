@@ -1,0 +1,80 @@
+# ---------- 剪藏(doc/23 五) ----------
+
+fragment ClipFields on Clip {
+  id
+  url
+  title
+  site
+  byline
+  excerpt
+  publishedAt
+  node {
+    id
+    parentId
+    name
+    kind
+  }
+  words
+  images
+  readAt
+  createdAt
+}
+
+query Clips($unreadOnly: Boolean, $site: String, $cursor: String) {
+  clips(unreadOnly: $unreadOnly, site: $site, cursor: $cursor) {
+    items {
+      ...ClipFields
+    }
+    nextCursor
+  }
+}
+
+query ClipSites {
+  clipSites {
+    site
+    total
+  }
+}
+
+query Clip($id: ID!) {
+  clip(id: $id) {
+    ...ClipFields
+  }
+}
+
+query NodeClip($nodeId: ID!) {
+  nodeClip(nodeId: $nodeId) {
+    ...ClipFields
+  }
+}
+
+query ClipPrefs {
+  clipPrefs {
+    folder
+    byMonth
+  }
+}
+
+mutation ClipUrl($url: String!, $html: String, $force: Boolean) {
+  clipUrl(url: $url, html: $html, force: $force) {
+    job {
+      ...JobFields
+    }
+    existing {
+      ...ClipFields
+    }
+  }
+}
+
+mutation MarkClipRead($id: ID!, $read: Boolean) {
+  markClipRead(id: $id, read: $read) {
+    ...ClipFields
+  }
+}
+
+mutation SetClipPrefs($input: ClipPrefsInput!) {
+  setClipPrefs(input: $input) {
+    folder
+    byMonth
+  }
+}

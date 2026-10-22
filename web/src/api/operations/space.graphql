@@ -1,0 +1,130 @@
+# ---------- 空间分析(doc/23 三):都是现算的只读查询 ----------
+
+fragment SpaceFileFields on SpaceFile {
+  node {
+    id
+    parentId
+    name
+    kind
+    size
+    mime
+    updatedAt
+    preview {
+      kind
+      thumbUrl
+    }
+  }
+  path
+  category
+}
+
+query SpaceOverview {
+  spaceOverview {
+    usedBytes
+    quotaBytes
+    trashFiles
+    trashBytes
+    byType {
+      category
+      files
+      bytes
+    }
+    duplicateGroups
+    duplicateBytes
+  }
+}
+
+query SpaceFolders($parentId: ID) {
+  spaceFolders(parentId: $parentId) {
+    path
+    folders {
+      id
+      parentId
+      name
+      kind
+      subtreeBytes
+      subtreeCount
+      statsStale
+      updatedAt
+    }
+    looseFiles
+    looseBytes
+  }
+}
+
+query SpaceLargeFiles($category: FileCategory, $limit: Int) {
+  spaceLargeFiles(category: $category, limit: $limit) {
+    ...SpaceFileFields
+  }
+}
+
+query SpaceStaleFiles($days: Int, $minSize: Int64, $limit: Int) {
+  spaceStaleFiles(days: $days, minSize: $minSize, limit: $limit) {
+    ...SpaceFileFields
+  }
+}
+
+query SpaceDuplicates($offset: Int, $limit: Int) {
+  spaceDuplicates(offset: $offset, limit: $limit) {
+    items {
+      sha256
+      size
+      copies
+      files {
+        ...SpaceFileFields
+      }
+    }
+    nextOffset
+  }
+}
+
+query SpaceEmptyFolders($limit: Int) {
+  spaceEmptyFolders(limit: $limit) {
+    ...SpaceFileFields
+  }
+}
+
+query SpaceIdle {
+  spaceIdle {
+    shares {
+      id
+      nodeId
+      name
+      kind
+      expiresAt
+      createdAt
+      lastVisitAt
+      expired
+    }
+    links {
+      id
+      nodeId
+      name
+      expiresAt
+      createdAt
+      lastHitAt
+      hits
+      expired
+    }
+    requests {
+      id
+      title
+      folderId
+      expiresAt
+      createdAt
+    }
+  }
+}
+
+query AdminStorage {
+  adminStorage {
+    logicalBytes
+    physicalBytes
+    blobs
+    pendingGcBytes
+    derivativeBytes
+    derivatives
+    textIndexBytes
+    activityBytes
+  }
+}

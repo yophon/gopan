@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isActiveJob, jobPercent, jobStatusText, jobWorthShowing, parseUrls } from './jobs'
+import { isActiveJob, jobKindLabel, jobPercent, jobStatusText, jobWorthShowing, parseUrls } from './jobs'
 import type { JobLike } from './jobs'
 
 const base: JobLike = {
@@ -56,6 +56,28 @@ describe('jobStatusText', () => {
   it('isActiveJob', () => {
     expect(isActiveJob({ status: 'QUEUED' })).toBe(true)
     expect(isActiveJob({ status: 'DONE' })).toBe(false)
+  })
+})
+
+describe('剪藏任务', () => {
+  const clip: JobLike = { ...base, kind: 'CLIP_URL' }
+  it('标签、进度按图片算,没有图片不给百分比', () => {
+    expect(jobKindLabel.CLIP_URL).toBe('剪藏')
+    expect(jobPercent(clip)).toBeNull()
+    expect(jobPercent({ ...clip, filesDone: 3, filesSkipped: 1, filesTotal: 8 })).toBe(50)
+    expect(jobPercent({ ...clip, status: 'DONE' })).toBe(100)
+  })
+  it('状态一行字', () => {
+    expect(jobStatusText(clip)).toBe('剪藏中')
+    expect(jobStatusText({ ...clip, filesDone: 2, filesSkipped: 1, filesTotal: 5 })).toBe('剪藏中,图片 3 / 5')
+    expect(jobStatusText({ ...clip, status: 'DONE' })).toBe('已存好')
+    expect(jobStatusText({ ...clip, status: 'DONE', filesDone: 4, filesSkipped: 1 })).toBe(
+      '已存好 · 4 张图片,1 张没下下来(保留原地址)',
+    )
+    expect(
+      jobStatusText({ ...clip, status: 'DONE', errorCode: 'CLIP_FALLBACK', errorMessage: '没认出正文,存的是整页文字' }),
+    ).toBe('已存好,但没认出正文,存的是整页文字')
+    expect(jobStatusText({ ...clip, status: 'FAILED', errorMessage: '网站返回 HTTP 403' })).toBe('网站返回 HTTP 403')
   })
 })
 

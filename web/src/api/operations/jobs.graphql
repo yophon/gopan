@@ -1,4 +1,4 @@
-# ---------- 后台任务(doc/21):离线下载、解压 ----------
+# ---------- 后台任务(doc/21):离线下载、解压、剪藏(doc/23 五) ----------
 
 fragment JobFields on Job {
   id
@@ -33,6 +33,13 @@ query MyJobs($active: Boolean, $cursor: String) {
       ...JobFields
     }
     nextCursor
+  }
+}
+
+# 单个任务:剪藏页、书签栏小窗轮询进度用
+query Job($id: ID!) {
+  job(id: $id) {
+    ...JobFields
   }
 }
 

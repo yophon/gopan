@@ -23,7 +23,7 @@ import { errorText } from '@/api/errors'
 import { CancelJobDocument, ClearFinishedJobsDocument, RetryJobDocument } from '@/api/gen/graphql'
 import { useJobs } from '@/composables/jobs'
 import type { JobItem } from '@/composables/jobs'
-import { isActiveJob, jobPercent, jobStatusText } from '@/utils/jobs'
+import { isActiveJob, jobKindLabel, jobPercent, jobStatusText } from '@/utils/jobs'
 
 import { TERMINAL_STATUSES, useUploadsStore } from '@/stores/uploads'
 import type { ResumableRecord, UploadTask } from '@/stores/uploads'
@@ -40,7 +40,7 @@ import { formatBytes } from '@/utils/format'
 
 /**
  * 全局上传抽屉:右下角浮动面板,AppShell 挂载。
- * 任务列表 + 可恢复的上传(localStorage 断点记录)+ 服务端的后台任务(离线下载、解压,doc/21)。
+ * 任务列表 + 可恢复的上传(localStorage 断点记录)+ 服务端的后台任务(离线下载、解压,doc/21;剪藏,doc/23)。
  */
 
 const uploads = useUploadsStore()
@@ -131,12 +131,21 @@ async function jobAction(job: JobItem, action: 'cancel' | 'retry') {
   void queryClient.invalidateQueries({ queryKey: ['jobs'] })
 }
 
-/** 打开所在位置:下载的文件进它的文件夹;解压出来的进新文件夹 */
+/** 打开所在位置:下载的文件进它的文件夹;解压出来的进新文件夹;剪藏的那篇直接打开 */
 function openJob(job: JobItem) {
   const r = job.result
   if (!r) return
+  if (job.kind === 'CLIP_URL') {
+    void router.push({ path: r.parentId ? `/drive/${r.parentId}` : '/drive', query: { open: r.id } })
+    return
+  }
   const folder = r.kind === 'FOLDER' ? r.id : r.parentId
   void router.push(folder ? `/drive/${folder}` : '/drive')
+}
+
+/** 剪藏的标题先是网站域名,抓到网页后换成文章标题 */
+function jobHover(job: JobItem): string {
+  return job.url ? `${job.title}\n${job.url}` : job.title
 }
 
 function jobProgressStatus(job: JobItem): 'success' | 'exception' | 'warning' | undefined {
@@ -362,8 +371,8 @@ function onResumeFileChosen(e: Event) {
           <div v-if="jobItems.length === 0" class="task-status empty-jobs">没有后台任务</div>
           <div v-for="job in jobItems" :key="job.id" class="task job">
             <div class="task-main">
-              <div class="task-name" :title="job.url ?? job.title">
-                <span class="job-kind">{{ job.kind === 'EXTRACT_ARCHIVE' ? '解压' : '离线下载' }}</span>
+              <div class="task-name" :title="jobHover(job)">
+                <span class="job-kind">{{ jobKindLabel[job.kind] }}</span>
                 {{ job.title }}
               </div>
               <el-progress
@@ -405,7 +414,7 @@ function onResumeFileChosen(e: Event) {
                 link
                 size="small"
                 :icon="FolderOpened"
-                title="打开所在位置"
+                :title="job.kind === 'CLIP_URL' ? '打开' : '打开所在位置'"
                 @click="openJob(job)"
               />
             </div>

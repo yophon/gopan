@@ -10,7 +10,7 @@ import { isActiveJob, jobWorthShowing } from '@/utils/jobs'
 export type JobItem = MyJobsQuery['myJobs']['items'][number]
 
 /**
- * 后台任务列表(离线下载、解压):有进行中的就每 2 秒轮询,没有就停。
+ * 后台任务列表(离线下载、解压、剪藏):有进行中的就每 2 秒轮询,没有就停。
  * 任务变成已完成时刷新目标文件夹与用量。全局只挂一处(上传抽屉)。
  */
 export function useJobs(enabled: Ref<boolean>) {
@@ -45,6 +45,12 @@ export function useJobs(enabled: Ref<boolean>) {
         void queryClient.invalidateQueries({ queryKey: ['children', j.parentId ?? null] })
         if (j.kind === 'EXTRACT_ARCHIVE' && j.result) {
           void queryClient.invalidateQueries({ queryKey: ['children', j.result.id] })
+        }
+        // 剪藏存到哪由服务端定(剪藏文件夹 / 订阅的文件夹),按结果所在的文件夹刷新
+        if (j.kind === 'CLIP_URL') {
+          if (j.result) void queryClient.invalidateQueries({ queryKey: ['children', j.result.parentId ?? null] })
+          void queryClient.invalidateQueries({ queryKey: ['clips'] })
+          void queryClient.invalidateQueries({ queryKey: ['clipSites'] })
         }
         void queryClient.invalidateQueries({ queryKey: ['me'] })
         void queryClient.invalidateQueries({ queryKey: ['chatMessages'] })
