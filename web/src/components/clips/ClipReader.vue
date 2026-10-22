@@ -131,12 +131,16 @@ async function onDelete() {
   >
     <div class="cr">
       <header class="cr-bar">
-        <div class="cr-title">
-          <span class="cr-name" :title="clip?.title">{{ clip?.title || '剪藏' }}</span>
-          <span v-if="clip" class="cr-meta">
-            {{ siteOf(clip) }}<template v-if="clip.byline"> · {{ clip.byline }}</template> · 剪于
-            {{ formatTime(clip.createdAt) }}
-          </span>
+        <div class="cr-top">
+          <div class="cr-title">
+            <span class="cr-name" :title="clip?.title">{{ clip?.title || '剪藏' }}</span>
+            <span v-if="clip" class="cr-meta">
+              {{ siteOf(clip) }}<template v-if="clip.byline"> · {{ clip.byline }}</template> · 剪于
+              {{ formatTime(clip.createdAt) }}
+            </span>
+          </div>
+          <!-- 手机上关闭放在标题旁边,桌面放在工具栏最后 -->
+          <el-button text :icon="Close" class="close-m" title="关闭" aria-label="关闭" @click="visible = false" />
         </div>
         <div class="cr-actions">
           <el-button v-if="clip" size="small" @click="toggleRead">{{ clip.readAt ? '标为未读' : '标记已读' }}</el-button>
@@ -154,7 +158,7 @@ async function onDelete() {
           </el-button>
           <el-button v-if="clip?.node" size="small" :icon="FolderOpened" @click="showInFolder">在文件夹中显示</el-button>
           <el-button v-if="clip?.node" size="small" type="danger" plain :icon="Delete" @click="onDelete">删除</el-button>
-          <el-button size="small" text :icon="Close" title="关闭" aria-label="关闭" @click="visible = false" />
+          <el-button size="small" text :icon="Close" class="close-d" title="关闭" aria-label="关闭" @click="visible = false" />
         </div>
       </header>
       <div class="cr-body">
@@ -181,6 +185,16 @@ async function onDelete() {
   flex: none;
   padding: 10px 16px;
   border-bottom: 1px solid var(--el-border-color-light);
+}
+.cr-top {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.close-m {
+  display: none;
 }
 .cr-title {
   flex: 1;
@@ -232,6 +246,13 @@ async function onDelete() {
   }
   .cr-actions {
     justify-content: flex-start;
+  }
+  .close-m {
+    display: inline-flex;
+    flex: none;
+  }
+  .close-d {
+    display: none;
   }
   .cr-body {
     padding-bottom: var(--sab);

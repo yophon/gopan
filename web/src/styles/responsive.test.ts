@@ -28,7 +28,8 @@ describe('responsive.css', () => {
 
   it('Element Plus 的固定宽度容器在窄屏被钳住', () => {
     expect(css).toMatch(/\.el-dialog\s*\{[^}]*max-width:\s*94vw/)
-    expect(css).toMatch(/\.el-message-box\s*\{[^}]*max-width:\s*90vw/)
+    // 桌面保持 Element Plus 自己的宽度,窄屏才钳到 90vw
+    expect(css).toMatch(/\.el-message-box\s*\{[^}]*max-width:\s*min\(var\(--el-messagebox-width[^)]*\),\s*90vw\)/)
   })
 
   it('三档显隐工具类齐全', () => {

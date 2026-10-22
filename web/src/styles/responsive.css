@@ -25,8 +25,10 @@
   max-width: 94vw;
 }
 
+/* Element Plus 2.14 起 message-box 是 width:100% + max-width:var(--el-messagebox-width),
+   只写 90vw 会把桌面上的确认框撑到九成屏宽;取两者小的那个 */
 .el-message-box {
-  max-width: 90vw;
+  max-width: min(var(--el-messagebox-width, 420px), 90vw);
 }
 
 /* 纯 CSS 的显隐开关,能用它就别加 JS 分支 */

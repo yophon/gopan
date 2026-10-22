@@ -369,6 +369,10 @@ function onBookmarkletClick() {
   gap: 8px;
   margin-bottom: 12px;
 }
+.clip-input .el-input {
+  flex: 1;
+  min-width: 0;
+}
 .running {
   margin: 0 0 12px;
   padding: 0;

@@ -139,9 +139,10 @@ p.muted {
   padding: 0;
   list-style: none;
 }
+/* 每行各是一个 grid:数字列定宽,各行的条才一样长、能直接比 */
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, auto) 16px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 170px 16px;
   align-items: center;
   gap: 10px;
   padding: 7px 4px;
