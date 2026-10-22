@@ -69,7 +69,8 @@ function clearReadTimer() {
 watch(
   () => [open.value, clip.value?.id, !!clip.value?.readAt] as const,
   ([isOpen, id, read], old) => {
-    if (old && id !== old[1]) manualUnread = false
+    // 换了一篇、或重新打开:之前手动标的未读不再拦着
+    if (!old || id !== old[1] || (isOpen && !old[0])) manualUnread = false
     clearReadTimer()
     if (!isOpen || !id || read || manualUnread) return
     readTimer = setTimeout(() => void setRead(true, true), AUTO_READ_MS)
