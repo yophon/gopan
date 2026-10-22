@@ -5,12 +5,15 @@ import { useQuery } from '@tanstack/vue-query'
 import {
   Bell,
   ChatDotRound,
+  Clock,
+  Collection,
   Connection,
   Delete,
   Folder,
   Key,
   Lock,
   Monitor,
+  Scissor,
   Search,
   Setting,
   Share,
@@ -116,6 +119,18 @@ const quotaStatus = computed(() => {
         <el-icon><Share /></el-icon>
         <span>我的分享</span>
       </el-menu-item>
+      <el-menu-item index="/feeds">
+        <el-icon><Collection /></el-icon>
+        <span>订阅</span>
+      </el-menu-item>
+      <el-menu-item index="/clips">
+        <el-icon><Scissor /></el-icon>
+        <span>剪藏</span>
+      </el-menu-item>
+      <el-menu-item index="/activity">
+        <el-icon><Clock /></el-icon>
+        <span>动态</span>
+      </el-menu-item>
       <el-menu-item index="/trash">
         <el-icon><Delete /></el-icon>
         <span>回收站</span>
@@ -129,7 +144,15 @@ const quotaStatus = computed(() => {
       <el-icon><VideoPlay /></el-icon>
       <span>最近播放</span>
     </button>
-    <div v-if="me" class="quota-area">
+    <!-- 用量条可点:进空间分析(doc/23 三) -->
+    <router-link
+      v-if="me"
+      to="/space"
+      class="quota-area"
+      :class="{ active: route.path === '/space' }"
+      title="空间分析:看看空间花在哪"
+      @click="emit('navigate')"
+    >
       <el-progress
         :percentage="quotaPercent"
         :status="quotaStatus"
@@ -137,9 +160,10 @@ const quotaStatus = computed(() => {
         :show-text="false"
       />
       <span class="quota-text">
-        {{ formatBytes(me.usedBytes) }} / {{ formatBytes(me.quotaBytes) }}
+        <span>{{ formatBytes(me.usedBytes) }} / {{ formatBytes(me.quotaBytes) }}</span>
+        <span class="quota-more">空间分析 ›</span>
       </span>
-    </div>
+    </router-link>
     <div class="user-area">
       <span class="username" :title="auth.user?.username">{{ auth.user?.username }}</span>
       <span class="user-actions">
@@ -208,11 +232,25 @@ const quotaStatus = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 12px 16px 4px;
+  margin: 4px 8px 0;
+  padding: 8px 8px 6px;
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+.quota-area:hover,
+.quota-area.active {
+  background: var(--el-fill-color-light);
 }
 .quota-text {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+.quota-more {
+  color: var(--el-color-primary);
 }
 .user-area {
   display: flex;

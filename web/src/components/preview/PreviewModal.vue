@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
-import { useMutation, useQuery } from '@tanstack/vue-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useEventListener } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import {
   ArrowLeft,
   ArrowRight,
   Close,
+  Document,
   Download,
   Headset,
+  Reading,
   View,
   WarningFilled,
 } from '@element-plus/icons-vue'
@@ -16,6 +18,8 @@ import {
 import { guestRequest, request } from '@/api/client'
 import { errorText } from '@/api/errors'
 import {
+  MarkClipReadDocument,
+  NodeClipDocument,
   NodeDownloadUrlDocument,
   NodePreviewDocument,
   PlaylistDocument,
@@ -31,6 +35,7 @@ import { reportProgress } from '@/composables/media'
 import { useAuthStore } from '@/stores/auth'
 import { usePlayerStore } from '@/stores/player'
 import { formatDuration, resumePage } from '@/utils/media'
+import { siteOf } from '@/utils/clips'
 import {
   currentConnection,
   prefetchBudget,
@@ -42,6 +47,7 @@ const PdfViewer = defineAsyncComponent(() => import('./PdfViewer.vue'))
 import ImageViewer from './ImageViewer.vue'
 import ArchiveViewer from './ArchiveViewer.vue'
 import VideoPlayer from './VideoPlayer.vue'
+import MarkdownFrame from './MarkdownFrame.vue'
 import AudioPanel from '@/components/player/AudioPanel.vue'
 
 /** 访客模式(分享页):带访客 token 请求;访客是只读白名单,不能触发文档转换 */
@@ -236,6 +242,37 @@ const officeConverting = computed(() => {
   return !p.status || p.status === 'PENDING' || p.status === 'RUNNING'
 })
 
+// ---------- Markdown(doc/23 五.2):默认渲染着看,可切回源文件 ----------
+
+const mdSource = ref(false)
+watch(currentId, () => (mdSource.value = false))
+
+const showMarkdown = computed(
+  () => preview.value?.kind === 'TEXT' && !!preview.value.markdown && !mdSource.value,
+)
+
+/** 是不是一篇剪藏:是的话顶上给来源与已读(访客看不到别人的剪藏记录) */
+const queryClient = useQueryClient()
+const { data: clipData } = useQuery({
+  queryKey: ['nodeClip', currentId],
+  enabled: computed(() => !props.guestToken && currentId.value !== null && !!preview.value?.markdown),
+  queryFn: () => request(NodeClipDocument, { nodeId: currentId.value! }),
+  staleTime: 0,
+})
+const clip = computed(() => (clipData.value?.nodeClip?.node?.id === currentId.value ? clipData.value.nodeClip : null))
+
+async function toggleClipRead() {
+  const c = clip.value
+  if (!c) return
+  try {
+    await request(MarkClipReadDocument, { id: c.id, read: !c.readAt })
+    void queryClient.invalidateQueries({ queryKey: ['nodeClip'] })
+    void queryClient.invalidateQueries({ queryKey: ['clips'] })
+  } catch (err) {
+    ElMessage.error(errorText(err, '操作失败'))
+  }
+}
+
 // ---------- TEXT:拉取文本内容 ----------
 
 const TEXT_MAX_CHARS = 200_000
@@ -246,9 +283,10 @@ const textLoading = ref(false)
 const textError = ref<string | null>(null)
 
 watch(
-  [preview, currentId],
+  [preview, currentId, mdSource],
   async ([p, id]) => {
-    if (!p || !id || p.kind !== 'TEXT' || !p.contentUrl) return
+    // 渲染着看的 Markdown 不用拉原文;切到「源文件」时再拉
+    if (!p || !id || p.kind !== 'TEXT' || !p.contentUrl || showMarkdown.value) return
     textLoading.value = true
     textError.value = null
     textContent.value = ''
@@ -388,6 +426,16 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
               查看原图
             </el-button>
             <el-button
+              v-if="preview?.kind === 'TEXT' && preview.markdown"
+              :icon="mdSource ? Reading : Document"
+              text
+              class="header-btn"
+              :title="mdSource ? '渲染着看' : '看源文件'"
+              @click="mdSource = !mdSource"
+            >
+              {{ mdSource ? '渲染' : '源文件' }}
+            </el-button>
+            <el-button
               :icon="Download"
               text
               class="header-btn"
@@ -473,6 +521,18 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
             :initial-page="pdfInitialPage"
             @page="onPdfPage"
           />
+
+          <!-- Markdown:服务端渲染,沙箱 iframe;剪藏的顶上给来源 -->
+          <div v-else-if="showMarkdown && node" class="preview-md">
+            <div v-if="clip" class="md-clip-bar">
+              <span class="clip-site">{{ siteOf(clip) || '剪藏' }}</span>
+              <a class="clip-link" :href="clip.url" target="_blank" rel="noopener noreferrer">原网页</a>
+              <el-button link size="small" class="clip-read" @click="toggleClipRead">
+                {{ clip.readAt ? '标为未读' : '标记已读' }}
+              </el-button>
+            </div>
+            <MarkdownFrame :node-id="node.id" :token="mediaToken" class="md-body" />
+          </div>
 
           <!-- TEXT -->
           <div v-else-if="preview?.kind === 'TEXT'" class="preview-text" v-loading="textLoading">
@@ -695,6 +755,44 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   border-radius: 8px;
   background: #1f2937;
   overflow: hidden;
+}
+.preview-md {
+  width: min(900px, 100%);
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--el-bg-color);
+}
+.md-clip-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+.clip-site {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clip-link {
+  flex: none;
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+.clip-read {
+  margin-left: auto;
+}
+.md-body {
+  flex: 1;
+  min-height: 0;
 }
 .text-pre {
   flex: 1;

@@ -27,6 +27,10 @@ export default defineConfig({
       '/sub': {
         target: 'http://127.0.0.1:8080',
       },
+      // Markdown 渲染(doc/23 五.2)
+      '/md/': {
+        target: 'http://127.0.0.1:8080',
+      },
       '/x/': {
         target: 'http://127.0.0.1:8080',
       },

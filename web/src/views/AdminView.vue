@@ -16,6 +16,7 @@ import {
   AdminRetryFailedTasksDocument,
   AdminSetDisabledDocument,
   AdminSetQuotaDocument,
+  AdminStorageDocument,
   AdminUsersDocument,
 } from '@/api/gen/graphql'
 import type { AdminLinkStatsQuery, AdminUsersQuery } from '@/api/gen/graphql'
@@ -79,6 +80,16 @@ const { data: overviewData } = useQuery({
   queryFn: () => request(AdminOverviewDocument),
 })
 const overview = computed(() => overviewData.value?.adminOverview ?? null)
+
+// 存储(doc/23 三.2):逻辑用量(各人加起来)与物理占用(去重后真正存的),派生文件、正文索引、动态、待回收
+const { data: storageData } = useQuery({
+  queryKey: ['adminStorage'],
+  queryFn: () => request(AdminStorageDocument),
+})
+const storage = computed(() => storageData.value?.adminStorage ?? null)
+const dedupeSaved = computed(() =>
+  storage.value ? Math.max(0, storage.value.logicalBytes - storage.value.physicalBytes) : 0,
+)
 
 /** 内容索引:有文字可搜的份数,其余分类一行列出(只列非零的) */
 const indexed = computed(() => {
@@ -292,6 +303,27 @@ const retryMutation = useMutation({
         <div class="card-label">内容索引{{ overview.contentIndex.enabled ? '' : '(已关闭)' }}</div>
         <div class="card-value">{{ indexed }} 份 · {{ formatBytes(overview.contentIndex.textBytes) }}</div>
         <div class="card-sub">{{ indexSummary }}</div>
+      </el-card>
+      <el-card v-if="storage" shadow="never" class="storage-card">
+        <div class="card-label">存储</div>
+        <div class="card-value">
+          {{ formatBytes(storage.physicalBytes) }}
+          <span class="card-unit">实际占用 · {{ storage.blobs }} 份内容</span>
+        </div>
+        <dl class="storage-list">
+          <dt>各人用量合计</dt>
+          <dd>{{ formatBytes(storage.logicalBytes) }}</dd>
+          <dt>去重省下</dt>
+          <dd>{{ formatBytes(dedupeSaved) }}</dd>
+          <dt>缩略图与转换</dt>
+          <dd>{{ formatBytes(storage.derivativeBytes) }}({{ storage.derivatives }} 个)</dd>
+          <dt>正文索引</dt>
+          <dd>{{ formatBytes(storage.textIndexBytes) }}</dd>
+          <dt>动态记录</dt>
+          <dd>{{ formatBytes(storage.activityBytes) }}</dd>
+          <dt>等待回收</dt>
+          <dd>{{ formatBytes(storage.pendingGcBytes) }}</dd>
+        </dl>
       </el-card>
       <el-card v-if="linkStats" shadow="never">
         <div class="card-label">直链流量(本月)</div>
@@ -526,6 +558,36 @@ const retryMutation = useMutation({
 }
 .card-progress {
   margin-top: 6px;
+}
+.storage-card {
+  grid-column: span 2;
+}
+.card-unit {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--el-text-color-secondary);
+}
+.storage-list {
+  display: grid;
+  grid-template-columns: repeat(2, auto minmax(0, 1fr));
+  gap: 2px 10px;
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+.storage-list dt {
+  color: var(--el-text-color-secondary);
+}
+.storage-list dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 767px) {
+  .storage-card {
+    grid-column: auto;
+  }
+  .storage-list {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
 }
 .link-top {
   margin-bottom: 20px;

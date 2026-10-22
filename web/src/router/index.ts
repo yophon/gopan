@@ -24,6 +24,12 @@ const router = createRouter({
       component: () => import('@/views/CollectView.vue'),
     },
     {
+      // 书签栏小工具弹出的小窗(doc/23 五.3):要登录,但不套侧栏
+      path: '/clip',
+      name: 'clip-popup',
+      component: () => import('@/views/ClipPopupView.vue'),
+    },
+    {
       path: '/oauth/consent',
       name: 'oauth-consent',
       component: () => import('@/views/OAuthConsentView.vue'),
@@ -62,6 +68,26 @@ const router = createRouter({
           path: 'search',
           name: 'search',
           component: () => import('@/views/SearchView.vue'),
+        },
+        {
+          path: 'activity',
+          name: 'activity',
+          component: () => import('@/views/ActivityView.vue'),
+        },
+        {
+          path: 'space',
+          name: 'space',
+          component: () => import('@/views/SpaceView.vue'),
+        },
+        {
+          path: 'feeds',
+          name: 'feeds',
+          component: () => import('@/views/FeedsView.vue'),
+        },
+        {
+          path: 'clips',
+          name: 'clips',
+          component: () => import('@/views/ClipsView.vue'),
         },
         {
           path: 'admin',

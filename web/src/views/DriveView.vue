@@ -13,6 +13,7 @@ import {
   FolderAdd,
   FolderOpened,
   Grid,
+  InfoFilled,
   Link,
   List,
   Paperclip,
@@ -44,6 +45,7 @@ import MoveDialog from '@/components/MoveDialog.vue'
 import ShareDialog from '@/components/ShareDialog.vue'
 import FileRequestDialog from '@/components/FileRequestDialog.vue'
 import FetchDialog from '@/components/FetchDialog.vue'
+import NodeDetailDrawer from '@/components/NodeDetailDrawer.vue'
 import { useFetchEnabled } from '@/composables/jobs'
 import { useExtract } from '@/composables/extract'
 import { isArchiveName } from '@/utils/archive'
@@ -578,6 +580,14 @@ function onLinkSheetSelect(key: string) {
   void copyDirectLinks(linkSheet.value.nodes, key as LinkFormat)
 }
 
+// ---------- 详情与历史(doc/23 二.4) ----------
+
+const detail = ref<{ visible: boolean; id: string | null }>({ visible: false, id: null })
+
+function openDetail(node: { id: string }) {
+  detail.value = { visible: true, id: node.id }
+}
+
 // ---------- 触屏操作菜单 ----------
 
 const sheet = ref<{ visible: boolean; node: NodeListItem | null }>({
@@ -609,6 +619,7 @@ const sheetItems = computed<SheetItem[]>(() => {
     { key: 'move', label: '移动', icon: Rank },
     { key: 'copy', label: '复制', icon: CopyDocument },
     { key: 'select', label: '选择', icon: Check },
+    { key: 'detail', label: '详情与历史', icon: InfoFilled },
     { key: 'delete', label: '删除', icon: Delete, danger: true },
   ]
 })
@@ -653,6 +664,9 @@ function onSheetSelect(key: string) {
         toggleSelect(node)
       }
       break
+    case 'detail':
+      openDetail(node)
+      break
     case 'delete':
       void onDelete([node.id])
       break
@@ -692,6 +706,12 @@ function onContextShare() {
   const row = contextMenu.value.row
   closeContextMenu()
   if (row) openShare(row)
+}
+
+function onContextDetail() {
+  const row = contextMenu.value.row
+  closeContextMenu()
+  if (row) openDetail(row)
 }
 
 function onContextCollect() {
@@ -936,12 +956,17 @@ function onContextExtract(to: boolean) {
           解压到…
         </li>
       </template>
+      <li class="context-menu-item" @click="onContextDetail">
+        <el-icon><InfoFilled /></el-icon>
+        详情与历史
+      </li>
     </ul>
 
     <ShareDialog v-model="shareDialogVisible" :node="shareTarget" />
     <FileRequestDialog v-model="collectDialogVisible" :folder="collectTarget" />
     <FetchDialog v-model="fetchDialogVisible" :folder-id="folderId" :folder-name="folderName" />
     <MoveDialog v-model="extractPickVisible" mode="extract" :exclude-ids="[]" @confirm="onExtractConfirm" />
+    <NodeDetailDrawer v-model="detail.visible" :node-id="detail.id" />
   </div>
 </template>
 

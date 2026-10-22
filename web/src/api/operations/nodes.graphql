@@ -73,6 +73,28 @@ query Node($id: ID!) {
   }
 }
 
+# 文件详情抽屉(doc/23 二.4):基本信息;历史另查 activities(filter: { nodeId })
+query NodeDetail($id: ID!) {
+  node(id: $id) {
+    id
+    parentId
+    name
+    kind
+    size
+    mime
+    sha256
+    createdAt
+    updatedAt
+    subtreeBytes
+    subtreeCount
+    statsStale
+    preview {
+      kind
+      thumbUrl
+    }
+  }
+}
+
 mutation CreateFolder($parentId: ID, $name: String!) {
   createFolder(parentId: $parentId, name: $name) {
     id
