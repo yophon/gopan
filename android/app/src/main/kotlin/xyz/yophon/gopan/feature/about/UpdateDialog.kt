@@ -84,6 +84,8 @@ class UpdateViewModel @Inject constructor(private val repo: UpdateRepository) : 
     private var job: Job? = null
     private var silentChecked = false
 
+    val changelogUrl: String get() = repo.changelogUrl
+
     /** 「我的」页显示时调用:静默查,失败不提示 */
     fun checkSilently() {
         if (silentChecked) return

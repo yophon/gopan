@@ -99,6 +99,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.ui.platform.testTag
 import xyz.yophon.gopan.core.ui.theme.supportsDynamicColor
 import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.NewReleases
+import xyz.yophon.gopan.core.ui.rememberSystemActions
 import xyz.yophon.gopan.feature.about.CrashLogViewModel
 import xyz.yophon.gopan.feature.about.UpdateDialog
 import xyz.yophon.gopan.feature.about.UpdateViewModel
@@ -138,6 +140,7 @@ fun AccountScreen(
     val unread by inbox.unreadCount.collectAsStateWithLifecycle()
     val systemAlerts by inbox.systemAlerts.collectAsStateWithLifecycle()
     val permission = rememberNotificationPermission()
+    val system = rememberSystemActions()
     // 没有通知权限:能弹授权框就弹(Android 13+ 没拒过),否则去系统设置里本 App 的通知
     val fixPermission = { if (permission.canRequest) permission.request() else permission.openSettings() }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -165,6 +168,7 @@ fun AccountScreen(
         updateBadge = update.availableVersion,
         crashCount = crashState.reports.size,
         onCheckUpdate = updates::check,
+        onOpenChangelog = { system.openUrl(updates.changelogUrl) },
         onOpenCrashLogs = onOpenCrashLogs,
         onOpenLicenses = onOpenLicenses,
         onLogout = viewModel::logout,
@@ -212,6 +216,7 @@ internal fun AccountContent(
     updateBadge: String? = null,
     crashCount: Int = 0,
     onCheckUpdate: () -> Unit = {},
+    onOpenChangelog: () -> Unit = {},
     onOpenCrashLogs: () -> Unit = {},
     onOpenLicenses: () -> Unit = {},
     notifications: NotificationsEntry? = null,
@@ -280,6 +285,7 @@ internal fun AccountContent(
                     updateBadge = updateBadge,
                     crashCount = crashCount,
                     onCheckUpdate = onCheckUpdate,
+                    onOpenChangelog = onOpenChangelog,
                     onOpenCrashLogs = onOpenCrashLogs,
                     onOpenLicenses = onOpenLicenses,
                     onLogoutClick = { showLogoutConfirm = true },
@@ -366,6 +372,7 @@ private fun AccountList(
     onOpenCrashLogs: () -> Unit,
     onOpenLicenses: () -> Unit,
     onLogoutClick: () -> Unit,
+    onOpenChangelog: () -> Unit = {},
     notifications: NotificationsEntry? = null,
     onOpenActivity: () -> Unit = {},
     onOpenSpace: () -> Unit = {},
@@ -505,6 +512,9 @@ private fun AccountList(
                 value = updateBadge?.let { stringResource(R.string.update_badge, it) },
                 onClick = onCheckUpdate,
             )
+        }
+        item("changelog") {
+            SettingItem(icon = Icons.Outlined.NewReleases, title = stringResource(R.string.account_item_changelog), onClick = onOpenChangelog)
         }
         item("crash") {
             SettingItem(

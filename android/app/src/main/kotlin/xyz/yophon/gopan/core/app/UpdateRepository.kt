@@ -53,6 +53,9 @@ interface UpdateRepository {
 
     /** 下载并校验;同一个包下过就直接用 */
     suspend fun download(release: AppRelease, onProgress: (Long, Long?) -> Unit = { _, _ -> }): File
+
+    /** 站点发布页(功能介绍、安装包、更新日志)上的更新日志,用浏览器打开 */
+    val changelogUrl: String
 }
 
 @Singleton
@@ -65,6 +68,8 @@ class DefaultUpdateRepository internal constructor(
     @Inject
     constructor(@ApplicationContext context: Context, client: OkHttpClient, config: AppConfig) :
         this(File(context.cacheDir, "update"), client, config)
+
+    override val changelogUrl: String get() = config.baseUrl.trimEnd('/') + CHANGELOG_PATH
 
     override suspend fun check(currentVersionCode: Long): UpdateCheck = withContext(Dispatchers.IO) {
         val url = config.baseUrl.trimEnd('/') + LATEST_PATH
@@ -134,6 +139,7 @@ class DefaultUpdateRepository internal constructor(
 
     companion object {
         const val LATEST_PATH = "/api/app/android/latest"
+        const val CHANGELOG_PATH = "/app#changelog"
         private val SHA256_HEX = Regex("[0-9a-f]{64}")
         private val json = Json { ignoreUnknownKeys = true }
 

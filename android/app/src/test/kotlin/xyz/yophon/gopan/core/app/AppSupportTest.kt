@@ -34,6 +34,11 @@ class UpdateRepositoryTest {
         """{"versionCode":$code,"versionName":"3.0.0","apk":"$apk","sha256":"$sha","size":$size,"notes":"正式版","url":"/api/app/android/$apk","extra":1}"""
 
     @Test
+    fun `changelog opens the site release page`() {
+        assertThat(repo.changelogUrl).isEqualTo(server.url("/app").toString() + "#changelog")
+    }
+
+    @Test
     fun `a newer release on the site is offered`() = runBlocking {
         server.enqueue(MockResponse().setBody(latest(30000)))
         val r = repo.check(currentVersionCode = 30003 - 10)
