@@ -70,6 +70,31 @@ func TestExtractFallback(t *testing.T) {
 	}
 }
 
+func TestSplitTitleSite(t *testing.T) {
+	for in, want := range map[string][2]string{
+		"Go 1.23 is released - The Go Programming Language": {"Go 1.23 is released", "The Go Programming Language"},
+		"派早报:iPod touch 停产 - 少数派":                       {"派早报:iPod touch 停产", "少数派"},
+		"标题_某某网":                                         {"标题", "某某网"},
+		"A | B | 站点":                                       {"A | B", "站点"},
+	} {
+		if h, s, ok := splitTitleSite(in); !ok || h != want[0] || s != want[1] {
+			t.Fatalf("splitTitleSite(%q) = %q %q %v", in, h, s, ok)
+		}
+	}
+	if _, _, ok := splitTitleSite("没有分隔符的标题"); ok {
+		t.Fatal("no separator")
+	}
+}
+
+func TestExtractSloganSiteName(t *testing.T) {
+	u, _ := url.Parse("https://sspai.com/post/1")
+	body := strings.Repeat("<p>早报正文,一段足够长的文字,让正文提取认得出来。</p>", 6)
+	a, err := Extract([]byte(`<html><head><title>派早报:今天的新闻 - 少数派</title><meta property="og:site_name" content="少数派 - 高品质数字消费指南"></head><body><article>`+body+`</article></body></html>`), u)
+	if err != nil || a.Title != "派早报:今天的新闻" || a.Site != "少数派" {
+		t.Fatalf("title %q site %q %v", a.Title, a.Site, err)
+	}
+}
+
 func TestCountWords(t *testing.T) {
 	if n := CountWords("你好 world, hello 世界 42"); n != 7 {
 		t.Fatalf("CountWords = %d", n)

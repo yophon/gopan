@@ -2,6 +2,7 @@ package feedparse
 
 import (
 	"bytes"
+	"fmt"
 	"net/url"
 	"strings"
 	"testing"
@@ -126,5 +127,32 @@ func TestGitHub(t *testing.T) {
 	}
 	if !MatchAsset(nil, "anything") || MatchAsset([]string{"*.exe"}, "a.apk") {
 		t.Fatal("MatchAsset")
+	}
+}
+
+func TestParseLimitAndTruncated(t *testing.T) {
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0"?><rss><channel><title>大播客</title><link>https://big.example.com/</link>`)
+	for i := 500; i >= 1; i-- {
+		b.WriteString(fmt.Sprintf(`<item><title>第%d期</title><guid>g%d</guid><description><![CDATA[%s]]></description><enclosure url="https://cdn.example.com/%d.mp3" type="audio/mpeg"/></item>`, i, i, strings.Repeat("长长的节目介绍。", 50), i))
+	}
+	b.WriteString(`</channel></rss>`)
+	doc := b.String()
+	f, err := ParseLimit(strings.NewReader(doc), nil, 100)
+	if err != nil || len(f.Items) != 100 || f.Items[0].GUID != "g500" || f.Title != "大播客" || f.SiteURL != "https://big.example.com/" || !f.Podcast {
+		t.Fatalf("limit = %d items, %v (%q %q)", len(f.Items), err, f.Title, f.SiteURL)
+	}
+	// 截在一个 CDATA 中间:交出前面完整的条目
+	cut := doc[:len(doc)/3]
+	f, err = Parse(strings.NewReader(cut), nil)
+	if err != nil || len(f.Items) < 100 || f.Items[0].GUID != "g500" {
+		t.Fatalf("truncated = %v items, %v", len(f.Items), err)
+	}
+	// RSS 1.0(RDF):item 与 channel 平级
+	rdf := `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://purl.org/rss/1.0/"><channel><title>RDF 站</title><link>https://rdf.example.com/</link></channel>
+<item rdf:about="https://rdf.example.com/1"><title>一</title><link>https://rdf.example.com/1</link></item></rdf:RDF>`
+	f, err = Parse(strings.NewReader(rdf), nil)
+	if err != nil || f.Title != "RDF 站" || len(f.Items) != 1 || f.Items[0].Link != "https://rdf.example.com/1" {
+		t.Fatalf("rdf = %+v %v", f, err)
 	}
 }

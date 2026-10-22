@@ -17,6 +17,7 @@ import (
 
 	"github.com/disintegration/imaging"
 	"github.com/google/uuid"
+	_ "golang.org/x/image/webp" // 缩略图认得 webp(剪藏下来的网图大多是 webp)
 
 	"github.com/yophon/gopan/server/internal/objstore"
 	"github.com/yophon/gopan/server/internal/service"

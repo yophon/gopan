@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,13 +33,14 @@ import (
 // 剪藏(doc/23 五):抓网页 → 提取正文 → 转 Markdown → 图片下到「标题.assets/」→ 存「标题.md」。
 
 const (
-	clipHTMLMax     = 5 << 20
-	clipImageMax    = 10 << 20
-	clipImagesTotal = 50 << 20
-	clipFetchTime   = 30 * time.Second
-	defaultClipDir  = "/剪藏"
-	clipsPageSize   = 30
-	orderClips      = "CLIPS"
+	clipHTMLMax      = 5 << 20
+	clipImageMax     = 10 << 20
+	clipImagesTotal  = 50 << 20
+	clipFetchTime    = 30 * time.Second
+	clipImageWorkers = 4
+	defaultClipDir   = "/剪藏"
+	clipsPageSize    = 30
+	orderClips       = "CLIPS"
 )
 
 type clipParams struct {
@@ -175,24 +177,43 @@ func (c *Clips) runClip(ctx context.Context, j *Jobs, run *jobRun) (*uuid.UUID, 
 		if err != nil {
 			return nil, err
 		}
+		// 4 张一起下;文件名按在文中的顺序编号,与谁先下完无关
+		var mu sync.Mutex
+		sem := make(chan struct{}, clipImageWorkers)
+		var wg sync.WaitGroup
 		for i, im := range art.Images {
-			if err := ctx.Err(); err != nil {
-				return nil, err
+			if ctx.Err() != nil {
+				break
 			}
-			if imgBytes >= clipImagesTotal {
-				run.fileSkipped()
-				continue
-			}
-			n, size, err := c.saveImage(quiet, run, owner, assets.ID, i+1, im.URL, page.String(), clipImagesTotal-imgBytes)
-			if err != nil {
-				slog.Info("clip image skipped", "job", run.job.ID, "url", fetcher.Host(im.URL), "err", err)
-				run.fileSkipped()
-				continue
-			}
-			imgCount++
-			imgBytes += size
-			run.fileDone()
-			mapping[im.Placeholder] = mdPathEscape(assets.Name) + "/" + mdPathEscape(n.Name)
+			sem <- struct{}{}
+			wg.Add(1)
+			go func(seq int, im clipper.Image) {
+				defer wg.Done()
+				defer func() { <-sem }()
+				mu.Lock()
+				budget := clipImagesTotal - imgBytes
+				mu.Unlock()
+				if budget <= 0 {
+					run.fileSkipped()
+					return
+				}
+				n, size, err := c.saveImage(quiet, run, owner, assets.ID, seq, im.URL, page.String(), budget)
+				if err != nil {
+					slog.Info("clip image skipped", "job", run.job.ID, "url", fetcher.Host(im.URL), "err", err)
+					run.fileSkipped()
+					return
+				}
+				mu.Lock()
+				imgCount++
+				imgBytes += size
+				mapping[im.Placeholder] = mdPathEscape(assets.Name) + "/" + mdPathEscape(n.Name)
+				mu.Unlock()
+				run.fileDone()
+			}(i+1, im)
+		}
+		wg.Wait()
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
 		if imgCount == 0 {
 			_ = c.uploads.nodes.Purge(quiet, owner, []uuid.UUID{assets.ID})

@@ -36,7 +36,7 @@ const (
 	FeedModeNone     = "none"
 
 	maxFeeds            = 100
-	feedDocMax          = 5 << 20
+	feedDocMax          = 20 << 20 // 大播客的订阅文件十几 MB;只解析前 100 条,读够就停
 	feedTimeout         = 20 * time.Second
 	feedCheckBatch      = 5
 	feedDefaultInterval = 360
@@ -757,7 +757,7 @@ func (f *Feeds) fetch(ctx context.Context, kind, u, etag, lastMod string, patter
 	if kind == FeedGitHub {
 		doc, err = feedparse.ParseGitHubReleases(body, u, patterns, prerelease)
 	} else {
-		doc, err = feedparse.Parse(body, resp.Request.URL)
+		doc, err = feedparse.ParseLimit(body, resp.Request.URL, feedItemsPerCheck)
 	}
 	if err != nil {
 		return nil, "", "", false, errf("NOT_A_FEED", "%s", err.Error())

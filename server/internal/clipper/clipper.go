@@ -89,9 +89,18 @@ func Extract(doc []byte, page *url.URL) (*Article, error) {
 		a.Title = page.Hostname()
 	}
 	if a.Site == "" {
-		a.Site = strings.TrimPrefix(page.Hostname(), "www.")
+		// 没写 og:site_name 的站:「文章 - 站名」里的站名就是它;认不出才用域名
+		if t, site, ok := splitTitleSite(a.Title); ok {
+			a.Title, a.Site = t, site
+		} else {
+			a.Site = strings.TrimPrefix(page.Hostname(), "www.")
+		}
 	}
 	a.Title = trimSiteSuffix(a.Title, a.Site)
+	// og:site_name 常带口号(「少数派 - 高品质数字消费指南」),标题末段是它的开头时两边都收短
+	if h, seg, ok := splitTitleSite(a.Title); ok && strings.HasPrefix(a.Site, seg) {
+		a.Title, a.Site = h, seg
+	}
 	a.Excerpt = truncate(a.Excerpt, 300)
 	a.Words = CountWords(a.Markdown)
 	return a, nil
@@ -138,6 +147,26 @@ func Document(a *Article, source string, clipped time.Time, body string) string 
 	b.WriteString(body)
 	b.WriteString("\n")
 	return b.String()
+}
+
+var titleSeps = []string{" - ", " | ", " – ", " — ", " · ", "_"}
+
+// splitTitleSite 「文章 - 站名」拆成文章与站名:取最后一个分隔符,站名 2–30 个字。
+func splitTitleSite(title string) (string, string, bool) {
+	at, sep := -1, ""
+	for _, s := range titleSeps {
+		if i := strings.LastIndex(title, s); i > at {
+			at, sep = i, s
+		}
+	}
+	if at <= 0 {
+		return "", "", false
+	}
+	head, site := strings.TrimSpace(title[:at]), strings.TrimSpace(title[at+len(sep):])
+	if n := len([]rune(site)); n < 2 || n > 30 || len([]rune(head)) < 2 {
+		return "", "", false
+	}
+	return head, site, true
 }
 
 // trimSiteSuffix 「文章 - 站名」「文章 | 站名」「文章_站名」去掉后面的站名。

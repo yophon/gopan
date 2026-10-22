@@ -95,41 +95,103 @@ type atomFeed struct {
 }
 
 // Parse 解析一份订阅文档;base 是订阅地址,用来补全相对链接。
-func Parse(r io.Reader, base *url.URL) (*Feed, error) {
+func Parse(r io.Reader, base *url.URL) (*Feed, error) { return ParseLimit(r, base, 0) }
+
+// ParseLimit 同 Parse,最多取文档里的前 max 条(0 = 不限)。逐条流式解码:大播客的订阅文件十几 MB,
+// 新的写在前面,读够了就停,不用整份装进内存;读到一半断了(被截断)也交出已经读到的。
+func ParseLimit(r io.Reader, base *url.URL, max int) (*Feed, error) {
 	d := xml.NewDecoder(r)
 	d.CharsetReader = charset.NewReaderLabel
 	// 不严格:容忍 &nbsp; 这类 HTML 实体与不规范的转义。不能开 AutoClose(HTML 的 <link> 是空元素,会吞掉 RSS 的 <link>)
 	d.Strict = false
 	d.Entity = xml.HTMLEntity
-	for {
+	var (
+		kind    string // rss / atom
+		depth   int
+		root    rssRoot
+		af      atomFeed
+		entries int
+	)
+	full := func() bool { return max > 0 && entries >= max }
+	for !full() {
 		tok, err := d.Token()
-		if err == io.EOF {
-			return nil, ErrNotFeed
-		}
 		if err != nil {
-			return nil, fmt.Errorf("%w:%v", ErrNotFeed, err)
+			if kind == "" {
+				if err == io.EOF {
+					return nil, ErrNotFeed
+				}
+				return nil, fmt.Errorf("%w:%v", ErrNotFeed, err)
+			}
+			if entries == 0 && err != io.EOF {
+				return nil, fmt.Errorf("%w:%v", ErrNotFeed, err)
+			}
+			break // 读完,或读到一半断了:交出已经读到的
 		}
-		se, ok := tok.(xml.StartElement)
-		if !ok {
+		switch t := tok.(type) {
+		case xml.EndElement:
+			depth--
 			continue
-		}
-		switch strings.ToLower(se.Name.Local) {
-		case "rss", "rdf":
-			var root rssRoot
-			if err := d.DecodeElement(&root, &se); err != nil {
-				return nil, fmt.Errorf("%w:%v", ErrNotFeed, err)
+		case xml.StartElement:
+			depth++
+			name := strings.ToLower(t.Name.Local)
+			if depth == 1 {
+				switch name {
+				case "rss", "rdf":
+					kind = "rss"
+				case "feed":
+					kind = "atom"
+				default:
+					return nil, ErrNotFeed // 根元素不对(多半是网页)
+				}
+				continue
 			}
-			return fromRSS(root, base), nil
-		case "feed":
-			var f atomFeed
-			if err := d.DecodeElement(&f, &se); err != nil {
-				return nil, fmt.Errorf("%w:%v", ErrNotFeed, err)
+			var derr error
+			consumed := true
+			switch {
+			case kind == "rss" && name == "item" && (depth == 2 || depth == 3): // RSS 1.0 的 item 与 channel 平级
+				var it rssItem
+				if derr = d.DecodeElement(&it, &t); derr == nil {
+					root.Channel.Items = append(root.Channel.Items, it)
+					entries++
+				}
+			case kind == "rss" && depth == 3 && name == "title" && root.Channel.Title == "":
+				derr = d.DecodeElement(&root.Channel.Title, &t)
+			case kind == "rss" && depth == 3 && name == "link":
+				var l xmlLink
+				if derr = d.DecodeElement(&l, &t); derr == nil {
+					root.Channel.Links = append(root.Channel.Links, l)
+				}
+			case kind == "atom" && depth == 2 && name == "entry":
+				var e atomEntry
+				if derr = d.DecodeElement(&e, &t); derr == nil {
+					af.Entries = append(af.Entries, e)
+					entries++
+				}
+			case kind == "atom" && depth == 2 && name == "title" && af.Title == "":
+				derr = d.DecodeElement(&af.Title, &t)
+			case kind == "atom" && depth == 2 && name == "link":
+				var l xmlLink
+				if derr = d.DecodeElement(&l, &t); derr == nil {
+					af.Links = append(af.Links, l)
+				}
+			default:
+				consumed = false
 			}
-			return fromAtom(f, base), nil
-		default:
-			return nil, ErrNotFeed // 根元素不对(多半是网页)
+			if consumed {
+				depth-- // DecodeElement 连结束标签一起读掉了
+			}
+			if derr != nil {
+				if entries == 0 {
+					return nil, fmt.Errorf("%w:%v", ErrNotFeed, derr)
+				}
+				max = entries // 读到一半断了:交出已经读到的
+			}
 		}
 	}
+	if kind == "atom" {
+		return fromAtom(af, base), nil
+	}
+	return fromRSS(root, base), nil
 }
 
 func fromRSS(root rssRoot, base *url.URL) *Feed {
