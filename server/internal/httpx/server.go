@@ -249,7 +249,7 @@ func (r *statusRecorder) WriteHeader(code int) {
 // normalizePath 归一指标的 path 标签,防 /s/{token} 这类动态段打爆基数。
 func normalizePath(p string) string {
 	switch {
-	case p == "/query", p == "/healthz", p == "/pack", p == "/mcp":
+	case p == "/query", p == "/healthz", p == "/pack", p == "/mcp", p == "/app":
 		return p
 	case strings.HasPrefix(p, "/oauth/"):
 		return "/oauth/:endpoint"

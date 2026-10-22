@@ -3,6 +3,8 @@ package httpx
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"html"
 	"io/fs"
 	"net/http"
 	"os"
@@ -139,4 +141,34 @@ func writeJSONError(w http.ResponseWriter, status int, code string) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": code})
+}
+
+// AppLanding 对发布页 /app 直出带 og 标签的 index.html(与 ShareLanding 同一个做法):
+// 把链接发进微信 / Telegram 时卡片上有标题与安装包版本,浏览器随后照常加载 SPA。
+// 没发安卓包或 latest.json 不合法时只是少写版本,页面照样出。
+func AppLanding(dist fs.FS, releaseDir string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		idx, err := fs.ReadFile(dist, "index.html")
+		if err != nil {
+			http.Error(w, "gopan: 前端未构建,先跑 make build", http.StatusNotFound)
+			return
+		}
+		title := "gopan 云盘 · 安卓 App 与网页版"
+		desc := "放在自己服务器上的网盘,网页版打开即用。"
+		if releaseDir != "" {
+			if rel, err := readAndroidRelease(releaseDir); err == nil {
+				desc = fmt.Sprintf("放在自己服务器上的网盘。安卓 App %s(%.1f MB),网页版打开即用。",
+					rel.VersionName, float64(rel.Size)/(1<<20))
+			}
+		}
+		meta := fmt.Sprintf(
+			`<meta property="og:title" content="%s"><meta property="og:description" content="%s"><meta property="og:type" content="website"><meta name="description" content="%s">`,
+			html.EscapeString(title), html.EscapeString(desc), html.EscapeString(desc))
+		page := strings.Replace(string(idx), "<head>", "<head>"+meta, 1)
+		page = strings.Replace(page, "<title>gopan 云盘</title>", "<title>gopan 云盘 · 安卓 App 与更新日志</title>", 1)
+		// 与 SPAHandler 的 index.html 一样不缓存:发版后旧页面引用的 /assets/ 指纹文件已经不在了
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(page))
+	})
 }

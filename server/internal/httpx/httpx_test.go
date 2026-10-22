@@ -29,6 +29,8 @@ func TestNormalizePath(t *testing.T) {
 		"/dav":                    "/dav",
 		"/dav/docs/a":             "/dav",
 		"/api/app/android/latest": "/api/app/android/:file",
+		"/app":                    "/app",
+		"/app/x":                  "/spa",
 		"/":                       "/spa",
 		"/drive/xxx":              "/spa",
 		"/assets/x.js":            "/spa",

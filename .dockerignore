@@ -10,3 +10,5 @@ docker-compose.prod.yml
 Caddyfile
 scripts
 *.md
+# 发布页的更新日志要打进前端(Dockerfile 的 web 阶段)
+!CHANGELOG.md

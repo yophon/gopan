@@ -292,6 +292,8 @@ func run() error {
 	}
 	mux.Handle("GET /s/{token}", httpx.ShareLanding(dist, shares))
 	mux.Handle("GET /c/{token}", httpx.CollectLanding(dist, collects))
+	// 发布页(功能介绍、安卓安装包、更新日志):SPA 页面,服务端只补 og 标签
+	mux.Handle("GET /app", httpx.AppLanding(dist, cfg.AppReleaseDir))
 	mux.Handle("/", httpx.SPAHandler(dist))
 
 	// pprof + /metrics 同挂内网端口(反代永不转发,与 pprof 同一安全边界)

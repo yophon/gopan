@@ -9,6 +9,8 @@ COPY web/package.json web/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 # codegen 产物已提交进仓库,这里只需 vite 构建;schema 供 codegen.ts 引用路径存在即可
 COPY server/graph/schema.graphqls /src/server/graph/schema.graphqls
+# 发布页 /app 的更新日志在仓库根目录,构建时打进前端(web/src/views/AppReleaseView.vue)
+COPY CHANGELOG.md /src/CHANGELOG.md
 COPY web/ ./
 RUN pnpm build
 

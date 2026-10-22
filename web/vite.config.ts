@@ -1,6 +1,6 @@
 import { fileURLToPath, URL } from 'node:url'
 
-import { defineConfig } from 'vite'
+import { defineConfig, searchForWorkspaceRoot } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
@@ -11,7 +11,15 @@ export default defineConfig({
     },
   },
   server: {
+    // 发布页 /app 读仓库根目录的 CHANGELOG.md(?raw 导入),开发服务器默认只放行 web/ 里的文件
+    fs: {
+      allow: [searchForWorkspaceRoot(process.cwd()), fileURLToPath(new URL('../CHANGELOG.md', import.meta.url))],
+    },
     proxy: {
+      // 安卓安装包与检查更新(发布页用)
+      '/api/app': {
+        target: 'http://127.0.0.1:8080',
+      },
       '/query': {
         target: 'http://127.0.0.1:8080',
         changeOrigin: true,

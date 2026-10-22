@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import {
   Bell,
+  Cellphone,
   ChatDotRound,
   Clock,
   Collection,
@@ -144,6 +145,10 @@ const quotaStatus = computed(() => {
       <el-icon><VideoPlay /></el-icon>
       <span>最近播放</span>
     </button>
+    <router-link to="/app" class="nav-extra" @click="emit('navigate')">
+      <el-icon><Cellphone /></el-icon>
+      <span>安卓 App · 更新日志</span>
+    </router-link>
     <!-- 用量条可点:进空间分析(doc/23 三) -->
     <router-link
       v-if="me"
@@ -214,6 +219,7 @@ const quotaStatus = computed(() => {
   color: var(--el-text-color-regular);
   font-size: 14px;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
 .nav-extra:hover {

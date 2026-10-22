@@ -175,6 +175,7 @@ async function submitRegister() {
         </el-tab-pane>
       </el-tabs>
     </el-card>
+    <router-link to="/app" class="app-link">安卓 App · 功能介绍 · 更新日志</router-link>
   </div>
 </template>
 
@@ -182,6 +183,8 @@ async function submitRegister() {
 .login-page {
   height: 100%;
   display: flex;
+  flex-direction: column;
+  gap: 16px;
   align-items: center;
   justify-content: center;
   background-color: var(--el-fill-color-light);
@@ -198,5 +201,13 @@ async function submitRegister() {
 .submit-btn {
   width: 100%;
   margin-top: 8px;
+}
+.app-link {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  text-decoration: none;
+}
+.app-link:hover {
+  color: var(--el-color-primary);
 }
 </style>

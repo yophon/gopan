@@ -24,6 +24,12 @@ const router = createRouter({
       component: () => import('@/views/CollectView.vue'),
     },
     {
+      // 发布页:功能介绍、安卓安装包、网页版入口、更新日志;公开访问
+      path: '/app',
+      name: 'app-release',
+      component: () => import('@/views/AppReleaseView.vue'),
+    },
+    {
       // 书签栏小工具弹出的小窗(doc/23 五.3):要登录,但不套侧栏
       path: '/clip',
       name: 'clip-popup',
@@ -103,8 +109,8 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
-  // 分享 / 收集访客页公开,不做登录校验
-  if (to.name === 'share-visitor' || to.name === 'collect-visitor') return true
+  // 分享 / 收集访客页与发布页公开,不做登录校验
+  if (to.name === 'share-visitor' || to.name === 'collect-visitor' || to.name === 'app-release') return true
 
   if (to.path === '/login') {
     // 已登录还访问登录页 → 直接回主界面

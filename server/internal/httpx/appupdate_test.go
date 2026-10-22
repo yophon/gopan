@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func writeRelease(t *testing.T, dir, latest string, apk []byte) {
@@ -135,5 +136,41 @@ func TestAndroidReleaseMethod(t *testing.T) {
 	AndroidRelease(t.TempDir()).ServeHTTP(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("POST 应 405,得到 %d", rec.Code)
+	}
+}
+
+func TestAppLanding(t *testing.T) {
+	dist := fstest.MapFS{"index.html": {Data: []byte(`<html><head><title>gopan 云盘</title></head><body></body></html>`)}}
+	dir := t.TempDir()
+	writeRelease(t, dir, strings.Replace(goodLatest, `"size":10`, `"size":5633367`, 1), []byte("0123456789"))
+
+	rec := get(AppLanding(dist, dir), "/app", nil)
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") {
+		t.Fatalf("应直出 HTML:%d %s", rec.Code, rec.Header().Get("Content-Type"))
+	}
+	for _, want := range []string{`og:title" content="gopan 云盘 · 安卓 App 与网页版"`, "安卓 App 3.0.0(5.4 MB)", "<title>gopan 云盘 · 安卓 App 与更新日志</title>"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("缺 %q:%s", want, body)
+		}
+	}
+	if rec.Header().Get("Cache-Control") != "no-cache" {
+		t.Fatalf("index.html 不能被缓存:%q", rec.Header().Get("Cache-Control"))
+	}
+
+	// 没配发版目录、latest.json 坏了:照样出页面,只是不写版本
+	for _, d := range []string{"", t.TempDir()} {
+		if d != "" {
+			writeRelease(t, d, `{"versionCode":1}`, nil)
+		}
+		rec := get(AppLanding(dist, d), "/app", nil)
+		if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "MB") || !strings.Contains(rec.Body.String(), "og:description") {
+			t.Fatalf("没有安装包时也应出页面且不写版本:%d %s", rec.Code, rec.Body.String())
+		}
+	}
+
+	// 前端没构建
+	if rec := get(AppLanding(fstest.MapFS{}, dir), "/app", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("没有 index.html 应 404,得到 %d", rec.Code)
 	}
 }
