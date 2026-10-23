@@ -26,6 +26,17 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.Stable
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarState
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.MutatorMutex
@@ -174,8 +185,17 @@ fun ChatScreen(
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    // 再点底部的「传输助手」:滚到最新(reverseLayout 下标 0 在底部)
-    OnTabReselect(Routes.ChatTab) { if (listState.layoutInfo.totalItemsCount > 0) listState.animateScrollToItem(0) }
+    // 顶栏的高度交给下面的 chromeBars 按同一个进度拉,不挂它自带的滚动连接;pinned 也让顶栏本身不能单独拖
+    val topBarState = remember { TopAppBarState(-Float.MAX_VALUE, 0f, 0f) }
+    val topBarScroll = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
+    val bottomChrome = LocalBottomChrome.current
+    val chromeBars = remember(bottomChrome, topBarState) { CollapsingChrome(bottomChrome, topBarState) }
+    val focusManager = LocalFocusManager.current
+    // 再点底部的「传输助手」:滚到最新(reverseLayout 下标 0 在底部),顶栏和输入框放出来
+    OnTabReselect(Routes.ChatTab) {
+        scope.launch { chromeBars.expand() }
+        if (listState.layoutInfo.totalItemsCount > 0) listState.animateScrollToItem(0)
+    }
     val currentOnOpenFolder by rememberUpdatedState(onOpenFolder)
     val currentOnOpenPreview by rememberUpdatedState(onOpenPreview)
     var actionTarget by remember { mutableStateOf<ChatMessage?>(null) }
@@ -227,6 +247,7 @@ fun ChatScreen(
             when (effect) {
                 ChatEffect.ScrollToBottom -> launch {
                     followBottom = true
+                    launch { chromeBars.expand() }
                     if (listState.layoutInfo.totalItemsCount > 0) listState.animateScrollToItem(0)
                 }
                 is ChatEffect.ScrollToMessage -> launch {
@@ -265,23 +286,22 @@ fun ChatScreen(
         }
     }
 
-    // 顶栏与底部(输入框 + 底部导航)随滚动一起收放,都跟着手指走,松手吸附到全开或全收:
-    // 手指往上推一起收起,往下拉一起出来。键盘弹起、搜索时不收
-    val topBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
-    val bottomChrome = LocalBottomChrome.current
-    val bottomBars = remember(bottomChrome) { CollapsingBottom(bottomChrome) }
+    // 顶栏与底部(输入框 + 底部导航)随滚动一起收放,共用一个进度:往旧消息里翻(手指下拉)收起,
+    // 回到最新(手指上推)放出,拖动和惯性都跟着走,停下吸附到全开或全收。键盘弹起、搜索时不收
     val bottomInset = LocalBottomBarInset.current
     val imeVisible = WindowInsets.isImeVisible
-    bottomBars.locked = imeVisible || state.searchOpen
-    LaunchedEffect(listState, bottomBars) {
-        snapshotFlow { listState.isScrollInProgress }.collect { scrolling -> if (!scrolling) bottomBars.settle() }
+    chromeBars.locked = imeVisible || state.searchOpen
+    LaunchedEffect(listState, chromeBars) {
+        // 新一轮滚动开始就打断吸附动画,免得和手指抢
+        snapshotFlow { listState.isScrollInProgress }.collectLatest { scrolling -> if (!scrolling) chromeBars.settle() }
     }
-    LaunchedEffect(bottomBars.locked) { if (bottomBars.locked) bottomBars.expand() }
+    LaunchedEffect(chromeBars.locked) { if (chromeBars.locked) chromeBars.expand() }
     // 离开传输助手:底部导航放回原位
     DisposableEffect(bottomChrome) { onDispose { bottomChrome.offsetPx = 0f } }
     var inputHeightPx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
-    bottomBars.rangePx = inputHeightPx + with(density) { bottomInset.roundToPx() }
+    // 胶囊的阴影会探出上沿一点,多滑一截才藏干净
+    chromeBars.rangePx = inputHeightPx + with(density) { (bottomInset + 8.dp).roundToPx() }
     // 消息列表铺到底,最后几条能滚到输入框与导航后面;底部留出它们的高度
     val bottomSpace = with(density) { inputHeightPx.toDp() } + bottomInset
 
@@ -292,9 +312,7 @@ fun ChatScreen(
     LaunchedEffect(nearBottom, state.anchored, state.messages.size) { if (nearBottom && state.anchored) viewModel.loadNewer() }
 
     Scaffold(
-        modifier = Modifier
-            .nestedScroll(bottomBars.connection)
-            .then(if (state.searchOpen) Modifier else Modifier.nestedScroll(topBarScroll.nestedScrollConnection)),
+        modifier = Modifier.nestedScroll(chromeBars.connection),
         contentWindowInsets = NestedScreenInsets,
         topBar = {
             if (state.searchOpen) {
@@ -302,18 +320,8 @@ fun ChatScreen(
             } else {
                 TopAppBar(
                     windowInsets = TopBarInsets,
-                    title = {
-                        Column {
-                            TabTitle(stringResource(R.string.chat_title))
-                            if (state.offline) {
-                                Text(
-                                    stringResource(R.string.chat_offline),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                        }
-                    },
+                    // 离线由顶栏下面的提示条说,标题不再重复一行
+                    title = { TabTitle(stringResource(R.string.chat_title)) },
                     actions = {
                         IconButton(onClick = viewModel::openSearch) {
                             Icon(Icons.Outlined.Search, contentDescription = stringResource(R.string.chat_search))
@@ -334,13 +342,17 @@ fun ChatScreen(
     ) { padding ->
         Box(modifier = Modifier.belowCollapsingTopBar(padding, topBarScroll).fillMaxSize().imePadding()) {
             Column(modifier = Modifier.fillMaxSize()) {
-                state.receiving?.let { r ->
-                    Banner(text = stringResource(R.string.chat_receiving, r.count), progress = true)
+                // 顶栏收起时内容伸进状态栏底下:最上面那条提示条的底色跟着伸上去,字让在状态栏下面
+                val underStatusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() * topBarScroll.state.collapsedFraction
+                val receiving = state.receiving
+                receiving?.let { r ->
+                    Banner(text = stringResource(R.string.chat_receiving, r.count), progress = true, topInset = underStatusBar)
                 }
                 if (state.offline && !state.searchOpen) {
-                    Banner(text = stringResource(R.string.chat_offline), icon = true)
+                    Banner(text = stringResource(R.string.chat_offline), icon = true, topInset = if (receiving == null) underStatusBar else 0.dp)
                 }
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                // 点一下消息区(空白处或消息上都算)就退出输入、收起键盘;只旁观,不拦消息自己的点按
+                Box(modifier = Modifier.weight(1f).fillMaxWidth().onTap { focusManager.clearFocus() }) {
                     when {
                         showingResults && state.searchResults.isNullOrEmpty() -> EmptyState(title = stringResource(R.string.chat_search_empty), icon = Icons.Outlined.Search)
                         state.searchOpen && state.searching && state.searchResults == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -395,6 +407,7 @@ fun ChatScreen(
                                 onClick = {
                                     viewModel.clearUnread()
                                     followBottom = true
+                                    scope.launch { chromeBars.expand() }
                                     scope.launch { listState.animateScrollToItem(0) }
                                 },
                                 icon = { Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = null) },
@@ -413,7 +426,7 @@ fun ChatScreen(
                         .fillMaxWidth()
                         .padding(bottom = bottomInset)
                         .onSizeChanged { inputHeightPx = it.height }
-                        .graphicsLayer { translationY = bottomBars.offsetPx },
+                        .graphicsLayer { translationY = bottomChrome.offsetPx },
                 ) {
                     DraftFetchBanner(viewModel, fetchViewModel)
                     InputBar(
@@ -559,9 +572,9 @@ private fun HistoryFooter(loading: Boolean, hasMore: Boolean, hasMessages: Boole
 }
 
 @Composable
-private fun Banner(text: String, progress: Boolean = false, icon: Boolean = false) {
+private fun Banner(text: String, progress: Boolean = false, icon: Boolean = false, topInset: Dp = 0.dp) {
     Surface(color = MaterialTheme.colorScheme.tertiaryContainer, contentColor = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = topInset).padding(horizontal = 16.dp, vertical = 6.dp)) {
             if (progress) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
             if (icon) Icon(Icons.Outlined.CloudOff, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(10.dp))
@@ -786,23 +799,33 @@ private fun SheetItem(icon: androidx.compose.ui.graphics.vector.ImageVector, lab
 private const val BOTTOM_SLOP_PX = 120
 
 /**
- * 传输助手底部(输入框 + 主界面的底部导航)跟着滚动滑出 / 滑回:手指上推收、下拉放,跟手;滚动停下后吸附到全开或全收。
- * 滑出的像素写进 [BottomChromeState],MainScaffold 的底部导航按它一起往下移;[locked] 时(键盘弹起、搜索中)不动。
+ * 传输助手的顶栏、输入框和主界面的底部导航跟着滚动一起收放,共用一个进度,同时到位。
+ * 会话倒着排(最新在底),往旧消息里翻(手指下拉)是"往列表深处走",收起;回到最新(手指上推)放出,和其它页同一个方向感。
+ * 拖动和惯性都跟着走,滚动停下后吸附到全开或全收。滑出的像素写进 [BottomChromeState](MainScaffold 的底部导航按它往下移),
+ * 顶栏按同样的比例收起;[locked] 时(键盘弹起、搜索中)不动。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Stable
-private class CollapsingBottom(private val chrome: BottomChromeState) {
-    /** 输入框连同底部导航的高度:手指移动这么多就全收 */
+private class CollapsingChrome(private val chrome: BottomChromeState, private val topBar: TopAppBarState) {
+    /** 输入框连同底部导航要滑出的距离:手指移动这么多就全收 */
     var rangePx by mutableIntStateOf(0)
     var locked by mutableStateOf(false)
-    /** 已经滑出去的像素:0 = 全露出,rangePx = 全收 */
-    val offsetPx: Float get() = chrome.offsetPx
     private val mutex = MutatorMutex()
+
+    /** 底部滑出 [px](0 = 全露出,rangePx = 全收),顶栏按同样的比例收 */
+    private fun moveTo(px: Float) {
+        val range = rangePx.toFloat()
+        chrome.offsetPx = px.coerceIn(0f, range)
+        // 顶栏还没量出高度时(heightOffsetLimit 还是初始的 -MAX_VALUE)先不动它
+        val limit = topBar.heightOffsetLimit
+        if (range > 0f && limit > -Float.MAX_VALUE) topBar.heightOffset = limit * chrome.offsetPx / range
+    }
 
     val connection = object : NestedScrollConnection {
         override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-            if (locked || rangePx == 0 || source != NestedScrollSource.UserInput) return Offset.Zero
-            // 手指上推时 available.y < 0:往外滑
-            chrome.offsetPx = (chrome.offsetPx - available.y).coerceIn(0f, rangePx.toFloat())
+            if (locked || rangePx == 0) return Offset.Zero
+            // 手指下拉时 available.y > 0:往外滑
+            moveTo(chrome.offsetPx + available.y)
             return Offset.Zero
         }
     }
@@ -813,7 +836,16 @@ private class CollapsingBottom(private val chrome: BottomChromeState) {
 
     private suspend fun animateTo(target: Float) = mutex.mutate {
         if (chrome.offsetPx != target) {
-            animate(chrome.offsetPx, target, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { value, _ -> chrome.offsetPx = value }
+            animate(chrome.offsetPx, target, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { value, _ -> moveTo(value) }
         }
+    }
+}
+
+/** 在这块区域里轻点一下(按下到抬起没拖动、没长按)就回调;只在 Initial 阶段旁观,不消费事件,子项的点按、长按、列表滚动照常 */
+private fun Modifier.onTap(action: () -> Unit) = pointerInput(Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        val up = waitForUpOrCancellation(PointerEventPass.Initial) ?: return@awaitEachGesture
+        if (up.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis) action()
     }
 }

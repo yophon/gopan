@@ -75,7 +75,7 @@ fun FullPage(content: @Composable () -> Unit) {
 val LocalBottomBarInset = compositionLocalOf { 0.dp }
 
 /**
- * 主界面底部浮层(迷你播放条 + 胶囊导航)往下滑出的像素:传输助手随滚动把它连同输入栏一起收起,离开页面时归零。
+ * 主界面底部浮层(迷你播放条 + 胶囊导航)往下滑出的像素:传输助手随滚动把它连同输入栏、顶栏一起收起,离开页面时归零。
  */
 @Stable
 class BottomChromeState {
