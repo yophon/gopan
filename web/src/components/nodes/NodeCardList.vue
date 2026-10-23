@@ -26,7 +26,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div v-loading="loading" class="node-card-list" :class="`mode-${mode}`">
+  <div v-loading="!!loading" class="node-card-list" :class="`mode-${mode}`">
     <NodeCard
       v-for="node in items"
       :key="node.id"

@@ -2,8 +2,8 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { useInfiniteQuery, useQuery } from '@tanstack/vue-query'
 import { ArrowLeft, Document, Download, Folder, FolderOpened } from '@element-plus/icons-vue'
-import type { Variables } from 'graphql-request'
-import type { TypedDocumentNode } from '@graphql-typed-document-node/core'
+import type { Variables } from '@/api/transport'
+import type { DocumentTypeDecoration } from '@graphql-typed-document-node/core'
 
 import { guestRequest, request } from '@/api/client'
 import { errorText } from '@/api/errors'
@@ -34,7 +34,7 @@ const { extract } = useExtract()
 const isOwner = computed(() => !props.guestToken)
 
 function req<TResult, TVariables extends Variables>(
-  document: TypedDocumentNode<TResult, TVariables>,
+  document: DocumentTypeDecoration<TResult, TVariables>,
   variables?: TVariables,
 ): Promise<TResult> {
   return props.guestToken ? guestRequest(document, props.guestToken, variables) : request(document, variables)

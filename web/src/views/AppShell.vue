@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, reactive, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Bell } from '@element-plus/icons-vue'
@@ -11,15 +11,19 @@ import { useUploadsStore } from '@/stores/uploads'
 import { useBreakpoints } from '@/composables/breakpoints'
 import { shellPanel, withoutQuery } from '@/utils/notifications'
 import UploadDrawer from '@/components/UploadDrawer.vue'
-import PreviewModal from '@/components/preview/PreviewModal.vue'
-import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
-import AppPasswordsDialog from '@/components/AppPasswordsDialog.vue'
-import MCPAccessDialog from '@/components/MCPAccessDialog.vue'
 import SideNav from '@/components/SideNav.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
-import NotificationDrawer from '@/components/notify/NotificationDrawer.vue'
-import RecentPlaysDialog from '@/components/RecentPlaysDialog.vue'
 import MiniPlayer from '@/components/player/MiniPlayer.vue'
+import { previewState } from '@/composables/preview'
+
+// 弹窗 / 抽屉第一次打开时才加载(连同它们用到的表格、表单、标签页这些组件),之后一直挂着,关的动画照常。
+// 上传抽屉要轮询后台任务、迷你播放条持有全站唯一的 <audio>,这两个照旧常驻
+const PreviewModal = defineAsyncComponent(() => import('@/components/preview/PreviewModal.vue'))
+const ChangePasswordDialog = defineAsyncComponent(() => import('@/components/ChangePasswordDialog.vue'))
+const AppPasswordsDialog = defineAsyncComponent(() => import('@/components/AppPasswordsDialog.vue'))
+const MCPAccessDialog = defineAsyncComponent(() => import('@/components/MCPAccessDialog.vue'))
+const NotificationDrawer = defineAsyncComponent(() => import('@/components/notify/NotificationDrawer.vue'))
+const RecentPlaysDialog = defineAsyncComponent(() => import('@/components/RecentPlaysDialog.vue'))
 
 const route = useRoute()
 const router = useRouter()
@@ -44,6 +48,16 @@ const mcpDialogVisible = ref(false)
 
 const notifyVisible = ref(false)
 const recentVisible = ref(false)
+
+const opened = reactive({ preview: false, pwd: false, dav: false, mcp: false, notify: false, recent: false })
+watchEffect(() => {
+  if (previewState.visible) opened.preview = true
+  if (pwdDialogVisible.value) opened.pwd = true
+  if (davDialogVisible.value) opened.dav = true
+  if (mcpDialogVisible.value) opened.mcp = true
+  if (notifyVisible.value) opened.notify = true
+  if (recentVisible.value) opened.recent = true
+})
 
 const { data: meData } = useQuery({ queryKey: ['me'], queryFn: () => request(MeDocument) })
 const unread = computed(() => meData.value?.me.unreadNotifications ?? 0)
@@ -141,12 +155,12 @@ async function onLogout() {
     </el-drawer>
 
     <UploadDrawer />
-    <PreviewModal />
-    <ChangePasswordDialog v-model="pwdDialogVisible" />
-    <AppPasswordsDialog v-model="davDialogVisible" />
-    <MCPAccessDialog v-model="mcpDialogVisible" />
-    <NotificationDrawer v-model="notifyVisible" />
-    <RecentPlaysDialog v-model="recentVisible" />
+    <PreviewModal v-if="opened.preview" />
+    <ChangePasswordDialog v-if="opened.pwd" v-model="pwdDialogVisible" />
+    <AppPasswordsDialog v-if="opened.dav" v-model="davDialogVisible" />
+    <MCPAccessDialog v-if="opened.mcp" v-model="mcpDialogVisible" />
+    <NotificationDrawer v-if="opened.notify" v-model="notifyVisible" />
+    <RecentPlaysDialog v-if="opened.recent" v-model="recentVisible" />
   </el-container>
 </template>
 

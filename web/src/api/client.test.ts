@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { ClientError } from 'graphql-request'
+import { ClientError } from '@/api/transport'
 
 // client.ts 模块顶层用 `${location.origin}/query` 建客户端,node 环境没有 location,
 // 必须在模块加载前(vi.hoisted)补上
@@ -14,8 +14,8 @@ const { gqlRequestMock, routerPushMock } = vi.hoisted(() => {
 })
 
 // 保留真实 ClientError(getErrorCode 用 instanceof 判断),只替换 GraphQLClient 的网络层
-vi.mock('graphql-request', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('graphql-request')>()
+vi.mock('@/api/transport', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/transport')>()
   return {
     ...actual,
     GraphQLClient: vi.fn(function GraphQLClientStub() {

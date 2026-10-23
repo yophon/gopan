@@ -25,6 +25,8 @@
   --gp-on-primary: #ffffff;
   --gp-primary-hover: #2e2d2b;
   --gp-primary-active: #000000;
+  --gp-primary-disabled-bg: #878685;
+  --gp-primary-disabled-text: #ffffff;
   --gp-font: Inter, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', sans-serif;
   --gp-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 
@@ -129,6 +131,9 @@ html.dark {
   --gp-on-primary: #121212;
   --gp-primary-hover: #dcdad4;
   --gp-primary-active: #ffffff;
+  /* 深色里禁用的主按钮要暗下去,不能是一块亮灰 */
+  --gp-primary-disabled-bg: #34322f;
+  --gp-primary-disabled-text: #77736c;
 
   --el-color-primary: #f3f2ee;
   --el-color-primary-light-3: #b0afac;
@@ -229,6 +234,9 @@ body {
   --el-button-hover-border-color: var(--gp-primary-hover);
   --el-button-active-bg-color: var(--gp-primary-active);
   --el-button-active-border-color: var(--gp-primary-active);
+  --el-button-disabled-bg-color: var(--gp-primary-disabled-bg);
+  --el-button-disabled-border-color: var(--gp-primary-disabled-bg);
+  --el-button-disabled-text-color: var(--gp-primary-disabled-text);
 }
 .el-button--primary.is-plain {
   --el-button-hover-text-color: var(--gp-on-primary);

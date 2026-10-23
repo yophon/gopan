@@ -25,8 +25,8 @@ import {
   PlaylistDocument,
   RequestPreviewDocument,
 } from '@/api/gen/graphql'
-import type { Variables } from 'graphql-request'
-import type { TypedDocumentNode } from '@graphql-typed-document-node/core'
+import type { Variables } from '@/api/transport'
+import type { DocumentTypeDecoration } from '@graphql-typed-document-node/core'
 import { formatBytes } from '@/utils/format'
 import { useBreakpoints } from '@/composables/breakpoints'
 import { useSwipe } from '@vueuse/core'
@@ -54,7 +54,7 @@ import AudioPanel from '@/components/player/AudioPanel.vue'
 const props = defineProps<{ guestToken?: string }>()
 
 function req<TResult, TVariables extends Variables>(
-  document: TypedDocumentNode<TResult, TVariables>,
+  document: DocumentTypeDecoration<TResult, TVariables>,
   variables?: TVariables,
 ): Promise<TResult> {
   return props.guestToken

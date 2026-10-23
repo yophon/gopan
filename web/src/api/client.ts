@@ -1,6 +1,6 @@
-import { GraphQLClient, ClientError } from 'graphql-request'
-import type { Variables } from 'graphql-request'
-import type { TypedDocumentNode } from '@graphql-typed-document-node/core'
+import { GraphQLClient, ClientError } from '@/api/transport'
+import type { Variables } from '@/api/transport'
+import type { DocumentTypeDecoration } from '@graphql-typed-document-node/core'
 
 import { useAuthStore } from '@/stores/auth'
 import router from '@/router'
@@ -19,8 +19,7 @@ import router from '@/router'
  * (经 BroadcastChannel,见 stores/auth.ts)换成新的,就直接复用,不再发请求。
  */
 
-// graphql-request v7 内部用 new URL() 解析 endpoint,相对路径会抛 Invalid URL,
-// 必须给绝对地址(同源部署,origin 即当前站点)
+// 同源部署,origin 即当前站点
 const gqlClient = new GraphQLClient(`${location.origin}/query`, {
   credentials: 'include', // refresh token 在 httpOnly cookie 里
 })
@@ -58,10 +57,10 @@ function authHeaders(): Record<string, string> {
 }
 
 export async function plainRequest<TResult, TVariables extends Variables>(
-  document: TypedDocumentNode<TResult, TVariables>,
+  document: DocumentTypeDecoration<TResult, TVariables>,
   variables?: TVariables,
 ): Promise<TResult> {
-  return gqlClient.request<TResult>({
+  return gqlClient.request<TResult, TVariables>({
     document,
     variables,
     requestHeaders: authHeaders(),
@@ -75,11 +74,11 @@ export async function plainRequest<TResult, TVariables extends Variables>(
  * 访客 token 30 分钟过期且无 refresh,过期由分享页捕获后引导重新验密。
  */
 export async function guestRequest<TResult, TVariables extends Variables>(
-  document: TypedDocumentNode<TResult, TVariables>,
+  document: DocumentTypeDecoration<TResult, TVariables>,
   accessToken: string,
   variables?: TVariables,
 ): Promise<TResult> {
-  return gqlClient.request<TResult>({
+  return gqlClient.request<TResult, TVariables>({
     document,
     variables,
     requestHeaders: { Authorization: `Bearer ${accessToken}` },
@@ -123,7 +122,7 @@ export function singleFlightRefresh(staleToken?: string | null): Promise<boolean
 // ---------- 业务请求(带 401 → 刷新 → 重放) ----------
 
 export async function request<TResult, TVariables extends Variables>(
-  document: TypedDocumentNode<TResult, TVariables>,
+  document: DocumentTypeDecoration<TResult, TVariables>,
   variables?: TVariables,
 ): Promise<TResult> {
   const tokenUsed = useAuthStore().accessToken

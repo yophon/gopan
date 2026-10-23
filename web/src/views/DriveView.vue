@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, reactive, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useEventListener } from '@vueuse/core'
@@ -45,11 +45,6 @@ import { enqueueFiles } from '@/uploader/manager'
 import { openPreview } from '@/composables/preview'
 import { useBreakpoints } from '@/composables/breakpoints'
 import { useUiStore } from '@/stores/ui'
-import MoveDialog from '@/components/MoveDialog.vue'
-import ShareDialog from '@/components/ShareDialog.vue'
-import FileRequestDialog from '@/components/FileRequestDialog.vue'
-import FetchDialog from '@/components/FetchDialog.vue'
-import NodeDetailDrawer from '@/components/NodeDetailDrawer.vue'
 import ContextMenu, { type MenuEntry } from '@/components/ContextMenu.vue'
 import { useFetchEnabled } from '@/composables/jobs'
 import { useExtract } from '@/composables/extract'
@@ -67,6 +62,13 @@ import { baseNameRange, DRAG_MIME, nextSort, parseSortPref, stepSelection, type 
 import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 
 type ChildItem = ChildrenQuery['children']['items'][number]
+
+// 这些弹窗第一次用到时才加载(连同里面的表单、日期选择这些组件),之后一直挂着
+const MoveDialog = defineAsyncComponent(() => import('@/components/MoveDialog.vue'))
+const ShareDialog = defineAsyncComponent(() => import('@/components/ShareDialog.vue'))
+const FileRequestDialog = defineAsyncComponent(() => import('@/components/FileRequestDialog.vue'))
+const FetchDialog = defineAsyncComponent(() => import('@/components/FetchDialog.vue'))
+const NodeDetailDrawer = defineAsyncComponent(() => import('@/components/NodeDetailDrawer.vue'))
 
 const route = useRoute()
 const router = useRouter()
@@ -598,6 +600,17 @@ function openDetail(node: { id: string }) {
   detail.value = { visible: true, id: node.id }
 }
 
+const opened = reactive({ move: false, copy: false, extract: false, share: false, collect: false, fetch: false, detail: false })
+watchEffect(() => {
+  if (moveDialogVisible.value) opened.move = true
+  if (copyDialogVisible.value) opened.copy = true
+  if (extractPickVisible.value) opened.extract = true
+  if (shareDialogVisible.value) opened.share = true
+  if (collectDialogVisible.value) opened.collect = true
+  if (fetchDialogVisible.value) opened.fetch = true
+  if (detail.value.visible) opened.detail = true
+})
+
 // ---------- 打开 ----------
 
 function onOpen(row: NodeListItem) {
@@ -1042,8 +1055,8 @@ function onSheetSelect(key: string) {
 
     <ContextMenu v-model:visible="menu.visible" :x="menu.x" :y="menu.y" :items="menuItems" @select="onMenuSelect" />
 
-    <MoveDialog v-model="moveDialogVisible" :exclude-ids="pendingIds" :start-id="folderId" @confirm="onMoveConfirm" />
-    <MoveDialog v-model="copyDialogVisible" mode="copy" :exclude-ids="pendingIds" :start-id="folderId" @confirm="onCopyConfirm" />
+    <MoveDialog v-if="opened.move" v-model="moveDialogVisible" :exclude-ids="pendingIds" :start-id="folderId" @confirm="onMoveConfirm" />
+    <MoveDialog v-if="opened.copy" v-model="copyDialogVisible" mode="copy" :exclude-ids="pendingIds" :start-id="folderId" @confirm="onCopyConfirm" />
 
     <!-- 隐藏的文件 / 文件夹选择器 -->
     <input ref="fileInput" type="file" multiple class="hidden-input" @change="onFilesChosen" />
@@ -1057,11 +1070,11 @@ function onSheetSelect(key: string) {
       </div>
     </div>
 
-    <ShareDialog v-model="shareDialogVisible" :node="shareTarget" />
-    <FileRequestDialog v-model="collectDialogVisible" :folder="collectTarget" />
-    <FetchDialog v-model="fetchDialogVisible" :folder-id="folderId" :folder-name="folderName" />
-    <MoveDialog v-model="extractPickVisible" mode="extract" :exclude-ids="[]" :start-id="folderId" @confirm="onExtractConfirm" />
-    <NodeDetailDrawer v-model="detail.visible" :node-id="detail.id" />
+    <ShareDialog v-if="opened.share" v-model="shareDialogVisible" :node="shareTarget" />
+    <FileRequestDialog v-if="opened.collect" v-model="collectDialogVisible" :folder="collectTarget" />
+    <FetchDialog v-if="opened.fetch" v-model="fetchDialogVisible" :folder-id="folderId" :folder-name="folderName" />
+    <MoveDialog v-if="opened.extract" v-model="extractPickVisible" mode="extract" :exclude-ids="[]" :start-id="folderId" @confirm="onExtractConfirm" />
+    <NodeDetailDrawer v-if="opened.detail" v-model="detail.visible" :node-id="detail.id" />
   </div>
 </template>
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ClientError } from 'graphql-request'
+import { ClientError } from '@/api/transport'
 
 // errors.ts → client.ts 的传递依赖需要 location 与 router,提前打桩
 vi.hoisted(() => {
@@ -9,8 +9,8 @@ vi.hoisted(() => {
     configurable: true,
   })
 })
-vi.mock('graphql-request', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('graphql-request')>()
+vi.mock('@/api/transport', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/transport')>()
   return {
     ...actual,
     GraphQLClient: vi.fn(function GraphQLClientStub() {

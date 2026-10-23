@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useInfiniteQuery, useQuery } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
@@ -18,10 +18,9 @@ import {
 import type { ChildrenQuery } from '@/api/gen/graphql'
 import { formatBytes } from '@/utils/format'
 import { mostlyMedia, shareSummary } from '@/utils/visitor'
-import { openPreview } from '@/composables/preview'
+import { openPreview, previewState } from '@/composables/preview'
 import { useBreakpoints } from '@/composables/breakpoints'
 import BrandLogo from '@/components/BrandLogo.vue'
-import PreviewModal from '@/components/preview/PreviewModal.vue'
 import NodeBrowser from '@/components/nodes/NodeBrowser.vue'
 import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
@@ -36,6 +35,16 @@ import '@/styles/visitor.css'
  */
 
 type ChildItem = ChildrenQuery['children']['items'][number]
+
+// 预览弹层第一次打开时才加载
+const PreviewModal = defineAsyncComponent(() => import('@/components/preview/PreviewModal.vue'))
+const previewOpened = ref(false)
+watch(
+  () => previewState.visible,
+  (v) => {
+    if (v) previewOpened.value = true
+  },
+)
 
 const route = useRoute()
 const { isMobile } = useBreakpoints()
@@ -455,7 +464,7 @@ const summary = computed(() => (info.value ? shareSummary(info.value) : ''))
       <a href="/app">用 gopan 云盘分享</a>
     </footer>
 
-    <PreviewModal v-if="guestToken" :guest-token="guestToken" />
+    <PreviewModal v-if="guestToken && previewOpened" :guest-token="guestToken" />
     <ContextMenu v-model:visible="menu.visible" :x="menu.x" :y="menu.y" :items="menuItems" @select="onMenuSelect" />
     <NodeActionSheet v-model:visible="sheet.visible" :title="sheet.node?.name" :items="sheetItems" @select="onSheetSelect" />
   </div>

@@ -2,9 +2,21 @@ import { fileURLToPath, URL } from 'node:url'
 
 import { defineConfig, searchForWorkspaceRoot } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    // Element Plus 按需:模板里用到哪个组件 / 指令(v-loading)才打进包。以前 app.use(ElementPlus) 把整个库塞进首屏。
+    // 样式仍然整份引入(main.ts):theme.css 靠先后顺序覆盖组件级变量,按组件拆开的样式会晚到、盖掉主题
+    Components({
+      // 只管 Element;自己的组件照旧显式 import,不做自动注册
+      dirs: [],
+      resolvers: [ElementPlusResolver({ importStyle: false })],
+      dts: 'src/components.d.ts',
+    }),
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
