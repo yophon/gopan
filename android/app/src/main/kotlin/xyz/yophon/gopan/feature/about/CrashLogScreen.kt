@@ -56,6 +56,7 @@ import xyz.yophon.gopan.core.app.CrashReport
 import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.exposeTestTags
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
+import xyz.yophon.gopan.feature.drive.TopBarInsets
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -123,7 +124,7 @@ fun CrashLogScreen(onBack: () -> Unit, viewModel: CrashLogViewModel = hiltViewMo
         contentWindowInsets = NestedScreenInsets,
         topBar = {
             TopAppBar(
-                windowInsets = NestedScreenInsets,
+                windowInsets = TopBarInsets,
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back)) }
                 },

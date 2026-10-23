@@ -1,6 +1,9 @@
 package xyz.yophon.gopan.feature.chat
 
 import xyz.yophon.gopan.core.ui.components.FolderGlyph
+import xyz.yophon.gopan.core.ui.components.longPressFirst
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -72,7 +75,10 @@ private val TIME = DateTimeFormatter.ofPattern("HH:mm")
 
 fun timeOf(millis: Long, zone: ZoneId = ZoneId.systemDefault()): String = TIME.format(Instant.ofEpochMilli(millis).atZone(zone))
 
-/** 每条消息的外壳:左对齐、长按出操作面板、定位时高亮 */
+/**
+ * 每条消息的外壳:左对齐、长按出操作面板、定位时高亮。
+ * 长按在 Initial 阶段先判断(longPressFirst):整条都是链接的消息,按在链接上也能长按,不会被链接的点击拦住。
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageShell(
@@ -95,11 +101,12 @@ fun MessageShell(
                 .widthIn(max = 520.dp)
                 .fillMaxWidth(0.86f)
                 .clip(RoundedCornerShape(14.dp))
+                .longPressFirst(onLongClick)
                 .combinedClickable(
                     enabled = onClick != null || onLongClick != null,
                     onClick = { onClick?.invoke() },
-                    onLongClick = onLongClick,
-                ),
+                )
+                .then(if (onLongClick != null) Modifier.semantics { onLongClick(label = null) { onLongClick.invoke(); true } } else Modifier),
         ) { content() }
     }
 }

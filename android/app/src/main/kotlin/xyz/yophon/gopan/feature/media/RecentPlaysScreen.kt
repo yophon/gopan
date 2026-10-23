@@ -52,6 +52,7 @@ import xyz.yophon.gopan.core.ui.format.formatRelativeTime
 import xyz.yophon.gopan.feature.drive.FullPage
 import xyz.yophon.gopan.feature.drive.ListStatus
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
+import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.NodeVisual
 import java.time.Instant
 
@@ -82,7 +83,7 @@ fun RecentPlaysScreen(
         contentWindowInsets = NestedScreenInsets,
         topBar = {
             TopAppBar(
-                windowInsets = NestedScreenInsets,
+                windowInsets = TopBarInsets,
                 title = { Text(stringResource(R.string.media_recent_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {

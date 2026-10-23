@@ -1,5 +1,18 @@
 package xyz.yophon.gopan.feature.account
 
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.fillMaxHeight
+import xyz.yophon.gopan.core.ui.isMediumWidth
+import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.NestedScreenInsets
+import xyz.yophon.gopan.feature.drive.LocalBottomBarInset
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.rememberLazyListState
+import xyz.yophon.gopan.core.ui.nav.Routes
+import xyz.yophon.gopan.core.ui.nav.OnTabReselect
 import xyz.yophon.gopan.core.ui.exposeTestTags
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -251,16 +264,19 @@ internal fun AccountContent(
         }
     }
 
-    // 外层 MainScaffold 的 innerPadding 已经让出了状态栏,这里的顶栏不再重复加 inset
+    // 外层 MainScaffold 的 innerPadding 已经让出了状态栏,这里的顶栏不再重复加 inset;随滚动收起
+    val topBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 title = { TabTitle(stringResource(R.string.account_title)) },
                 windowInsets = WindowInsets(0, 0, 0, 0),
+                scrollBehavior = topBarScroll,
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        contentWindowInsets = NestedScreenInsets,
     ) { innerPadding ->
         val user = state.user
         when {
@@ -273,7 +289,7 @@ internal fun AccountContent(
             else -> PullToRefreshBox(
                 isRefreshing = state.refreshing,
                 onRefresh = onRefresh,
-                modifier = Modifier.padding(innerPadding).fillMaxSize(),
+                modifier = Modifier.padding(top = innerPadding.calculateTopPadding()).fillMaxSize(),
             ) {
                 AccountList(
                     user = user,
@@ -399,167 +415,178 @@ private fun AccountList(
     onOpenFeeds: () -> Unit = {},
     onOpenClips: () -> Unit = {},
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        item("header") { AccountHeader(user = user, usage = usage, onClick = onOpenSpace) }
-
-        if (notifications != null) notificationsSection(notifications)
-
-        item("storage") { SectionTitle(stringResource(R.string.account_section_storage)) }
-        // 空间分析与动态(doc/23 二、三)
-        item("space") {
-            SettingItem(
-                icon = Icons.Outlined.PieChart,
-                title = stringResource(R.string.space_title),
-                supporting = stringResource(R.string.space_entry_hint),
-                onClick = onOpenSpace,
-            )
-        }
-        item("activity") {
-            SettingItem(
-                icon = Icons.Outlined.History,
-                title = stringResource(R.string.activity_title),
-                supporting = stringResource(R.string.activity_entry_hint),
-                onClick = onOpenActivity,
-            )
-        }
-        item("trash") {
-            SettingItem(
-                icon = Icons.Outlined.DeleteOutline,
-                title = stringResource(R.string.account_item_trash),
-                supporting = stringResource(R.string.account_item_trash_hint),
-                onClick = onOpenTrash,
-            )
-        }
-        item("transfers") {
-            SettingItem(
-                icon = Icons.Outlined.SwapVert,
-                title = stringResource(R.string.account_item_transfers),
-                supporting = stringResource(R.string.account_item_transfers_hint),
-                onClick = onOpenTransfers,
-            )
-        }
-        item("transfer-settings") {
-            SettingItem(
-                icon = Icons.Outlined.Tune,
-                title = stringResource(R.string.account_item_transfer_settings),
-                supporting = stringResource(R.string.account_item_transfer_settings_hint),
-                onClick = onOpenTransferSettings,
-            )
-        }
-
-        // 订阅与剪藏(doc/23 四、五)
-        item("content") { SectionTitle(stringResource(R.string.feeds_section)) }
-        item("feeds") {
-            SettingItem(
-                icon = Icons.Outlined.RssFeed,
-                title = stringResource(R.string.feeds_title),
-                supporting = stringResource(R.string.feeds_entry_hint),
-                onClick = onOpenFeeds,
-                modifier = Modifier.testTag("account_feeds"),
-            )
-        }
-        item("clips") {
-            SettingItem(
-                icon = Icons.Outlined.ContentCut,
-                title = stringResource(R.string.clips_title),
-                supporting = stringResource(R.string.clips_entry_hint),
-                onClick = onOpenClips,
-                modifier = Modifier.testTag("account_clips"),
-            )
-        }
-
-        item("account") { SectionTitle(stringResource(R.string.account_section_account)) }
-        item("password") {
-            SettingItem(icon = Icons.Outlined.Lock, title = stringResource(R.string.account_item_change_password), onClick = onOpenPasswordDialog)
-        }
-        item("sessions") {
-            SettingItem(icon = Icons.Outlined.Devices, title = stringResource(R.string.account_item_sessions), onClick = onOpenSessions)
-        }
-        item("apppass") {
-            SettingItem(icon = Icons.Outlined.Key, title = stringResource(R.string.account_item_app_passwords), onClick = onOpenAppPasswords)
-        }
-        item("agent") {
-            SettingItem(icon = Icons.Outlined.SmartToy, title = stringResource(R.string.account_item_agent), onClick = onOpenAgent)
-        }
-
-        item("appearance") { SectionTitle(stringResource(R.string.account_section_appearance)) }
-        item("theme") {
-            SettingItem(
-                icon = Icons.Outlined.DarkMode,
-                title = stringResource(R.string.account_item_theme),
-                value = stringResource(theme.labelRes()),
-                onClick = onOpenThemeDialog,
-            )
-        }
-        item("palette") {
-            SettingItem(
-                icon = Icons.Outlined.Palette,
-                title = stringResource(R.string.account_item_palette),
-                value = stringResource(palette.labelRes()),
-                onClick = onOpenPaletteDialog,
-                modifier = Modifier.testTag("account_palette"),
-            )
-        }
-        item("view") {
-            SettingItem(
-                icon = if (driveViewMode == DriveViewMode.GRID) Icons.Outlined.GridView else Icons.AutoMirrored.Outlined.ViewList,
-                title = stringResource(R.string.account_item_drive_view),
-                value = stringResource(driveViewMode.labelRes()),
-                onClick = onOpenViewModeDialog,
-            )
-        }
-
-        if (user.isAdmin) {
-            item("admin") { SectionTitle(stringResource(R.string.account_section_admin)) }
-            item("admin-entry") {
-                SettingItem(icon = Icons.Outlined.AdminPanelSettings, title = stringResource(R.string.account_item_admin), onClick = onOpenAdmin)
+    val listState = rememberLazyListState()
+    OnTabReselect(Routes.AccountTab) { listState.animateScrollToItem(0) }
+    // 宽屏(横屏、平板):头部固定在左边一栏,设置列表在右边单独滚
+    val wide = isMediumWidth()
+    Row(Modifier.fillMaxSize()) {
+        if (wide) {
+            Column(Modifier.weight(0.42f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                AccountHeader(user = user, usage = usage, onClick = onOpenSpace)
             }
         }
+        LazyColumn(state = listState, contentPadding = PaddingValues(bottom = LocalBottomBarInset.current), modifier = Modifier.weight(0.58f).fillMaxHeight()) {
+            if (!wide) item("header") { AccountHeader(user = user, usage = usage, onClick = onOpenSpace) }
 
-        item("about") { SectionTitle(stringResource(R.string.account_section_about)) }
-        item("version") {
-            SettingItem(icon = Icons.Outlined.Info, title = stringResource(R.string.account_item_version), value = versionName, onClick = null)
-        }
-        item("update") {
-            SettingItem(
-                icon = Icons.Outlined.SystemUpdate,
-                title = stringResource(R.string.account_item_check_update),
-                value = updateBadge?.let { stringResource(R.string.update_badge, it) },
-                onClick = onCheckUpdate,
-            )
-        }
-        item("changelog") {
-            SettingItem(icon = Icons.Outlined.NewReleases, title = stringResource(R.string.account_item_changelog), onClick = onOpenChangelog)
-        }
-        item("crash") {
-            SettingItem(
-                icon = Icons.Outlined.BugReport,
-                title = stringResource(R.string.account_item_crash_logs),
-                value = if (crashCount > 0) stringResource(R.string.crash_count, crashCount) else null,
-                onClick = onOpenCrashLogs,
-            )
-        }
-        item("oss") {
-            SettingItem(icon = Icons.Outlined.Code, title = stringResource(R.string.account_item_open_source), onClick = onOpenLicenses)
-        }
+            if (notifications != null) notificationsSection(notifications)
 
-        item("logout-divider") { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
-        item("logout") {
-            ListItem(
-                headlineContent = {
-                    Text(stringResource(R.string.account_item_logout), color = MaterialTheme.colorScheme.error)
-                },
-                leadingContent = {
-                    if (loggingOut) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                    }
-                },
-                modifier = Modifier.clickable(enabled = !loggingOut, onClick = onLogoutClick),
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            )
-            Spacer(Modifier.height(24.dp))
+            item("storage") { SectionTitle(stringResource(R.string.account_section_storage)) }
+            // 空间分析与动态(doc/23 二、三)
+            item("space") {
+                SettingItem(
+                    icon = Icons.Outlined.PieChart,
+                    title = stringResource(R.string.space_title),
+                    supporting = stringResource(R.string.space_entry_hint),
+                    onClick = onOpenSpace,
+                )
+            }
+            item("activity") {
+                SettingItem(
+                    icon = Icons.Outlined.History,
+                    title = stringResource(R.string.activity_title),
+                    supporting = stringResource(R.string.activity_entry_hint),
+                    onClick = onOpenActivity,
+                )
+            }
+            item("trash") {
+                SettingItem(
+                    icon = Icons.Outlined.DeleteOutline,
+                    title = stringResource(R.string.account_item_trash),
+                    supporting = stringResource(R.string.account_item_trash_hint),
+                    onClick = onOpenTrash,
+                )
+            }
+            item("transfers") {
+                SettingItem(
+                    icon = Icons.Outlined.SwapVert,
+                    title = stringResource(R.string.account_item_transfers),
+                    supporting = stringResource(R.string.account_item_transfers_hint),
+                    onClick = onOpenTransfers,
+                )
+            }
+            item("transfer-settings") {
+                SettingItem(
+                    icon = Icons.Outlined.Tune,
+                    title = stringResource(R.string.account_item_transfer_settings),
+                    supporting = stringResource(R.string.account_item_transfer_settings_hint),
+                    onClick = onOpenTransferSettings,
+                )
+            }
+
+            // 订阅与剪藏(doc/23 四、五)
+            item("content") { SectionTitle(stringResource(R.string.feeds_section)) }
+            item("feeds") {
+                SettingItem(
+                    icon = Icons.Outlined.RssFeed,
+                    title = stringResource(R.string.feeds_title),
+                    supporting = stringResource(R.string.feeds_entry_hint),
+                    onClick = onOpenFeeds,
+                    modifier = Modifier.testTag("account_feeds"),
+                )
+            }
+            item("clips") {
+                SettingItem(
+                    icon = Icons.Outlined.ContentCut,
+                    title = stringResource(R.string.clips_title),
+                    supporting = stringResource(R.string.clips_entry_hint),
+                    onClick = onOpenClips,
+                    modifier = Modifier.testTag("account_clips"),
+                )
+            }
+
+            item("account") { SectionTitle(stringResource(R.string.account_section_account)) }
+            item("password") {
+                SettingItem(icon = Icons.Outlined.Lock, title = stringResource(R.string.account_item_change_password), onClick = onOpenPasswordDialog)
+            }
+            item("sessions") {
+                SettingItem(icon = Icons.Outlined.Devices, title = stringResource(R.string.account_item_sessions), onClick = onOpenSessions)
+            }
+            item("apppass") {
+                SettingItem(icon = Icons.Outlined.Key, title = stringResource(R.string.account_item_app_passwords), onClick = onOpenAppPasswords)
+            }
+            item("agent") {
+                SettingItem(icon = Icons.Outlined.SmartToy, title = stringResource(R.string.account_item_agent), onClick = onOpenAgent)
+            }
+
+            item("appearance") { SectionTitle(stringResource(R.string.account_section_appearance)) }
+            item("theme") {
+                SettingItem(
+                    icon = Icons.Outlined.DarkMode,
+                    title = stringResource(R.string.account_item_theme),
+                    value = stringResource(theme.labelRes()),
+                    onClick = onOpenThemeDialog,
+                )
+            }
+            item("palette") {
+                SettingItem(
+                    icon = Icons.Outlined.Palette,
+                    title = stringResource(R.string.account_item_palette),
+                    value = stringResource(palette.labelRes()),
+                    onClick = onOpenPaletteDialog,
+                    modifier = Modifier.testTag("account_palette"),
+                )
+            }
+            item("view") {
+                SettingItem(
+                    icon = if (driveViewMode == DriveViewMode.GRID) Icons.Outlined.GridView else Icons.AutoMirrored.Outlined.ViewList,
+                    title = stringResource(R.string.account_item_drive_view),
+                    value = stringResource(driveViewMode.labelRes()),
+                    onClick = onOpenViewModeDialog,
+                )
+            }
+
+            if (user.isAdmin) {
+                item("admin") { SectionTitle(stringResource(R.string.account_section_admin)) }
+                item("admin-entry") {
+                    SettingItem(icon = Icons.Outlined.AdminPanelSettings, title = stringResource(R.string.account_item_admin), onClick = onOpenAdmin)
+                }
+            }
+
+            item("about") { SectionTitle(stringResource(R.string.account_section_about)) }
+            item("version") {
+                SettingItem(icon = Icons.Outlined.Info, title = stringResource(R.string.account_item_version), value = versionName, onClick = null)
+            }
+            item("update") {
+                SettingItem(
+                    icon = Icons.Outlined.SystemUpdate,
+                    title = stringResource(R.string.account_item_check_update),
+                    value = updateBadge?.let { stringResource(R.string.update_badge, it) },
+                    onClick = onCheckUpdate,
+                )
+            }
+            item("changelog") {
+                SettingItem(icon = Icons.Outlined.NewReleases, title = stringResource(R.string.account_item_changelog), onClick = onOpenChangelog)
+            }
+            item("crash") {
+                SettingItem(
+                    icon = Icons.Outlined.BugReport,
+                    title = stringResource(R.string.account_item_crash_logs),
+                    value = if (crashCount > 0) stringResource(R.string.crash_count, crashCount) else null,
+                    onClick = onOpenCrashLogs,
+                )
+            }
+            item("oss") {
+                SettingItem(icon = Icons.Outlined.Code, title = stringResource(R.string.account_item_open_source), onClick = onOpenLicenses)
+            }
+
+            item("logout-divider") { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
+            item("logout") {
+                ListItem(
+                    headlineContent = {
+                        Text(stringResource(R.string.account_item_logout), color = MaterialTheme.colorScheme.error)
+                    },
+                    leadingContent = {
+                        if (loggingOut) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    modifier = Modifier.clickable(enabled = !loggingOut, onClick = onLogoutClick),
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                )
+                Spacer(Modifier.height(24.dp))
+            }
         }
     }
 }

@@ -303,6 +303,18 @@ GraphQL operations 按域各自一个文件(`nodes.graphql` 归文件线,`chat.g
   登录页与「我的」头部是文件夹面板(`FolderPanel`,标签页宽度跟着内容走);四个 tab 的根页面顶栏是粗体大标题(`TabTitle`)。
   启动图标是墨黑底白色文件夹(矢量,带 Android 13 主题图标的单色层),与网页版图标同一条路径。
 - 宽 ≥ 600dp(横屏、平板、折叠屏展开)底部导航换成侧边导航栏;宽 ≥ 840dp 文件页是列表 + 预览双栏,返回键先收起侧栏。
+  文件、分享、收集、直链的列表按宽度分栏(`ListColumnMinWidth` 340dp,手机横屏两栏);「我的」在宽屏左边放头部、右边放设置。
+- 手势与滚动(3.6):
+  - 底部胶囊浮在页面上、背后透明:MainScaffold 把它连同迷你播放条叠在 NavHost 上面,量出的高度经 `LocalBottomBarInset` 下传;
+    `NestedScreenInsets` 只含这段底部,TopAppBar 用 `TopBarInsets`(零)。文件、分享三个标签、「我的」的内容铺到底、
+    底部留白放进列表的 contentPadding,能滚到胶囊后面;其余页面照旧让在胶囊上面。
+  - 胶囊可以点,也可以按住左右拖:白底跟手、经过 tab 轻震,松手切过去。再点当前 tab:在子页面就退回首页,在首页就滚回顶部
+    (`OnTabReselect`,传输助手是滚到最新)。
+  - 分享、搜索、空间、传输列表的标签能左右滑(`rememberTabPager` + HorizontalPager);Agent 接入的标签栏在列表里,横划切换(`swipeBetweenTabs`)。
+  - 文件、分享、「我的」的顶栏随滚动收起(enterAlways);文件页新建按钮往下滚收起、往上滚出来。
+    传输助手顶栏与输入栏一收一放:手指上推收顶栏、下拉翻历史收输入栏,停在最新处或弹出键盘时输入栏一定露出来。
+  - 传输助手的长按在 Initial 阶段先判断(`longPressFirst`),整条都是链接的消息按在链接上也能长按。
+  - 全屏看图片(没放大时)上下拖关闭;列表增删、换顺序有条目动画(`animateItem`)。
 
 ## 管理端(P4)
 

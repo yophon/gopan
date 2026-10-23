@@ -1,5 +1,7 @@
 package xyz.yophon.gopan.feature.drive
 
+import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,7 +56,20 @@ fun FullPage(content: @Composable () -> Unit) {
 }
 
 /**
- * tab 内页面的 Scaffold / TopAppBar 用零 insets:MainScaffold 已经按系统栏给了内边距,
- * 再让内层处理一遍会出现双倍状态栏/导航栏留白。
+ * 主界面底部浮着的迷你播放条与胶囊导航(连同系统导航栏)占的高度,MainScaffold 量出来往下传。
+ * 键盘弹起时导航收起,只剩系统导航栏的高度。
  */
-val NestedScreenInsets: WindowInsets = WindowInsets(0, 0, 0, 0)
+val LocalBottomBarInset = compositionLocalOf { 0.dp }
+
+/**
+ * tab 内页面 Scaffold 的 contentWindowInsets:顶部与两侧 MainScaffold 已经让过,这里只让出底部浮着的导航。
+ * 想让列表滚到导航后面的页面,内容只用顶部内边距,底部那段放进列表的 contentPadding。
+ */
+val NestedScreenInsets: WindowInsets
+    @Composable get() = WindowInsets(bottom = LocalBottomBarInset.current)
+
+/** 列表按宽度分栏(LazyVerticalGrid + GridCells.Adaptive)时一栏的最窄宽度:手机竖屏一栏,横屏两栏 */
+val ListColumnMinWidth = 340.dp
+
+/** tab 内页面 TopAppBar 的 insets:状态栏 MainScaffold 已经让过 */
+val TopBarInsets: WindowInsets = WindowInsets(0, 0, 0, 0)

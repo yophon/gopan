@@ -75,6 +75,7 @@ import xyz.yophon.gopan.feature.drive.ListStatus
 import xyz.yophon.gopan.feature.drive.LoadMoreFooter
 import xyz.yophon.gopan.feature.drive.LoadMoreTrigger
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
+import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.isNearEnd
 import xyz.yophon.gopan.feature.drive.resolve
 import java.time.LocalDate
@@ -119,7 +120,7 @@ fun NotificationsScreen(
         contentWindowInsets = NestedScreenInsets,
         topBar = {
             TopAppBar(
-                windowInsets = NestedScreenInsets,
+                windowInsets = TopBarInsets,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))

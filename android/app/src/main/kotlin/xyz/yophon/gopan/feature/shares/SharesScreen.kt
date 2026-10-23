@@ -1,5 +1,21 @@
 package xyz.yophon.gopan.feature.shares
 
+import xyz.yophon.gopan.feature.drive.ListColumnMinWidth
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.LocalBottomBarInset
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.pager.HorizontalPager
+import xyz.yophon.gopan.core.ui.components.rememberTabPager
+import androidx.compose.foundation.lazy.rememberLazyListState
+import xyz.yophon.gopan.core.ui.nav.Routes
+import xyz.yophon.gopan.core.ui.nav.OnTabReselect
 import xyz.yophon.gopan.core.ui.components.TabTitle
 import xyz.yophon.gopan.core.ui.components.FolderGlyph
 import androidx.compose.foundation.clickable
@@ -82,6 +98,7 @@ import xyz.yophon.gopan.feature.collect.FileRequestsTab
 import xyz.yophon.gopan.feature.drive.FullPage
 import xyz.yophon.gopan.feature.drive.ListStatus
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
+import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.resolve
 import xyz.yophon.gopan.core.ui.exposeTestTags
 import xyz.yophon.gopan.feature.links.DirectLinksTab
@@ -145,25 +162,29 @@ fun SharesScreen(
         links.checkEnabled()
     }
     fun toast(res: Int) = scope.launch { snackbar.showSnackbar(context.getString(res)) }
+    val topBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
-        topBar = { TopAppBar(windowInsets = NestedScreenInsets, title = { TabTitle(stringResource(R.string.shares_title)) }) },
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
+        topBar = { TopAppBar(windowInsets = TopBarInsets, title = { TabTitle(stringResource(R.string.shares_title)) }, scrollBehavior = topBarScroll) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            // 「直链」标签还没出现(开关没问到 / 关了)时下标不能越界
-            PrimaryTabRow(selectedTabIndex = if (tab == 2 && linksEnabled != true) 0 else tab) {
+        // 内容铺到底(列表能滚到浮着的导航后面),底部那段放进各列表的 contentPadding
+        Column(modifier = Modifier.padding(top = padding.calculateTopPadding()).fillMaxSize()) {
+            // 「直链」标签还没出现(开关没问到 / 关了)时只有两页;左右滑动切换标签
+            val pager = rememberTabPager(selected = tab, pageCount = if (linksEnabled == true) 3 else 2, onSelect = { tab = it })
+            PrimaryTabRow(selectedTabIndex = pager.currentPage) {
                 Tab(
                     unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    selected = tab == 0,
+                    selected = pager.currentPage == 0,
                     onClick = { tab = 0 },
                     text = { Text(stringResource(R.string.collect_tab_share)) },
                     modifier = Modifier.testTag("shares_tab_share"),
                 )
                 Tab(
                     unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    selected = tab == 1,
+                    selected = pager.currentPage == 1,
                     onClick = { tab = 1 },
                     text = { Text(stringResource(R.string.collect_tab_collect)) },
                     modifier = Modifier.testTag("shares_tab_collect"),
@@ -171,38 +192,49 @@ fun SharesScreen(
                 if (linksEnabled == true) {
                     Tab(
                         unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        selected = tab == 2,
+                        selected = pager.currentPage == 2,
                         onClick = { tab = 2 },
                         text = { Text(stringResource(R.string.links_tab)) },
                         modifier = Modifier.testTag("shares_tab_links"),
                     )
                 }
             }
-            if (tab == 1) {
-                FileRequestsTab(snackbar = snackbar, onOpenUploads = onOpenUploads)
-            } else if (tab == 2 && linksEnabled == true) {
-                DirectLinksTab(viewModel = links, snackbar = snackbar)
-            } else {
-                PullToRefreshBox(
-                    isRefreshing = state.refreshing,
-                    onRefresh = viewModel::refresh,
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    when (val status = state.status) {
-                        ListStatus.Loading -> ListSkeleton()
-                        is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
-                        ListStatus.Content -> if (state.items.isEmpty()) {
-                            FullPage {
-                                EmptyState(
-                                    title = stringResource(R.string.shares_empty),
-                                    description = stringResource(R.string.shares_empty_hint),
-                                    icon = Icons.Outlined.Share,
-                                )
-                            }
-                        } else {
-                            LazyColumn(modifier = Modifier.fillMaxSize().testTag("shares_list")) {
-                                items(state.items, key = { it.id }) { share ->
-                                    ShareRow(share, revoking = share.id in state.revoking, onClick = { sheetFor = share.id })
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), key = { it }) { page ->
+                if (page == 1) {
+                    FileRequestsTab(snackbar = snackbar, onOpenUploads = onOpenUploads)
+                } else if (page == 2) {
+                    DirectLinksTab(viewModel = links, snackbar = snackbar)
+                } else {
+                    PullToRefreshBox(
+                        isRefreshing = state.refreshing,
+                        onRefresh = viewModel::refresh,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        when (val status = state.status) {
+                            ListStatus.Loading -> ListSkeleton()
+                            is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
+                            ListStatus.Content -> if (state.items.isEmpty()) {
+                                FullPage {
+                                    EmptyState(
+                                        title = stringResource(R.string.shares_empty),
+                                        description = stringResource(R.string.shares_empty_hint),
+                                        icon = Icons.Outlined.Share,
+                                    )
+                                }
+                            } else {
+                                val listState = rememberLazyGridState()
+                                OnTabReselect(Routes.SharesTab) { listState.animateScrollToItem(0) }
+                                LazyVerticalGrid(
+                                    columns = GridCells.Adaptive(minSize = ListColumnMinWidth),
+                                    state = listState,
+                                    contentPadding = PaddingValues(bottom = LocalBottomBarInset.current),
+                                    modifier = Modifier.fillMaxSize().testTag("shares_list"),
+                                ) {
+                                    items(state.items, key = { it.id }) { share ->
+                                        Box(Modifier.animateItem()) {
+                                        ShareRow(share, revoking = share.id in state.revoking, onClick = { sheetFor = share.id })
+                                    }
+                                    }
                                 }
                             }
                         }
@@ -358,7 +390,7 @@ fun ShareVisitsScreen(onBack: () -> Unit, viewModel: ShareVisitsViewModel = hilt
         contentWindowInsets = NestedScreenInsets,
         topBar = {
             TopAppBar(
-                windowInsets = NestedScreenInsets,
+                windowInsets = TopBarInsets,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))

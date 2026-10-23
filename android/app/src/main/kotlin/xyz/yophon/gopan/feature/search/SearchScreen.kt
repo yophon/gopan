@@ -1,5 +1,7 @@
 package xyz.yophon.gopan.feature.search
 
+import androidx.compose.foundation.pager.HorizontalPager
+import xyz.yophon.gopan.core.ui.components.rememberTabPager
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -65,6 +67,7 @@ import xyz.yophon.gopan.feature.drive.LoadMoreTrigger
 import xyz.yophon.gopan.feature.drive.NodeDialogHost
 import xyz.yophon.gopan.feature.drive.NodeEffect
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
+import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.NodeRow
 import xyz.yophon.gopan.feature.drive.SEARCH_ACTIONS
 import xyz.yophon.gopan.feature.drive.isNearEnd
@@ -87,6 +90,7 @@ fun SearchScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val dialog by viewModel.dialog.collectAsStateWithLifecycle()
+    val pager = rememberTabPager(selected = state.tab.ordinal, pageCount = SearchTab.entries.size, onSelect = { viewModel.onTabSelected(SearchTab.entries[it]) })
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val inputError by viewModel.inputError.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -127,7 +131,7 @@ fun SearchScreen(
         topBar = {
             Column {
                 TopAppBar(
-                    windowInsets = NestedScreenInsets,
+                    windowInsets = TopBarInsets,
                     title = {
                         TextField(
                             value = text,
@@ -164,7 +168,7 @@ fun SearchScreen(
                         }
                     },
                 )
-                SearchTabs(selected = state.tab, onSelect = viewModel::onTabSelected)
+                SearchTabs(selected = SearchTab.entries[pager.currentPage], onSelect = viewModel::onTabSelected)
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -175,9 +179,12 @@ fun SearchScreen(
             .consumeWindowInsets(padding)
             .imePadding()
             .fillMaxSize()
-        when (state.tab) {
-            SearchTab.NAME -> NameTab(state, viewModel, contentModifier)
-            SearchTab.CONTENT -> ContentTab(state, viewModel, locate, contentModifier)
+        // 左右滑动切换「文件名」「内容」
+        HorizontalPager(state = pager, modifier = contentModifier, key = { it }) { page ->
+            when (SearchTab.entries[page]) {
+                SearchTab.NAME -> NameTab(state, viewModel, Modifier.fillMaxSize())
+                SearchTab.CONTENT -> ContentTab(state, viewModel, locate, Modifier.fillMaxSize())
+            }
         }
     }
 

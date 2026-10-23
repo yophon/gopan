@@ -62,6 +62,7 @@ import xyz.yophon.gopan.feature.drive.NodeAction
 import xyz.yophon.gopan.feature.drive.NodeActionSheet
 import xyz.yophon.gopan.feature.drive.NodeDetailsSheet
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
+import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.NodeRow
 import xyz.yophon.gopan.feature.drive.isNearEnd
 import xyz.yophon.gopan.feature.drive.TRASH_ACTIONS
@@ -129,7 +130,7 @@ fun TrashScreen(
 private fun TrashTopBar(onBack: () -> Unit, canPurgeAll: Boolean, onPurgeAll: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     TopAppBar(
-        windowInsets = NestedScreenInsets,
+        windowInsets = TopBarInsets,
         title = { Text(stringResource(R.string.trash_title)) },
         navigationIcon = {
             IconButton(onClick = onBack) {
@@ -162,7 +163,7 @@ private fun TrashTopBar(onBack: () -> Unit, canPurgeAll: Boolean, onPurgeAll: ()
 private fun TrashSelectionTopBar(state: TrashUiState, viewModel: TrashViewModel) {
     val hasSelection = state.selection.isNotEmpty()
     TopAppBar(
-        windowInsets = NestedScreenInsets,
+        windowInsets = TopBarInsets,
         title = { Text(stringResource(R.string.drive_selected_count, state.selection.size)) },
         navigationIcon = {
             IconButton(onClick = viewModel::clearSelection) {
@@ -215,6 +216,7 @@ private fun TrashList(state: TrashUiState, viewModel: TrashViewModel) {
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         items(state.items, key = { it.id }, contentType = { "node" }) { node ->
             NodeRow(
+                modifier = Modifier.animateItem(),
                 node = node,
                 secondary = trashSecondary(node, state.nowMillis),
                 secondaryColor = trashSecondaryColor(node, state.nowMillis),

@@ -1,5 +1,16 @@
 package xyz.yophon.gopan.feature.collect
 
+import xyz.yophon.gopan.feature.drive.ListColumnMinWidth
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import xyz.yophon.gopan.feature.drive.LocalBottomBarInset
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.lazy.rememberLazyListState
+import xyz.yophon.gopan.core.ui.nav.Routes
+import xyz.yophon.gopan.core.ui.nav.OnTabReselect
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -281,14 +292,21 @@ fun FileRequestsTab(
                     )
                 }
             } else {
-                LazyColumn(modifier = Modifier.fillMaxSize().testTag("collect_list")) {
+                val listState = rememberLazyGridState()
+                OnTabReselect(Routes.SharesTab) { listState.animateScrollToItem(0) }
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = ListColumnMinWidth),
+                    state = listState,
+                    contentPadding = PaddingValues(bottom = LocalBottomBarInset.current),
+                    modifier = Modifier.fillMaxSize().testTag("collect_list"),
+                ) {
                     items(state.items, key = { it.id }) { request ->
-                        FileRequestRow(
+                        Box(Modifier.animateItem()) { FileRequestRow(
                             request,
                             revoking = request.id in state.revoking,
                             onClick = { openUploads(request) },
                             onMore = { sheetFor = request.id },
-                        )
+                        ) }
                     }
                 }
             }

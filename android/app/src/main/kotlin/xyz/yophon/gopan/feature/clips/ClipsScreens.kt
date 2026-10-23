@@ -76,6 +76,7 @@ import xyz.yophon.gopan.feature.drive.ListStatus
 import xyz.yophon.gopan.feature.drive.LoadMoreFooter
 import xyz.yophon.gopan.feature.drive.LoadMoreTrigger
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
+import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.isNearEnd
 import xyz.yophon.gopan.feature.drive.resolve
 
@@ -93,7 +94,7 @@ fun ClipsScreen(onBack: () -> Unit, onOpen: (Clip) -> Unit, viewModel: ClipsView
         contentWindowInsets = NestedScreenInsets,
         topBar = {
             TopAppBar(
-                windowInsets = NestedScreenInsets,
+                windowInsets = TopBarInsets,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))
@@ -248,7 +249,7 @@ fun ClipReaderScreen(title: String, onBack: () -> Unit, viewModel: ClipReaderVie
         contentWindowInsets = NestedScreenInsets,
         topBar = {
             TopAppBar(
-                windowInsets = NestedScreenInsets,
+                windowInsets = TopBarInsets,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))

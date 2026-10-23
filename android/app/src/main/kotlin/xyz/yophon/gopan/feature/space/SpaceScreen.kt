@@ -1,5 +1,7 @@
 package xyz.yophon.gopan.feature.space
 
+import androidx.compose.foundation.pager.HorizontalPager
+import xyz.yophon.gopan.core.ui.components.rememberTabPager
 import xyz.yophon.gopan.core.ui.components.FolderGlyph
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
@@ -100,6 +102,7 @@ import xyz.yophon.gopan.feature.drive.ListStatus
 import xyz.yophon.gopan.feature.drive.LoadMoreFooter
 import xyz.yophon.gopan.feature.drive.LoadMoreTrigger
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
+import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.NodeVisual
 import xyz.yophon.gopan.feature.drive.isNearEnd
 import xyz.yophon.gopan.feature.drive.resolve
@@ -133,7 +136,7 @@ fun SpaceScreen(
         contentWindowInsets = NestedScreenInsets,
         topBar = {
             TopAppBar(
-                windowInsets = NestedScreenInsets,
+                windowInsets = TopBarInsets,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))
@@ -145,18 +148,19 @@ fun SpaceScreen(
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            PrimaryScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 8.dp, modifier = Modifier.testTag("space_tabs")) {
+            val pager = rememberTabPager(selected = tab.ordinal, pageCount = SpaceTab.entries.size, onSelect = { tab = SpaceTab.entries[it] })
+            PrimaryScrollableTabRow(selectedTabIndex = pager.currentPage, edgePadding = 8.dp, modifier = Modifier.testTag("space_tabs")) {
                 SpaceTab.entries.forEach { t ->
                     Tab(
-                        selected = tab == t,
+                        selected = pager.currentPage == t.ordinal,
                         onClick = { tab = t },
                         text = { Text(stringResource(t.label)) },
                         unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                when (tab) {
+            HorizontalPager(state = pager, modifier = Modifier.weight(1f).fillMaxWidth(), key = { it }) { page ->
+                when (SpaceTab.entries[page]) {
                     SpaceTab.OVERVIEW -> OverviewTab(snackbar, onOpenTrash = onOpenTrash, onShowTab = { tab = it })
                     SpaceTab.FOLDERS -> FoldersTab(snackbar, onOpen)
                     SpaceTab.LARGE -> LargeFilesTab(snackbar, onOpen)

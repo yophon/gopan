@@ -1,5 +1,25 @@
 package xyz.yophon.gopan.feature.chat
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import kotlin.math.roundToInt
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.Stable
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.MutatorMutex
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.Spring
+import xyz.yophon.gopan.core.ui.nav.Routes
+import xyz.yophon.gopan.core.ui.nav.OnTabReselect
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.foundation.shape.RoundedCornerShape
 import xyz.yophon.gopan.core.ui.components.TabTitle
@@ -112,6 +132,7 @@ import xyz.yophon.gopan.core.ui.components.LoadingState
 import xyz.yophon.gopan.core.ui.transfer.rememberTransferPermissions
 import xyz.yophon.gopan.core.ui.transfer.rememberUploadPickers
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
+import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.fetch.ChatFetchBanner
 import xyz.yophon.gopan.feature.fetch.FetchEffect
 import xyz.yophon.gopan.feature.fetch.FetchViewModel
@@ -123,7 +144,7 @@ import java.time.ZoneId
  * 传输助手:单会话消息流。列表用 reverseLayout,最新在底部;滚到顶附近往前翻历史。
  * 只在页面可见(STARTED)时轮询;系统分享进来的内容在这里落地(文本进草稿、文件直接发)。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(
     onOpenFolder: (String) -> Unit,
@@ -139,6 +160,8 @@ fun ChatScreen(
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    // 再点底部的「传输助手」:滚到最新(reverseLayout 下标 0 在底部)
+    OnTabReselect(Routes.ChatTab) { if (listState.layoutInfo.totalItemsCount > 0) listState.animateScrollToItem(0) }
     val currentOnOpenFolder by rememberUpdatedState(onOpenFolder)
     val currentOnOpenPreview by rememberUpdatedState(onOpenPreview)
     var actionTarget by remember { mutableStateOf<ChatMessage?>(null) }
@@ -228,6 +251,22 @@ fun ChatScreen(
         }
     }
 
+    // 顶栏与输入栏随滚动一收一放(都跟着手指走,松手吸附到全开或全收):
+    // 手指往上推(往新消息走)收顶栏、放出输入栏;往下拉(翻历史)放出顶栏、收起输入栏
+    val topBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val inputBar = remember { CollapsingBar() }
+    val imeVisible = WindowInsets.isImeVisible
+    inputBar.locked = imeVisible || state.searchOpen
+    // 停在最新处、弹出键盘时输入栏一定露出来
+    LaunchedEffect(listState, inputBar) {
+        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
+            if (scrolling) return@collect
+            val atBottom = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < BOTTOM_SLOP_PX
+            if (atBottom) inputBar.expand() else inputBar.settle()
+        }
+    }
+    LaunchedEffect(imeVisible) { if (imeVisible) inputBar.expand() }
+
     // 滚到顶附近往前翻;定位模式下滚到底附近往后续
     val nearTop by remember { derivedStateOf { val info = listState.layoutInfo; info.totalItemsCount > 0 && (info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= info.totalItemsCount - 3 } }
     LaunchedEffect(nearTop, state.messages.size) { if (nearTop && !showingResults) viewModel.loadOlder() }
@@ -235,13 +274,16 @@ fun ChatScreen(
     LaunchedEffect(nearBottom, state.anchored, state.messages.size) { if (nearBottom && state.anchored) viewModel.loadNewer() }
 
     Scaffold(
+        modifier = Modifier
+            .nestedScroll(inputBar.connection)
+            .then(if (state.searchOpen) Modifier else Modifier.nestedScroll(topBarScroll.nestedScrollConnection)),
         contentWindowInsets = NestedScreenInsets,
         topBar = {
             if (state.searchOpen) {
                 SearchBar(query = query, onQuery = viewModel::setSearchQuery, onClose = viewModel::closeSearch)
             } else {
                 TopAppBar(
-                    windowInsets = NestedScreenInsets,
+                    windowInsets = TopBarInsets,
                     title = {
                         Column {
                             TabTitle(stringResource(R.string.chat_title))
@@ -265,6 +307,7 @@ fun ChatScreen(
                             Icon(Icons.Outlined.SwapVert, contentDescription = stringResource(R.string.chat_transfers))
                         }
                     },
+                    scrollBehavior = topBarScroll,
                 )
             }
         },
@@ -341,7 +384,7 @@ fun ChatScreen(
                     }
                 }
             }
-            if (!state.searchOpen) {
+            if (!state.searchOpen) Column(Modifier.collapsible(inputBar)) {
                 DraftFetchBanner(viewModel, fetchViewModel)
                 InputBar(
                     viewModel = viewModel,
@@ -522,7 +565,7 @@ private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> U
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     TopAppBar(
-        windowInsets = NestedScreenInsets,
+        windowInsets = TopBarInsets,
         navigationIcon = {
             IconButton(onClick = onClose) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chat_search_close))
@@ -699,3 +742,42 @@ private fun SheetItem(icon: androidx.compose.ui.graphics.vector.ImageVector, lab
 
 /** 离底部这么近(像素)也算"在底部" */
 private const val BOTTOM_SLOP_PX = 120
+
+/**
+ * 跟着滚动收起 / 放出的一条栏(传输助手的输入栏)。手指往下拉时收、往上推时放,跟手;
+ * 滚动停下后吸附到全开或全收。[locked] 时(键盘弹起、搜索中)不动。
+ */
+@Stable
+private class CollapsingBar {
+    var heightPx by mutableIntStateOf(0)
+    /** 已经收起的像素:0 = 全开,heightPx = 全收 */
+    var offset by mutableFloatStateOf(0f)
+    var locked by mutableStateOf(false)
+    private val mutex = MutatorMutex()
+
+    val connection = object : NestedScrollConnection {
+        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+            if (locked || heightPx == 0 || source != NestedScrollSource.UserInput) return Offset.Zero
+            offset = (offset + available.y).coerceIn(0f, heightPx.toFloat())
+            return Offset.Zero
+        }
+    }
+
+    suspend fun expand() = animateTo(0f)
+
+    suspend fun settle() = animateTo(if (offset > heightPx / 2f) heightPx.toFloat() else 0f)
+
+    private suspend fun animateTo(target: Float) = mutex.mutate {
+        if (offset != target) animate(offset, target, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { value, _ -> offset = value }
+    }
+}
+
+/** 按 [bar] 收起的像素把高度压扁(顶边不动,下面一截被裁掉),上面的列表跟着变长 */
+private fun Modifier.collapsible(bar: CollapsingBar): Modifier = this
+    .clipToBounds()
+    .layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints)
+        bar.heightPx = placeable.height
+        val visible = (placeable.height - bar.offset.roundToInt()).coerceIn(0, placeable.height)
+        layout(placeable.width, visible) { placeable.place(0, 0) }
+    }

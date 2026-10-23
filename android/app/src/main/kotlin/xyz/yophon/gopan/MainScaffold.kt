@@ -1,5 +1,26 @@
 package xyz.yophon.gopan
 
+import androidx.compose.foundation.layout.PaddingValues
+import xyz.yophon.gopan.feature.drive.LocalBottomBarInset
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.asPaddingValues
+import xyz.yophon.gopan.core.ui.nav.TabReselectEvents
+import xyz.yophon.gopan.core.ui.nav.LocalTabReselect
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
@@ -66,7 +87,7 @@ import xyz.yophon.gopan.feature.media.MiniPlayerBar
 import xyz.yophon.gopan.feature.clips.ClipOpenViewModel
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -99,17 +120,20 @@ import xyz.yophon.gopan.core.ui.theme.LocalGopanColors
 /** 底部 tab 定义;顺序即显示顺序 */
 private class MainTab(
     val route: Any,
+    /** tab 的首页(嵌套图的起点) */
+    val root: Any,
     @StringRes val label: Int,
     val icon: ImageVector,
     val selectedIcon: ImageVector,
     val matches: (NavDestination) -> Boolean,
+    val isRoot: (NavDestination) -> Boolean,
 )
 
 private val mainTabs = listOf(
-    MainTab(Routes.DriveTab, R.string.tab_drive, Icons.Outlined.Folder, Icons.Filled.Folder) { it.hasRoute<Routes.DriveTab>() },
-    MainTab(Routes.ChatTab, R.string.tab_chat, Icons.AutoMirrored.Outlined.Chat, Icons.AutoMirrored.Filled.Chat) { it.hasRoute<Routes.ChatTab>() },
-    MainTab(Routes.SharesTab, R.string.tab_shares, Icons.Outlined.Share, Icons.Filled.Share) { it.hasRoute<Routes.SharesTab>() },
-    MainTab(Routes.AccountTab, R.string.tab_account, Icons.Outlined.Person, Icons.Filled.Person) { it.hasRoute<Routes.AccountTab>() },
+    MainTab(Routes.DriveTab, Routes.Drive, R.string.tab_drive, Icons.Outlined.Folder, Icons.Filled.Folder, { it.hasRoute<Routes.DriveTab>() }, { it.hasRoute<Routes.Drive>() }),
+    MainTab(Routes.ChatTab, Routes.Chat, R.string.tab_chat, Icons.AutoMirrored.Outlined.Chat, Icons.AutoMirrored.Filled.Chat, { it.hasRoute<Routes.ChatTab>() }, { it.hasRoute<Routes.Chat>() }),
+    MainTab(Routes.SharesTab, Routes.Shares, R.string.tab_shares, Icons.Outlined.Share, Icons.Filled.Share, { it.hasRoute<Routes.SharesTab>() }, { it.hasRoute<Routes.Shares>() }),
+    MainTab(Routes.AccountTab, Routes.Account, R.string.tab_account, Icons.Outlined.Person, Icons.Filled.Person, { it.hasRoute<Routes.AccountTab>() }, { it.hasRoute<Routes.Account>() }),
 )
 
 /**
@@ -126,7 +150,14 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
     val imeVisible = WindowInsets.isImeVisible
     // 宽屏(横屏、平板、折叠屏展开)用侧边导航栏,底部不再占一条
     val rail = isMediumWidth()
+    val reselect = remember { TabReselectEvents() }
     fun selectTab(tab: MainTab) {
+        val here = navController.currentDestination
+        if (here != null && here.hierarchy.any { tab.matches(it) }) {
+            // 再点当前 tab:在子页面就退回这个 tab 的首页,已经在首页就让首页滚回顶部
+            if (tab.isRoot(here)) reselect.emit(tab.route) else navController.popBackStack(tab.root, inclusive = false)
+            return
+        }
         navController.navigate(tab.route) {
             // 切 tab:保留各 tab 自己的返回栈,回到起点时不重复入栈
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -175,60 +206,86 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
         clipOpen.consume(nodeId)
     }
 
-    Row(Modifier.fillMaxSize()) {
-        if (rail) {
-            NavigationRail(modifier = Modifier.testTag("main_rail")) {
-                Spacer(Modifier.weight(1f))
-                mainTabs.forEach { tab ->
-                    val selected = currentDestination?.hierarchy?.any { tab.matches(it) } == true
-                    NavigationRailItem(
-                        selected = selected,
-                        onClick = { selectTab(tab) },
-                        icon = { TabIcon(tab, selected, badge = if (tab.route == Routes.AccountTab) unread else 0) },
-                        label = { Text(stringResource(tab.label)) },
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-            }
-        }
-        Scaffold(
-            // 侧边导航栏已经让出了起始侧的系统栏(横屏三键导航在左边时)
-            modifier = if (rail) Modifier.consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)) else Modifier,
-            bottomBar = {
-                // 迷你播放条(doc/22 二.4)在导航栏上面,后台在放音频时出现,切 tab 不受影响
-                if (!imeVisible) Column {
-                    MiniPlayerBar(onOpenPreview = onOpenPreview, insetBottom = rail)
-                    if (!rail) {
-                        PillNavBar(
-                            selectedIndex = mainTabs.indexOfFirst { tab -> currentDestination?.hierarchy?.any { tab.matches(it) } == true },
-                            unread = unread,
-                            onSelect = ::selectTab,
+    CompositionLocalProvider(LocalTabReselect provides reselect) {
+        Row(Modifier.fillMaxSize()) {
+            if (rail) {
+                NavigationRail(modifier = Modifier.testTag("main_rail")) {
+                    Spacer(Modifier.weight(1f))
+                    mainTabs.forEach { tab ->
+                        val selected = currentDestination?.hierarchy?.any { tab.matches(it) } == true
+                        NavigationRailItem(
+                            selected = selected,
+                            onClick = { selectTab(tab) },
+                            icon = { TabIcon(tab, selected, badge = if (tab.route == Routes.AccountTab) unread else 0) },
+                            label = { Text(stringResource(tab.label)) },
                         )
                     }
+                    Spacer(Modifier.weight(1f))
                 }
-            },
-        ) { innerPadding ->
-            NavHost(
-                navController = navController,
-                startDestination = Routes.DriveTab,
-                // innerPadding 已含状态栏与底部栏高度;再把这部分 insets 标记为已消费,
-                // tab 内页面的 TopAppBar / Scaffold 无论用默认 insets 还是零 insets 都不会出现双倍留白
-                modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
-                enterTransition = navEnter,
-                exitTransition = navExit,
-            ) {
-                driveGraph(navController, onOpenPreview)
-                chatGraph(navController, onOpenPreview)
-                sharesGraph(navController)
-                accountGraph(navController, onOpenPreview)
-                // 传输列表:全局页,不属于哪个 tab(文件页菜单、传输助手、「我的」、通知都能进)
-                composable<Routes.Transfers> { entry ->
-                    TransfersScreen(
-                        onBack = { entry.ifResumed { navController.popBackStack() } },
-                        onOpenFolder = { id ->
-                            entry.ifResumed { navController.navigate(if (id == null) Routes.Drive else Routes.Folder(id)) }
-                        },
-                    )
+            }
+            Scaffold(
+                // 侧边导航栏已经让出了起始侧的系统栏(横屏三键导航在左边时)
+                modifier = if (rail) Modifier.consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)) else Modifier,
+            ) { innerPadding ->
+                // 底部的迷你播放条与胶囊导航浮在页面上面,背后透明:页面铺到屏幕底,
+                // 它们占的高度经 LocalBottomBarInset 交给各页(NestedScreenInsets),列表用它做底部留白,能滚到胶囊后面
+                val density = LocalDensity.current
+                val layoutDirection = LocalLayoutDirection.current
+                val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                var chromeHeight by remember { mutableStateOf(if (rail) 0.dp else PILL_BAR_HEIGHT + navBarBottom) }
+                val sidesAndTop = PaddingValues(
+                    start = innerPadding.calculateStartPadding(layoutDirection),
+                    top = innerPadding.calculateTopPadding(),
+                    end = innerPadding.calculateEndPadding(layoutDirection),
+                )
+                // 键盘弹起时为 0:各页的 imePadding 已经从屏幕底算起(含系统导航栏那段)
+                val bottomInset = if (imeVisible) 0.dp else maxOf(chromeHeight, navBarBottom)
+                Box(Modifier.fillMaxSize()) {
+                    CompositionLocalProvider(LocalBottomBarInset provides bottomInset) {
+                        NavHost(
+                            navController = navController,
+                            startDestination = Routes.DriveTab,
+                            // 顶部与两侧让出系统栏并标记为已消费;底部不消费,由各页按 LocalBottomBarInset 自己留
+                            modifier = Modifier
+                                .padding(sidesAndTop)
+                                .consumeWindowInsets(sidesAndTop),
+                            enterTransition = navEnter,
+                            exitTransition = navExit,
+                        ) {
+                            driveGraph(navController, onOpenPreview)
+                            chatGraph(navController, onOpenPreview)
+                            sharesGraph(navController)
+                            accountGraph(navController, onOpenPreview)
+                            // 传输列表:全局页,不属于哪个 tab(文件页菜单、传输助手、「我的」、通知都能进)
+                            composable<Routes.Transfers> { entry ->
+                                TransfersScreen(
+                                    onBack = { entry.ifResumed { navController.popBackStack() } },
+                                    onOpenFolder = { id ->
+                                        entry.ifResumed { navController.navigate(if (id == null) Routes.Drive else Routes.Folder(id)) }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    // 键盘弹起时收起底部导航:否则输入框(传输助手、搜索)和键盘之间隔着一条导航栏
+                    if (!imeVisible) {
+                        Column(
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .onSizeChanged { chromeHeight = with(density) { it.height.toDp() } },
+                        ) {
+                            // 迷你播放条(doc/22 二.4)在导航栏上面,后台在放音频时出现,切 tab 不受影响
+                            MiniPlayerBar(onOpenPreview = onOpenPreview, insetBottom = rail)
+                            if (!rail) {
+                                PillNavBar(
+                                    selectedIndex = mainTabs.indexOfFirst { tab -> currentDestination?.hierarchy?.any { tab.matches(it) } == true },
+                                    unread = unread,
+                                    onSelect = ::selectTab,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -236,16 +293,17 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
 }
 
 /**
- * 底部导航:浮起的胶囊,选中项垫一块会滑动的底;四个 tab 都带文字(E2E 也按文字找)。
- * [selectedIndex] = -1(在传输列表这类不属于哪个 tab 的页面)时不画选中底。
+ * 底部导航:浮起的胶囊,选中项垫一块白底。点按切换;按住左右拖,白底跟着手指走,经过每个 tab 轻震一下,松手切到手指下的那个。
+ * 四个 tab 都带文字(E2E 也按文字找)。[selectedIndex] = -1(在传输列表这类不属于哪个 tab 的页面)时不画选中底。
  */
 @Composable
 private fun PillNavBar(selectedIndex: Int, unread: Int, onSelect: (MainTab) -> Unit) {
     val colors = LocalGopanColors.current
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp),
         contentAlignment = Alignment.Center,
@@ -261,33 +319,71 @@ private fun PillNavBar(selectedIndex: Int, unread: Int, onSelect: (MainTab) -> U
                 .selectableGroup()
                 .testTag("main_nav"),
         ) {
-            val itemWidth = maxWidth / mainTabs.size
-            val indicatorX by animateDpAsState(
-                targetValue = itemWidth * selectedIndex.coerceAtLeast(0),
-                animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
-                label = "navIndicator",
-            )
-            if (selectedIndex >= 0) {
+            val count = mainTabs.size
+            val itemWidth = maxWidth / count
+            val itemPx = constraints.maxWidth.toFloat() / count
+            // 白底的横向位置(像素);点按时弹簧滑过去,拖动时贴着手指
+            val indicatorX = remember { Animatable(itemPx * selectedIndex.coerceAtLeast(0)) }
+            // 拖动中手指下的 tab;null = 没在拖
+            var dragIndex by remember { mutableStateOf<Int?>(null) }
+            val springSpec = spring<Float>(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
+            LaunchedEffect(selectedIndex, itemPx) {
+                if (dragIndex == null && selectedIndex >= 0) indicatorX.animateTo(itemPx * selectedIndex, springSpec)
+            }
+            val highlighted = dragIndex ?: selectedIndex
+            if (highlighted >= 0) {
                 Box(
                     Modifier
-                        .offset { IntOffset(indicatorX.roundToPx(), 0) }
+                        .offset { IntOffset(indicatorX.value.roundToInt(), 0) }
                         .width(itemWidth)
                         .fillMaxHeight()
                         .clip(CircleShape)
                         .background(colors.navSelected),
                 )
             }
-            Row(Modifier.fillMaxSize()) {
+            Row(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(count, itemPx) {
+                        fun indexAt(x: Float) = (x / itemPx).toInt().coerceIn(0, count - 1)
+                        fun follow(x: Float) = (x - itemPx / 2).coerceIn(0f, itemPx * (count - 1))
+                        detectHorizontalDragGestures(
+                            onDragStart = { start ->
+                                dragIndex = indexAt(start.x)
+                                scope.launch { indicatorX.animateTo(follow(start.x), spring(stiffness = Spring.StiffnessHigh)) }
+                            },
+                            onHorizontalDrag = { change, _ ->
+                                change.consume()
+                                val index = indexAt(change.position.x)
+                                if (index != dragIndex) {
+                                    dragIndex = index
+                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                }
+                                scope.launch { indicatorX.snapTo(follow(change.position.x)) }
+                            },
+                            onDragEnd = {
+                                val index = dragIndex ?: return@detectHorizontalDragGestures
+                                dragIndex = null
+                                scope.launch { indicatorX.animateTo(itemPx * index, springSpec) }
+                                onSelect(mainTabs[index])
+                            },
+                            onDragCancel = {
+                                dragIndex = null
+                                if (selectedIndex >= 0) scope.launch { indicatorX.animateTo(itemPx * selectedIndex, springSpec) }
+                            },
+                        )
+                    },
+            ) {
                 mainTabs.forEachIndexed { index, tab ->
-                    val selected = index == selectedIndex
-                    val tint by animateColorAsState(if (selected) colors.onNavSelected else colors.onNav, label = "navTint")
+                    val on = index == highlighted
+                    val tint by animateColorAsState(if (on) colors.onNavSelected else colors.onNav, label = "navTint")
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
                             .clip(CircleShape)
                             .selectable(
-                                selected = selected,
+                                selected = index == selectedIndex,
                                 interactionSource = null,
                                 indication = ripple(color = colors.onNav),
                                 role = Role.Tab,
@@ -296,13 +392,13 @@ private fun PillNavBar(selectedIndex: Int, unread: Int, onSelect: (MainTab) -> U
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
-                        TabIcon(tab, selected, badge = if (tab.route == Routes.AccountTab) unread else 0, tint = tint)
+                        TabIcon(tab, on, badge = if (tab.route == Routes.AccountTab) unread else 0, tint = tint)
                         Spacer(Modifier.height(2.dp))
                         Text(
                             text = stringResource(tab.label),
                             color = tint,
                             style = MaterialTheme.typography.labelSmall,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
                             maxLines = 1,
                         )
                     }
@@ -311,6 +407,9 @@ private fun PillNavBar(selectedIndex: Int, unread: Int, onSelect: (MainTab) -> U
         }
     }
 }
+
+/** 胶囊导航一条的高度(胶囊 64 + 上下留白 16),不含系统导航栏;第一帧量出来之前用它估 */
+private val PILL_BAR_HEIGHT = 80.dp
 
 /** tab 图标;[badge] > 0 时右上角带未读数(「我的」= 站内通知),角标用强调色 */
 @Composable

@@ -1,5 +1,15 @@
 package xyz.yophon.gopan.feature.links
 
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import xyz.yophon.gopan.feature.drive.ListColumnMinWidth
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import xyz.yophon.gopan.feature.drive.LocalBottomBarInset
+import androidx.compose.foundation.layout.PaddingValues
+import xyz.yophon.gopan.core.ui.nav.Routes
+import xyz.yophon.gopan.core.ui.nav.OnTabReselect
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -84,7 +94,8 @@ fun DirectLinksTab(viewModel: DirectLinksViewModel, snackbar: SnackbarHostState)
     val context = LocalContext.current
     val system = rememberSystemActions()
     val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
+    val listState = rememberLazyGridState()
+    OnTabReselect(Routes.SharesTab) { listState.animateScrollToItem(0) }
     var sheetFor by rememberSaveable { mutableStateOf<String?>(null) }
     var copyFor by rememberSaveable { mutableStateOf<String?>(null) }
     var revokeFor by rememberSaveable { mutableStateOf<String?>(null) }
@@ -119,8 +130,13 @@ fun DirectLinksTab(viewModel: DirectLinksViewModel, snackbar: SnackbarHostState)
                 }
             } else {
                 LoadMoreTrigger(itemCount = state.items.size, isNearEnd = { listState.isNearEnd() }, onLoadMore = viewModel::loadMore)
-                LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("links_list")) {
-                    item("hint") {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = ListColumnMinWidth),
+                    state = listState,
+                    contentPadding = PaddingValues(bottom = LocalBottomBarInset.current),
+                    modifier = Modifier.fillMaxSize().testTag("links_list"),
+                ) {
+                    item("hint", span = { GridItemSpan(maxLineSpan) }) {
                         Text(
                             stringResource(R.string.links_web_hint, state.total),
                             style = MaterialTheme.typography.bodySmall,
@@ -129,11 +145,13 @@ fun DirectLinksTab(viewModel: DirectLinksViewModel, snackbar: SnackbarHostState)
                         )
                     }
                     items(state.items, key = { it.id }) { link ->
-                        LinkRow(link, busy = link.id in state.busy, onClick = { sheetFor = link.id })
-                        HorizontalDivider()
+                        Column(Modifier.animateItem()) {
+                            LinkRow(link, busy = link.id in state.busy, onClick = { sheetFor = link.id })
+                            HorizontalDivider()
+                        }
                     }
                     if (state.nextCursor != null || state.loadingMore || state.loadMoreError != null) {
-                        item("more") { LoadMoreFooter(isLoading = state.loadingMore, error = state.loadMoreError, onRetry = viewModel::loadMore) }
+                        item("more", span = { GridItemSpan(maxLineSpan) }) { LoadMoreFooter(isLoading = state.loadingMore, error = state.loadMoreError, onRetry = viewModel::loadMore) }
                     }
                 }
             }

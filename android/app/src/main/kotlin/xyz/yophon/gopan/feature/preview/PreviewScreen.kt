@@ -1,5 +1,15 @@
 package xyz.yophon.gopan.feature.preview
 
+import kotlin.math.sign
+import kotlin.math.abs
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Animatable
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -207,11 +217,57 @@ private fun PreviewBody(onBack: () -> Unit, viewModel: PreviewViewModel, session
     val currentPage = remember(currentItem.nodeId) { viewModel.page(currentItem.nodeId) }
     val currentState by currentPage.state.collectAsStateWithLifecycle()
 
-    Box(Modifier.fillMaxSize().background(Color.Black).testTag("preview_root")) {
+    // 下滑(或上滑)关闭:只在全屏的图片页、没放大时。拖动时整页跟着手指走并缩小一点,
+    // 松手时过了距离或甩得够快就滑出去关掉,否则弹回
+    val dismissDrag = remember { Animatable(0f) }
+    val density = LocalDensity.current
+    val dismissDistance = with(density) { 120.dp.toPx() }
+    val dismissVelocity = with(density) { 1000.dp.toPx() }
+    val canDragDismiss = !pane && currentState.content is PreviewContent.Image && !zoomFor(currentItem.nodeId).magnified
+    val dragProgress = (abs(dismissDrag.value) / (dismissDistance * 3)).coerceIn(0f, 1f)
+    val dragToDismiss = if (canDragDismiss) {
+        Modifier.pointerInput(currentItem.nodeId) {
+            val tracker = VelocityTracker()
+            detectVerticalDragGestures(
+                onDragStart = { tracker.resetTracking() },
+                onVerticalDrag = { change, amount ->
+                    change.consume()
+                    tracker.addPosition(change.uptimeMillis, change.position)
+                    scope.launch { dismissDrag.snapTo(dismissDrag.value + amount) }
+                },
+                onDragEnd = {
+                    val offset = dismissDrag.value
+                    val velocity = tracker.calculateVelocity().y
+                    val fling = abs(velocity) > dismissVelocity && sign(velocity) == sign(offset)
+                    scope.launch {
+                        if (abs(offset) > dismissDistance || fling) {
+                            dismissDrag.animateTo(sign(offset) * size.height, tween(180))
+                            onBack()
+                        } else {
+                            dismissDrag.animateTo(0f, spring(dampingRatio = 0.8f))
+                        }
+                    }
+                },
+                onDragCancel = { scope.launch { dismissDrag.animateTo(0f) } },
+            )
+        }
+    } else {
+        Modifier
+    }
+
+    Box(Modifier.fillMaxSize().background(Color.Black).then(dragToDismiss).testTag("preview_root")) {
         CompositionLocalProvider(LocalPreviewSnackbar provides snackbar) {
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize().testTag("preview_pager"),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        translationY = dismissDrag.value
+                        val scale = 1f - 0.2f * dragProgress
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .testTag("preview_pager"),
                 beyondViewportPageCount = 1,
                 pageSpacing = 16.dp,
                 userScrollEnabled = !zoomFor(currentItem.nodeId).magnified,
@@ -232,7 +288,7 @@ private fun PreviewBody(onBack: () -> Unit, viewModel: PreviewViewModel, session
             }
         }
         AnimatedVisibility(
-            visible = chromeVisible,
+            visible = chromeVisible && dismissDrag.value == 0f,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopCenter),

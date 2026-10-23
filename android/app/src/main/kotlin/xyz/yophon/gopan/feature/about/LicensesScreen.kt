@@ -38,6 +38,7 @@ import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.ui.exposeTestTags
 import xyz.yophon.gopan.core.ui.rememberSystemActions
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
+import xyz.yophon.gopan.feature.drive.TopBarInsets
 
 enum class OssLicense(val label: String, @RawRes val text: Int) {
     APACHE_2_0("Apache License 2.0", R.raw.license_apache_2_0),
@@ -82,7 +83,7 @@ fun LicensesScreen(onBack: () -> Unit) {
         contentWindowInsets = NestedScreenInsets,
         topBar = {
             TopAppBar(
-                windowInsets = NestedScreenInsets,
+                windowInsets = TopBarInsets,
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back)) }
                 },

@@ -1,5 +1,7 @@
 package xyz.yophon.gopan.feature.transfers
 
+import androidx.compose.foundation.pager.HorizontalPager
+import xyz.yophon.gopan.core.ui.components.rememberTabPager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -72,6 +74,7 @@ import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.format.formatBytes
 import xyz.yophon.gopan.feature.drive.FileCategory
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
+import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.fileCategory
 import xyz.yophon.gopan.feature.drive.icon
 import xyz.yophon.gopan.feature.drive.tint
@@ -138,7 +141,7 @@ fun TransfersScreen(
         contentWindowInsets = NestedScreenInsets,
         topBar = {
             TopAppBar(
-                windowInsets = NestedScreenInsets,
+                windowInsets = TopBarInsets,
                 title = { Text(stringResource(R.string.transfers_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -164,51 +167,58 @@ fun TransfersScreen(
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            PrimaryTabRow(selectedTabIndex = tab) {
+            val pager = rememberTabPager(selected = tab, pageCount = 3, onSelect = ::selectTab)
+            PrimaryTabRow(selectedTabIndex = pager.currentPage) {
                 Tab(
                     unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    selected = tab == 0,
+                    selected = pager.currentPage == 0,
                     onClick = { selectTab(0) },
                     text = { Text(tabLabel(stringResource(R.string.transfers_tab_uploads), state.activeUploads)) },
                     modifier = Modifier.testTag("transfers_tab_uploads"),
                 )
                 Tab(
                     unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    selected = tab == 1,
+                    selected = pager.currentPage == 1,
                     onClick = { selectTab(1) },
                     text = { Text(tabLabel(stringResource(R.string.transfers_tab_downloads), state.activeDownloads)) },
                     modifier = Modifier.testTag("transfers_tab_downloads"),
                 )
                 Tab(
                     unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    selected = tab == JOBS_TAB,
+                    selected = pager.currentPage == JOBS_TAB,
                     onClick = { selectTab(JOBS_TAB) },
                     text = { Text(tabLabel(stringResource(R.string.jobs_tab), jobs.activeCount), maxLines = 1) },
                     modifier = Modifier.testTag("transfers_tab_jobs"),
                 )
             }
-            if (tab == JOBS_TAB) {
-                JobsTab(jobs, jobsViewModel)
-            } else if (tab == 0) {
-                if (state.loaded && state.uploads.isEmpty()) {
-                    EmptyState(title = stringResource(R.string.transfers_empty_uploads), icon = Icons.Outlined.CloudUpload)
-                } else {
-                    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
-                        items(state.uploads, key = { it.task.id }) { row ->
-                            UploadItem(row, viewModel)
-                            HorizontalDivider()
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), key = { it }) { page ->
+                if (page == JOBS_TAB) {
+                    JobsTab(jobs, jobsViewModel)
+                } else if (page == 0) {
+                    if (state.loaded && state.uploads.isEmpty()) {
+                        EmptyState(title = stringResource(R.string.transfers_empty_uploads), icon = Icons.Outlined.CloudUpload)
+                    } else {
+                        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
+                            items(state.uploads, key = { it.task.id }) { row ->
+                                Column(Modifier.animateItem()) {
+                                    UploadItem(row, viewModel)
+                                    HorizontalDivider()
+                                }
+                            }
                         }
                     }
-                }
-            } else {
-                if (state.loaded && state.downloads.isEmpty()) {
-                    EmptyState(title = stringResource(R.string.transfers_empty_downloads), icon = Icons.Outlined.CloudDownload)
                 } else {
-                    val chooser = stringResource(R.string.drive_action_open)
-                    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
-                        items(state.downloads, key = { it.task.id }) { row ->
-                            DownloadItem(row, viewModel, chooser)
-                            HorizontalDivider()
+                    if (state.loaded && state.downloads.isEmpty()) {
+                        EmptyState(title = stringResource(R.string.transfers_empty_downloads), icon = Icons.Outlined.CloudDownload)
+                    } else {
+                        val chooser = stringResource(R.string.drive_action_open)
+                        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
+                            items(state.downloads, key = { it.task.id }) { row ->
+                                Column(Modifier.animateItem()) {
+                                    DownloadItem(row, viewModel, chooser)
+                                    HorizontalDivider()
+                                }
+                            }
                         }
                     }
                 }

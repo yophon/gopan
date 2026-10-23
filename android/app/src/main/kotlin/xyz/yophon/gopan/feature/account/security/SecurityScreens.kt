@@ -1,5 +1,6 @@
 package xyz.yophon.gopan.feature.account.security
 
+import xyz.yophon.gopan.core.ui.components.swipeBetweenTabs
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -81,6 +82,7 @@ import xyz.yophon.gopan.core.ui.rememberSystemActions
 import xyz.yophon.gopan.feature.drive.FullPage
 import xyz.yophon.gopan.feature.drive.ListStatus
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
+import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.resolve
 import xyz.yophon.gopan.core.ui.exposeTestTags
 
@@ -100,7 +102,7 @@ private fun SecurityScaffold(
         contentWindowInsets = NestedScreenInsets,
         topBar = {
             TopAppBar(
-                windowInsets = NestedScreenInsets,
+                windowInsets = TopBarInsets,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))
@@ -417,7 +419,15 @@ fun AgentScreen(onBack: () -> Unit, viewModel: AgentViewModel = hiltViewModel())
         when (val status = state.status) {
             ListStatus.Loading -> LoadingState()
             is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
-            ListStatus.Content -> LazyColumn(Modifier.fillMaxSize().testTag("agent_list")) {
+            ListStatus.Content -> LazyColumn(
+                Modifier
+                    .fillMaxSize()
+                    .swipeBetweenTabs(
+                        onNext = { AgentTab.entries.getOrNull(state.tab.ordinal + 1)?.let(viewModel::selectTab) },
+                        onPrevious = { AgentTab.entries.getOrNull(state.tab.ordinal - 1)?.let(viewModel::selectTab) },
+                    )
+                    .testTag("agent_list"),
+            ) {
                 item { CopyRow(stringResource(R.string.agent_endpoint), viewModel.endpoint, { copy(viewModel.endpoint) }, "mcp_copy") }
                 if (viewModel.isAdmin) {
                     item { CopyRow(stringResource(R.string.agent_admin_endpoint), viewModel.adminEndpoint, { copy(viewModel.adminEndpoint) }, "mcp_admin_copy") }

@@ -1,5 +1,18 @@
 package xyz.yophon.gopan.feature.drive
 
+import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.AnimatedVisibility
+import xyz.yophon.gopan.core.ui.nav.Routes
+import xyz.yophon.gopan.core.ui.nav.OnTabReselect
 import androidx.compose.foundation.shape.CircleShape
 import xyz.yophon.gopan.core.ui.components.TabTitle
 import xyz.yophon.gopan.core.ui.theme.LocalGopanColors
@@ -202,9 +215,23 @@ fun DriveScreen(
     BackHandler(enabled = !state.selectionMode && twoPane && paneNodeId != null) { paneNodeId = null }
 
     val pane = paneNodeId?.takeIf { twoPane }
+    // 新建按钮:往下滚收起(不挡列表末尾),往上滚或下拉时再出来
+    var fabShown by rememberSaveable { mutableStateOf(true) }
+    val fabOnScroll = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < -FAB_SCROLL_THRESHOLD) fabShown = false else if (available.y > FAB_SCROLL_THRESHOLD) fabShown = true
+                return Offset.Zero
+            }
+        }
+    }
+    // 顶栏随滚动收起、往回滚就出来(面包屑不收)
+    val topBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Row(Modifier.fillMaxSize()) {
         Scaffold(
-            modifier = if (pane != null) Modifier.weight(0.42f) else Modifier.fillMaxSize(),
+            modifier = (if (pane != null) Modifier.weight(0.42f) else Modifier.fillMaxSize())
+                .nestedScroll(fabOnScroll)
+                .nestedScroll(topBarScroll.nestedScrollConnection),
             contentWindowInsets = NestedScreenInsets,
             topBar = {
                 if (state.selectionMode) {
@@ -222,11 +249,15 @@ fun DriveScreen(
                         },
                     )
                 } else {
-                    DriveTopBar(state, viewModel, onBack, onCrumbClick, onOpenSearch, onOpenTrash, onOpenTransfers, onOpenRecentPlays)
+                    DriveTopBar(state, viewModel, onBack, onCrumbClick, onOpenSearch, onOpenTrash, onOpenTransfers, onOpenRecentPlays, topBarScroll)
                 }
             },
             floatingActionButton = {
-                if (!state.selectionMode) {
+                AnimatedVisibility(
+                    visible = !state.selectionMode && fabShown,
+                    enter = scaleIn() + fadeIn(),
+                    exit = scaleOut() + fadeOut(),
+                ) {
                     val brand = LocalGopanColors.current
                     FloatingActionButton(
                         onClick = {
@@ -247,8 +278,9 @@ fun DriveScreen(
             DriveContent(
                 state = state,
                 viewModel = viewModel,
+                bottomPadding = padding.calculateBottomPadding(),
                 modifier = Modifier
-                    .padding(padding)
+                    .padding(top = padding.calculateTopPadding())
                     .fillMaxSize(),
             )
         }
@@ -310,6 +342,9 @@ fun DriveScreen(
     }
 }
 
+/** 一次滚动超过这么多像素才切换新建按钮的显隐,手指抖一下不算 */
+private const val FAB_SCROLL_THRESHOLD = 6f
+
 // ---- 顶栏 ----
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -323,6 +358,7 @@ private fun DriveTopBar(
     onOpenTrash: () -> Unit,
     onOpenTransfers: () -> Unit,
     onOpenRecentPlays: () -> Unit,
+    scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {
     val rootCrumb = Crumb(null, "")
     val title = when {
@@ -331,7 +367,8 @@ private fun DriveTopBar(
     }
     Column {
         TopAppBar(
-            windowInsets = NestedScreenInsets,
+            windowInsets = TopBarInsets,
+            scrollBehavior = scrollBehavior,
             title = {
                 if (state.isRoot) TabTitle(title) else Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
             },
@@ -372,7 +409,7 @@ private fun DriveTopBar(
 private fun SelectionTopBar(state: DriveUiState, viewModel: DriveViewModel, onCopyLinks: (() -> Unit)?) {
     val hasSelection = state.selection.isNotEmpty()
     TopAppBar(
-        windowInsets = NestedScreenInsets,
+        windowInsets = TopBarInsets,
         title = { Text(stringResource(R.string.drive_selected_count, state.selection.size)) },
         navigationIcon = {
             IconButton(onClick = viewModel::clearSelection) {
@@ -540,7 +577,7 @@ private fun OverflowMenu(onOpenTrash: () -> Unit, onOpenTransfers: () -> Unit, o
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DriveContent(state: DriveUiState, viewModel: DriveViewModel, modifier: Modifier = Modifier) {
+private fun DriveContent(state: DriveUiState, viewModel: DriveViewModel, modifier: Modifier = Modifier, bottomPadding: Dp = 0.dp) {
     PullToRefreshBox(isRefreshing = state.isRefreshing, onRefresh = viewModel::refresh, modifier = modifier) {
         when (val status = state.status) {
             ListStatus.Loading -> if (state.viewMode == DriveViewMode.LIST) ListSkeleton() else GridSkeleton()
@@ -557,8 +594,8 @@ private fun DriveContent(state: DriveUiState, viewModel: DriveViewModel, modifie
                                 icon = Icons.Outlined.FolderOpen,
                             )
                         }
-                        state.viewMode == DriveViewMode.LIST -> NodeList(state, viewModel)
-                        else -> NodeGrid(state, viewModel)
+                        state.viewMode == DriveViewMode.LIST -> NodeList(state, viewModel, bottomPadding)
+                        else -> NodeGrid(state, viewModel, bottomPadding)
                     }
                     if (state.revalidating) {
                         AfterDelay(LOADING_INDICATOR_DELAY_MS) {
@@ -595,11 +632,14 @@ private fun OfflineBanner(fetchedAt: Long, onRetry: () -> Unit) {
     }
 }
 
+/** 列表模式:一行一个文件;宽屏(横屏、平板)按宽度分成两三栏,不让一行拉得老长 */
 @Composable
-private fun NodeList(state: DriveUiState, viewModel: DriveViewModel) {
-    val listState = rememberLazyListState()
+private fun NodeList(state: DriveUiState, viewModel: DriveViewModel, bottomPadding: Dp) {
+    val listState = rememberLazyGridState()
     // 换排序后新列表到达:回到顶部。否则 LazyColumn 按旧首项的 key 锚定,升降序一换直接跳到底
     LaunchedEffect(state.scrollToTopToken) { if (state.scrollToTopToken > 0) listState.scrollToItem(0) }
+    // 在根目录再点底部的「文件」:滚回顶部
+    OnTabReselect(Routes.DriveTab, enabled = state.isRoot) { listState.animateScrollToItem(0) }
     StickToTop(
         firstKey = state.items.firstOrNull()?.id,
         isScrolling = { listState.isScrollInProgress },
@@ -611,13 +651,15 @@ private fun NodeList(state: DriveUiState, viewModel: DriveViewModel) {
         isNearEnd = { listState.isNearEnd() },
         onLoadMore = viewModel::loadMore,
     )
-    LazyColumn(
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = ListColumnMinWidth),
         state = listState,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 96.dp),
+        contentPadding = PaddingValues(bottom = bottomPadding + FAB_CLEARANCE),
     ) {
         items(state.items, key = { it.id }, contentType = { "node" }) { node ->
             NodeRow(
+                modifier = Modifier.animateItem(),
                 node = node,
                 secondary = nodeSecondaryText(node),
                 selectionMode = state.selectionMode,
@@ -629,17 +671,21 @@ private fun NodeList(state: DriveUiState, viewModel: DriveViewModel) {
             )
         }
         if (state.nextCursor != null || state.isLoadingMore || state.loadMoreError != null) {
-            item(key = "footer", contentType = "footer") {
+            item(key = "footer", contentType = "footer", span = { GridItemSpan(maxLineSpan) }) {
                 LoadMoreFooter(isLoading = state.isLoadingMore, error = state.loadMoreError, onRetry = viewModel::loadMore)
             }
         }
     }
 }
 
+/** 列表末尾给新建按钮留的空 */
+private val FAB_CLEARANCE = 88.dp
+
 @Composable
-private fun NodeGrid(state: DriveUiState, viewModel: DriveViewModel) {
+private fun NodeGrid(state: DriveUiState, viewModel: DriveViewModel, bottomPadding: Dp) {
     val gridState = rememberLazyGridState()
     LaunchedEffect(state.scrollToTopToken) { if (state.scrollToTopToken > 0) gridState.scrollToItem(0) }
+    OnTabReselect(Routes.DriveTab, enabled = state.isRoot) { gridState.animateScrollToItem(0) }
     StickToTop(
         firstKey = state.items.firstOrNull()?.id,
         isScrolling = { gridState.isScrollInProgress },
@@ -655,12 +701,13 @@ private fun NodeGrid(state: DriveUiState, viewModel: DriveViewModel) {
         columns = GridCells.Adaptive(minSize = 140.dp),
         state = gridState,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 96.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = bottomPadding + FAB_CLEARANCE),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(state.items, key = { it.id }, contentType = { "node" }) { node ->
             NodeCard(
+                modifier = Modifier.animateItem(),
                 node = node,
                 secondary = nodeSecondaryText(node),
                 selectionMode = state.selectionMode,
