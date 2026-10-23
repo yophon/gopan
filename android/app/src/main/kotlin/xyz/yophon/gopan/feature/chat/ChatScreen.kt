@@ -1,5 +1,19 @@
 package xyz.yophon.gopan.feature.chat
 
+import xyz.yophon.gopan.feature.drive.belowCollapsingTopBar
+import xyz.yophon.gopan.feature.drive.collapsingTopBarColors
+import xyz.yophon.gopan.feature.drive.LocalBottomBarInset
+import xyz.yophon.gopan.feature.drive.LocalBottomChrome
+import xyz.yophon.gopan.feature.drive.BottomChromeState
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import kotlin.math.roundToInt
 import androidx.compose.ui.layout.layout
@@ -251,21 +265,25 @@ fun ChatScreen(
         }
     }
 
-    // 顶栏与输入栏随滚动一收一放(都跟着手指走,松手吸附到全开或全收):
-    // 手指往上推(往新消息走)收顶栏、放出输入栏;往下拉(翻历史)放出顶栏、收起输入栏
+    // 顶栏与底部(输入框 + 底部导航)随滚动一起收放,都跟着手指走,松手吸附到全开或全收:
+    // 手指往上推一起收起,往下拉一起出来。键盘弹起、搜索时不收
     val topBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
-    val inputBar = remember { CollapsingBar() }
+    val bottomChrome = LocalBottomChrome.current
+    val bottomBars = remember(bottomChrome) { CollapsingBottom(bottomChrome) }
+    val bottomInset = LocalBottomBarInset.current
     val imeVisible = WindowInsets.isImeVisible
-    inputBar.locked = imeVisible || state.searchOpen
-    // 停在最新处、弹出键盘时输入栏一定露出来
-    LaunchedEffect(listState, inputBar) {
-        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
-            if (scrolling) return@collect
-            val atBottom = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < BOTTOM_SLOP_PX
-            if (atBottom) inputBar.expand() else inputBar.settle()
-        }
+    bottomBars.locked = imeVisible || state.searchOpen
+    LaunchedEffect(listState, bottomBars) {
+        snapshotFlow { listState.isScrollInProgress }.collect { scrolling -> if (!scrolling) bottomBars.settle() }
     }
-    LaunchedEffect(imeVisible) { if (imeVisible) inputBar.expand() }
+    LaunchedEffect(bottomBars.locked) { if (bottomBars.locked) bottomBars.expand() }
+    // 离开传输助手:底部导航放回原位
+    DisposableEffect(bottomChrome) { onDispose { bottomChrome.offsetPx = 0f } }
+    var inputHeightPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    bottomBars.rangePx = inputHeightPx + with(density) { bottomInset.roundToPx() }
+    // 消息列表铺到底,最后几条能滚到输入框与导航后面;底部留出它们的高度
+    val bottomSpace = with(density) { inputHeightPx.toDp() } + bottomInset
 
     // 滚到顶附近往前翻;定位模式下滚到底附近往后续
     val nearTop by remember { derivedStateOf { val info = listState.layoutInfo; info.totalItemsCount > 0 && (info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= info.totalItemsCount - 3 } }
@@ -275,7 +293,7 @@ fun ChatScreen(
 
     Scaffold(
         modifier = Modifier
-            .nestedScroll(inputBar.connection)
+            .nestedScroll(bottomBars.connection)
             .then(if (state.searchOpen) Modifier else Modifier.nestedScroll(topBarScroll.nestedScrollConnection)),
         contentWindowInsets = NestedScreenInsets,
         topBar = {
@@ -307,92 +325,105 @@ fun ChatScreen(
                             Icon(Icons.Outlined.SwapVert, contentDescription = stringResource(R.string.chat_transfers))
                         }
                     },
+                    colors = collapsingTopBarColors(topBarScroll),
                     scrollBehavior = topBarScroll,
                 )
             }
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize().imePadding()) {
-            state.receiving?.let { r ->
-                Banner(text = stringResource(R.string.chat_receiving, r.count), progress = true)
-            }
-            if (state.offline && !state.searchOpen) {
-                Banner(text = stringResource(R.string.chat_offline), icon = true)
-            }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                when {
-                    showingResults && state.searchResults.isNullOrEmpty() -> EmptyState(title = stringResource(R.string.chat_search_empty), icon = Icons.Outlined.Search)
-                    state.searchOpen && state.searching && state.searchResults == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(stringResource(R.string.chat_searching), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    !showingResults && state.loading && state.messages.isEmpty() -> LoadingState()
-                    !showingResults && state.loadError != null && state.messages.isEmpty() -> ErrorState(state.loadError!!, onRetry = viewModel::retryInitial)
-                    !showingResults && items.isEmpty() -> EmptyState(
-                        title = stringResource(R.string.chat_empty),
-                        description = stringResource(R.string.chat_empty_desc),
-                        icon = Icons.Outlined.Forum,
-                    )
-                    else -> LazyColumn(
-                        state = listState,
-                        reverseLayout = true,
-                        contentPadding = PaddingValues(vertical = 8.dp),
-                        modifier = Modifier.fillMaxSize().testTag("chat_list"),
-                    ) {
-                        items(items, key = { it.key }, contentType = { it::class.simpleName }) { item ->
-                            ChatRow(
-                                item = item,
-                                highlightId = state.highlightId,
-                                searchMode = showingResults,
-                                viewModel = viewModel,
-                                onActions = { actionTarget = it },
-                            )
+        Box(modifier = Modifier.belowCollapsingTopBar(padding, topBarScroll).fillMaxSize().imePadding()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                state.receiving?.let { r ->
+                    Banner(text = stringResource(R.string.chat_receiving, r.count), progress = true)
+                }
+                if (state.offline && !state.searchOpen) {
+                    Banner(text = stringResource(R.string.chat_offline), icon = true)
+                }
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    when {
+                        showingResults && state.searchResults.isNullOrEmpty() -> EmptyState(title = stringResource(R.string.chat_search_empty), icon = Icons.Outlined.Search)
+                        state.searchOpen && state.searching && state.searchResults == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(stringResource(R.string.chat_searching), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        if (!showingResults) {
-                            item(key = "history-footer") {
-                                HistoryFooter(loading = state.loadingOlder, hasMore = state.hasMoreOlder, hasMessages = state.messages.isNotEmpty())
+                        !showingResults && state.loading && state.messages.isEmpty() -> LoadingState()
+                        !showingResults && state.loadError != null && state.messages.isEmpty() -> ErrorState(state.loadError!!, onRetry = viewModel::retryInitial)
+                        !showingResults && items.isEmpty() -> EmptyState(
+                            title = stringResource(R.string.chat_empty),
+                            description = stringResource(R.string.chat_empty_desc),
+                            icon = Icons.Outlined.Forum,
+                        )
+                        else -> LazyColumn(
+                            state = listState,
+                            reverseLayout = true,
+                            contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp + (if (state.searchOpen) bottomInset else bottomSpace)),
+                            modifier = Modifier.fillMaxSize().testTag("chat_list"),
+                        ) {
+                            items(items, key = { it.key }, contentType = { it::class.simpleName }) { item ->
+                                ChatRow(
+                                    item = item,
+                                    highlightId = state.highlightId,
+                                    searchMode = showingResults,
+                                    viewModel = viewModel,
+                                    onActions = { actionTarget = it },
+                                )
+                            }
+                            if (!showingResults) {
+                                item(key = "history-footer") {
+                                    HistoryFooter(loading = state.loadingOlder, hasMore = state.hasMoreOlder, hasMessages = state.messages.isNotEmpty())
+                                }
                             }
                         }
                     }
-                }
-                Column(
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    // ExtendedFloatingActionButton 的文字没有进无障碍树(读屏只会念"按钮"):显式给标签
-                    if (state.anchored && !state.searchOpen) {
-                        val label = stringResource(R.string.chat_back_to_latest)
-                        ExtendedFloatingActionButton(
-                            onClick = viewModel::backToLatest,
-                            icon = { Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = null) },
-                            text = { Text(label) },
-                            modifier = Modifier.semantics { contentDescription = label }.testTag("chat_back_latest"),
-                        )
-                    } else if (state.unread > 0 && !state.searchOpen) {
-                        val label = stringResource(R.string.chat_new_messages, state.unread)
-                        ExtendedFloatingActionButton(
-                            onClick = {
-                                viewModel.clearUnread()
-                                followBottom = true
-                                scope.launch { listState.animateScrollToItem(0) }
-                            },
-                            icon = { Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = null) },
-                            text = { Text(label) },
-                            modifier = Modifier.semantics { contentDescription = label }.testTag("chat_unread"),
-                        )
+                    Column(
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp + bottomSpace),
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        // ExtendedFloatingActionButton 的文字没有进无障碍树(读屏只会念"按钮"):显式给标签
+                        if (state.anchored && !state.searchOpen) {
+                            val label = stringResource(R.string.chat_back_to_latest)
+                            ExtendedFloatingActionButton(
+                                onClick = viewModel::backToLatest,
+                                icon = { Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = null) },
+                                text = { Text(label) },
+                                modifier = Modifier.semantics { contentDescription = label }.testTag("chat_back_latest"),
+                            )
+                        } else if (state.unread > 0 && !state.searchOpen) {
+                            val label = stringResource(R.string.chat_new_messages, state.unread)
+                            ExtendedFloatingActionButton(
+                                onClick = {
+                                    viewModel.clearUnread()
+                                    followBottom = true
+                                    scope.launch { listState.animateScrollToItem(0) }
+                                },
+                                icon = { Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = null) },
+                                text = { Text(label) },
+                                modifier = Modifier.semantics { contentDescription = label }.testTag("chat_unread"),
+                            )
+                        }
                     }
                 }
             }
-            if (!state.searchOpen) Column(Modifier.collapsible(inputBar)) {
-                DraftFetchBanner(viewModel, fetchViewModel)
-                InputBar(
-                    viewModel = viewModel,
-                    onSend = viewModel::send,
-                    onPickFiles = pickers::pickFiles,
-                    onPickMedia = pickers::pickMedia,
-                    onCamera = pickers::takePhoto,
-                )
+            // 输入框浮在消息上面(背后透明),和底部导航一起滑出屏幕
+            if (!state.searchOpen) {
+                Column(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(bottom = bottomInset)
+                        .onSizeChanged { inputHeightPx = it.height }
+                        .graphicsLayer { translationY = bottomBars.offsetPx },
+                ) {
+                    DraftFetchBanner(viewModel, fetchViewModel)
+                    InputBar(
+                        viewModel = viewModel,
+                        onSend = viewModel::send,
+                        onPickFiles = pickers::pickFiles,
+                        onPickMedia = pickers::pickMedia,
+                        onCamera = pickers::takePhoto,
+                    )
+                }
             }
         }
     }
@@ -612,72 +643,83 @@ private fun InputBar(
         snapshotFlow { field.text.toString() }.collect(viewModel::setDraft)
     }
     val draft = field.text
-    Row(
-        verticalAlignment = Alignment.Bottom,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
+    // 浮起的胶囊:白底、细边、投影,背后的消息照常显示;附件、输入、发送都在里面
+    Surface(
+        shape = RoundedCornerShape(26.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 6.dp,
+        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 8.dp),
     ) {
-        Box {
-            IconButton(onClick = { menu = true }, modifier = Modifier.testTag("chat_attach")) {
-                Icon(Icons.Outlined.AttachFile, contentDescription = stringResource(R.string.chat_attach))
+        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(4.dp)) {
+            Box {
+                IconButton(onClick = { menu = true }, modifier = Modifier.testTag("chat_attach")) {
+                    Icon(Icons.Outlined.AttachFile, contentDescription = stringResource(R.string.chat_attach))
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_attach_files)) },
+                        leadingIcon = { Icon(Icons.Outlined.UploadFile, contentDescription = null) },
+                        onClick = {
+                            menu = false
+                            onPickFiles()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_attach_media)) },
+                        leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = null) },
+                        onClick = {
+                            menu = false
+                            onPickMedia()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_attach_camera)) },
+                        leadingIcon = { Icon(Icons.Outlined.PhotoCamera, contentDescription = null) },
+                        onClick = {
+                            menu = false
+                            onCamera()
+                        },
+                    )
+                }
             }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.chat_attach_files)) },
-                    leadingIcon = { Icon(Icons.Outlined.UploadFile, contentDescription = null) },
-                    onClick = {
-                        menu = false
-                        onPickFiles()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.chat_attach_media)) },
-                    leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = null) },
-                    onClick = {
-                        menu = false
-                        onPickMedia()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.chat_attach_camera)) },
-                    leadingIcon = { Icon(Icons.Outlined.PhotoCamera, contentDescription = null) },
-                    onClick = {
-                        menu = false
-                        onCamera()
-                    },
-                )
-            }
-        }
-        OutlinedTextField(
-            state = field,
-            placeholder = { Text(stringResource(R.string.chat_input_hint)) },
-            lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = 1, maxHeightInLines = 6),
-            // 胶囊输入框:暖灰底、不描边
-            shape = RoundedCornerShape(24.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-            ),
-            modifier = Modifier
-                .weight(1f)
-                .testTag("chat_input")
-                // 粘贴 / 输入法插入的图片:直接作为文件发出去(文本照常进输入框)
-                .contentReceiver { content ->
-                    if (!content.hasMediaType(MediaType.Image)) return@contentReceiver content
-                    val uris = mutableListOf<android.net.Uri>()
-                    val rest = content.consume { item -> item.uri?.let { uris += it; true } ?: false }
-                    viewModel.sendPasted(uris)
-                    rest
+            val placeholder = stringResource(R.string.chat_input_hint)
+            val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
+            BasicTextField(
+                state = field,
+                lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = 1, maxHeightInLines = 6),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                decorator = { inner ->
+                    Box(Modifier.padding(horizontal = 4.dp, vertical = 12.dp), contentAlignment = Alignment.CenterStart) {
+                        if (field.text.isEmpty()) Text(placeholder, style = MaterialTheme.typography.bodyLarge, color = hintColor)
+                        inner()
+                    }
                 },
-        )
-        Spacer(Modifier.size(4.dp))
-        FilledIconButton(
-            onClick = onSend,
-            enabled = draft.isNotBlank(),
-            modifier = Modifier.padding(bottom = 4.dp).testTag("chat_send"),
-        ) {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_send))
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+                    .testTag("chat_input")
+                    // 粘贴 / 输入法插入的图片:直接作为文件发出去(文本照常进输入框)
+                    .contentReceiver { content ->
+                        if (!content.hasMediaType(MediaType.Image)) return@contentReceiver content
+                        val uris = mutableListOf<android.net.Uri>()
+                        val rest = content.consume { item -> item.uri?.let { uris += it; true } ?: false }
+                        viewModel.sendPasted(uris)
+                        rest
+                    },
+            )
+            FilledIconButton(
+                onClick = onSend,
+                enabled = draft.isNotBlank(),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    disabledContainerColor = Color.Transparent,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                ),
+                modifier = Modifier.testTag("chat_send"),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_send))
+            }
         }
     }
 }
@@ -744,40 +786,34 @@ private fun SheetItem(icon: androidx.compose.ui.graphics.vector.ImageVector, lab
 private const val BOTTOM_SLOP_PX = 120
 
 /**
- * 跟着滚动收起 / 放出的一条栏(传输助手的输入栏)。手指往下拉时收、往上推时放,跟手;
- * 滚动停下后吸附到全开或全收。[locked] 时(键盘弹起、搜索中)不动。
+ * 传输助手底部(输入框 + 主界面的底部导航)跟着滚动滑出 / 滑回:手指上推收、下拉放,跟手;滚动停下后吸附到全开或全收。
+ * 滑出的像素写进 [BottomChromeState],MainScaffold 的底部导航按它一起往下移;[locked] 时(键盘弹起、搜索中)不动。
  */
 @Stable
-private class CollapsingBar {
-    var heightPx by mutableIntStateOf(0)
-    /** 已经收起的像素:0 = 全开,heightPx = 全收 */
-    var offset by mutableFloatStateOf(0f)
+private class CollapsingBottom(private val chrome: BottomChromeState) {
+    /** 输入框连同底部导航的高度:手指移动这么多就全收 */
+    var rangePx by mutableIntStateOf(0)
     var locked by mutableStateOf(false)
+    /** 已经滑出去的像素:0 = 全露出,rangePx = 全收 */
+    val offsetPx: Float get() = chrome.offsetPx
     private val mutex = MutatorMutex()
 
     val connection = object : NestedScrollConnection {
         override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-            if (locked || heightPx == 0 || source != NestedScrollSource.UserInput) return Offset.Zero
-            offset = (offset + available.y).coerceIn(0f, heightPx.toFloat())
+            if (locked || rangePx == 0 || source != NestedScrollSource.UserInput) return Offset.Zero
+            // 手指上推时 available.y < 0:往外滑
+            chrome.offsetPx = (chrome.offsetPx - available.y).coerceIn(0f, rangePx.toFloat())
             return Offset.Zero
         }
     }
 
     suspend fun expand() = animateTo(0f)
 
-    suspend fun settle() = animateTo(if (offset > heightPx / 2f) heightPx.toFloat() else 0f)
+    suspend fun settle() = animateTo(if (chrome.offsetPx > rangePx / 2f) rangePx.toFloat() else 0f)
 
     private suspend fun animateTo(target: Float) = mutex.mutate {
-        if (offset != target) animate(offset, target, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { value, _ -> offset = value }
+        if (chrome.offsetPx != target) {
+            animate(chrome.offsetPx, target, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { value, _ -> chrome.offsetPx = value }
+        }
     }
 }
-
-/** 按 [bar] 收起的像素把高度压扁(顶边不动,下面一截被裁掉),上面的列表跟着变长 */
-private fun Modifier.collapsible(bar: CollapsingBar): Modifier = this
-    .clipToBounds()
-    .layout { measurable, constraints ->
-        val placeable = measurable.measure(constraints)
-        bar.heightPx = placeable.height
-        val visible = (placeable.height - bar.offset.roundToInt()).coerceIn(0, placeable.height)
-        layout(placeable.width, visible) { placeable.place(0, 0) }
-    }

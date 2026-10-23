@@ -1,5 +1,14 @@
 package xyz.yophon.gopan
 
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
+import xyz.yophon.gopan.feature.drive.LocalBottomChrome
+import xyz.yophon.gopan.feature.drive.BottomChromeState
 import androidx.compose.foundation.layout.PaddingValues
 import xyz.yophon.gopan.feature.drive.LocalBottomBarInset
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -233,22 +242,23 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
                 val layoutDirection = LocalLayoutDirection.current
                 val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 var chromeHeight by remember { mutableStateOf(if (rail) 0.dp else PILL_BAR_HEIGHT + navBarBottom) }
-                val sidesAndTop = PaddingValues(
+                // 只让出两侧:状态栏透明,各页顶栏自己让出它,收起时内容能从状态栏底下露出来
+                val sides = PaddingValues(
                     start = innerPadding.calculateStartPadding(layoutDirection),
-                    top = innerPadding.calculateTopPadding(),
                     end = innerPadding.calculateEndPadding(layoutDirection),
                 )
+                val bottomChrome = remember { BottomChromeState() }
                 // 键盘弹起时为 0:各页的 imePadding 已经从屏幕底算起(含系统导航栏那段)
                 val bottomInset = if (imeVisible) 0.dp else maxOf(chromeHeight, navBarBottom)
                 Box(Modifier.fillMaxSize()) {
-                    CompositionLocalProvider(LocalBottomBarInset provides bottomInset) {
+                    CompositionLocalProvider(LocalBottomBarInset provides bottomInset, LocalBottomChrome provides bottomChrome) {
                         NavHost(
                             navController = navController,
                             startDestination = Routes.DriveTab,
-                            // 顶部与两侧让出系统栏并标记为已消费;底部不消费,由各页按 LocalBottomBarInset 自己留
+                            // 两侧让出系统栏并标记为已消费;顶部由各页顶栏让,底部由各页按 LocalBottomBarInset 留
                             modifier = Modifier
-                                .padding(sidesAndTop)
-                                .consumeWindowInsets(sidesAndTop),
+                                .padding(sides)
+                                .consumeWindowInsets(sides),
                             enterTransition = navEnter,
                             exitTransition = navExit,
                         ) {
@@ -273,7 +283,9 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
                             Modifier
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
-                                .onSizeChanged { chromeHeight = with(density) { it.height.toDp() } },
+                                .onSizeChanged { chromeHeight = with(density) { it.height.toDp() } }
+                                // 传输助手往上翻时整条滑出屏幕
+                                .graphicsLayer { translationY = bottomChrome.offsetPx },
                         ) {
                             // 迷你播放条(doc/22 二.4)在导航栏上面,后台在放音频时出现,切 tab 不受影响
                             MiniPlayerBar(onOpenPreview = onOpenPreview, insetBottom = rail)
@@ -330,8 +342,8 @@ private fun PillNavBar(selectedIndex: Int, unread: Int, onSelect: (MainTab) -> U
             LaunchedEffect(selectedIndex, itemPx) {
                 if (dragIndex == null && selectedIndex >= 0) indicatorX.animateTo(itemPx * selectedIndex, springSpec)
             }
-            val highlighted = dragIndex ?: selectedIndex
-            if (highlighted >= 0) {
+            val showIndicator = dragIndex != null || selectedIndex >= 0
+            if (showIndicator) {
                 Box(
                     Modifier
                         .offset { IntOffset(indicatorX.value.roundToInt(), 0) }
@@ -374,10 +386,13 @@ private fun PillNavBar(selectedIndex: Int, unread: Int, onSelect: (MainTab) -> U
                         )
                     },
             ) {
+                // 底层:灰色的线框图标与文字,负责点按
                 mainTabs.forEachIndexed { index, tab ->
-                    val on = index == highlighted
-                    val tint by animateColorAsState(if (on) colors.onNavSelected else colors.onNav, label = "navTint")
-                    Column(
+                    NavItem(
+                        tab = tab,
+                        filled = false,
+                        tint = colors.onNav,
+                        badge = if (tab.route == Routes.AccountTab) unread else 0,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
@@ -389,22 +404,50 @@ private fun PillNavBar(selectedIndex: Int, unread: Int, onSelect: (MainTab) -> U
                                 role = Role.Tab,
                                 onClick = { onSelect(tab) },
                             ),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        TabIcon(tab, on, badge = if (tab.route == Routes.AccountTab) unread else 0, tint = tint)
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = stringResource(tab.label),
-                            color = tint,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
-                            maxLines = 1,
+                    )
+                }
+            }
+            // 上层:墨黑的实心图标与文字,只画在白底盖住的那一块:白底滑到哪,哪里才变色
+            if (showIndicator) {
+                Row(
+                    Modifier
+                        .fillMaxSize()
+                        .clearAndSetSemantics {}
+                        .drawWithContent {
+                            val left = indicatorX.value
+                            clipPath(Path().apply { addRoundRect(RoundRect(left, 0f, left + itemPx, size.height, CornerRadius(size.height / 2))) }) {
+                                this@drawWithContent.drawContent()
+                            }
+                        },
+                ) {
+                    mainTabs.forEach { tab ->
+                        NavItem(
+                            tab = tab,
+                            filled = true,
+                            tint = colors.onNavSelected,
+                            badge = if (tab.route == Routes.AccountTab) unread else 0,
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
                         )
                     }
                 }
             }
         }
+    }
+}
+
+/** 胶囊里的一项:图标在上、文字在下;两层(灰 / 墨黑)用同一个排版,叠起来逐像素对齐 */
+@Composable
+private fun NavItem(tab: MainTab, filled: Boolean, tint: Color, badge: Int, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        TabIcon(tab, filled, badge = badge, tint = tint)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = stringResource(tab.label),
+            color = tint,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
     }
 }
 

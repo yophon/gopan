@@ -279,9 +279,13 @@ fun DriveScreen(
                 state = state,
                 viewModel = viewModel,
                 bottomPadding = padding.calculateBottomPadding(),
-                modifier = Modifier
-                    .padding(top = padding.calculateTopPadding())
-                    .fillMaxSize(),
+                modifier = (
+                    if (state.isRoot && !state.selectionMode) {
+                        Modifier.belowCollapsingTopBar(padding, topBarScroll)
+                    } else {
+                        Modifier.padding(top = padding.calculateTopPadding())
+                    }
+                    ).fillMaxSize(),
             )
         }
         if (pane != null) {
@@ -369,6 +373,12 @@ private fun DriveTopBar(
         TopAppBar(
             windowInsets = TopBarInsets,
             scrollBehavior = scrollBehavior,
+            // 白底,内容滚到底下也不变深;根目录收起时淡成透明,子目录下面还有面包屑,保持白底
+            colors = if (state.isRoot && scrollBehavior != null) {
+                collapsingTopBarColors(scrollBehavior)
+            } else {
+                TopAppBarDefaults.topAppBarColors(scrolledContainerColor = MaterialTheme.colorScheme.surface)
+            },
             title = {
                 if (state.isRoot) TabTitle(title) else Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
             },

@@ -1,5 +1,8 @@
 package xyz.yophon.gopan.feature.account
 
+import xyz.yophon.gopan.feature.drive.belowCollapsingTopBar
+import xyz.yophon.gopan.feature.drive.collapsingTopBarColors
+import xyz.yophon.gopan.feature.drive.TopBarInsets
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -271,7 +274,8 @@ internal fun AccountContent(
         topBar = {
             TopAppBar(
                 title = { TabTitle(stringResource(R.string.account_title)) },
-                windowInsets = WindowInsets(0, 0, 0, 0),
+                windowInsets = TopBarInsets,
+                colors = collapsingTopBarColors(topBarScroll),
                 scrollBehavior = topBarScroll,
             )
         },
@@ -289,7 +293,7 @@ internal fun AccountContent(
             else -> PullToRefreshBox(
                 isRefreshing = state.refreshing,
                 onRefresh = onRefresh,
-                modifier = Modifier.padding(top = innerPadding.calculateTopPadding()).fillMaxSize(),
+                modifier = Modifier.belowCollapsingTopBar(innerPadding, topBarScroll).fillMaxSize(),
             ) {
                 AccountList(
                     user = user,

@@ -1,5 +1,7 @@
 package xyz.yophon.gopan.feature.shares
 
+import xyz.yophon.gopan.feature.drive.belowCollapsingTopBar
+import xyz.yophon.gopan.feature.drive.collapsingTopBarColors
 import xyz.yophon.gopan.feature.drive.ListColumnMinWidth
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
@@ -167,11 +169,18 @@ fun SharesScreen(
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
         modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
-        topBar = { TopAppBar(windowInsets = TopBarInsets, title = { TabTitle(stringResource(R.string.shares_title)) }, scrollBehavior = topBarScroll) },
+        topBar = {
+            TopAppBar(
+                windowInsets = TopBarInsets,
+                title = { TabTitle(stringResource(R.string.shares_title)) },
+                colors = collapsingTopBarColors(topBarScroll),
+                scrollBehavior = topBarScroll,
+            )
+        },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         // 内容铺到底(列表能滚到浮着的导航后面),底部那段放进各列表的 contentPadding
-        Column(modifier = Modifier.padding(top = padding.calculateTopPadding()).fillMaxSize()) {
+        Column(modifier = Modifier.belowCollapsingTopBar(padding, topBarScroll).fillMaxSize()) {
             // 「直链」标签还没出现(开关没问到 / 关了)时只有两页;左右滑动切换标签
             val pager = rememberTabPager(selected = tab, pageCount = if (linksEnabled == true) 3 else 2, onSelect = { tab = it })
             PrimaryTabRow(selectedTabIndex = pager.currentPage) {
