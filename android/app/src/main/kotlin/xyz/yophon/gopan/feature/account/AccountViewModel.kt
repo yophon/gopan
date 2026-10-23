@@ -17,6 +17,7 @@ import xyz.yophon.gopan.core.auth.UserSummary
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.network.gopanResult
 import xyz.yophon.gopan.core.prefs.DriveViewMode
+import xyz.yophon.gopan.core.prefs.Palette
 import xyz.yophon.gopan.core.prefs.ThemeMode
 import xyz.yophon.gopan.core.prefs.UserPreferencesRepository
 import javax.inject.Inject
@@ -47,7 +48,7 @@ data class AccountUiState(
     /** 没有用户可显示时的整页错误;有用户时错误走 [message] */
     val loadError: String? = null,
     val theme: ThemeMode = ThemeMode.SYSTEM,
-    val dynamicColor: Boolean = true,
+    val palette: Palette = Palette.GOPAN,
     val driveViewMode: DriveViewMode = DriveViewMode.LIST,
     val passwordDialog: PasswordDialogState? = null,
     val loggingOut: Boolean = false,
@@ -83,7 +84,7 @@ class AccountViewModel @Inject constructor(
         }
         viewModelScope.launch {
             preferences.preferences.collect { prefs ->
-                _state.update { it.copy(theme = prefs.theme, dynamicColor = prefs.dynamicColor, driveViewMode = prefs.driveViewMode) }
+                _state.update { it.copy(theme = prefs.theme, palette = prefs.palette, driveViewMode = prefs.driveViewMode) }
             }
         }
         load()
@@ -189,9 +190,9 @@ class AccountViewModel @Inject constructor(
         }
     }
 
-    fun setDynamicColor(on: Boolean) {
+    fun setPalette(palette: Palette) {
         viewModelScope.launch {
-            runCatching { preferences.setDynamicColor(on) }.onFailure { Timber.w(it, "写动态取色偏好失败") }
+            runCatching { preferences.setPalette(palette) }.onFailure { Timber.w(it, "写配色偏好失败") }
         }
     }
 

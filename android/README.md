@@ -7,7 +7,7 @@ Kotlin + Jetpack Compose(Material 3)重写的 gopan 客户端,v3.0.0 起替代 v
 - P2:上传 / 下载引擎(后台前台服务、断网与杀进程后续传、秒传、打包下载)、传输列表与传输设置、
   传输助手(网页端全部功能)、系统分享直达传输助手;
 - P3:预览(图片缩放翻页、视频、音频后台播放、PDF、文本、Office 派生 PDF)、分享(新建 / 列表 / 访问记录 / 取消)、
-  登录设备、WebDAV 应用密码、Agent 接入(API Key / OAuth 授权 / 目录范围 / 操作记录)、动态取色开关、平板侧边导航与双栏预览;
+  登录设备、WebDAV 应用密码、Agent 接入(API Key / OAuth 授权 / 目录范围 / 操作记录)、配色与深浅、平板侧边导航与双栏预览;
 - P4:管理端、系统「文件」App 里的 gopan(DocumentsProvider)、站内检查更新、崩溃日志、开源许可、断网恢复自动刷新、release 开 R8。
 
 ## 构建
@@ -76,7 +76,7 @@ app/src/main/kotlin/xyz/yophon/gopan/
                                  实现 Coil 的 SingletonImageLoader.Factory,缩略图加载复用全局 OkHttpClient
   MainActivity.kt                唯一 Activity:GopanTheme → RootNavHost;接住系统分享(SEND / SEND_MULTIPLE)与通知点按,
                                  转成 core.share 的待处理内容与跳转请求
-  MainViewModel.kt               登录态 + 外观偏好(深浅、动态取色)
+  MainViewModel.kt               登录态 + 外观偏好(深浅、配色)
   RootNavHost.kt                 按 AuthState 切换:启动页 / 登录图 / MainScaffold;全屏预览(Routes.Preview)也挂在这一层,盖住底部导航
   MainScaffold.kt                底部导航(文件 / 传输助手 / 分享 / 我的;宽 ≥ 600dp 换成侧边导航栏)+ 主 NavHost —— 导航栏与 NavHost 只在这里;
                                  innerPadding 已含系统栏并 consumeWindowInsets,tab 内页面的 TopAppBar/Scaffold
@@ -127,7 +127,8 @@ app/src/main/kotlin/xyz/yophon/gopan/
                                  db/(upload_task、download_task 两张队列表)
   core/share/                    IncomingShareStore(系统分享的接收与暂存)、AppNavRequests(外部入口的跳转请求)
   core/ui/transfer/              上传选择器(文件 / 照片和视频 / 拍照)与通知、存储权限的申请
-  core/ui/theme|components|format|nav   主题(动态取色经 LocalDynamicColor 传给嵌套主题)、通用组件(Loading/Error/Empty/Confirm/TextInput/Placeholder、
+  core/ui/theme|components|format|nav   主题(配色经 LocalPalette 传给嵌套主题,品牌色在 LocalGopanColors)、品牌图形(Brand.kt:文件夹记号与字标、
+                                 两片的文件夹图标、文件夹面板)、通用组件(Loading/Error/Empty/Confirm/TextInput/Placeholder、
                                  Zoomable 双指 / 双击缩放)、格式化(含 describeUserAgent,规则与网页端一致)、Routes
   core/ui/SystemActions.kt       复制、系统分享面板发文本、浏览器打开链接
   core/ui/WindowSize.kt          宽度断点:600dp 侧边导航栏、840dp 列表 + 预览双栏
@@ -138,7 +139,7 @@ app/src/main/kotlin/xyz/yophon/gopan/
   feature/trash/                 TrashScreen / TrashViewModel(还原、彻删、清空两次确认)、TrashExpiry(剩余天数)
   feature/search/                SearchScreen / SearchViewModel(「文件名」「内容」两个标签,300ms 防抖、分页;只搜当前标签,换关键词两边作废)、
                                  ContentHits(内容结果行:命中页、片段高亮按码点换算到 UTF-16)
-  feature/account/               AccountScreen / AccountViewModel(用量条、回收站与传输列表入口、传输设置、改密码对话框、主题 / 动态取色 / 列表视图偏好、
+  feature/account/               AccountScreen / AccountViewModel(用量条、回收站与传输列表入口、传输设置、改密码对话框、主题 / 配色 / 列表视图偏好、
                                  管理端入口(仅管理员)、检查更新(打开页面时静默查一次,有新版本标出)、崩溃日志与开源许可入口、退出登录)、
                                  AccountUsage、ChangePasswordForm
   feature/account/security/      登录设备、WebDAV 应用密码、Agent 接入三页(SecurityScreens / SecurityViewModels)与 MCP 权限中文名(McpScopes)
@@ -294,7 +295,13 @@ GraphQL operations 按域各自一个文件(`nodes.graphql` 归文件线,`chat.g
 
 ## 外观与平板(P3)
 
-- 「我的 → 外观」:深浅主题、动态取色(Android 12+,默认开,关掉用 App 自己的配色)、列表视图。
+- 「我的 → 外观」:深浅主题、配色、列表视图。配色三选一:墨黑(默认,与网页版同一套)、青绿(3.5 以前的配色)、
+  跟随壁纸(Material You,Android 12+ 才出现);偏好键 `palette`,3.6 以前的 `dynamic_color` 开关不再读,第一次改配色时删掉。
+- 视觉(3.6):`core/ui/theme` 里墨黑配色的 Material 角色 + `GopanColors`(强调色、文件夹两片、面板、底部导航、文件类型图标),
+  青绿与跟随壁纸的 `GopanColors` 从各自的配色推出来;标题加粗(`GopanTypography`)、圆角 6/8/12/16/24(`GopanShapes`)。
+  底部导航是浮起的胶囊,选中项垫一块会滑动的底;文件页的新建按钮与未读角标用信号橙;文件夹是两片的实心图标(`FolderGlyph`);
+  登录页与「我的」头部是文件夹面板(`FolderPanel`,标签页宽度跟着内容走);四个 tab 的根页面顶栏是粗体大标题(`TabTitle`)。
+  启动图标是墨黑底白色文件夹(矢量,带 Android 13 主题图标的单色层),与网页版图标同一条路径。
 - 宽 ≥ 600dp(横屏、平板、折叠屏展开)底部导航换成侧边导航栏;宽 ≥ 840dp 文件页是列表 + 预览双栏,返回键先收起侧栏。
 
 ## 管理端(P4)

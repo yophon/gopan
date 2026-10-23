@@ -1,5 +1,6 @@
 package xyz.yophon.gopan.feature.drive
 
+import xyz.yophon.gopan.core.ui.components.FolderGlyph
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -184,7 +185,7 @@ private fun FolderList(state: FolderPickerUiState, viewModel: FolderPickerViewMo
             ListItem(
                 modifier = Modifier.clickable { viewModel.enter(folder) },
                 leadingContent = {
-                    Icon(Icons.Outlined.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+                    FolderGlyph(Modifier.size(30.dp))
                 },
                 headlineContent = { Text(folder.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                 trailingContent = { Icon(Icons.Outlined.ChevronRight, contentDescription = null) },

@@ -21,6 +21,7 @@
     <string name="account_item_app_passwords">应用密码(WebDAV)</string>
     <string name="account_item_agent">Agent 接入</string>
     <string name="account_item_theme">主题</string>
+    <string name="account_item_palette">配色</string>
     <string name="account_item_drive_view">文件列表默认视图</string>
     <string name="account_item_admin">管理端</string>
     <string name="account_item_version">版本</string>
@@ -33,6 +34,9 @@
     <string name="account_theme_system">跟随系统</string>
     <string name="account_theme_light">浅色</string>
     <string name="account_theme_dark">深色</string>
+    <string name="account_palette_gopan">墨黑</string>
+    <string name="account_palette_classic">青绿</string>
+    <string name="account_palette_dynamic">跟随壁纸</string>
     <string name="account_view_list">列表</string>
     <string name="account_view_grid">网格</string>
 
@@ -54,6 +58,4 @@
     <string name="account_pwd_err_new_too_long">新密码过长(最多 72 字节)</string>
     <string name="account_pwd_err_same_as_old">新密码不能与旧密码相同</string>
     <string name="account_pwd_err_mismatch">两次输入的新密码不一致</string>
-    <string name="account_item_dynamic_color">动态取色</string>
-    <string name="account_item_dynamic_color_hint">配色跟随壁纸</string>
 </resources>

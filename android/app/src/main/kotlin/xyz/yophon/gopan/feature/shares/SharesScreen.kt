@@ -1,5 +1,7 @@
 package xyz.yophon.gopan.feature.shares
 
+import xyz.yophon.gopan.core.ui.components.TabTitle
+import xyz.yophon.gopan.core.ui.components.FolderGlyph
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -146,19 +148,21 @@ fun SharesScreen(
 
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
-        topBar = { TopAppBar(windowInsets = NestedScreenInsets, title = { Text(stringResource(R.string.shares_title)) }) },
+        topBar = { TopAppBar(windowInsets = NestedScreenInsets, title = { TabTitle(stringResource(R.string.shares_title)) }) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             // 「直链」标签还没出现(开关没问到 / 关了)时下标不能越界
             PrimaryTabRow(selectedTabIndex = if (tab == 2 && linksEnabled != true) 0 else tab) {
                 Tab(
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     selected = tab == 0,
                     onClick = { tab = 0 },
                     text = { Text(stringResource(R.string.collect_tab_share)) },
                     modifier = Modifier.testTag("shares_tab_share"),
                 )
                 Tab(
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     selected = tab == 1,
                     onClick = { tab = 1 },
                     text = { Text(stringResource(R.string.collect_tab_collect)) },
@@ -166,6 +170,7 @@ fun SharesScreen(
                 )
                 if (linksEnabled == true) {
                     Tab(
+                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         selected = tab == 2,
                         onClick = { tab = 2 },
                         text = { Text(stringResource(R.string.links_tab)) },
@@ -266,11 +271,11 @@ private fun ShareRow(share: Share, revoking: Boolean, onClick: () -> Unit) {
     ListItem(
         modifier = Modifier.clickable(enabled = !revoking, onClick = onClick).testTag("share_row"),
         leadingContent = {
-            Icon(
-                if (share.isFolder) Icons.Outlined.Folder else Icons.AutoMirrored.Outlined.InsertDriveFile,
-                contentDescription = null,
-                tint = if (share.isFolder) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (share.isFolder) {
+                FolderGlyph(Modifier.size(26.dp))
+            } else {
+                Icon(Icons.AutoMirrored.Outlined.InsertDriveFile, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         },
         headlineContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {

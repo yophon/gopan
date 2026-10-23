@@ -78,7 +78,7 @@ class ClipShareActivity : ComponentActivity() {
             val main: MainViewModel = hiltViewModel()
             val appearance by main.appearance.collectAsStateWithLifecycle()
             val look = appearance ?: return@setContent
-            GopanTheme(themeMode = look.theme, dynamicColor = look.dynamicColor) {
+            GopanTheme(themeMode = look.theme, palette = look.palette) {
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 ClipShareSheet(
                     state = state,

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动图标前景:白色文件夹记号(与网页版 favicon、PWA 图标同一条路径),底色是墨黑 ic_launcher_background。
+     108dp 画布里文件夹宽 42dp,落在 72dp 可见区里约六成,和网页图标的比例一致。也用作 Android 13 主题图标的单色层。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="1.75"
+        android:scaleY="1.75"
+        android:translateX="33"
+        android:translateY="37.5">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M0,3a3,3 0,0 1,3 -3h5.2a2,2 0,0 1,1.5 0.7L11.6,3H21a3,3 0,0 1,3 3v11a3,3 0,0 1,-3 3H3a3,3 0,0 1,-3 -3z" />
+    </group>
+</vector>

@@ -776,28 +776,29 @@ await scenario('A3', 'Agent 接入:建 API Key(明文只显示一次)能连 MCP;
   await sleep(600);
 });
 
-await scenario('T1', '动态取色开关:关掉后冷启动仍是关', async () => {
+await scenario('T1', '配色:默认墨黑,换成青绿后冷启动仍是青绿', async () => {
+  const findPaletteItem = async () => {
+    for (let i = 0; i < 6 && !device.dump().has({ id: 'account_palette' }); i++) {
+      app.scrollUp(400);
+      await sleep(500);
+    }
+    return device.waitFor({ id: 'account_palette' }, { label: '配色设置项' });
+  };
   await app.gotoTab('我的');
   await backToTabRoot();
-  for (let i = 0; i < 6 && !device.dump().has({ id: 'account_dynamic_color' }); i++) {
-    app.scrollUp(400);
-    await sleep(500);
-  }
-  const sw = await device.waitFor({ id: 'account_dynamic_color' }, { label: '动态取色开关' });
-  expect(sw.checked, '默认开');
-  device.tapXY(sw.cx, sw.cy);
+  const item = await findPaletteItem();
+  expect(item.allText().includes('墨黑'), `默认墨黑,实际:${item.allText()}`);
+  device.tapXY(item.cx, item.cy);
+  await device.tap({ id: 'palette_CLASSIC' }, { label: '配色对话框的「青绿」' });
   await sleep(1200);
-  device.screenshot(join(RUN_DIR, 'p3-static-color.png'));
+  device.screenshot(join(RUN_DIR, 'p3-classic-palette.png'));
   app.coldStart();
   await app.waitMain(30000);
   await app.gotoTab('我的');
-  for (let i = 0; i < 6 && !device.dump().has({ id: 'account_dynamic_color' }); i++) {
-    app.scrollUp(400);
-    await sleep(500);
-  }
-  const after = await device.waitFor({ id: 'account_dynamic_color' }, { label: '动态取色开关' });
-  expect(!after.checked, '冷启动后仍是关');
+  const after = await findPaletteItem();
+  expect(after.allText().includes('青绿'), `冷启动后仍是青绿,实际:${after.allText()}`);
   device.tapXY(after.cx, after.cy); // 恢复
+  await device.tap({ id: 'palette_GOPAN' }, { label: '配色对话框的「墨黑」' });
   await sleep(800);
 });
 

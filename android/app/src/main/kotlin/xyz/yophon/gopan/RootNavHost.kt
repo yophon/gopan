@@ -1,5 +1,7 @@
 package xyz.yophon.gopan
 
+import androidx.compose.ui.unit.sp
+import xyz.yophon.gopan.core.ui.components.GopanWordmark
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -116,11 +118,7 @@ private const val FADE_MS = 180
 private fun StartupScreen() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            GopanWordmark(fontSize = 34.sp, color = MaterialTheme.colorScheme.onSurface)
             // 有缓存用户时启动页只闪过几十毫秒(读加密存储),转圈晚点出现,免得一闪
             Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                 AfterDelay(LOADING_INDICATOR_DELAY_MS) { CircularProgressIndicator() }

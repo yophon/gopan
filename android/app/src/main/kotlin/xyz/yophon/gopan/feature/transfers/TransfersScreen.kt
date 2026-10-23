@@ -166,18 +166,21 @@ fun TransfersScreen(
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             PrimaryTabRow(selectedTabIndex = tab) {
                 Tab(
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     selected = tab == 0,
                     onClick = { selectTab(0) },
                     text = { Text(tabLabel(stringResource(R.string.transfers_tab_uploads), state.activeUploads)) },
                     modifier = Modifier.testTag("transfers_tab_uploads"),
                 )
                 Tab(
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     selected = tab == 1,
                     onClick = { selectTab(1) },
                     text = { Text(tabLabel(stringResource(R.string.transfers_tab_downloads), state.activeDownloads)) },
                     modifier = Modifier.testTag("transfers_tab_downloads"),
                 )
                 Tab(
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     selected = tab == JOBS_TAB,
                     onClick = { selectTab(JOBS_TAB) },
                     text = { Text(tabLabel(stringResource(R.string.jobs_tab), jobs.activeCount), maxLines = 1) },

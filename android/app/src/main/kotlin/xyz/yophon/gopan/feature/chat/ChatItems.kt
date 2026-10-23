@@ -1,5 +1,6 @@
 package xyz.yophon.gopan.feature.chat
 
+import xyz.yophon.gopan.core.ui.components.FolderGlyph
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -192,12 +193,11 @@ fun FileCard(message: ChatMessage, onDownload: (Node) -> Unit) {
                 }
             } else {
                 val category = fileCategory(node)
-                Icon(
-                    if (node.isFolder) Icons.Outlined.Folder else category.icon,
-                    contentDescription = null,
-                    tint = category.tint(),
-                    modifier = Modifier.size(36.dp),
-                )
+                if (node.isFolder) {
+                    FolderGlyph(Modifier.size(38.dp))
+                } else {
+                    Icon(category.icon, contentDescription = null, tint = category.tint(), modifier = Modifier.size(36.dp))
+                }
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(node.name, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.MiddleEllipsis)

@@ -374,7 +374,7 @@ private fun ActivityItem(
             .clickable(onClick = onClick)
             .padding(start = if (nested) 16.dp else 0.dp)
             .testTag("activity_row"),
-        colors = ListItemDefaults.colors(containerColor = if (nested) MaterialTheme.colorScheme.surfaceContainerLow else Color.Transparent),
+        colors = ListItemDefaults.colors(containerColor = if (nested) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent),
         leadingContent = { ActionBadge(actionIcon(activity.action), dimmed = activity.undone, destructive = destructive) },
         headlineContent = {
             Text(

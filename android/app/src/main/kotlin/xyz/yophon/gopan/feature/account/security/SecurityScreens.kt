@@ -427,6 +427,7 @@ fun AgentScreen(onBack: () -> Unit, viewModel: AgentViewModel = hiltViewModel())
                     PrimaryTabRow(selectedTabIndex = state.tab.ordinal) {
                         AgentTab.entries.forEach { tab ->
                             Tab(
+                                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 selected = state.tab == tab,
                                 onClick = { viewModel.selectTab(tab) },
                                 text = { Text(stringResource(tab.label())) },

@@ -117,7 +117,7 @@ WebDAV 用 PROPFIND、MCP 用 initialize 请求核对应用密码 / API Key 的�
 | A1 | 登录设备:本机显示「gopan 安卓 App」;吊销主机那台(Firefox · Linux)后它 refresh 得到 UNAUTHENTICATED |
 | A2 | WebDAV 应用密码:生成后 PROPFIND 207;吊销后 401 |
 | A3 | Agent 接入:建 API Key(浏览与搜索 + 读取与下载)能通过 MCP 认证、服务端权限一致;设目录范围;吊销后 401 |
-| T1 | 动态取色关掉后冷启动仍是关(再打开恢复) |
+| T1 | 配色默认墨黑,换成青绿后冷启动仍是青绿(再换回墨黑) |
 | W1 | `wm size 1280x800`:侧边导航栏;文件页点文件在右侧栏预览、列表仍在,点另一个文件侧栏跟着换,关闭侧栏;结束恢复原尺寸 |
 
 ## 场景(p4.mjs)

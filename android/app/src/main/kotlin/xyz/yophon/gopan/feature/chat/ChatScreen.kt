@@ -1,5 +1,8 @@
 package xyz.yophon.gopan.feature.chat
 
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.foundation.shape.RoundedCornerShape
+import xyz.yophon.gopan.core.ui.components.TabTitle
 import android.content.ClipData
 import android.os.Build
 import android.widget.Toast
@@ -241,7 +244,7 @@ fun ChatScreen(
                     windowInsets = NestedScreenInsets,
                     title = {
                         Column {
-                            Text(stringResource(R.string.chat_title))
+                            TabTitle(stringResource(R.string.chat_title))
                             if (state.offline) {
                                 Text(
                                     stringResource(R.string.chat_offline),
@@ -566,7 +569,6 @@ private fun InputBar(
         snapshotFlow { field.text.toString() }.collect(viewModel::setDraft)
     }
     val draft = field.text
-    HorizontalDivider()
     Row(
         verticalAlignment = Alignment.Bottom,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
@@ -606,6 +608,14 @@ private fun InputBar(
             state = field,
             placeholder = { Text(stringResource(R.string.chat_input_hint)) },
             lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = 1, maxHeightInLines = 6),
+            // 胶囊输入框:暖灰底、不描边
+            shape = RoundedCornerShape(24.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = Color.Transparent,
+            ),
             modifier = Modifier
                 .weight(1f)
                 .testTag("chat_input")

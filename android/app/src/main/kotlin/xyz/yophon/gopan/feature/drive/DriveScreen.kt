@@ -1,5 +1,8 @@
 package xyz.yophon.gopan.feature.drive
 
+import androidx.compose.foundation.shape.CircleShape
+import xyz.yophon.gopan.core.ui.components.TabTitle
+import xyz.yophon.gopan.core.ui.theme.LocalGopanColors
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -224,11 +227,17 @@ fun DriveScreen(
             },
             floatingActionButton = {
                 if (!state.selectionMode) {
-                    FloatingActionButton(onClick = {
-                        // 离线下载开关进页面时没问到(断网)的话补问,问到了菜单里就多出「离线下载」
-                        fetchViewModel.checkEnabled()
-                        viewModel.openFabMenu()
-                    }) {
+                    val brand = LocalGopanColors.current
+                    FloatingActionButton(
+                        onClick = {
+                            // 离线下载开关进页面时没问到(断网)的话补问,问到了菜单里就多出「离线下载」
+                            fetchViewModel.checkEnabled()
+                            viewModel.openFabMenu()
+                        },
+                        shape = CircleShape,
+                        containerColor = brand.accent,
+                        contentColor = brand.onAccent,
+                    ) {
                         Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.drive_fab_add))
                     }
                 }
@@ -323,7 +332,9 @@ private fun DriveTopBar(
     Column {
         TopAppBar(
             windowInsets = NestedScreenInsets,
-            title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            title = {
+                if (state.isRoot) TabTitle(title) else Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            },
             navigationIcon = {
                 if (onBack != null) {
                     IconButton(onClick = onBack) {

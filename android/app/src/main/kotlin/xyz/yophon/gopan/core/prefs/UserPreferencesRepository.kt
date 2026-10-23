@@ -19,6 +19,9 @@ import javax.inject.Singleton
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
+/** 配色:墨黑(默认,与网页版同一套)、青绿(3.5 以前的配色)、跟随壁纸(Material You,Android 12+) */
+enum class Palette { GOPAN, CLASSIC, DYNAMIC }
+
 enum class DriveViewMode { LIST, GRID }
 
 /** 与 GraphQL 的 NodeOrder 同名,功能线自己映射,偏好层不依赖生成代码 */
@@ -49,8 +52,7 @@ data class TransferPrefs(
 
 data class UserPreferences(
     val theme: ThemeMode = ThemeMode.SYSTEM,
-    /** Material You 动态取色(跟随壁纸,Android 12+);关掉用 App 自己的配色 */
-    val dynamicColor: Boolean = true,
+    val palette: Palette = Palette.GOPAN,
     val driveViewMode: DriveViewMode = DriveViewMode.LIST,
     val driveSort: DriveSort = DriveSort(),
     val transfer: TransferPrefs = TransferPrefs(),
@@ -65,7 +67,7 @@ private val Context.prefsDataStore: DataStore<Preferences> by preferencesDataSto
 /** 进程内唯一的偏好 DataStore(DI 根用它提供 DataStore<Preferences>) */
 fun userPreferencesDataStore(context: Context): DataStore<Preferences> = context.prefsDataStore
 
-/** 用户偏好(DataStore):主题、文件列表的视图模式与排序、传输设置、传输助手草稿。读失败按默认值,不让坏文件拖垮启动。 */
+/** 用户偏好(DataStore):主题与配色、文件列表的视图模式与排序、传输设置、传输助手草稿。读失败按默认值,不让坏文件拖垮启动。 */
 @Singleton
 class UserPreferencesRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>,
@@ -78,8 +80,12 @@ class UserPreferencesRepository @Inject constructor(
         dataStore.edit { it[Keys.theme] = mode.name }
     }
 
-    suspend fun setDynamicColor(on: Boolean) {
-        dataStore.edit { it[Keys.dynamicColor] = on }
+    suspend fun setPalette(palette: Palette) {
+        dataStore.edit {
+            it[Keys.palette] = palette.name
+            // 3.6 以前的「动态取色」开关,由配色取代
+            it.remove(Keys.legacyDynamicColor)
+        }
     }
 
     suspend fun setDriveViewMode(mode: DriveViewMode) {
@@ -128,7 +134,8 @@ class UserPreferencesRepository @Inject constructor(
 
     private object Keys {
         val theme = stringPreferencesKey("theme")
-        val dynamicColor = booleanPreferencesKey("dynamic_color")
+        val palette = stringPreferencesKey("palette")
+        val legacyDynamicColor = booleanPreferencesKey("dynamic_color")
         val wifiOnly = booleanPreferencesKey("transfer_wifi_only")
         val partsOnWifi = intPreferencesKey("transfer_parts_wifi")
         val partsOnMobile = intPreferencesKey("transfer_parts_mobile")
@@ -142,7 +149,7 @@ class UserPreferencesRepository @Inject constructor(
 
     private fun Preferences.toUserPreferences() = UserPreferences(
         theme = enumOrDefault(this[Keys.theme], ThemeMode.SYSTEM),
-        dynamicColor = this[Keys.dynamicColor] ?: true,
+        palette = enumOrDefault(this[Keys.palette], Palette.GOPAN),
         driveViewMode = enumOrDefault(this[Keys.driveViewMode], DriveViewMode.LIST),
         driveSort = DriveSort(
             order = enumOrDefault(this[Keys.driveSortOrder], DriveSortOrder.NAME),

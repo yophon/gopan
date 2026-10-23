@@ -16,8 +16,6 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -66,6 +64,37 @@ import xyz.yophon.gopan.feature.notifications.NotificationsEntryViewModel
 import xyz.yophon.gopan.feature.notifications.NotificationsLogic
 import xyz.yophon.gopan.feature.media.MiniPlayerBar
 import xyz.yophon.gopan.feature.clips.ClipOpenViewModel
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ripple
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import xyz.yophon.gopan.core.ui.theme.LocalGopanColors
 
 /** 底部 tab 定义;顺序即显示顺序 */
 private class MainTab(
@@ -169,16 +198,12 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
                 // 迷你播放条(doc/22 二.4)在导航栏上面,后台在放音频时出现,切 tab 不受影响
                 if (!imeVisible) Column {
                     MiniPlayerBar(onOpenPreview = onOpenPreview, insetBottom = rail)
-                    if (!rail) NavigationBar {
-                        mainTabs.forEach { tab ->
-                            val selected = currentDestination?.hierarchy?.any { tab.matches(it) } == true
-                            NavigationBarItem(
-                                selected = selected,
-                                onClick = { selectTab(tab) },
-                                icon = { TabIcon(tab, selected, badge = if (tab.route == Routes.AccountTab) unread else 0) },
-                                label = { Text(stringResource(tab.label)) },
-                            )
-                        }
+                    if (!rail) {
+                        PillNavBar(
+                            selectedIndex = mainTabs.indexOfFirst { tab -> currentDestination?.hierarchy?.any { tab.matches(it) } == true },
+                            unread = unread,
+                            onSelect = ::selectTab,
+                        )
                     }
                 }
             },
@@ -210,15 +235,99 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
     }
 }
 
-/** tab 图标;[badge] > 0 时右上角带未读数(「我的」= 站内通知) */
+/**
+ * 底部导航:浮起的胶囊,选中项垫一块会滑动的底;四个 tab 都带文字(E2E 也按文字找)。
+ * [selectedIndex] = -1(在传输列表这类不属于哪个 tab 的页面)时不画选中底。
+ */
 @Composable
-private fun TabIcon(tab: MainTab, selected: Boolean, badge: Int) {
+private fun PillNavBar(selectedIndex: Int, unread: Int, onSelect: (MainTab) -> Unit) {
+    val colors = LocalGopanColors.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .widthIn(max = 480.dp)
+                .fillMaxWidth()
+                .height(64.dp)
+                .clip(CircleShape)
+                .background(colors.nav)
+                .padding(5.dp)
+                .selectableGroup()
+                .testTag("main_nav"),
+        ) {
+            val itemWidth = maxWidth / mainTabs.size
+            val indicatorX by animateDpAsState(
+                targetValue = itemWidth * selectedIndex.coerceAtLeast(0),
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
+                label = "navIndicator",
+            )
+            if (selectedIndex >= 0) {
+                Box(
+                    Modifier
+                        .offset { IntOffset(indicatorX.roundToPx(), 0) }
+                        .width(itemWidth)
+                        .fillMaxHeight()
+                        .clip(CircleShape)
+                        .background(colors.navSelected),
+                )
+            }
+            Row(Modifier.fillMaxSize()) {
+                mainTabs.forEachIndexed { index, tab ->
+                    val selected = index == selectedIndex
+                    val tint by animateColorAsState(if (selected) colors.onNavSelected else colors.onNav, label = "navTint")
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .selectable(
+                                selected = selected,
+                                interactionSource = null,
+                                indication = ripple(color = colors.onNav),
+                                role = Role.Tab,
+                                onClick = { onSelect(tab) },
+                            ),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        TabIcon(tab, selected, badge = if (tab.route == Routes.AccountTab) unread else 0, tint = tint)
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = stringResource(tab.label),
+                            color = tint,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** tab 图标;[badge] > 0 时右上角带未读数(「我的」= 站内通知),角标用强调色 */
+@Composable
+private fun TabIcon(tab: MainTab, selected: Boolean, badge: Int, tint: Color = LocalContentColor.current) {
     val icon = if (selected) tab.selectedIcon else tab.icon
     if (badge > 0) {
-        BadgedBox(badge = { Badge(modifier = Modifier.testTag("main_unread_badge")) { Text(NotificationsLogic.badgeText(badge)) } }) {
-            Icon(imageVector = icon, contentDescription = null)
+        val colors = LocalGopanColors.current
+        BadgedBox(
+            badge = {
+                Badge(containerColor = colors.accent, contentColor = colors.onAccent, modifier = Modifier.testTag("main_unread_badge")) {
+                    Text(NotificationsLogic.badgeText(badge))
+                }
+            },
+        ) {
+            Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
         }
     } else {
-        Icon(imageVector = icon, contentDescription = null)
+        Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
     }
 }

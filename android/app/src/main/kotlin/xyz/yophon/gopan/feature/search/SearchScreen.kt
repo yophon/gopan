@@ -196,6 +196,7 @@ private fun SearchTabs(selected: SearchTab, onSelect: (SearchTab) -> Unit) {
     PrimaryTabRow(selectedTabIndex = selected.ordinal) {
         SearchTab.entries.forEach { tab ->
             Tab(
+                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 selected = selected == tab,
                 onClick = { onSelect(tab) },
                 text = {

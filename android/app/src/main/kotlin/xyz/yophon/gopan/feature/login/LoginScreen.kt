@@ -1,5 +1,11 @@
 package xyz.yophon.gopan.feature.login
 
+import xyz.yophon.gopan.core.ui.components.GopanWordmark
+import xyz.yophon.gopan.core.ui.components.FolderPanel
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.foundation.layout.PaddingValues
 import android.content.ActivityNotFoundException
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
@@ -22,12 +28,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -64,7 +68,6 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -146,14 +149,16 @@ private fun LoginContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Column(
+            // 文件夹面板:标签页上是字标,登录方式在正文里切换(网页版登录页同一个样子)
+            FolderPanel(
                 modifier = Modifier
-                    .widthIn(max = 400.dp)
+                    .widthIn(max = 420.dp)
                     .fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                tabHeight = 48.dp,
+                corner = 24.dp,
+                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 24.dp),
+                tab = { GopanWordmark(fontSize = 20.sp) },
             ) {
-                Brand()
-                Spacer(Modifier.height(36.dp))
                 AnimatedContent(targetState = state.passwordPanelVisible, label = "login-panel") { expanded ->
                     if (expanded) {
                         PasswordPanel(
@@ -178,43 +183,24 @@ private fun LoginContent(
 }
 
 @Composable
-private fun Brand() {
-    Surface(
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        modifier = Modifier.size(80.dp),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = Icons.Outlined.Cloud,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(44.dp),
-            )
-        }
-    }
-    Spacer(Modifier.height(16.dp))
-    Text(
-        text = stringResource(R.string.login_title),
-        style = MaterialTheme.typography.headlineMedium,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
-}
-
-@Composable
 private fun YophonIdPanel(
     state: LoginUiState,
     onStartYophonId: () -> Unit,
     onShowPasswordLogin: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.login_heading),
+            style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.login_subtitle),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(28.dp))
         BusyButton(
             text = stringResource(R.string.login_with_yophon_id),
             busyText = stringResource(R.string.login_connecting_id),
@@ -223,7 +209,7 @@ private fun YophonIdPanel(
         )
         ErrorBanner(message = state.bannerError)
         Spacer(Modifier.height(8.dp))
-        TextButton(onClick = onShowPasswordLogin, enabled = !state.busy) {
+        TextButton(onClick = onShowPasswordLogin, enabled = !state.busy, modifier = Modifier.align(Alignment.CenterHorizontally)) {
             Text(stringResource(R.string.login_other_account))
         }
     }
@@ -256,9 +242,10 @@ private fun PasswordPanel(
     val moveNext = { focusManager.moveFocus(FocusDirection.Down); Unit }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        PrimaryTabRow(selectedTabIndex = selectedTab) {
+        PrimaryTabRow(selectedTabIndex = selectedTab, containerColor = Color.Transparent) {
             tabs.forEach { tab ->
                 Tab(
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     selected = state.mode == tab,
                     onClick = { if (tab == LoginMode.REGISTER) onShowRegister() else onShowPasswordLogin() },
                     enabled = !state.busy,
@@ -277,6 +264,7 @@ private fun PasswordPanel(
                 .fillMaxWidth()
                 .semantics { contentType = if (registering) ContentType.NewUsername else ContentType.Username },
             label = { Text(stringResource(R.string.login_username)) },
+            colors = panelFieldColors(),
             singleLine = true,
             enabled = !state.busy,
             isError = state.errorField == LoginField.USERNAME,
@@ -355,6 +343,7 @@ private fun PasswordField(
             .fillMaxWidth()
             .semantics { contentType = autofillType },
         label = { Text(label) },
+        colors = panelFieldColors(),
         singleLine = true,
         enabled = enabled,
         isError = error != null,
@@ -373,7 +362,16 @@ private fun PasswordField(
     )
 }
 
-/** 主按钮:busy 时禁用并显示小转圈 + 进行中文案 */
+/** 面板是暖灰的,输入框垫白底 */
+@Composable
+private fun panelFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = MaterialTheme.colorScheme.surface,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+    disabledContainerColor = MaterialTheme.colorScheme.surface,
+    errorContainerColor = MaterialTheme.colorScheme.surface,
+)
+
+/** 主按钮(实心胶囊):busy 时禁用并显示小转圈 + 进行中文案 */
 @Composable
 private fun BusyButton(
     text: String,
@@ -386,7 +384,7 @@ private fun BusyButton(
         enabled = !busy,
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp),
+            .height(52.dp),
     ) {
         if (busy) {
             CircularProgressIndicator(
@@ -439,7 +437,7 @@ private fun ErrorBanner(message: String?) {
 @Preview(name = "Yophon ID · 深色", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun PreviewYophonId() {
-    GopanTheme(dynamicColor = false) {
+    GopanTheme {
         LoginContent(
             state = LoginUiState(),
             onStartYophonId = {}, onShowYophonId = {}, onShowPasswordLogin = {}, onShowRegister = {},
@@ -451,7 +449,7 @@ private fun PreviewYophonId() {
 @Preview(name = "密码登录 · 出错", showBackground = true)
 @Composable
 private fun PreviewPasswordError() {
-    GopanTheme(dynamicColor = false) {
+    GopanTheme {
         LoginContent(
             state = LoginUiState(mode = LoginMode.PASSWORD, error = LoginRules.TEXT_BAD_CREDENTIALS),
             onStartYophonId = {}, onShowYophonId = {}, onShowPasswordLogin = {}, onShowRegister = {},
@@ -463,7 +461,7 @@ private fun PreviewPasswordError() {
 @Preview(name = "注册 · 进行中", showBackground = true)
 @Composable
 private fun PreviewRegisterBusy() {
-    GopanTheme(dynamicColor = false) {
+    GopanTheme {
         LoginContent(
             state = LoginUiState(mode = LoginMode.REGISTER, busy = true),
             onStartYophonId = {}, onShowYophonId = {}, onShowPasswordLogin = {}, onShowRegister = {},

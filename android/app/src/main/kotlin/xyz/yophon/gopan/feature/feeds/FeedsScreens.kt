@@ -597,7 +597,7 @@ private fun FeedDetailList(feed: Feed, state: FeedDetailUiState, viewModel: Feed
 private fun FeedHeader(feed: Feed) {
     val actions = rememberSystemActions()
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = MaterialTheme.colorScheme.surfaceContainer,
         shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
     ) {

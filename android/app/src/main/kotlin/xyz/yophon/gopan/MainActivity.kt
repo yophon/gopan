@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
                 )
                 onDispose {}
             }
-            GopanTheme(themeMode = mode, dynamicColor = look.dynamicColor) {
+            GopanTheme(themeMode = mode, palette = look.palette) {
                 RootNavHost(authState = authState)
             }
         }

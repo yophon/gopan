@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 自适应图标背景(前景 PNG 由 web/public/icons/icon-512.png 派生,与 v2.6 壳相同) -->
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- 自适应图标背景:墨黑(前景是白色文件夹 drawable/ic_launcher_foreground,与网页版图标一致) -->
+    <color name="ic_launcher_background">#121212</color>
+    <!-- 深色主题启动期的窗口底色,与墨黑配色的深色背景一致 -->
+    <color name="window_background_dark">#141312</color>
 </resources>

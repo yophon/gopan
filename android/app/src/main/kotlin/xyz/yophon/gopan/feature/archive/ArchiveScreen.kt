@@ -1,5 +1,8 @@
 package xyz.yophon.gopan.feature.archive
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import xyz.yophon.gopan.core.ui.components.FolderGlyph
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -334,12 +337,8 @@ private fun EntryRow(
         colors = ListItemDefaults.colors(containerColor = container),
         leadingContent = {
             if (entry.isDir) {
-                Icon(
-                    Icons.Outlined.Folder,
-                    contentDescription = stringResource(R.string.archive_type_folder),
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp),
-                )
+                val label = stringResource(R.string.archive_type_folder)
+                FolderGlyph(Modifier.size(30.dp).semantics { contentDescription = label })
             } else {
                 val category = fileCategory(NodeKind.FILE, entry.name, null)
                 Icon(

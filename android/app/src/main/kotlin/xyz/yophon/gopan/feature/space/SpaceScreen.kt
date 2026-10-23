@@ -1,5 +1,6 @@
 package xyz.yophon.gopan.feature.space
 
+import xyz.yophon.gopan.core.ui.components.FolderGlyph
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
@@ -146,7 +147,12 @@ fun SpaceScreen(
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             PrimaryScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 8.dp, modifier = Modifier.testTag("space_tabs")) {
                 SpaceTab.entries.forEach { t ->
-                    Tab(selected = tab == t, onClick = { tab = t }, text = { Text(stringResource(t.label)) })
+                    Tab(
+                        selected = tab == t,
+                        onClick = { tab = t },
+                        text = { Text(stringResource(t.label)) },
+                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -222,7 +228,7 @@ private fun SectionTitle(text: String) {
 @Composable
 private fun SpaceCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = MaterialTheme.colorScheme.surfaceContainer,
         shape = MaterialTheme.shapes.large,
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
@@ -417,11 +423,11 @@ private fun FolderShareRow(share: FolderShare, looseFiles: Long, onEnter: () -> 
         modifier = if (node != null) Modifier.clickable(onClick = onEnter).testTag("space_folder_row") else Modifier,
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         leadingContent = {
-            Icon(
-                if (node != null) Icons.Outlined.Folder else Icons.AutoMirrored.Outlined.InsertDriveFile,
-                contentDescription = null,
-                tint = if (node != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (node != null) {
+                FolderGlyph(Modifier.size(26.dp))
+            } else {
+                Icon(Icons.AutoMirrored.Outlined.InsertDriveFile, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         },
         headlineContent = {
             Text(

@@ -1,5 +1,6 @@
 package xyz.yophon.gopan.feature.account
 
+import xyz.yophon.gopan.core.ui.exposeTestTags
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -87,14 +88,24 @@ import xyz.yophon.gopan.BuildConfig
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.auth.UserSummary
 import xyz.yophon.gopan.core.prefs.DriveViewMode
+import xyz.yophon.gopan.core.prefs.Palette
 import xyz.yophon.gopan.core.prefs.ThemeMode
 import xyz.yophon.gopan.core.ui.components.ConfirmDialog
 import xyz.yophon.gopan.core.ui.components.ErrorState
 import xyz.yophon.gopan.core.ui.components.LoadingState
+import xyz.yophon.gopan.core.ui.components.FolderPanel
+import xyz.yophon.gopan.core.ui.components.TabTitle
+import xyz.yophon.gopan.core.ui.format.formatBytes
+import xyz.yophon.gopan.core.ui.theme.LocalGopanColors
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import xyz.yophon.gopan.feature.transfers.TransferSettingsDialog
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material.icons.outlined.ColorLens
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material3.Switch
 import androidx.compose.ui.platform.testTag
 import xyz.yophon.gopan.core.ui.theme.supportsDynamicColor
@@ -163,7 +174,7 @@ fun AccountScreen(
         onPasswordInputChanged = viewModel::clearPasswordErrors,
         onSubmitPassword = viewModel::submitPasswordChange,
         onSetTheme = viewModel::setTheme,
-        onSetDynamicColor = viewModel::setDynamicColor,
+        onSetPalette = viewModel::setPalette,
         onSetDriveViewMode = viewModel::setDriveViewMode,
         updateBadge = update.availableVersion,
         crashCount = crashState.reports.size,
@@ -208,7 +219,7 @@ internal fun AccountContent(
     onPasswordInputChanged: () -> Unit,
     onSubmitPassword: (old: String, new: String, confirm: String) -> Unit,
     onSetTheme: (ThemeMode) -> Unit,
-    onSetDynamicColor: (Boolean) -> Unit,
+    onSetPalette: (Palette) -> Unit,
     onSetDriveViewMode: (DriveViewMode) -> Unit,
     onLogout: () -> Unit,
     onMessageShown: (Long) -> Unit,
@@ -227,6 +238,7 @@ internal fun AccountContent(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showThemeDialog by rememberSaveable { mutableStateOf(false) }
+    var showPaletteDialog by rememberSaveable { mutableStateOf(false) }
     var showTransferSettings by rememberSaveable { mutableStateOf(false) }
     var showViewModeDialog by rememberSaveable { mutableStateOf(false) }
     var showLogoutConfirm by rememberSaveable { mutableStateOf(false) }
@@ -243,7 +255,7 @@ internal fun AccountContent(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.account_title)) },
+                title = { TabTitle(stringResource(R.string.account_title)) },
                 windowInsets = WindowInsets(0, 0, 0, 0),
             )
         },
@@ -267,8 +279,8 @@ internal fun AccountContent(
                     user = user,
                     usage = state.usage ?: UsageSummary(user.usedBytes, user.quotaBytes),
                     theme = state.theme,
-                    dynamicColor = state.dynamicColor,
-                    onSetDynamicColor = onSetDynamicColor,
+                    palette = state.palette,
+                    onOpenPaletteDialog = { showPaletteDialog = true },
                     driveViewMode = state.driveViewMode,
                     versionName = versionName,
                     loggingOut = state.loggingOut,
@@ -321,6 +333,14 @@ internal fun AccountContent(
         )
     }
 
+    if (showPaletteDialog) {
+        PaletteDialog(
+            selected = state.palette,
+            onSelect = { onSetPalette(it); showPaletteDialog = false },
+            onDismiss = { showPaletteDialog = false },
+        )
+    }
+
     if (showViewModeDialog) {
         SingleChoiceDialog(
             title = stringResource(R.string.account_item_drive_view),
@@ -351,8 +371,8 @@ private fun AccountList(
     user: UserSummary,
     usage: UsageSummary,
     theme: ThemeMode,
-    dynamicColor: Boolean,
-    onSetDynamicColor: (Boolean) -> Unit,
+    palette: Palette,
+    onOpenPaletteDialog: () -> Unit,
     driveViewMode: DriveViewMode,
     versionName: String,
     loggingOut: Boolean,
@@ -465,25 +485,20 @@ private fun AccountList(
         item("appearance") { SectionTitle(stringResource(R.string.account_section_appearance)) }
         item("theme") {
             SettingItem(
-                icon = Icons.Outlined.Palette,
+                icon = Icons.Outlined.DarkMode,
                 title = stringResource(R.string.account_item_theme),
                 value = stringResource(theme.labelRes()),
                 onClick = onOpenThemeDialog,
             )
         }
-        if (supportsDynamicColor) {
-            item("dynamic-color") {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.account_item_dynamic_color)) },
-                    supportingContent = { Text(stringResource(R.string.account_item_dynamic_color_hint)) },
-                    leadingContent = { Icon(Icons.Outlined.ColorLens, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-                    trailingContent = {
-                        Switch(checked = dynamicColor, onCheckedChange = onSetDynamicColor, modifier = Modifier.testTag("account_dynamic_color"))
-                    },
-                    modifier = Modifier.clickable { onSetDynamicColor(!dynamicColor) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                )
-            }
+        item("palette") {
+            SettingItem(
+                icon = Icons.Outlined.Palette,
+                title = stringResource(R.string.account_item_palette),
+                value = stringResource(palette.labelRes()),
+                onClick = onOpenPaletteDialog,
+                modifier = Modifier.testTag("account_palette"),
+            )
         }
         item("view") {
             SettingItem(
@@ -549,67 +564,76 @@ private fun AccountList(
     }
 }
 
-/** 头部:用户名与用量;点一下进「空间」看空间花在哪 */
+/**
+ * 头部:文件夹面板,标签页上是用户名,正文是大号的已用空间与用量条;点一下进「空间」看空间花在哪
+ */
 @Composable
 private fun AccountHeader(user: UserSummary, usage: UsageSummary, onClick: () -> Unit) {
-    Surface(
+    val colors = LocalGopanColors.current
+    FolderPanel(
         onClick = onClick,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).testTag("account_usage"),
-        shape = MaterialTheme.shapes.large,
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.size(56.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = user.username.take(1).uppercase(),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = user.username,
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.weight(1f, fill = false),
-                            maxLines = 1,
-                        )
-                        if (user.isAdmin) {
-                            Spacer(Modifier.width(8.dp))
-                            AdminBadge()
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = usage.percentText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("account_usage"),
+        tab = {
+            Box(
+                modifier = Modifier.size(24.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = user.username.take(1).uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
             }
-            Spacer(Modifier.height(16.dp))
-            val barColor = when (usage.level) {
-                UsageLevel.NORMAL -> MaterialTheme.colorScheme.primary
-                UsageLevel.WARN -> MaterialTheme.colorScheme.tertiary
-                UsageLevel.CRITICAL -> MaterialTheme.colorScheme.error
-            }
-            LinearProgressIndicator(
-                progress = { usage.fraction },
-                modifier = Modifier.fillMaxWidth(),
-                color = barColor,
-            )
-            Spacer(Modifier.height(8.dp))
             Text(
-                text = usage.text,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = user.username,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
             )
+            if (user.isAdmin) AdminBadge()
+        },
+    ) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = formatBytes(usage.usedBytes.coerceAtLeast(0)),
+                style = MaterialTheme.typography.displaySmall,
+                modifier = Modifier.alignByBaseline(),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = if (usage.noQuota) usage.percentText else "/ ${formatBytes(usage.quotaBytes)}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.alignByBaseline().weight(1f),
+                maxLines = 1,
+            )
+            if (!usage.noQuota) {
+                Text(
+                    text = "${usage.percent}%",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.alignByBaseline(),
+                )
+            }
         }
+        Spacer(Modifier.height(14.dp))
+        val barColor = when (usage.level) {
+            UsageLevel.NORMAL -> MaterialTheme.colorScheme.primary
+            UsageLevel.WARN -> MaterialTheme.colorScheme.tertiary
+            UsageLevel.CRITICAL -> MaterialTheme.colorScheme.error
+        }
+        LinearProgressIndicator(
+            progress = { usage.fraction },
+            modifier = Modifier.fillMaxWidth().height(8.dp),
+            color = barColor,
+            trackColor = colors.folderBack,
+            strokeCap = StrokeCap.Round,
+            gapSize = 0.dp,
+            drawStopIndicator = {},
+        )
     }
 }
 
@@ -688,7 +712,11 @@ private fun LazyListScope.notificationsSection(entry: NotificationsEntry) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (entry.unread > 0) {
                         val description = stringResource(R.string.notifications_unread_badge, NotificationsLogic.badgeText(entry.unread))
-                        Badge(modifier = Modifier.testTag("account_notifications_badge").semantics { contentDescription = description }) {
+                        Badge(
+                            containerColor = LocalGopanColors.current.accent,
+                            contentColor = LocalGopanColors.current.onAccent,
+                            modifier = Modifier.testTag("account_notifications_badge").semantics { contentDescription = description },
+                        ) {
                             Text(NotificationsLogic.badgeText(entry.unread))
                         }
                         Spacer(Modifier.width(4.dp))
@@ -880,7 +908,70 @@ private fun <T> SingleChoiceDialog(
     )
 }
 
+/** 配色:每项右边一组色样(主色、强调色、面板色);「跟随壁纸」只在 Android 12+ 出现 */
+@Composable
+private fun PaletteDialog(selected: Palette, onSelect: (Palette) -> Unit, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val options = buildList {
+        add(Palette.GOPAN to listOf(Color(0xFF121212), Color(0xFFF2541B), Color(0xFFF3F2EE)))
+        add(Palette.CLASSIC to listOf(Color(0xFF00696B), Color(0xFF6FF7F8), Color(0xFFCCE8E7)))
+        if (supportsDynamicColor) {
+            val wall = dynamicLightColorScheme(context)
+            add(Palette.DYNAMIC to listOf(wall.primary, wall.primaryContainer, wall.secondaryContainer))
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.account_item_palette)) },
+        text = {
+            Column(Modifier.exposeTestTags()) {
+                options.forEach { (option, swatch) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = option == selected, role = Role.RadioButton, onClick = { onSelect(option) })
+                            .padding(vertical = 10.dp)
+                            .testTag("palette_${option.name}"),
+                    ) {
+                        RadioButton(selected = option == selected, onClick = null)
+                        Spacer(Modifier.width(12.dp))
+                        Text(stringResource(option.labelRes()), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        Swatch(swatch)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}
+
+/** 几个叠在一起的圆点,中间留一圈底色 */
+@Composable
+private fun Swatch(colors: List<Color>) {
+    val ring = MaterialTheme.colorScheme.surfaceContainerHigh
+    Row(horizontalArrangement = Arrangement.spacedBy((-6).dp)) {
+        colors.forEach { c ->
+            Box(
+                Modifier
+                    .size(22.dp)
+                    .background(ring, CircleShape)
+                    .padding(2.dp)
+                    .background(c, CircleShape),
+            )
+        }
+    }
+}
+
 // ---- 文案映射 ----
+
+private fun Palette.labelRes(): Int = when (this) {
+    Palette.GOPAN -> R.string.account_palette_gopan
+    Palette.CLASSIC -> R.string.account_palette_classic
+    Palette.DYNAMIC -> R.string.account_palette_dynamic
+}
 
 private fun ThemeMode.labelRes(): Int = when (this) {
     ThemeMode.SYSTEM -> R.string.account_theme_system

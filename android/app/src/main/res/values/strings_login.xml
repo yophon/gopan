@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 登录功能线(feature.login)的界面文案;错误文案在 LoginRules.kt(ViewModel 产出,不经资源) -->
 <resources>
-    <string name="login_title">gopan 云盘</string>
+    <string name="login_heading">登录</string>
     <string name="login_subtitle">使用 Yophon ID 打开你的文件。</string>
     <string name="login_with_yophon_id">使用 Yophon ID 登录</string>
     <string name="login_connecting_id">正在连接账号中心…</string>

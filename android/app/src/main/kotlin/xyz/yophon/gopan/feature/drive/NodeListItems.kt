@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.role
@@ -70,6 +71,8 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.Node
+import xyz.yophon.gopan.core.ui.components.FolderGlyph
+import xyz.yophon.gopan.core.ui.theme.LocalGopanColors
 import xyz.yophon.gopan.core.ui.format.formatBytes
 import xyz.yophon.gopan.core.ui.format.formatRelativeTime
 
@@ -109,12 +112,17 @@ val FileCategory.labelRes: Int
         FileCategory.OTHER -> R.string.drive_type_other
     }
 
+/** 文件类型图标的颜色:墨黑配色下一律暖灰(和网页版一样),青绿与跟随壁纸按类型上色 */
 @Composable
-fun FileCategory.tint(): Color = when (this) {
-    FileCategory.FOLDER -> MaterialTheme.colorScheme.primary
-    FileCategory.IMAGE, FileCategory.VIDEO, FileCategory.AUDIO -> MaterialTheme.colorScheme.tertiary
-    FileCategory.PDF -> MaterialTheme.colorScheme.error
-    else -> MaterialTheme.colorScheme.secondary
+fun FileCategory.tint(): Color {
+    val colors = LocalGopanColors.current
+    return when (this) {
+        // 线框文件夹图标(少数没换成 FolderGlyph 的地方)要有对比度,用主色
+        FileCategory.FOLDER -> MaterialTheme.colorScheme.primary
+        FileCategory.IMAGE, FileCategory.VIDEO, FileCategory.AUDIO -> colors.fileMedia
+        FileCategory.PDF -> colors.filePdf
+        else -> colors.fileOther
+    }
 }
 
 /**
@@ -135,12 +143,18 @@ fun NodeVisual(
     var thumbShown by remember(node.imageCacheKey) { mutableStateOf(false) }
     Box(modifier = modifier.clip(shape), contentAlignment = Alignment.Center) {
         if (!thumbShown) {
-            Icon(
-                imageVector = category.icon,
-                contentDescription = stringResource(category.labelRes),
-                tint = category.tint(),
-                modifier = Modifier.size(iconSize),
-            )
+            if (category == FileCategory.FOLDER) {
+                // 文件夹:实心两片,与网页版、发布页的文件夹记号一致
+                val label = stringResource(category.labelRes)
+                FolderGlyph(Modifier.size(iconSize * 1.15f).semantics { contentDescription = label })
+            } else {
+                Icon(
+                    imageVector = category.icon,
+                    contentDescription = stringResource(category.labelRes),
+                    tint = category.tint(),
+                    modifier = Modifier.size(iconSize),
+                )
+            }
         }
         if (node.hasThumb) {
             val url = node.preview.thumbUrl
@@ -252,7 +266,7 @@ fun NodeCard(
             .testTag("node:${node.name}"),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
         ),
         border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
     ) {
