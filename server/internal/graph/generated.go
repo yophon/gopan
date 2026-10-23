@@ -843,9 +843,12 @@ type ComplexityRoot struct {
 
 	ShareInfo struct {
 		Expired      func(childComplexity int) int
+		ExpiresAt    func(childComplexity int) int
+		FileCount    func(childComplexity int) int
 		Kind         func(childComplexity int) int
 		Name         func(childComplexity int) int
 		NeedPassword func(childComplexity int) int
+		Size         func(childComplexity int) int
 		Token        func(childComplexity int) int
 	}
 
@@ -5217,6 +5220,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ShareInfo.Expired(childComplexity), true
+	case "ShareInfo.expiresAt":
+		if e.ComplexityRoot.ShareInfo.ExpiresAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareInfo.ExpiresAt(childComplexity), true
+	case "ShareInfo.fileCount":
+		if e.ComplexityRoot.ShareInfo.FileCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareInfo.FileCount(childComplexity), true
 	case "ShareInfo.kind":
 		if e.ComplexityRoot.ShareInfo.Kind == nil {
 			break
@@ -5235,6 +5250,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ShareInfo.NeedPassword(childComplexity), true
+	case "ShareInfo.size":
+		if e.ComplexityRoot.ShareInfo.Size == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareInfo.Size(childComplexity), true
 	case "ShareInfo.token":
 		if e.ComplexityRoot.ShareInfo.Token == nil {
 			break
@@ -6190,6 +6211,11 @@ type ShareInfo {
   kind: NodeKind!
   needPassword: Boolean!
   expired: Boolean!
+  # 访客页头部显示(v3.8):有密码的分享在验密前一律为 null,不提前透露内容的规模
+  expiresAt: Time
+  # 文件是大小;文件夹是子树体积与文件数(异步统计,可能略滞后)
+  size: Int64
+  fileCount: Int64
 }
 
 type AuthPayload {
@@ -8315,6 +8341,12 @@ func (ec *executionContext) childFields_ShareInfo(ctx context.Context, field gra
 		return ec.fieldContext_ShareInfo_needPassword(ctx, field)
 	case "expired":
 		return ec.fieldContext_ShareInfo_expired(ctx, field)
+	case "expiresAt":
+		return ec.fieldContext_ShareInfo_expiresAt(ctx, field)
+	case "size":
+		return ec.fieldContext_ShareInfo_size(ctx, field)
+	case "fileCount":
+		return ec.fieldContext_ShareInfo_fileCount(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ShareInfo", field.Name)
 }
@@ -27107,6 +27139,75 @@ func (ec *executionContext) fieldContext_ShareInfo_expired(_ context.Context, fi
 	return graphql.NewScalarFieldContext("ShareInfo", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
+func (ec *executionContext) _ShareInfo_expiresAt(ctx context.Context, field graphql.CollectedField, obj *ShareInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareInfo_expiresAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ExpiresAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ShareInfo_expiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareInfo", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _ShareInfo_size(ctx context.Context, field graphql.CollectedField, obj *ShareInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareInfo_size(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Size, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int64) graphql.Marshaler {
+			return ec.marshalOInt642ᚖint64(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ShareInfo_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareInfo", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _ShareInfo_fileCount(ctx context.Context, field graphql.CollectedField, obj *ShareInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareInfo_fileCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FileCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int64) graphql.Marshaler {
+			return ec.marshalOInt642ᚖint64(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ShareInfo_fileCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareInfo", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
 func (ec *executionContext) _ShareVisit_kind(ctx context.Context, field graphql.CollectedField, obj *ShareVisit) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -37301,6 +37402,21 @@ func (ec *executionContext) _ShareInfo(ctx context.Context, sel ast.SelectionSet
 		case "expired":
 			out.Values[i] = ec._ShareInfo_expired(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expiresAt":
+			out.Values[i] = ec._ShareInfo_expiresAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "size":
+			out.Values[i] = ec._ShareInfo_size(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "fileCount":
+			out.Values[i] = ec._ShareInfo_fileCount(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:

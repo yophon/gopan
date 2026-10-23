@@ -3,7 +3,6 @@ package httpx
 import (
 	"errors"
 	"fmt"
-	"html"
 	"io/fs"
 	"log/slog"
 	"net"
@@ -18,7 +17,7 @@ import (
 )
 
 // ShareLanding 对 /s/{token} 服务端直出带 og 标签的 index.html,
-// 微信/群聊爬虫拿到卡片预览,浏览器随后照常加载 SPA。
+// 微信/群聊爬虫拿到卡片预览(标题、类型与大小、缩略图;有密码的不露名字,见 landing.go),浏览器随后照常加载 SPA。
 func ShareLanding(dist fs.FS, shares *service.Shares) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		idx, err := fs.ReadFile(dist, "index.html")
@@ -27,26 +26,16 @@ func ShareLanding(dist fs.FS, shares *service.Shares) http.Handler {
 			return
 		}
 		page := string(idx)
-		if info, err := shares.Info(r.Context(), r.PathValue("token")); err == nil {
-			title := info.Name
-			desc := "通过 gopan 云盘分享的文件"
-			if info.Kind == "folder" {
-				desc = "通过 gopan 云盘分享的文件夹"
-			}
-			if info.Expired {
-				title, desc = "分享已失效", "该分享链接已过期或被取消"
-			}
-			meta := fmt.Sprintf(
-				`<meta property="og:title" content="%s"><meta property="og:description" content="%s"><meta property="og:type" content="website">`,
-				html.EscapeString(title), html.EscapeString(desc))
-			page = strings.Replace(page, "<head>", "<head>"+meta, 1)
+		token := r.PathValue("token")
+		if info, err := shares.Info(r.Context(), token); err == nil {
+			page = injectMeta(page, shareMeta(info, requestOrigin(r), token, time.Now()))
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write([]byte(page))
 	})
 }
 
-// CollectLanding 对 /c/{token}(收集文件链接)同样直出 og 标签:卡片上是属主写的标题。
+// CollectLanding 对 /c/{token}(收集文件链接)同样直出 og 标签:卡片上是属主写的标题与说明。
 func CollectLanding(dist fs.FS, collects *service.Collects) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		idx, err := fs.ReadFile(dist, "index.html")
@@ -56,14 +45,7 @@ func CollectLanding(dist fs.FS, collects *service.Collects) http.Handler {
 		}
 		page := string(idx)
 		if info, err := collects.Info(r.Context(), r.PathValue("token")); err == nil {
-			title, desc := info.Title, "点开链接即可上传文件,无需注册"
-			if info.Closed {
-				title, desc = "收集已结束", "该收集链接已截止或被取消"
-			}
-			meta := fmt.Sprintf(
-				`<meta property="og:title" content="%s"><meta property="og:description" content="%s"><meta property="og:type" content="website">`,
-				html.EscapeString(title), html.EscapeString(desc))
-			page = strings.Replace(page, "<head>", "<head>"+meta, 1)
+			page = injectMeta(page, collectMeta(info, requestOrigin(r), time.Now()))
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write([]byte(page))

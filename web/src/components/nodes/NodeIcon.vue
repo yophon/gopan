@@ -23,6 +23,8 @@ const canThumb = computed(
 )
 
 const boxStyle = computed(() => ({ width: `${props.size}px`, height: `${props.size}px` }))
+/** 图标字形占方框的七成:28px 的行里约 20px,72px 的大图标约 50px */
+const iconStyle = computed(() => ({ ...boxStyle.value, fontSize: `${Math.round(props.size * 0.7)}px` }))
 </script>
 
 <template>
@@ -40,7 +42,7 @@ const boxStyle = computed(() => ({ width: `${props.size}px`, height: `${props.si
     <path d="M1 4a3 3 0 0 1 3-3h7.2a2 2 0 0 1 1.5.7L15.4 4H30a3 3 0 0 1 3 3v18a3 3 0 0 1-3 3H4a3 3 0 0 1-3-3z" class="folder-back" />
     <path d="M1 9.5h32V25a3 3 0 0 1-3 3H4a3 3 0 0 1-3-3z" class="folder-front" />
   </svg>
-  <el-icon v-else class="node-icon" :style="boxStyle">
+  <el-icon v-else class="node-icon" :style="iconStyle">
     <component :is="fileIcon(node)" />
   </el-icon>
 </template>

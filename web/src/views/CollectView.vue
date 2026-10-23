@@ -3,14 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
-import {
-  CircleCheckFilled,
-  Close,
-  Link,
-  Refresh,
-  UploadFilled,
-  WarningFilled,
-} from '@element-plus/icons-vue'
+import { CircleCheckFilled, Close, Lock, Refresh, UploadFilled } from '@element-plus/icons-vue'
 
 import { guestRequest, hasErrorCode, plainRequest } from '@/api/client'
 import { errorText } from '@/api/errors'
@@ -26,6 +19,10 @@ import {
 import { formatBytes, formatTime } from '@/utils/format'
 import { createCollectUploader } from '@/uploader/collect'
 import type { CollectTask, CollectTransport } from '@/uploader/collect'
+import { expiryText } from '@/utils/visitor'
+import { useBreakpoints } from '@/composables/breakpoints'
+import BrandLogo from '@/components/BrandLogo.vue'
+import '@/styles/visitor.css'
 
 /**
  * 收集文件的访客页(/c/:token,doc/20 二.5)。不登录:打开链接 → 密码 / 名字 → 选文件上传。
@@ -60,7 +57,7 @@ function onGuestError(err: unknown): boolean {
 
 const {
   data: infoData,
-  isFetching: infoLoading,
+  isPending: infoPending,
   isError: infoError,
   error: infoErr,
   refetch: refetchInfo,
@@ -278,70 +275,76 @@ onBeforeUnmount(() => {
   void holdWakeLock(false)
 })
 
-const deadlineText = computed(() =>
-  info.value?.expiresAt ? `截止 ${formatTime(info.value.expiresAt)}` : '',
-)
+const { isMobile } = useBreakpoints()
+
+/** 头部那一行:截止时间(N 天后截止 · 具体时刻)、单个文件上限 */
+const metaParts = computed(() => {
+  const i = info.value
+  if (!i) return []
+  const out: string[] = []
+  if (i.expiresAt) {
+    const left = expiryText(i.expiresAt, Date.now(), '截止')
+    out.push(left ? `${left}(${formatTime(i.expiresAt)})` : `截止 ${formatTime(i.expiresAt)}`)
+  }
+  if (i.maxFileSize) out.push(`单个文件不超过 ${formatBytes(i.maxFileSize)}`)
+  return out
+})
+
+watch(info, (i) => {
+  if (i && !i.closed) document.title = `${i.title} · gopan 云盘`
+})
 </script>
 
 <template>
-  <div class="collect">
-    <header class="collect-header">
-      <span class="brand">gopan 云盘</span>
-      <span class="brand-sub">收集文件</span>
+  <div class="visitor">
+    <header class="v-top">
+      <a href="/app" class="v-brand" title="gopan 云盘"><BrandLogo /></a>
     </header>
 
-    <main class="collect-main">
-      <div v-if="infoLoading && !info" v-loading="true" class="state-box" />
+    <main class="v-main">
+      <div v-if="infoPending" v-loading="true" class="v-state" element-loading-background="transparent" />
 
-      <el-empty v-else-if="notFound" class="state-box" description="链接不存在或已被删除">
-        <template #image><el-icon :size="56" class="dead-icon"><WarningFilled /></el-icon></template>
-      </el-empty>
-
-      <el-empty v-else-if="infoError" class="state-box" :description="errorText(infoErr, '加载失败')" />
-
-      <el-empty v-else-if="info?.closed" class="state-box" description="收集已结束,链接已截止或被取消">
-        <template #image><el-icon :size="56" class="dead-icon"><WarningFilled /></el-icon></template>
-      </el-empty>
-
-      <div v-else-if="info" class="card">
-        <h2 class="title">{{ info.title }}</h2>
-        <p v-if="info.note" class="note">{{ info.note }}</p>
-        <p class="meta">
-          <span v-if="deadlineText">{{ deadlineText }}</span>
-          <span v-if="info.maxFileSize">单个文件不超过 {{ formatBytes(info.maxFileSize) }}</span>
-          <span>上传后你看不到别人传的文件</span>
+      <!-- 不存在 / 出错 / 已结束 -->
+      <section v-else-if="notFound || infoError || info?.closed" class="v-state">
+        <svg class="v-state-art" viewBox="0 0 34 29" aria-hidden="true">
+          <path d="M1 4a3 3 0 0 1 3-3h7.2a2 2 0 0 1 1.5.7L15.4 4H30a3 3 0 0 1 3 3v18a3 3 0 0 1-3 3H4a3 3 0 0 1-3-3z" class="folder-back" />
+          <path d="M1 9.5h32V25a3 3 0 0 1-3 3H4a3 3 0 0 1-3-3z" class="folder-front" />
+        </svg>
+        <h1 class="v-state-title">{{ notFound ? '链接不存在' : info?.closed ? '收集已结束' : '打不开这个链接' }}</h1>
+        <p class="v-state-text">
+          {{
+            notFound
+              ? '可能是地址抄错了,或者链接已经被删除。'
+              : info?.closed
+                ? '已经过了截止时间,或者发起的人关掉了这个链接。'
+                : errorText(infoErr, '网络不太好,稍后刷新试试。')
+          }}
         </p>
+      </section>
+
+      <section v-else-if="info" class="gp-folder v-card c-card">
+        <span class="gp-folder-tab">
+          <el-icon v-if="info.needPassword && !guestToken"><Lock /></el-icon>收集文件
+        </span>
+        <h1 class="v-title">{{ info.title }}</h1>
+        <p v-if="info.note" class="c-note">{{ info.note }}</p>
+        <p v-if="metaParts.length" class="v-sub">{{ metaParts.join(' · ') }}</p>
 
         <!-- 入口:密码 / 名字 -->
-        <form v-if="!guestToken" class="entry" @submit.prevent="open">
+        <form v-if="!guestToken" class="v-form" @submit.prevent="open">
           <template v-if="needsForm">
-            <el-input
-              v-if="info.needName"
-              v-model="uploaderName"
-              placeholder="你的名字(对方会看到)"
-              maxlength="50"
-              @keyup.enter="open"
-            />
-            <el-input
-              v-if="info.needPassword"
-              v-model="password"
-              type="password"
-              placeholder="密码"
-              show-password
-              @keyup.enter="open"
-            />
-            <p v-if="openError" class="entry-error">{{ openError }}</p>
-            <el-button type="primary" native-type="submit" :loading="opening" class="entry-btn">
-              开始上传
-            </el-button>
+            <el-input v-if="info.needName" v-model="uploaderName" size="large" placeholder="你的名字(对方会看到)" maxlength="50" />
+            <el-input v-if="info.needPassword" v-model="password" size="large" type="password" placeholder="密码" show-password />
+            <p v-if="openError" class="v-error">{{ openError }}</p>
+            <el-button type="primary" size="large" native-type="submit" :loading="opening" class="v-btn">开始上传</el-button>
           </template>
-          <p v-else v-loading="true" class="entry-hint">正在打开…</p>
+          <div v-else v-loading="true" class="c-opening" element-loading-background="transparent" />
         </form>
 
         <!-- 上传 -->
         <template v-else>
           <div
-            class="drop"
+            class="c-drop"
             :class="{ dragging }"
             role="button"
             tabindex="0"
@@ -351,259 +354,179 @@ const deadlineText = computed(() =>
             @dragleave.prevent="dragging = false"
             @drop.prevent="onDrop"
           >
-            <el-icon :size="40" class="drop-icon"><UploadFilled /></el-icon>
-            <p class="drop-main">点击选择文件,或拖到这里</p>
-            <p class="drop-sub">可以一次选多个;传完之前请不要关闭页面或切到别的应用</p>
+            <el-icon :size="34" class="c-drop-icon"><UploadFilled /></el-icon>
+            <p class="c-drop-main">{{ isMobile ? '点这里选择文件' : '点这里选择文件,或者拖进来' }}</p>
+            <p class="c-drop-sub">一次可以选多个 · 传完之前别关掉这个页面</p>
             <input ref="fileInput" type="file" multiple hidden @change="onPick" />
           </div>
 
-          <ul v-if="pending.length" class="tasks">
-            <li v-for="t in pending" :key="t.id" class="task" :class="t.status">
-              <div class="task-row">
-                <span class="task-name" :title="t.fileName">{{ t.fileName }}</span>
-                <span class="task-size">{{ formatBytes(t.size) }}</span>
-                <el-button
-                  v-if="t.status === 'failed'"
-                  link
-                  type="primary"
-                  :icon="Refresh"
-                  title="重试"
-                  @click="uploader.retry(t.id)"
-                />
+          <ul v-if="pending.length" class="c-tasks">
+            <li v-for="t in pending" :key="t.id" class="c-task" :class="t.status">
+              <div class="c-row">
+                <span class="c-name" :title="t.fileName">{{ t.fileName }}</span>
+                <span class="c-status">{{ formatBytes(t.size) }} · {{ statusText(t) }}</span>
+                <el-button v-if="t.status === 'failed'" link :icon="Refresh" title="重试" aria-label="重试" @click="uploader.retry(t.id)" />
                 <el-button
                   v-if="t.status === 'failed' || t.status === 'canceled'"
                   link
                   :icon="Close"
                   title="移除"
+                  aria-label="移除"
                   @click="uploader.remove(t.id)"
                 />
-                <el-button
-                  v-else
-                  link
-                  :icon="Close"
-                  title="取消"
-                  @click="uploader.cancel(t.id)"
-                />
+                <el-button v-else link :icon="Close" title="取消" aria-label="取消" @click="uploader.cancel(t.id)" />
               </div>
-              <el-progress
-                v-if="t.status === 'uploading' || t.status === 'completing' || t.status === 'queued'"
-                :percentage="percent(t)"
-                :show-text="false"
-                :stroke-width="4"
-              />
-              <span class="task-status">{{ statusText(t) }}</span>
+              <div class="c-bar"><i :style="{ width: `${percent(t)}%` }" /></div>
             </li>
           </ul>
 
-          <section v-if="delivered.length" class="delivered">
-            <h3 class="delivered-title">
-              <el-icon class="ok-icon"><CircleCheckFilled /></el-icon>
+          <section v-if="delivered.length" class="c-done">
+            <h2 class="c-done-title">
+              <el-icon><CircleCheckFilled /></el-icon>
               已送达 {{ delivered.length }} 个文件
-            </h3>
+            </h2>
             <ul>
-              <li v-for="(d, i) in delivered" :key="i" class="delivered-item">
-                <span class="task-name" :title="d.name">{{ d.name }}</span>
-                <span class="task-size">{{ formatBytes(d.size) }}</span>
+              <li v-for="(d, i) in delivered" :key="i" class="c-row">
+                <span class="c-name" :title="d.name">{{ d.name }}</span>
+                <span class="c-size">{{ formatBytes(d.size) }}</span>
               </li>
             </ul>
           </section>
         </template>
-      </div>
+
+        <p class="c-privacy">你传的文件只有发起的人能看到;别人传了什么你也看不到。</p>
+      </section>
     </main>
 
-    <footer class="collect-footer">
-      <el-icon><Link /></el-icon>
-      由 gopan 云盘提供收集服务
+    <footer class="v-foot">
+      <a href="/app">用 gopan 云盘收集文件</a>
     </footer>
   </div>
 </template>
 
 <style scoped>
-.collect {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--el-fill-color-lighter);
+.c-card {
+  max-width: 560px;
+  margin-top: 2vh;
 }
-.collect-header {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 16px 28px;
-  background: var(--el-bg-color);
-  border-bottom: 1px solid var(--el-border-color-light);
-}
-.brand {
-  font-size: 17px;
-  font-weight: 600;
-}
-.brand-sub {
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-}
-.collect-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 32px 24px;
-}
-.state-box {
-  margin-top: 10vh;
-}
-.dead-icon {
-  color: var(--el-color-warning);
-}
-.card {
-  width: min(560px, 100%);
-  padding: 28px 32px;
-  border-radius: 12px;
-  background: var(--el-bg-color);
-  box-shadow: var(--el-box-shadow-light);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.title {
-  margin: 0;
-  font-size: 20px;
-  word-break: break-word;
-}
-.note {
-  margin: 0;
+.c-note {
+  margin: 10px 0 0;
   white-space: pre-wrap;
   word-break: break-word;
-  color: var(--el-text-color-regular);
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--gp-ink-2);
 }
-.meta {
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+.c-opening {
+  min-height: 44px;
 }
-.entry {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 4px;
-}
-.entry-error {
-  margin: 0;
-  font-size: 12px;
-  color: var(--el-color-danger);
-}
-.entry-btn {
-  width: 100%;
-}
-.entry-hint {
-  margin: 0;
-  min-height: 40px;
-}
-.drop {
+.c-drop {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 28px 16px;
-  border: 1.5px dashed var(--el-border-color);
-  border-radius: 10px;
-  cursor: pointer;
+  margin-top: 22px;
+  padding: 30px 16px;
+  border: 1.5px dashed var(--el-border-color-darker);
+  border-radius: 16px;
+  background: var(--el-bg-color);
   text-align: center;
-  transition: border-color 0.15s, background 0.15s;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
 }
-.drop:hover,
-.drop.dragging {
+.c-drop:hover,
+.c-drop.dragging {
   border-color: var(--el-color-primary);
   background: var(--el-color-primary-light-9);
 }
-.drop-icon {
-  color: var(--el-color-primary);
+.c-drop-icon {
+  color: var(--gp-ink);
 }
-.drop-main {
-  margin: 0;
-  font-weight: 500;
+.c-drop-main {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gp-ink);
 }
-.drop-sub {
+.c-drop-sub {
   margin: 0;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  color: var(--gp-ink-3);
 }
-.tasks,
-.delivered ul {
-  list-style: none;
-  margin: 0;
+.c-tasks,
+.c-done ul {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 18px 0 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  list-style: none;
 }
-.task {
-  display: flex;
-  flex-direction: column;
+.c-task {
+  display: grid;
   gap: 4px;
 }
-.task-row,
-.delivered-item {
+.c-row {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
-.task-name {
+.c-name {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 14px;
+  color: var(--gp-ink);
 }
-.task-size {
+.c-status,
+.c-size {
+  flex: none;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
-  flex-shrink: 0;
+  color: var(--gp-ink-3);
 }
-.task-status {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-.task.failed .task-status {
+.c-task.failed .c-status {
   color: var(--el-color-danger);
 }
-.delivered {
+.c-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--el-fill-color-dark);
+  overflow: hidden;
+}
+.c-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--gp-ink);
+  transition: width 0.3s;
+}
+.c-task.failed .c-bar i {
+  background: var(--el-color-danger);
+}
+.c-done {
+  margin-top: 22px;
+  padding-top: 18px;
   border-top: 1px solid var(--el-border-color-lighter);
-  padding-top: 12px;
 }
-.delivered-title {
-  margin: 0 0 10px;
+.c-done-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gp-ink);
 }
-.ok-icon {
+.c-done-title .el-icon {
   color: var(--el-color-success);
+  font-size: 18px;
 }
-.collect-footer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 16px;
+.c-privacy {
+  margin: 22px 0 0;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-/* 手机:访客大概率用手机打开 */
-@media (max-width: 767px) {
-  .collect-header {
-    padding: 12px 14px;
-  }
-  .collect-main {
-    padding: 16px 12px calc(16px + var(--sab));
-  }
-  .card {
-    padding: 20px 16px;
-  }
+  color: var(--gp-ink-3);
 }
 </style>

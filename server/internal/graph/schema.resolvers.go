@@ -1527,11 +1527,18 @@ func (r *queryResolver) ShareInfo(ctx context.Context, token string) (*ShareInfo
 	if err != nil {
 		return nil, err
 	}
-	return &ShareInfo{
+	out := &ShareInfo{
 		Token: info.Token, Name: info.Name,
 		Kind:         NodeKind(map[string]string{"file": "FILE", "folder": "FOLDER"}[info.Kind]),
 		NeedPassword: info.NeedPassword, Expired: info.Expired,
-	}, nil
+	}
+	// 有密码的分享:验密前不透露规模与期限
+	if !info.NeedPassword && !info.Expired {
+		out.ExpiresAt = info.ExpiresAt
+		out.Size = &info.Size
+		out.FileCount = &info.Files
+	}
+	return out, nil
 }
 
 // ShareRoot is the resolver for the shareRoot field.

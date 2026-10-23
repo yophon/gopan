@@ -36,7 +36,7 @@ const { pressed, handlers } = useLongPress({
 
 const meta = computed(() => sizeText(props.node))
 const time = computed(() => formatTime(props.node.updatedAt))
-const iconSize = computed(() => (props.mode === 'grid' ? 64 : 40))
+const iconSize = computed(() => (props.mode === 'grid' ? 120 : 40))
 </script>
 
 <template>
@@ -49,15 +49,20 @@ const iconSize = computed(() => (props.mode === 'grid' ? 64 : 40))
       <el-icon v-if="selected"><Check /></el-icon>
     </span>
 
-    <NodeIcon class="icon" :node="node" :size="iconSize" />
+    <!-- 网格:缩略图铺满一块 4:3 的方框;列表:左边一个图标 -->
+    <div v-if="mode === 'grid'" class="visual"><NodeIcon class="icon" :node="node" :size="iconSize" /></div>
+    <NodeIcon v-else class="icon" :node="node" :size="iconSize" />
 
     <div class="info">
       <div class="name" :title="node.name">{{ node.name }}</div>
       <div v-if="props.secondary" class="meta">{{ props.secondary }}</div>
       <div v-else class="meta">
         <span>{{ meta }}</span>
-        <span class="dot">·</span>
-        <span :title="time">{{ time }}</span>
+        <!-- 网格太窄,只写大小 -->
+        <template v-if="mode === 'list'">
+          <span class="dot">·</span>
+          <span :title="time">{{ time }}</span>
+        </template>
       </div>
     </div>
 
@@ -148,38 +153,62 @@ const iconSize = computed(() => (props.mode === 'grid' ? 64 : 40))
   color: var(--el-color-primary);
 }
 
-/* 网格:竖向卡片,缩略图居中,名字最多两行 */
+/* 网格:上面一块 4:3 的缩略图,下面名字(最多两行)和大小;「⋯」是浮在缩略图右上角的小圆钮 */
 .node-card.mode-grid {
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 12px 8px;
-  text-align: center;
+  align-items: stretch;
+  gap: 8px;
+  padding: 6px 6px 10px;
 }
-.node-card.mode-grid .icon {
+.visual {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 64px;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  background: var(--gp-panel);
+  overflow: hidden;
+}
+.visual :deep(.node-thumb) {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0;
+}
+.visual :deep(.node-icon) {
+  width: 40px !important;
+  height: 40px !important;
+  font-size: 34px !important;
+}
+.visual :deep(.node-folder) {
+  width: 64px !important;
+  height: 56px !important;
+}
+.node-card.mode-grid .info {
+  padding: 0 4px;
 }
 .node-card.mode-grid .name {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   white-space: normal;
   word-break: break-all;
   font-size: 13px;
-}
-.node-card.mode-grid .meta {
-  display: flex;
-  justify-content: center;
-  gap: 2px;
+  line-height: 1.35;
 }
 .node-card.mode-grid .more {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 32px;
-  height: 32px;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--el-bg-color) 85%, transparent);
+  font-size: 15px;
+}
+.node-card.mode-grid .check {
+  top: 12px;
+  left: 12px;
 }
 </style>

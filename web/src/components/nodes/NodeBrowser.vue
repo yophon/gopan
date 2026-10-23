@@ -26,6 +26,8 @@ const props = withDefaults(
     movable?: boolean
     /** 行尾的快捷按钮(下载 / 分享 / 更多);回收站这类只读列表关掉 */
     rowActions?: boolean
+    /** 行尾要不要「分享」(访客页不要) */
+    rowShare?: boolean
     /** 第三列(默认是修改时间)的标题与取值,回收站、搜索用来放别的 */
     timeLabel?: string
     timeOf?: (node: NodeListItem) => string
@@ -35,7 +37,7 @@ const props = withDefaults(
     timeLink?: boolean
     emptyText?: string
   }>(),
-  { view: 'list', loading: false, sort: null, movable: false, rowActions: true, openable: true, timeLabel: '修改时间', emptyText: '这里空空如也' },
+  { view: 'list', loading: false, sort: null, movable: false, rowActions: true, rowShare: true, openable: true, timeLabel: '修改时间', emptyText: '这里空空如也' },
 )
 
 const emit = defineEmits<{
@@ -250,7 +252,7 @@ const columns: { key: SortKey; label: () => string; cls: string }[] = [
           </span>
           <span v-if="rowActions" class="c-actions" @dblclick.stop>
             <el-button link :icon="Download" :title="node.kind === 'FOLDER' ? '打包下载' : '下载'" @click.stop="emit('download', node)" />
-            <el-button link :icon="Share" title="分享" @click.stop="emit('share', node)" />
+            <el-button v-if="rowShare" link :icon="Share" title="分享" @click.stop="emit('share', node)" />
             <el-button link :icon="MoreFilled" title="更多" @click.stop="onMoreClick(node, $event)" />
           </span>
         </div>
@@ -515,7 +517,7 @@ const columns: { key: SortKey; label: () => string; cls: string }[] = [
 .tile-visual :deep(.node-icon) {
   width: 44px !important;
   height: 44px !important;
-  font-size: 36px;
+  font-size: 36px !important;
 }
 .tile-name {
   display: -webkit-box;

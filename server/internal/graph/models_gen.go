@@ -772,11 +772,14 @@ type ShareAuth struct {
 }
 
 type ShareInfo struct {
-	Token        string   `json:"token"`
-	Name         string   `json:"name"`
-	Kind         NodeKind `json:"kind"`
-	NeedPassword bool     `json:"needPassword"`
-	Expired      bool     `json:"expired"`
+	Token        string     `json:"token"`
+	Name         string     `json:"name"`
+	Kind         NodeKind   `json:"kind"`
+	NeedPassword bool       `json:"needPassword"`
+	Expired      bool       `json:"expired"`
+	ExpiresAt    *time.Time `json:"expiresAt,omitempty"`
+	Size         *int64     `json:"size,omitempty"`
+	FileCount    *int64     `json:"fileCount,omitempty"`
 }
 
 type ShareVisit struct {

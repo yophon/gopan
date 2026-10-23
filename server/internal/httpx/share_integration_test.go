@@ -104,7 +104,7 @@ func newTestAuth(pool *pgxpool.Pool) *service.Auth {
 
 // spaIndex 最小可注入 og 标签的 index.html。
 var spaIndex = fstest.MapFS{
-	"index.html": &fstest.MapFile{Data: []byte("<html><head></head><body>gopan-spa</body></html>")},
+	"index.html": &fstest.MapFile{Data: []byte("<html><head><title>gopan 云盘</title></head><body>gopan-spa</body></html>")},
 }
 
 func TestShareLanding(t *testing.T) {
@@ -156,7 +156,7 @@ func TestShareLanding(t *testing.T) {
 		return rec.Code, rec.Body.String(), rec.Header().Get("Content-Type")
 	}
 
-	// 文件分享:og:title 是转义后的文件名,描述是"文件"
+	// 文件分享:og:title 是转义后的文件名,描述是类型与大小(测试节点没有 blob,类型就是「文件」;各类型的说法见 landing_test)
 	code, body, ct := get(fileShare.Token)
 	if code != 200 || !strings.Contains(ct, "text/html") {
 		t.Fatalf("落地页应 200 html:code=%d ct=%q", code, ct)
@@ -165,16 +165,29 @@ func TestShareLanding(t *testing.T) {
 	if !strings.Contains(body, "og:title") || !strings.Contains(body, wantTitle) {
 		t.Fatalf("og:title 应为转义后的文件名,body=%q", body)
 	}
-	if !strings.Contains(body, "分享的文件<") && !strings.Contains(body, "分享的文件\"") {
-		t.Fatalf("文件分享描述应含“分享的文件”,body=%q", body)
+	if !strings.Contains(body, `og:description" content="文件 · 0 B · gopan 云盘"`) {
+		t.Fatalf("文件分享描述应以类型开头,body=%q", body)
+	}
+	if !strings.Contains(body, `<title>报告&lt;v1&gt;&amp;&#34;final&#34;.pdf</title>`) {
+		t.Fatalf("<title> 也应换成文件名,body=%q", body)
 	}
 	if !strings.Contains(body, "gopan-spa") {
 		t.Fatal("注入 og 后应保留原 index 内容,浏览器照常加载 SPA")
 	}
 
-	// 文件夹分享:描述换成"文件夹"
-	if _, body, _ := get(folderShare.Token); !strings.Contains(body, "分享的文件夹") {
+	// 文件夹分享:描述是「文件夹 · N 个文件 · 体积」
+	if _, body, _ := get(folderShare.Token); !strings.Contains(body, `og:description" content="文件夹 · 0 个文件`) {
 		t.Fatalf("文件夹分享描述不符,body=%q", body)
+	}
+
+	// 有密码的分享:卡片上不露名字
+	pwd := "s3cret"
+	lockedShare, err := shares.Create(ctx, owner, file.ID, &pwd, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, body, _ := get(lockedShare.Token); !strings.Contains(body, "有人给你分享了一个文件") || strings.Contains(body, "final") {
+		t.Fatalf("有密码的分享不该露名字,body=%q", body)
 	}
 
 	// 已撤销分享:标题/描述换成失效文案(仍 200,前端再渲染细节)

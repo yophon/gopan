@@ -107,26 +107,35 @@ func (q *Queries) GetShareByID(ctx context.Context, id uuid.UUID) (GetShareByIDR
 
 const getShareByToken = `-- name: GetShareByToken :one
 SELECT s.id, s.token, s.node_id, s.created_by, s.password_hash, s.expires_at, s.revoked_at, s.created_at, n.name AS node_name, n.kind AS node_kind, n.deleted_at AS node_deleted_at,
-       (u.disabled_at IS NOT NULL)::boolean AS owner_disabled
+       (u.disabled_at IS NOT NULL)::boolean AS owner_disabled,
+       n.subtree_bytes AS node_subtree_bytes, n.subtree_count AS node_subtree_count,
+       b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM shares s JOIN nodes n ON n.id = s.node_id JOIN users u ON u.id = s.created_by
+LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE s.token = $1
 `
 
 type GetShareByTokenRow struct {
-	ID            uuid.UUID
-	Token         string
-	NodeID        uuid.UUID
-	CreatedBy     uuid.UUID
-	PasswordHash  *string
-	ExpiresAt     pgtype.Timestamptz
-	RevokedAt     pgtype.Timestamptz
-	CreatedAt     pgtype.Timestamptz
-	NodeName      string
-	NodeKind      string
-	NodeDeletedAt pgtype.Timestamptz
-	OwnerDisabled bool
+	ID               uuid.UUID
+	Token            string
+	NodeID           uuid.UUID
+	CreatedBy        uuid.UUID
+	PasswordHash     *string
+	ExpiresAt        pgtype.Timestamptz
+	RevokedAt        pgtype.Timestamptz
+	CreatedAt        pgtype.Timestamptz
+	NodeName         string
+	NodeKind         string
+	NodeDeletedAt    pgtype.Timestamptz
+	OwnerDisabled    bool
+	NodeSubtreeBytes int64
+	NodeSubtreeCount int64
+	BlobSize         *int64
+	BlobMime         *string
+	BlobSha256       *string
 }
 
+// 顺带带出大小 / 文件数与 blob 信息:访客页头部和链接预览卡片要用(有密码的分享由调用方自己藏起来)
 func (q *Queries) GetShareByToken(ctx context.Context, token string) (GetShareByTokenRow, error) {
 	row := q.db.QueryRow(ctx, getShareByToken, token)
 	var i GetShareByTokenRow
@@ -143,6 +152,11 @@ func (q *Queries) GetShareByToken(ctx context.Context, token string) (GetShareBy
 		&i.NodeKind,
 		&i.NodeDeletedAt,
 		&i.OwnerDisabled,
+		&i.NodeSubtreeBytes,
+		&i.NodeSubtreeCount,
+		&i.BlobSize,
+		&i.BlobMime,
+		&i.BlobSha256,
 	)
 	return i, err
 }

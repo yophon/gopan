@@ -124,6 +124,13 @@ type ShareInfoView struct {
 	Kind         string
 	NeedPassword bool
 	Expired      bool
+	ExpiresAt    *time.Time
+	// 文件是自身大小;文件夹是子树体积与文件数(异步统计,可能略滞后)
+	Size  int64
+	Files int64
+	// 单文件的 blob 信息,给链接预览卡片挑缩略图;文件夹为空
+	BlobSha  *string
+	BlobMime *string
 }
 
 func (s *Shares) Info(ctx context.Context, token string) (*ShareInfoView, error) {
@@ -134,13 +141,28 @@ func (s *Shares) Info(ctx context.Context, token string) (*ShareInfoView, error)
 		}
 		return nil, err
 	}
-	return &ShareInfoView{
+	v := &ShareInfoView{
 		Token:        sh.Token,
 		Name:         sh.NodeName,
 		Kind:         sh.NodeKind,
 		NeedPassword: sh.PasswordHash != nil,
 		Expired:      shareDead(sh.RevokedAt.Valid, sh.ExpiresAt, sh.NodeDeletedAt.Valid, sh.OwnerDisabled),
-	}, nil
+		Size:         sh.NodeSubtreeBytes,
+		Files:        sh.NodeSubtreeCount,
+		BlobSha:      sh.BlobSha256,
+		BlobMime:     sh.BlobMime,
+	}
+	if sh.ExpiresAt.Valid {
+		t := sh.ExpiresAt.Time
+		v.ExpiresAt = &t
+	}
+	if sh.NodeKind == "file" {
+		v.Files = 1
+		if sh.BlobSize != nil {
+			v.Size = *sh.BlobSize
+		}
+	}
+	return v, nil
 }
 
 // Access 验密并签发访客 token(无密码分享传空密码即可)。

@@ -4,9 +4,13 @@ VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: GetShareByToken :one
+-- 顺带带出大小 / 文件数与 blob 信息:访客页头部和链接预览卡片要用(有密码的分享由调用方自己藏起来)
 SELECT s.*, n.name AS node_name, n.kind AS node_kind, n.deleted_at AS node_deleted_at,
-       (u.disabled_at IS NOT NULL)::boolean AS owner_disabled
+       (u.disabled_at IS NOT NULL)::boolean AS owner_disabled,
+       n.subtree_bytes AS node_subtree_bytes, n.subtree_count AS node_subtree_count,
+       b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM shares s JOIN nodes n ON n.id = s.node_id JOIN users u ON u.id = s.created_by
+LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE s.token = $1;
 
 -- name: GetShareByID :one

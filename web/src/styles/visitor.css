@@ -1,0 +1,155 @@
+/*
+ * 访客页(分享 /s/、收集 /c/)共用的外壳与卡片:顶上一个品牌、中间文件夹记号卡片、底下一行出处。
+ * 两个页面各自 import 这一份;页面自己的细节留在各自的 <style scoped>。
+ */
+
+.visitor {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  background: var(--el-bg-color);
+}
+
+.v-top {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  padding: calc(var(--sat)) 24px 0;
+}
+
+.v-brand {
+  color: var(--gp-ink);
+  font-size: 18px;
+  text-decoration: none;
+}
+
+.v-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 44px 24px 32px;
+  box-sizing: border-box;
+}
+
+.v-card {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 26px 28px;
+}
+
+.v-card .gp-folder-tab {
+  height: 38px;
+  padding: 0 18px;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gp-ink-2);
+}
+
+.v-title {
+  margin: 0;
+  font-size: clamp(22px, 4vw, 30px);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--gp-ink);
+  word-break: break-word;
+}
+
+.v-sub {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--gp-ink-3);
+}
+
+.v-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.v-error {
+  margin: -4px 0 0;
+  font-size: 13px;
+  color: var(--el-color-danger);
+}
+
+.v-btn {
+  width: 100%;
+  border-radius: 999px;
+}
+
+.v-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 240px;
+  margin-top: 8vh;
+  text-align: center;
+}
+
+.v-state-art {
+  width: 72px;
+  height: 62px;
+  margin-bottom: 10px;
+  opacity: 0.9;
+}
+
+.folder-back {
+  fill: var(--gp-folder-back);
+}
+
+.folder-front {
+  fill: var(--gp-folder-front);
+}
+
+.v-state-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--gp-ink);
+}
+
+.v-state-text {
+  max-width: 360px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--gp-ink-3);
+}
+
+.v-foot {
+  padding: 18px 16px calc(18px + var(--sab));
+  text-align: center;
+  font-size: 12px;
+}
+
+.v-foot a {
+  color: var(--gp-ink-3);
+  text-decoration: none;
+}
+
+.v-foot a:hover {
+  color: var(--gp-ink);
+}
+
+/* 手机:边距收窄 */
+@media (max-width: 767px) {
+  .v-top {
+    height: 52px;
+    padding: var(--sat) 16px 0;
+  }
+  .v-main {
+    padding: 36px 14px 20px;
+  }
+  .v-card {
+    padding: 22px 18px;
+  }
+}

@@ -490,6 +490,11 @@ type ShareInfo {
   kind: NodeKind!
   needPassword: Boolean!
   expired: Boolean!
+  # 访客页头部显示(v3.8):有密码的分享在验密前一律为 null,不提前透露内容的规模
+  expiresAt: Time
+  # 文件是大小;文件夹是子树体积与文件数(异步统计,可能略滞后)
+  size: Int64
+  fileCount: Int64
 }
 
 type AuthPayload {

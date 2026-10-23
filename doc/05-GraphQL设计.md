@@ -99,6 +99,9 @@ type ShareInfo {                # 公开查询,验密前可见的最小信息
   kind: NodeKind!
   needPassword: Boolean!
   expired: Boolean!
+  expiresAt: Time               # 以下三项 v3.9 加,访客页头部用;有密码的分享验密前一律 null
+  size: Int64                   # 文件是大小,文件夹是子树体积
+  fileCount: Int64              # 文件夹的文件数(异步统计)
 }
 
 type AuthPayload {
