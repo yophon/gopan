@@ -45,6 +45,7 @@ type Node {
   subtreeBytes: Int64           # 文件夹异步统计
   subtreeCount: Int64
   statsStale: Boolean
+  path: String                  # 从根开始的路径(v3.8,搜索结果显示「位置」);访客与回收站里为 null,每个节点一次递归查询
 }
 
 enum PreviewKind { NONE, IMAGE, PDF, NATIVE_PDF, VIDEO, AUDIO, TEXT, OFFICE }

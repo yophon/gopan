@@ -108,7 +108,7 @@ function downloadSxcu() {
       </el-button>
     </div>
 
-    <el-table v-if="!isMobile" v-loading="isFetching" :data="keys" row-key="id" empty-text="还没有图床密钥" size="small">
+    <el-table v-if="!isMobile" v-loading="isFetching && !data" :data="keys" row-key="id" empty-text="还没有图床密钥" size="small">
       <el-table-column label="名称" prop="name" min-width="160" />
       <el-table-column label="创建" width="150">
         <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
@@ -131,8 +131,8 @@ function downloadSxcu() {
         </template>
       </el-table-column>
     </el-table>
-    <ul v-else v-loading="isFetching" class="key-cards">
-      <li v-if="!keys.length && !isFetching" class="muted">还没有图床密钥</li>
+    <ul v-else v-loading="isFetching && !data" class="key-cards">
+      <li v-if="!keys.length && !(isFetching && !data)" class="muted">还没有图床密钥</li>
       <li v-for="k in keys" :key="k.id" class="key-card">
         <div class="key-main">
           <span>{{ k.name }}</span>

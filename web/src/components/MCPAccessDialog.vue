@@ -164,7 +164,7 @@ async function copy(text: string) {
           </el-checkbox-group>
         </div>
 
-        <el-table v-loading="keysFetching" :data="keys" row-key="id" empty-text="还没有 API Key">
+        <el-table v-loading="keysFetching && !keysData" :data="keys" row-key="id" empty-text="还没有 API Key">
           <el-table-column label="名称" min-width="130">
             <template #default="{ row }">
               {{ row.name }}
@@ -213,7 +213,7 @@ async function copy(text: string) {
       <el-tab-pane label="OAuth 授权" name="oauth">
         <p class="connection-help">在客户端发起登录后，这里会显示已授权应用。客户端可自动刷新登录状态；撤销授权后立即失效。</p>
         <el-table
-          v-loading="grantsFetching"
+          v-loading="grantsFetching && !grantsData"
           :data="grants"
           row-key="id"
           empty-text="还没有 OAuth 授权"
@@ -255,7 +255,7 @@ async function copy(text: string) {
       </el-tab-pane>
       <el-tab-pane label="操作记录" name="audit">
         <el-button @click="auditBefore = undefined; refreshAudit()">刷新最新记录</el-button>
-        <el-table :data="auditData?.mcpAudit ?? []" v-loading="auditFetching" empty-text="暂无 MCP 操作记录">
+        <el-table :data="auditData?.mcpAudit ?? []" v-loading="auditFetching && !auditData" empty-text="暂无 MCP 操作记录">
           <el-table-column label="时间" width="170"><template #default="{ row }">{{ formatTime(row.createdAt) }}</template></el-table-column>
           <el-table-column label="操作" prop="tool" min-width="170" />
           <el-table-column label="接口" prop="endpoint" width="80" />

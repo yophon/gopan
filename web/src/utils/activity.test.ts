@@ -107,6 +107,26 @@ describe('同一批折叠', () => {
     expect(groups.map((g) => g.items.map((i) => i.id))).toEqual([['5', '4'], ['3'], ['2']])
     expect(groups[0].key).toBe('5')
   })
+  it('连着的零散上传并成一组:同一来源、同一文件夹、前后五分钟内', () => {
+    const up = (id: string, batchId: string, at: string, over: Partial<ActivityLike> = {}) =>
+      act({ id, batchId, at, action: 'UPLOAD', ...over })
+    const items = [
+      up('6', 'a', '2026-10-21T08:10:00Z'),
+      up('5', 'b', '2026-10-21T08:08:00Z'),
+      up('4', 'c', '2026-10-21T08:04:00Z'),
+      up('3', 'd', '2026-10-21T07:50:00Z'), // 隔了 14 分钟
+      up('2', 'e', '2026-10-21T07:49:00Z', { parentPath: '/别处' }),
+      up('1', 'f', '2026-10-21T07:48:00Z', { actor: { kind: 'AGENT', ref: 'k', label: 'Claude' }, parentPath: '/别处' }),
+    ]
+    const groups = groupBatches(items)
+    expect(groups.map((g) => g.items.map((i) => i.id))).toEqual([['6', '5', '4'], ['3'], ['2'], ['1']])
+    expect(groups[0].mixed).toBe(true)
+    expect(groups[1].mixed).toBeUndefined()
+  })
+  it('删除不按时间凑,只认同一批', () => {
+    const items = [act({ id: '2', batchId: 'x' }), act({ id: '1', batchId: 'y' })]
+    expect(groupBatches(items).length).toBe(2)
+  })
   it('一组的一句话', () => {
     const moved = Array.from({ length: 37 }, (_, i) =>
       act({ id: String(i), action: 'MOVE', fromPath: '/下载', toPath: '/照片', parentPath: '/照片' }),

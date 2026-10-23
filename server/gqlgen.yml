@@ -31,6 +31,8 @@ models:
         resolver: true
       playProgress:
         resolver: true
+      path:
+        resolver: true
   User:
     fields:
       unreadNotifications:

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Bell, Menu as MenuIcon } from '@element-plus/icons-vue'
+import { Bell } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { MeDocument } from '@/api/gen/graphql'
@@ -98,14 +98,12 @@ async function onLogout() {
 
     <el-container class="body" direction="vertical">
       <header v-if="isMobile" class="topbar">
-        <el-button
-          text
-          class="topbar-btn"
-          :icon="MenuIcon"
-          title="打开导航"
-          aria-label="打开导航"
-          @click="navOpen = true"
-        />
+        <el-button text class="topbar-btn" title="打开导航" aria-label="打开导航" @click="navOpen = true">
+          <!-- 三道杠;Element 的 Menu 图标是四个方块,像「应用」不像「菜单」 -->
+          <svg class="menu-glyph" viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M3 5.5h14M3 10h14M3 14.5h14" />
+          </svg>
+        </el-button>
         <span class="topbar-title"><BrandLogo /></span>
         <el-badge :value="unread" :max="99" :hidden="unread === 0" class="topbar-badge">
           <el-button
@@ -176,6 +174,14 @@ async function onLogout() {
   width: var(--touch-target);
   height: var(--touch-target);
   font-size: 20px;
+}
+.menu-glyph {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
 }
 .topbar-title {
   flex: 1;

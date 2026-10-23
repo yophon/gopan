@@ -135,6 +135,9 @@ type Node {
   statsStale: Boolean
   # 播放进度(doc/22 二.3):音视频、PDF;没记过、访客、文件夹为 null。每个节点一次查询,只在单个节点上取,列表里别请求
   playProgress: PlayProgress
+  # 从根开始的路径,如 /工作资料/合同/报价.pdf;访客与回收站里的节点为 null。
+  # 每个节点一次递归查询:搜索结果这类要显示「位置」的地方取,普通列表别请求
+  path: String
 }
 
 # ARCHIVE:压缩包(zip / 7z / rar / tar.*),用 archiveInfo / archiveEntries 浏览

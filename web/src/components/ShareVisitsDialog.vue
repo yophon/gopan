@@ -43,7 +43,7 @@ function kindText(kind: string): string {
       服务端看不到传完的时刻。
     </p>
     <el-table
-      v-loading="isFetching"
+      v-loading="isFetching && !data"
       :data="items"
       empty-text="还没有访问记录"
       max-height="420"

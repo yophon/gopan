@@ -144,13 +144,13 @@ function asItem(row: unknown): Item {
 
 <template>
   <div class="fr-panel">
-    <p class="intro">
+    <p v-if="!items.length && data" class="intro">
       在文件夹上右键(手机上长按)选「收集文件」,把链接发给别人:对方不用注册就能往里传,看不到里面已有的内容。
     </p>
 
     <el-table
       v-if="!isMobile"
-      v-loading="isFetching"
+      v-loading="isFetching && !data"
       :data="items"
       row-key="id"
       empty-text="还没有收集链接"
@@ -195,8 +195,8 @@ function asItem(row: unknown): Item {
       </el-table-column>
     </el-table>
 
-    <ul v-else v-loading="isFetching" class="cards">
-      <li v-if="!items.length && !isFetching" class="empty">还没有收集链接</li>
+    <ul v-else v-loading="isFetching && !data" class="cards">
+      <li v-if="!items.length && !(isFetching && !data)" class="empty">还没有收集链接</li>
       <li v-for="row in items" :key="row.id" class="card" @click="openUploads(row)">
         <div class="card-main">
           <span class="title-line">

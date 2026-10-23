@@ -2,18 +2,21 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { FolderOpened } from '@element-plus/icons-vue'
+import { Download, FolderOpened, Share, View } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
 import { SearchNodesDocument } from '@/api/gen/graphql'
 import type { SearchNodesQuery } from '@/api/gen/graphql'
-import { formatBytes, formatTime } from '@/utils/format'
 import { openPreview } from '@/composables/preview'
 import { useBreakpoints } from '@/composables/breakpoints'
 import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
-import NodeIcon from '@/components/nodes/NodeIcon.vue'
+import NodeBrowser from '@/components/nodes/NodeBrowser.vue'
+import ContextMenu, { type MenuEntry } from '@/components/ContextMenu.vue'
+import ShareDialog from '@/components/ShareDialog.vue'
+import { useNodeDownload } from '@/composables/nodeDownload'
+import { searchKeyword } from '@/utils/search'
 import ContentResults from '@/components/ContentResults.vue'
 import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 
@@ -23,7 +26,7 @@ const route = useRoute()
 const router = useRouter()
 const { isMobile } = useBreakpoints()
 
-const q = computed(() => (typeof route.query.q === 'string' ? route.query.q.trim() : ''))
+const q = computed(() => searchKeyword(route.query).trim())
 
 // 「文件名」「内容」两个标签;?in=content 直达内容(换关键词时保留)
 const tab = computed({
@@ -95,8 +98,52 @@ function onLocate(row: NodeListItem) {
   void router.push(row.parentId ? `/drive/${row.parentId}` : '/drive')
 }
 
-function asItem(row: unknown): Item {
-  return row as Item
+/** 「位置」:所在文件夹的路径,根目录叫「我的文件」 */
+function locationOf(node: NodeListItem): string {
+  const path = (node as Item).path
+  if (!path) return ''
+  const segs = path.split('/').filter(Boolean).slice(0, -1)
+  return ['我的文件', ...segs].join(' / ')
+}
+
+// ---------- 桌面:选中、右键菜单、下载、分享 ----------
+
+const selectedIds = ref<string[]>([])
+watch(q, () => (selectedIds.value = []))
+const { download } = useNodeDownload()
+const shareTarget = ref<{ id: string; name: string } | null>(null)
+const shareVisible = ref(false)
+
+function openShare(node: NodeListItem) {
+  shareTarget.value = { id: node.id, name: node.name }
+  shareVisible.value = true
+}
+
+const menu = ref<{ visible: boolean; x: number; y: number; node: NodeListItem | null }>({ visible: false, x: 0, y: 0, node: null })
+
+function onMenu(node: NodeListItem | null, x: number, y: number) {
+  if (node) menu.value = { visible: true, x, y, node }
+}
+
+const menuItems = computed<MenuEntry[]>(() => {
+  const n = menu.value.node
+  if (!n) return []
+  return [
+    { key: 'open', label: n.kind === 'FOLDER' ? '打开' : '预览', icon: n.kind === 'FOLDER' ? FolderOpened : View },
+    { key: 'locate', label: '打开所在文件夹', icon: FolderOpened },
+    { key: 'd', divider: true },
+    { key: 'download', label: n.kind === 'FOLDER' ? '打包下载' : '下载', icon: Download },
+    { key: 'share', label: '分享', icon: Share },
+  ]
+})
+
+function onMenuSelect(key: string) {
+  const n = menu.value.node
+  if (!n) return
+  if (key === 'open') onOpen(n)
+  else if (key === 'locate') onLocate(n)
+  else if (key === 'download') void download([n])
+  else if (key === 'share') openShare(n)
 }
 
 // ---------- 手机 ----------
@@ -134,36 +181,22 @@ function onSheetSelect(key: string) {
     <ContentResults v-if="tab === 'content'" :q="q" />
 
     <template v-else>
-      <el-table
+      <NodeBrowser
         v-if="!isMobile"
-        v-loading="loading && items.length === 0"
-        :data="items"
-        row-key="id"
+        v-model:selected-ids="selectedIds"
+        :items="items"
+        :loading="loading"
+        time-label="位置"
+        :time-of="locationOf"
+        time-link
         empty-text="没有匹配的文件"
-        @row-dblclick="(row: unknown) => onOpen(asItem(row))"
-      >
-        <el-table-column label="名称" min-width="320">
-          <template #default="{ row }">
-            <span class="name-cell">
-              <NodeIcon :node="asItem(row)" :size="28" />
-              {{ asItem(row).name }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="大小" width="120">
-          <template #default="{ row }">
-            {{ asItem(row).kind === 'FOLDER' ? '—' : formatBytes(asItem(row).size) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="修改时间" width="180">
-          <template #default="{ row }">{{ formatTime(asItem(row).updatedAt) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="120" align="center">
-          <template #default="{ row }">
-            <el-button link type="primary" @click.stop="onLocate(asItem(row))">所在目录</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+        style="--nb-time-w: 300px"
+        @open="onOpen"
+        @menu="onMenu"
+        @download="(n) => download([n])"
+        @share="openShare"
+        @time-click="onLocate"
+      />
 
       <NodeCardList
         v-else
@@ -180,6 +213,9 @@ function onSheetSelect(key: string) {
         <el-button :loading="loading" @click="onLoadMore">加载更多</el-button>
       </div>
     </template>
+
+    <ContextMenu v-model:visible="menu.visible" :x="menu.x" :y="menu.y" :items="menuItems" @select="onMenuSelect" />
+    <ShareDialog v-model="shareVisible" :node="shareTarget" />
 
     <NodeActionSheet
       v-model:visible="sheet.visible"
@@ -202,11 +238,6 @@ function onSheetSelect(key: string) {
   font-size: 13px;
   font-weight: 400;
   color: var(--el-text-color-secondary);
-}
-.name-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 .load-more {
   display: flex;

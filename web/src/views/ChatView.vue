@@ -180,12 +180,18 @@ function applyLatest(incoming: ChatMsg[]) {
   }
 }
 
-watch(latestQuery.data, (incoming) => {
-  if (!incoming) return
-  // 定位窗口还没追到最新:轮询只用来维持连接状态,不动列表
-  if (anchored.value) return
-  applyLatest(incoming)
-})
+// immediate:离开再回到传输助手时缓存里已经有数据,之后轮询拿到的内容没变、引用也不变,
+// 不立即应用的话列表会一直是空的,直到来了新消息
+watch(
+  latestQuery.data,
+  (incoming) => {
+    if (!incoming) return
+    // 定位窗口还没追到最新:轮询只用来维持连接状态,不动列表
+    if (anchored.value) return
+    applyLatest(incoming)
+  },
+  { immediate: true },
+)
 
 // ---------- 搜索 ----------
 
@@ -754,7 +760,6 @@ function timeOf(iso: string): string {
     <header class="chat-header">
       <div class="title">
         <h2>传输助手</h2>
-        <span v-if="!isMobile">在电脑和手机之间传输消息与文件</span>
       </div>
       <div class="tools">
         <el-input
@@ -771,8 +776,8 @@ function timeOf(iso: string): string {
           :disabled="!latestText"
           @click="copyLatest"
         />
+        <!-- 连着的时候不打扰,断了才说 -->
         <el-tag v-if="offline" type="warning" effect="plain">离线,重连中</el-tag>
-        <el-tag v-else type="success" effect="plain">已连接</el-tag>
       </div>
     </header>
 
@@ -946,24 +951,30 @@ function timeOf(iso: string): string {
       <el-icon class="el-icon--right"><ArrowDown /></el-icon>
     </el-button>
 
+    <!-- 输入框做成一个胶囊:附件、输入、发送在一起,和 App 一样 -->
     <footer class="composer">
-      <el-button text :icon="Paperclip" title="发送文件" @click="pickFile" />
-      <el-input
-        v-model="draft"
-        type="textarea"
-        :autosize="{ minRows: 1, maxRows: 6 }"
-        resize="none"
-        :placeholder="isMobile ? '输入消息' : '输入消息,Enter 发送,Shift+Enter 换行'"
-        @keydown="onComposerKeydown"
-      />
-      <el-button
-        type="primary"
-        :icon="Promotion"
-        :disabled="!draft.trim() || sendMutation.isPending.value"
-        @click="send"
-      >
-        发送
-      </el-button>
+      <div class="composer-box">
+        <el-button text circle :icon="Paperclip" title="发送文件" aria-label="发送文件" class="composer-attach" @click="pickFile" />
+        <el-input
+          v-model="draft"
+          type="textarea"
+          :autosize="{ minRows: 1, maxRows: 6 }"
+          resize="none"
+          class="composer-input"
+          :placeholder="isMobile ? '发消息' : '发消息,Enter 发送,Shift+Enter 换行'"
+          @keydown="onComposerKeydown"
+        />
+        <el-button
+          type="primary"
+          circle
+          :icon="Promotion"
+          title="发送"
+          aria-label="发送"
+          class="composer-send"
+          :disabled="!draft.trim() || sendMutation.isPending.value"
+          @click="send"
+        />
+      </div>
     </footer>
 
     <!-- 拖拽遮罩(限聊天页) -->
@@ -999,8 +1010,7 @@ function timeOf(iso: string): string {
 <style scoped>
 .chat-page { position: relative; height: 100%; display: flex; flex-direction: column; max-width: 900px; margin: 0 auto; }
 .chat-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 1px solid var(--el-border-color-light); padding: 4px 0 12px; }
-h2 { margin: 0 0 4px; font-size: 20px; }
-.chat-header .title span { color: var(--el-text-color-secondary); font-size: 13px; }
+h2 { margin: 0; font-size: 20px; }
 .tools { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .search { width: 220px; }
 .message-list { flex: 1; overflow: auto; padding: 12px 4px; -webkit-overflow-scrolling: touch; }
@@ -1060,8 +1070,13 @@ time, .sending-text { font-size: 11px; color: var(--el-text-color-secondary); }
 .hover-actions .el-icon:hover { color: var(--el-color-primary); }
 .message-row:hover .hover-actions { opacity: 1; }
 .new-msg-fab { position: absolute; left: 50%; transform: translateX(-50%); bottom: 72px; z-index: 5; box-shadow: var(--el-box-shadow-light); }
-.composer { display: flex; gap: 8px; align-items: flex-end; padding-top: 10px; border-top: 1px solid var(--el-border-color-light); }
-.composer :deep(.el-textarea__inner) { line-height: 1.5; }
+.composer { padding: 8px 0 4px; }
+.composer-box { display: flex; align-items: flex-end; gap: 4px; padding: 5px; border: 1px solid var(--el-border-color); border-radius: 24px; background: var(--el-bg-color); box-shadow: var(--el-box-shadow-lighter); transition: border-color 0.15s; }
+.composer-box:focus-within { border-color: var(--el-color-primary-light-5); }
+.composer-input :deep(.el-textarea__inner) { padding: 7px 4px; border: none; box-shadow: none; background: transparent; line-height: 1.5; font-size: 15px; }
+.composer-attach, .composer-send { flex: none; width: 36px; height: 36px; }
+.composer-attach { font-size: 18px; color: var(--el-text-color-secondary); }
+.composer-send.is-disabled { --el-button-disabled-bg-color: transparent; --el-button-disabled-border-color: transparent; --el-button-disabled-text-color: var(--el-text-color-placeholder); }
 .drop-overlay { position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--el-color-primary) 12%, transparent); border: 2px dashed var(--el-color-primary); border-radius: 8px; pointer-events: none; }
 .drop-hint { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px 36px; border-radius: 12px; background: var(--el-bg-color); box-shadow: var(--el-box-shadow); color: var(--el-color-primary); font-size: 15px; }
 .drop-hint p { margin: 0; }
@@ -1071,7 +1086,6 @@ time, .sending-text { font-size: 11px; color: var(--el-text-color-secondary); }
   .chat-header { flex-wrap: wrap; }
   .tools { flex: 1; }
   .search { flex: 1; width: auto; min-width: 0; }
-  .composer :deep(.el-button) { padding: 8px; }
   .bubble { max-width: 85%; }
   .media-thumb { max-width: 200px; max-height: 200px; }
 }

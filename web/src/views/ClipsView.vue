@@ -497,7 +497,7 @@ function onBookmarkletClick() {
   padding: 6px 14px;
   border-radius: 16px;
   background: var(--el-color-primary);
-  color: #fff;
+  color: var(--gp-on-primary);
   font-size: 14px;
   text-decoration: none;
   cursor: grab;

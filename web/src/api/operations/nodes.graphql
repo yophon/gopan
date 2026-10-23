@@ -146,6 +146,7 @@ query SearchNodes($q: String!, $cursor: String) {
       kind
       size
       updatedAt
+      path
       preview {
         kind
         thumbUrl

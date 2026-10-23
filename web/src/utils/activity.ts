@@ -177,15 +177,47 @@ export interface BatchGroup<T> {
   key: string
   batchId: string
   items: T[]
+  /** 并进了别的批次(零散上传):撤回时按 id 选,不能只按 batchId */
+  mixed?: boolean
 }
 
-/** 相邻且 batchId 相同的折成一组(服务端新的在前,同一批本来就挨着);单条也是一组,只是不折 */
-export function groupBatches<T extends { id: string; batchId: string }>(items: T[]): BatchGroup<T>[] {
+/**
+ * 连着的零散上传也算一组:网页、App 一次选几十个文件,每个文件各自一批,
+ * 同一来源、同一个文件夹、前后不超过这么久的上传 / 新建文件夹,折成一组
+ */
+export const LOOSE_GROUP_MS = 5 * 60_000
+const LOOSE_ACTIONS: ActivityActionValue[] = ['UPLOAD', 'MKDIR']
+
+function looselySame(a: GroupableActivity, b: GroupableActivity): boolean {
+  if (!a.action || a.action !== b.action || !LOOSE_ACTIONS.includes(a.action)) return false
+  if (a.parentPath !== b.parentPath || !a.actor || !b.actor) return false
+  if (a.actor.kind !== b.actor.kind || (a.actor.ref ?? '') !== (b.actor.ref ?? '')) return false
+  if (!a.at || !b.at) return false
+  return Math.abs(Date.parse(a.at) - Date.parse(b.at)) <= LOOSE_GROUP_MS
+}
+
+interface GroupableActivity {
+  id: string
+  batchId: string
+  action?: ActivityActionValue
+  parentPath?: string
+  at?: string
+  actor?: { kind: string; ref?: string | null }
+}
+
+/**
+ * 相邻且 batchId 相同的折成一组(服务端新的在前,同一批本来就挨着);
+ * 连着的零散上传(见 looselySame)也并进去,这时一组里有多个 batchId,撤回按 id 来。单条也是一组,只是不折
+ */
+export function groupBatches<T extends GroupableActivity>(items: T[]): BatchGroup<T>[] {
   const out: BatchGroup<T>[] = []
   for (const it of items) {
     const last = out[out.length - 1]
-    if (last && last.batchId === it.batchId) last.items.push(it)
-    else out.push({ key: it.id, batchId: it.batchId, items: [it] })
+    const prev = last?.items[last.items.length - 1]
+    if (last && (last.batchId === it.batchId || (prev && looselySame(prev, it)))) {
+      last.items.push(it)
+      if (last.batchId !== it.batchId) last.mixed = true
+    } else out.push({ key: it.id, batchId: it.batchId, items: [it] })
   }
   return out
 }

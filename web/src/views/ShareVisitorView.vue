@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
 import {
+  Document,
   Download,
   Link,
   Lock,

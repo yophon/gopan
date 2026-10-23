@@ -16,6 +16,7 @@ import { feedKindTag, feedModeLabel, feedStatus, intervalText } from '@/utils/fe
 import { withoutQuery } from '@/utils/notifications'
 import FeedFormDialog from '@/components/feeds/FeedFormDialog.vue'
 import FeedDetailDrawer from '@/components/feeds/FeedDetailDrawer.vue'
+import PageHelp from '@/components/PageHelp.vue'
 
 type Feed = FeedFieldsFragment
 
@@ -137,7 +138,10 @@ async function onExport() {
 <template>
   <div class="feeds">
     <div class="head">
-      <h2 class="page-title">订阅</h2>
+      <h2 class="page-title">
+        订阅
+        <PageHelp text="RSS / Atom(包括播客)和 GitHub 仓库的 Releases。服务器定时检查,新内容按订阅的方式下载附件、剪藏正文或只记录,有新内容和连续失败都会通知你。导出 OPML 不含 GitHub 订阅。" />
+      </h2>
       <span class="head-actions">
         <el-button type="primary" :icon="Plus" :disabled="!fetchEnabled" @click="addVisible = true">添加</el-button>
         <el-button :icon="Upload" :loading="importing" :disabled="!fetchEnabled" @click="opmlInput?.click()">
@@ -156,9 +160,6 @@ async function onExport() {
       title="本站没有开启离线下载,订阅也用不了"
       class="tip"
     />
-    <p v-else class="intro">
-      RSS / Atom(包括播客)和 GitHub 仓库的 Releases。服务器定时检查,新内容按订阅的方式下载附件、剪藏正文或只记录,有新内容和连续失败都会通知你。导出 OPML 不含 GitHub 订阅。
-    </p>
 
     <el-table
       v-if="!isMobile"

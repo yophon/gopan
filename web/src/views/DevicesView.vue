@@ -10,6 +10,7 @@ import type { SessionsQuery } from '@/api/gen/graphql'
 import { formatTime } from '@/utils/format'
 import { describeUserAgent } from '@/utils/userAgent'
 import { useBreakpoints } from '@/composables/breakpoints'
+import PageHelp from '@/components/PageHelp.vue'
 
 type DeviceSession = SessionsQuery['sessions'][number]
 
@@ -53,15 +54,14 @@ async function revoke(s: DeviceSession) {
 
 <template>
   <div class="devices">
-    <h2 class="page-title">登录设备</h2>
-    <p class="hint">
-      账号当前登录的会话。不在身边的设备可以随时吊销 —— 吊销后那台设备需要重新登录。
-      改密码会一次性吊销全部设备。
-    </p>
+    <h2 class="page-title">
+      登录设备
+      <PageHelp text="不在身边的设备可以随时吊销,吊销后那台设备需要重新登录。改密码会一次性吊销全部设备。" />
+    </h2>
 
     <el-table
       v-if="!isMobile"
-      v-loading="isFetching"
+      v-loading="isFetching && !data"
       :data="items"
       row-key="familyId"
       empty-text="没有登录记录"
@@ -106,7 +106,7 @@ async function revoke(s: DeviceSession) {
     </el-table>
 
     <!-- 手机:设备行只有四五个字段,表格挤不下,用卡片 -->
-    <div v-else v-loading="isFetching" class="device-cards">
+    <div v-else v-loading="isFetching && !data" class="device-cards">
       <el-empty v-if="items.length === 0" description="没有登录记录" />
       <div v-for="s in items" :key="s.familyId" class="device-card">
         <div class="card-main">

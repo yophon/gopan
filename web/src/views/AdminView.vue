@@ -398,7 +398,7 @@ const retryMutation = useMutation({
       <el-button type="primary" :icon="Plus" @click="createVisible = true">新建用户</el-button>
     </div>
 
-    <el-table v-if="!isMobile" v-loading="isFetching" :data="users" row-key="id">
+    <el-table v-if="!isMobile" v-loading="isFetching && !usersData" :data="users" row-key="id">
       <el-table-column label="用户名" min-width="180">
         <template #default="{ row }">
           <span class="name-cell">
@@ -433,7 +433,7 @@ const retryMutation = useMutation({
     </el-table>
 
     <!-- 手机:账号卡片,逐项操作走底部菜单(表格 800px 起,手机上横向滚动太难受) -->
-    <div v-else v-loading="isFetching" class="user-cards">
+    <div v-else v-loading="isFetching && !usersData" class="user-cards">
       <div v-for="u in users" :key="u.id" class="user-card">
         <div class="user-main">
           <div class="user-name">

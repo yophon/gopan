@@ -603,6 +603,7 @@ type Node struct {
 	SubtreeCount *int64        `json:"subtreeCount,omitempty"`
 	StatsStale   *bool         `json:"statsStale,omitempty"`
 	PlayProgress *PlayProgress `json:"playProgress,omitempty"`
+	Path         *string       `json:"path,omitempty"`
 	// 由列表转换器置位:preview 走零查询乐观路径
 	InList bool `json:"-"`
 }

@@ -20,9 +20,9 @@ function loadViewMode(): ViewMode {
 }
 
 export const useUiStore = defineStore('ui', () => {
-  /** 手机上的列表形态;桌面固定看表格,不读这个值 */
+  /** 文件列表的形态(列表 / 网格),手机与桌面共用 */
   const viewMode = ref<ViewMode>(loadViewMode())
-  /** 触屏多选态:桌面用表格自带的勾选列,手机靠它把卡片点击切成勾选 */
+  /** 触屏多选态:桌面单击就是选中,手机靠它把卡片点击切成勾选 */
   const selectionMode = ref(false)
 
   watch(viewMode, (mode) => {

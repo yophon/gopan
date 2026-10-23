@@ -9,7 +9,9 @@
  * 必须在 element-plus/dist/index.css 之后引入:组件级变量(.el-dialog 等)同权重,靠先后覆盖。
  */
 
-:root {
+/* .gp-force-light:只做浅色的页面(发布页 /app)挂上它,里面的变量全回到浅色 */
+:root,
+.gp-force-light {
   --gp-ink: #121212;
   --gp-ink-2: #55534e;
   --gp-ink-3: #6f6c66;
@@ -17,6 +19,12 @@
   --gp-panel-2: #e9e7e1;
   --gp-line: #e6e4de;
   --gp-accent: #f2541b;
+  /* 主色底上的字、主色按钮的悬停 / 按下:浅色是墨黑底白字,深色反过来 */
+  --gp-folder-back: #e3dfd5;
+  --gp-folder-front: #cfc9bc;
+  --gp-on-primary: #ffffff;
+  --gp-primary-hover: #2e2d2b;
+  --gp-primary-active: #000000;
   --gp-font: Inter, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', sans-serif;
   --gp-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 
@@ -99,11 +107,109 @@
   --el-box-shadow-light: 0 8px 24px -8px rgba(18, 18, 18, 0.16), 0 1px 3px rgba(18, 18, 18, 0.05);
   --el-box-shadow-lighter: 0 2px 10px -2px rgba(18, 18, 18, 0.1);
   --el-box-shadow-dark: 0 16px 40px -10px rgba(18, 18, 18, 0.28);
+
+  color-scheme: light;
+}
+
+/*
+ * 深色:<html class="dark">(stores/theme 按「跟随系统 / 浅色 / 深色」切换,public/theme-init.js 在首屏前先挂上)。
+ * 和安卓 App 的深色同一套:暖黑底 #141312、墨白字;主色反过来是墨白,实心按钮上的字换成墨黑(见下面组件细调)。
+ * light-N 按底色 #141312 混出来:Element 的「浅一档」在深色里就是「更贴近底色」。
+ */
+html.dark {
+  --gp-ink: #f3f2ee;
+  --gp-ink-2: #c9c6bf;
+  --gp-ink-3: #a19d95;
+  --gp-panel: #222120;
+  --gp-panel-2: #2c2b29;
+  --gp-line: #34322f;
+  --gp-accent: #f4652e;
+  --gp-folder-back: #4a4741;
+  --gp-folder-front: #6a655c;
+  --gp-on-primary: #121212;
+  --gp-primary-hover: #dcdad4;
+  --gp-primary-active: #ffffff;
+
+  --el-color-primary: #f3f2ee;
+  --el-color-primary-light-3: #b0afac;
+  --el-color-primary-light-5: #848380;
+  --el-color-primary-light-7: #575654;
+  --el-color-primary-light-8: #41403e;
+  --el-color-primary-light-9: #2a2928;
+  --el-color-primary-dark-2: #ffffff;
+  --el-color-success: #3fb873;
+  --el-color-success-light-3: #328656;
+  --el-color-success-light-5: #2a6643;
+  --el-color-success-light-7: #21452f;
+  --el-color-success-light-8: #1d3425;
+  --el-color-success-light-9: #18241c;
+  --el-color-success-dark-2: #65c68f;
+  --el-color-warning: #e2a142;
+  --el-color-warning-light-3: #a47634;
+  --el-color-warning-light-5: #7b5a2a;
+  --el-color-warning-light-7: #523e20;
+  --el-color-warning-light-8: #3d2f1c;
+  --el-color-warning-light-9: #292117;
+  --el-color-warning-dark-2: #e8b468;
+  --el-color-danger: #f05a62;
+  --el-color-danger-light-3: #ae454a;
+  --el-color-danger-light-5: #82373a;
+  --el-color-danger-light-7: #56282a;
+  --el-color-danger-light-8: #402122;
+  --el-color-danger-light-9: #2a1a1a;
+  --el-color-danger-dark-2: #f37b81;
+  --el-color-error: #f05a62;
+  --el-color-error-light-3: #ae454a;
+  --el-color-error-light-5: #82373a;
+  --el-color-error-light-7: #56282a;
+  --el-color-error-light-8: #402122;
+  --el-color-error-light-9: #2a1a1a;
+  --el-color-error-dark-2: #f37b81;
+  --el-color-info: #a19d95;
+  --el-color-info-light-3: #77746e;
+  --el-color-info-light-5: #5b5854;
+  --el-color-info-light-7: #3e3c39;
+  --el-color-info-light-8: #302f2c;
+  --el-color-info-light-9: #22211f;
+  --el-color-info-dark-2: #b4b1aa;
+
+  --el-text-color-primary: #f3f2ee;
+  --el-text-color-regular: #d6d3cc;
+  --el-text-color-secondary: #a19d95;
+  --el-text-color-placeholder: #77736c;
+  --el-text-color-disabled: #5a5752;
+  --el-border-color: #3a3835;
+  --el-border-color-light: #312f2c;
+  --el-border-color-lighter: #2a2926;
+  --el-border-color-extra-light: #232220;
+  --el-border-color-dark: #43413d;
+  --el-border-color-darker: #4c4a45;
+  --el-fill-color: #2a2927;
+  --el-fill-color-light: #242321;
+  --el-fill-color-lighter: #1e1d1b;
+  --el-fill-color-extra-light: #1a1918;
+  --el-fill-color-dark: #302f2c;
+  --el-fill-color-darker: #383633;
+  --el-fill-color-blank: #141312;
+  --el-bg-color: #141312;
+  --el-bg-color-page: #0f0e0d;
+  --el-bg-color-overlay: #1f1e1c;
+  --el-mask-color: rgba(20, 19, 18, 0.82);
+  --el-overlay-color-lighter: rgba(0, 0, 0, 0.55);
+
+  --el-box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --el-box-shadow-light: 0 8px 24px -8px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --el-box-shadow-lighter: 0 2px 10px -2px rgba(0, 0, 0, 0.5);
+  --el-box-shadow-dark: 0 16px 40px -10px rgba(0, 0, 0, 0.75);
+
+  color-scheme: dark;
+  background: var(--el-bg-color);
 }
 
 body {
   font-family: var(--gp-font);
   color: var(--el-text-color-primary);
+  background: var(--el-bg-color);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -114,15 +220,52 @@ body {
 
 /* ---------- Element 组件的细调 ---------- */
 
-/* 墨黑主按钮:默认的悬停色是 light-3,对黑色来说太浅,只稍微提亮 */
+/* 主按钮:默认的悬停色是 light-3,对墨黑 / 墨白来说差太多,只稍微提亮(压暗)一点;字色跟着主色反过来 */
 .el-button--primary {
-  --el-button-hover-bg-color: #2e2d2b;
-  --el-button-hover-border-color: #2e2d2b;
-  --el-button-active-bg-color: #000;
-  --el-button-active-border-color: #000;
+  --el-button-text-color: var(--gp-on-primary);
+  --el-button-hover-text-color: var(--gp-on-primary);
+  --el-button-active-text-color: var(--gp-on-primary);
+  --el-button-hover-bg-color: var(--gp-primary-hover);
+  --el-button-hover-border-color: var(--gp-primary-hover);
+  --el-button-active-bg-color: var(--gp-primary-active);
+  --el-button-active-border-color: var(--gp-primary-active);
+}
+.el-button--primary.is-plain {
+  --el-button-hover-text-color: var(--gp-on-primary);
+  --el-button-active-text-color: var(--gp-on-primary);
 }
 .el-button {
   --el-button-font-weight: 600;
+}
+
+/* 「主色底 + 白字」的地方,字色都走 --gp-on-primary:深色里主色是墨白,字就是墨黑 */
+.el-checkbox {
+  --el-checkbox-checked-icon-color: var(--gp-on-primary);
+}
+.el-radio__input.is-checked .el-radio__inner::after {
+  background-color: var(--gp-on-primary);
+}
+.el-radio-button {
+  --el-radio-button-checked-text-color: var(--gp-on-primary);
+}
+.el-segmented {
+  --el-segmented-item-selected-color: var(--gp-on-primary);
+}
+.el-pagination.is-background .el-pager li.is-active,
+.el-pagination.is-background .btn-prev.is-active,
+.el-pagination.is-background .btn-next.is-active {
+  color: var(--gp-on-primary);
+}
+.el-tag--dark.el-tag--primary {
+  --el-tag-text-color: var(--gp-on-primary);
+}
+.el-switch.is-checked .el-switch__core .el-switch__action {
+  background-color: var(--gp-on-primary);
+}
+.gp-force-light {
+  color-scheme: light;
+  background: var(--el-bg-color);
+  color: var(--el-text-color-primary);
 }
 
 .el-dialog {
@@ -199,4 +342,24 @@ body {
   width: var(--gp-tr);
   height: var(--gp-tr);
   background: radial-gradient(circle at 100% 0, transparent calc(var(--gp-tr) - 0.5px), var(--gp-folder-bg, var(--gp-panel)) var(--gp-tr));
+}
+
+/* 带操作按钮的提示(utils/toast.ts):「已放入回收站 · 撤销」 */
+.gp-action-toast .gp-action-toast__body {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+.gp-action-toast__btn {
+  padding: 2px 8px;
+  border: none;
+  border-radius: 6px;
+  background: var(--el-fill-color);
+  color: var(--el-text-color-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.gp-action-toast__btn:hover {
+  background: var(--el-fill-color-darker);
 }

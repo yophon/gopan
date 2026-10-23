@@ -1229,6 +1229,26 @@ func (r *nodeResolver) PlayProgress(ctx context.Context, obj *Node) (*PlayProgre
 	return gqlPlayProgress(p), nil
 }
 
+// Path is the resolver for the path field.
+func (r *nodeResolver) Path(ctx context.Context, obj *Node) (*string, error) {
+	if obj.DeletedAt != nil {
+		return nil, nil
+	}
+	ident, err := httpx.IdentityFrom(ctx)
+	if err != nil || ident.Scope != service.ScopeUser {
+		return nil, nil // 访客看不到属主的目录结构
+	}
+	nid, err := parseID(obj.ID)
+	if err != nil {
+		return nil, err
+	}
+	p, err := r.Nodes.Path(ctx, ident.UserID, nid)
+	if err != nil {
+		return nil, nil // 不是自己的、已不在:位置留空,不让整个查询失败
+	}
+	return &p, nil
+}
+
 // McpAccessRoots is the resolver for the mcpAccessRoots field.
 func (r *queryResolver) McpAccessRoots(ctx context.Context) ([]*MCPAccessRoot, error) {
 	ident, err := httpx.UserFrom(ctx)

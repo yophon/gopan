@@ -188,7 +188,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="root" class="release">
+  <div ref="root" class="release gp-force-light">
     <div v-if="blockedInApp" class="inapp-tip" role="alert">
       {{ visitor.inAppBrowser === 'wechat' ? '微信' : 'QQ' }}里不能下载安装包：点右上角「···」，选「在浏览器打开」
       <span class="inapp-arrow" aria-hidden="true">↗</span>

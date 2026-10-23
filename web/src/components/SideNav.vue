@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useEventListener } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import {
+  ArrowRight,
   Bell,
   Cellphone,
   ChatDotRound,
@@ -27,6 +29,8 @@ import { request } from '@/api/client'
 import { MeDocument } from '@/api/gen/graphql'
 import { useAuthStore } from '@/stores/auth'
 import { formatBytes } from '@/utils/format'
+import { useThemeMode, type ThemeMode } from '@/composables/themeMode'
+import { searchKeyword } from '@/utils/search'
 
 /**
  * 侧栏内容。桌面直接放进 el-aside,手机放进 el-drawer ——
@@ -51,14 +55,35 @@ const activeMenu = computed(() => (route.path.startsWith('/drive') ? '/drive' : 
 
 // ---------- 搜索 ----------
 
-const searchInput = ref(typeof route.query.q === 'string' ? route.query.q : '')
+const searchInput = ref(searchKeyword(route.query))
+// 去别的页再回来、或者地址里的关键词变了:搜索框跟着显示当前的关键词
+watch(
+  () => route.fullPath,
+  () => {
+    if (route.path === '/search') searchInput.value = searchKeyword(route.query)
+  },
+)
+
+// 按 / 或 Ctrl+K 跳到搜索框(正在打字时不抢)
+const searchRef = ref<{ focus: () => void } | null>(null)
+useEventListener(window, 'keydown', (e: KeyboardEvent) => {
+  const t = e.target as HTMLElement | null
+  const typing = !!t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))
+  const slash = e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey
+  const ctrlK = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k'
+  if (!slash && !ctrlK) return
+  if (document.querySelector('.el-overlay:not([style*="display: none"])')) return
+  e.preventDefault()
+  searchRef.value?.focus()
+})
 
 function onSearch() {
   const q = searchInput.value.trim()
   if (!q) return
   // 正在看「内容」标签时换关键词,留在内容标签
   const inContent = route.path === '/search' && route.query.in === 'content'
-  void router.push({ path: '/search', query: inContent ? { q, in: 'content' } : { q } })
+  // 关键词放在 k 里而不是 q:有的浏览器插件(比如 ChatGPT 的)会把任何 /search?q= 当成搜索引擎结果页劫持走
+  void router.push({ path: '/search', query: inContent ? { k: q, in: 'content' } : { k: q } })
   emit('navigate')
 }
 
@@ -74,6 +99,26 @@ const quotaPercent = computed(() => {
   if (!me.value || me.value.quotaBytes <= 0) return 0
   return Math.min(100, Math.round((me.value.usedBytes / me.value.quotaBytes) * 100))
 })
+// ---------- 账户菜单:外观、登录设备、接入凭证、改密码、退出 ----------
+
+const { mode: themeMode, setMode: setThemeMode } = useThemeMode()
+const themeOptions: { label: string; value: ThemeMode }[] = [
+  { label: '跟随系统', value: 'system' },
+  { label: '浅色', value: 'light' },
+  { label: '深色', value: 'dark' },
+]
+const accountOpen = ref(false)
+
+function accountAction(action: () => void) {
+  accountOpen.value = false
+  action()
+}
+
+function goDevices() {
+  void router.push('/devices')
+  emit('navigate')
+}
+
 const quotaStatus = computed(() => {
   if (quotaPercent.value >= 90) return 'exception'
   if (quotaPercent.value >= 70) return 'warning'
@@ -97,25 +142,24 @@ const quotaStatus = computed(() => {
       </el-badge>
     </div>
     <el-input
+      ref="searchRef"
       v-model="searchInput"
       class="search-input"
       placeholder="搜索文件"
       :prefix-icon="Search"
       clearable
       @keyup.enter="onSearch"
-    />
+    >
+      <template v-if="!searchInput" #suffix><kbd class="search-kbd">/</kbd></template>
+    </el-input>
     <el-menu router :default-active="activeMenu" class="menu" @select="emit('navigate')">
-      <el-menu-item index="/chat">
-        <el-icon><ChatDotRound /></el-icon>
-        <span>传输助手</span>
-      </el-menu-item>
-      <el-menu-item index="/devices">
-        <el-icon><Monitor /></el-icon>
-        <span>登录设备</span>
-      </el-menu-item>
       <el-menu-item index="/drive">
         <el-icon><Folder /></el-icon>
         <span>我的文件</span>
+      </el-menu-item>
+      <el-menu-item index="/chat">
+        <el-icon><ChatDotRound /></el-icon>
+        <span>传输助手</span>
       </el-menu-item>
       <el-menu-item index="/shares">
         <el-icon><Share /></el-icon>
@@ -170,15 +214,50 @@ const quotaStatus = computed(() => {
         <span class="quota-more">空间分析 ›</span>
       </span>
     </router-link>
-    <div class="user-area">
-      <span class="username" :title="auth.user?.username">{{ auth.user?.username }}</span>
-      <span class="user-actions">
-        <el-button link :icon="Connection" title="WebDAV 应用密码" @click="emit('open-dav')" />
-        <el-button link :icon="Key" title="Agent API Key 与 OAuth" @click="emit('open-mcp')" />
-        <el-button link :icon="Lock" title="修改密码" @click="emit('open-pwd')" />
-        <el-button link type="danger" :icon="SwitchButton" title="退出" @click="emit('logout')" />
-      </span>
-    </div>
+    <el-popover
+      v-model:visible="accountOpen"
+      trigger="click"
+      placement="top-start"
+      :width="248"
+      :show-arrow="false"
+      :offset="6"
+      popper-class="account-popper"
+    >
+      <template #reference>
+        <button type="button" class="user-area" :class="{ open: accountOpen }" aria-label="账户与设置">
+          <span class="avatar">{{ (auth.user?.username ?? '?').slice(0, 1).toUpperCase() }}</span>
+          <span class="username" :title="auth.user?.username">{{ auth.user?.username }}</span>
+          <el-icon class="user-more"><ArrowRight /></el-icon>
+        </button>
+      </template>
+      <div class="account-menu">
+        <div class="account-section">
+          <span class="account-label">外观</span>
+          <el-segmented
+            :model-value="themeMode"
+            :options="themeOptions"
+            size="small"
+            block
+            @change="(v: string | number | boolean) => setThemeMode(v as ThemeMode)"
+          />
+        </div>
+        <button type="button" class="account-item" @click="accountAction(goDevices)">
+          <el-icon><Monitor /></el-icon>登录设备
+        </button>
+        <button type="button" class="account-item" @click="accountAction(() => emit('open-dav'))">
+          <el-icon><Connection /></el-icon>WebDAV 应用密码
+        </button>
+        <button type="button" class="account-item" @click="accountAction(() => emit('open-mcp'))">
+          <el-icon><Key /></el-icon>Agent 接入
+        </button>
+        <button type="button" class="account-item" @click="accountAction(() => emit('open-pwd'))">
+          <el-icon><Lock /></el-icon>修改密码
+        </button>
+        <button type="button" class="account-item danger" @click="accountAction(() => emit('logout'))">
+          <el-icon><SwitchButton /></el-icon>退出登录
+        </button>
+      </div>
+    </el-popover>
   </div>
 </template>
 
@@ -241,8 +320,20 @@ const quotaStatus = computed(() => {
   box-shadow: none;
 }
 .search-input :deep(.el-input__wrapper.is-focus) {
-  background: #fff;
+  background: var(--el-bg-color);
   box-shadow: 0 0 0 1px var(--gp-ink) inset;
+}
+.search-kbd {
+  padding: 0 5px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 4px;
+  font: 11px/16px var(--gp-font);
+  color: var(--el-text-color-placeholder);
+}
+@media (hover: none) {
+  .search-kbd {
+    display: none;
+  }
 }
 /* 菜单项做成圆角块:选中是暖灰底加粗,不再是蓝字 */
 .menu {
@@ -295,13 +386,38 @@ const quotaStatus = computed(() => {
 .user-area {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 12px 16px 14px 22px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  gap: 10px;
+  width: calc(100% - 20px);
+  margin: 8px 10px 10px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.user-area:hover,
+.user-area.open {
+  background: var(--gp-panel);
+}
+.avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--gp-ink);
+  color: var(--el-bg-color);
+  font-size: 13px;
+  font-weight: 700;
 }
 .username {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -309,9 +425,10 @@ const quotaStatus = computed(() => {
   font-size: 14px;
   font-weight: 600;
 }
-.user-actions {
-  display: flex;
+.user-more {
   flex: none;
+  color: var(--gp-ink-3);
+  transform: rotate(-90deg);
 }
 
 /* 抽屉里给底部留出安全区,免得账户操作被 Home Indicator 压住 */
@@ -320,11 +437,57 @@ const quotaStatus = computed(() => {
     padding-top: calc(12px + var(--sat));
   }
   .user-area {
-    padding-bottom: calc(12px + var(--sab));
-  }
-  .user-actions :deep(.el-button) {
-    min-width: var(--touch-target);
+    margin-bottom: calc(10px + var(--sab));
     min-height: var(--touch-target);
   }
+}
+</style>
+
+<style>
+/* 账户菜单是 teleport 到 body 的 popover,样式不走 scoped */
+.account-popper.el-popover {
+  padding: 6px;
+}
+.account-menu {
+  display: flex;
+  flex-direction: column;
+}
+.account-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.account-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.account-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--el-text-color-primary);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.account-item .el-icon {
+  font-size: 16px;
+  color: var(--el-text-color-secondary);
+}
+.account-item:hover {
+  background: var(--el-fill-color-light);
+}
+.account-item.danger,
+.account-item.danger .el-icon {
+  color: var(--el-color-danger);
 }
 </style>

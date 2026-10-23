@@ -177,7 +177,7 @@ function onSheetSelect(key: string) {
     <template v-else>
       <el-table
         v-if="!isMobile"
-        v-loading="isFetching"
+        v-loading="isFetching && !data"
         :data="items"
         row-key="id"
         empty-text="还没有创建过分享"
@@ -238,7 +238,7 @@ function onSheetSelect(key: string) {
         mode="list"
         :selection-mode="false"
         :selected-ids="[]"
-        :loading="isFetching"
+        :loading="isFetching && !data"
         :secondary="cardSecondary"
         @menu="(node) => (sheet = { visible: true, node })"
       />

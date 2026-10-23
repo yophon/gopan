@@ -98,7 +98,7 @@ async function copy(text: string) {
       </el-button>
     </div>
 
-    <el-table v-loading="isFetching" :data="items" row-key="id" empty-text="还没有应用密码">
+    <el-table v-loading="isFetching && !data" :data="items" row-key="id" empty-text="还没有应用密码">
       <el-table-column label="设备" prop="name" min-width="140" />
       <el-table-column v-if="!isMobile" label="创建于" width="170">
         <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>

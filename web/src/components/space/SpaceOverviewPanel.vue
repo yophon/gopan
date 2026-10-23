@@ -115,7 +115,6 @@ async function onPurgeTrash() {
           </span>
         </div>
       </section>
-      <p class="muted note">服务器上同一份内容本来只存一份,删重复文件省的是你的配额,不是服务器磁盘。</p>
     </template>
   </div>
 </template>

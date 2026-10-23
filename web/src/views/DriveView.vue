@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useEventListener } from '@vueuse/core'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+  ArrowDown,
   Check,
+  Close,
   CopyDocument,
   Delete,
   Download,
   EditPen,
+  Folder,
   FolderAdd,
   FolderOpened,
   Grid,
@@ -18,9 +21,11 @@ import {
   List,
   Paperclip,
   Rank,
+  Refresh,
   Share,
   Tickets,
   Upload,
+  View,
 } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
@@ -32,20 +37,20 @@ import {
   DeleteNodesDocument,
   MoveNodesDocument,
   NodeDocument,
-  NodeDownloadUrlDocument,
   RenameNodeDocument,
+  RestoreNodesDocument,
 } from '@/api/gen/graphql'
 import type { ChildrenQuery } from '@/api/gen/graphql'
 import { enqueueFiles } from '@/uploader/manager'
 import { openPreview } from '@/composables/preview'
 import { useBreakpoints } from '@/composables/breakpoints'
-import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import MoveDialog from '@/components/MoveDialog.vue'
 import ShareDialog from '@/components/ShareDialog.vue'
 import FileRequestDialog from '@/components/FileRequestDialog.vue'
 import FetchDialog from '@/components/FetchDialog.vue'
 import NodeDetailDrawer from '@/components/NodeDetailDrawer.vue'
+import ContextMenu, { type MenuEntry } from '@/components/ContextMenu.vue'
 import { useFetchEnabled } from '@/composables/jobs'
 import { useExtract } from '@/composables/extract'
 import { isArchiveName } from '@/utils/archive'
@@ -53,9 +58,12 @@ import { copyDirectLinks, useLinksEnabled } from '@/composables/links'
 import { linkFormatLabels } from '@/utils/links'
 import type { LinkFormat } from '@/utils/links'
 import { withoutQuery } from '@/utils/notifications'
-import NodeTable from '@/components/nodes/NodeTable.vue'
+import { actionToast } from '@/utils/toast'
+import { useNodeDownload } from '@/composables/nodeDownload'
+import NodeBrowser from '@/components/nodes/NodeBrowser.vue'
 import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
+import { baseNameRange, DRAG_MIME, nextSort, parseSortPref, stepSelection, type SortKey, type SortPref } from '@/components/nodes/browser'
 import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 
 type ChildItem = ChildrenQuery['children']['items'][number]
@@ -63,7 +71,6 @@ type ChildItem = ChildrenQuery['children']['items'][number]
 const route = useRoute()
 const router = useRouter()
 const queryClient = useQueryClient()
-const auth = useAuthStore()
 const ui = useUiStore()
 const { isMobile } = useBreakpoints()
 
@@ -73,13 +80,49 @@ const folderId = computed<string | null>(() => {
   return typeof raw === 'string' && raw !== '' ? raw : null
 })
 
-// ---------- 查询 ----------
+// ---------- 排序(记住上次的选择) ----------
 
-const { data, isFetching } = useQuery({
-  queryKey: ['children', folderId],
-  queryFn: () => request(ChildrenDocument, { parentId: folderId.value }),
+const SORT_KEY = 'gopan_drive_sort'
+
+function loadSort(): SortPref {
+  try {
+    return parseSortPref(localStorage.getItem(SORT_KEY))
+  } catch {
+    return parseSortPref(null)
+  }
+}
+
+const sort = ref<SortPref>(loadSort())
+
+function onSort(key: SortKey) {
+  sort.value = nextSort(sort.value, key)
+  try {
+    localStorage.setItem(SORT_KEY, JSON.stringify(sort.value))
+  } catch {
+    // 记不住就算了
+  }
+}
+
+// ---------- 查询:一页 200 条,第一页先出来,剩下的在后台接着拉完 ----------
+
+const childrenQuery = useInfiniteQuery({
+  queryKey: ['children', folderId, computed(() => sort.value.key), computed(() => sort.value.desc)],
+  queryFn: ({ pageParam }) =>
+    request(ChildrenDocument, { parentId: folderId.value, cursor: pageParam, order: sort.value.key, desc: sort.value.desc }),
+  initialPageParam: null as string | null,
+  getNextPageParam: (last) => last.children.nextCursor ?? undefined,
 })
-const items = computed<ChildItem[]>(() => data.value?.children.items ?? [])
+
+watch(
+  () => [childrenQuery.hasNextPage.value, childrenQuery.isFetching.value] as const,
+  ([more, fetching]) => {
+    if (more && !fetching) void childrenQuery.fetchNextPage()
+  },
+  { immediate: true },
+)
+
+const items = computed<ChildItem[]>(() => childrenQuery.data.value?.pages.flatMap((p) => p.children.items) ?? [])
+const initialLoading = computed(() => childrenQuery.isPending.value)
 
 interface Crumb {
   id: string
@@ -101,25 +144,38 @@ const { data: crumbs } = useQuery({
   },
 })
 
-// ---------- 多选 ----------
-// 桌面表格与手机卡片共用这一份选中状态:手机上由 ui.selectionMode 决定
-// 轻点是"打开"还是"勾选"。
+const folderName = computed(() => crumbs.value?.at(-1)?.name ?? '我的文件')
 
-const selection = ref<NodeListItem[]>([])
-const selectedIds = computed(() => selection.value.map((n) => n.id))
+// ---------- 选中 ----------
+// 桌面:单击 / Ctrl / Shift(NodeBrowser 里算好);手机:多选模式下轻点勾选。两边共用这一份 id 列表。
+
+const selectedIds = ref<string[]>([])
+const selection = computed<ChildItem[]>(() => {
+  const set = new Set(selectedIds.value)
+  return items.value.filter((n) => set.has(n.id))
+})
+const single = computed<ChildItem | null>(() => (selection.value.length === 1 ? selection.value[0]! : null))
 const showSelectionBar = computed(() => isMobile.value && ui.selectionMode)
 
+// 换文件夹、换排序:清掉选中
+watch(folderId, () => clearSelection())
+
+// 列表刷新后,已经不在了的选中项(被别处删了、移走了)拿掉
+watch(items, (list) => {
+  if (!selectedIds.value.length) return
+  const alive = new Set(list.map((n) => n.id))
+  const kept = selectedIds.value.filter((id) => alive.has(id))
+  if (kept.length !== selectedIds.value.length) selectedIds.value = kept
+})
+
 function toggleSelect(node: NodeListItem) {
-  const hit = selection.value.find((n) => n.id === node.id)
-  if (hit) {
-    selection.value = selection.value.filter((n) => n.id !== node.id)
-  } else {
-    selection.value = [...selection.value, node]
-  }
+  selectedIds.value = selectedIds.value.includes(node.id)
+    ? selectedIds.value.filter((id) => id !== node.id)
+    : [...selectedIds.value, node.id]
 }
 
 function clearSelection() {
-  selection.value = []
+  selectedIds.value = []
   ui.selectionMode = false
 }
 
@@ -132,29 +188,25 @@ function invalidate() {
 }
 
 const createFolderMutation = useMutation({
-  mutationFn: (vars: { parentId: string | null; name: string }) =>
-    request(CreateFolderDocument, vars),
-  onSuccess: () => {
-    ElMessage.success('文件夹已创建')
+  mutationFn: (vars: { parentId: string | null; name: string }) => request(CreateFolderDocument, vars),
+  onSuccess: (res) => {
     invalidate()
+    selectedIds.value = [res.createFolder.id]
   },
   onError: (err) => ElMessage.error(errorText(err)),
 })
 
 const renameMutation = useMutation({
   mutationFn: (vars: { id: string; name: string }) => request(RenameNodeDocument, vars),
-  onSuccess: () => {
-    ElMessage.success('重命名成功')
-    invalidate()
-  },
+  onSuccess: () => invalidate(),
   onError: (err) => ElMessage.error(errorText(err)),
 })
 
 const moveMutation = useMutation({
-  mutationFn: (vars: { ids: string[]; targetParentId: string | null }) =>
-    request(MoveNodesDocument, vars),
-  onSuccess: () => {
-    ElMessage.success('移动成功')
+  mutationFn: (vars: { ids: string[]; targetParentId: string | null; targetName?: string }) =>
+    request(MoveNodesDocument, { ids: vars.ids, targetParentId: vars.targetParentId }),
+  onSuccess: (_res, vars) => {
+    ElMessage.success(vars.targetName ? `已移到「${vars.targetName}」` : '移动成功')
     clearSelection()
     invalidate()
   },
@@ -162,8 +214,7 @@ const moveMutation = useMutation({
 })
 
 const copyMutation = useMutation({
-  mutationFn: (vars: { ids: string[]; targetParentId: string | null }) =>
-    request(CopyNodesDocument, vars),
+  mutationFn: (vars: { ids: string[]; targetParentId: string | null }) => request(CopyNodesDocument, vars),
   onSuccess: () => {
     ElMessage.success('复制成功')
     clearSelection()
@@ -175,22 +226,44 @@ const copyMutation = useMutation({
 
 const deleteMutation = useMutation({
   mutationFn: (vars: { ids: string[] }) => request(DeleteNodesDocument, vars),
-  onSuccess: () => {
-    ElMessage.success('已放入回收站')
+  onSuccess: (_res, vars) => {
     clearSelection()
     invalidate()
     void queryClient.invalidateQueries({ queryKey: ['trash'] })
+    // 进的是回收站,能撤:不先弹确认,做完给一个撤销
+    actionToast(vars.ids.length > 1 ? `${vars.ids.length} 项已放入回收站` : '已放入回收站', '撤销', () => {
+      void request(RestoreNodesDocument, { ids: vars.ids })
+        .then(() => {
+          invalidate()
+          void queryClient.invalidateQueries({ queryKey: ['trash'] })
+          selectedIds.value = vars.ids
+        })
+        .catch((err) => ElMessage.error(errorText(err, '撤销失败,可以去回收站还原')))
+    })
   },
   onError: (err) => ElMessage.error(errorText(err)),
 })
 
 // ---------- 操作 ----------
 
+/** 打开输入框后只选中主名(不带扩展名),改名时直接敲新名字就行 */
+function selectInPrompt(range: [number, number]) {
+  void nextTick(() => {
+    window.setTimeout(() => {
+      const input = document.querySelector<HTMLInputElement>('.el-message-box__input input')
+      input?.focus()
+      input?.setSelectionRange(range[0], range[1])
+    }, 60)
+  })
+}
+
 async function onCreateFolder() {
   try {
-    const { value } = await ElMessageBox.prompt('请输入文件夹名称', '新建文件夹', {
+    selectInPrompt([0, '新建文件夹'.length])
+    const { value } = await ElMessageBox.prompt('', '新建文件夹', {
       confirmButtonText: '创建',
       cancelButtonText: '取消',
+      inputValue: '新建文件夹',
       inputPattern: /\S+/,
       inputErrorMessage: '名称不能为空',
     })
@@ -202,14 +275,16 @@ async function onCreateFolder() {
 
 async function onRename(node: NodeListItem) {
   try {
-    const { value } = await ElMessageBox.prompt('请输入新名称', '重命名', {
+    selectInPrompt(baseNameRange(node.name, node.kind === 'FOLDER'))
+    const { value } = await ElMessageBox.prompt('', '重命名', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       inputValue: node.name,
       inputPattern: /\S+/,
       inputErrorMessage: '名称不能为空',
     })
-    renameMutation.mutate({ id: node.id, name: value.trim() })
+    const name = value.trim()
+    if (name !== node.name) renameMutation.mutate({ id: node.id, name })
   } catch {
     // 取消
   }
@@ -217,7 +292,7 @@ async function onRename(node: NodeListItem) {
 
 const moveDialogVisible = ref(false)
 const copyDialogVisible = ref(false)
-/** 移动/复制对话框的目标:桌面取多选,手机长按菜单取单个 */
+/** 移动 / 复制对话框处理的那几项 */
 const pendingIds = ref<string[]>([])
 
 function openMove(ids: string[]) {
@@ -240,26 +315,31 @@ function onCopyConfirm(targetParentId: string | null) {
   copyMutation.mutate({ ids: pendingIds.value, targetParentId })
 }
 
-async function onDelete(ids: string[]) {
+/** 拖到文件夹 / 面包屑上:直接移动 */
+function moveByDrag(ids: string[], targetId: string | null, targetName: string) {
+  const moving = ids.filter((id) => id !== targetId)
+  if (!moving.length) return
+  // 拖回原来所在的文件夹:什么都不做
+  if (targetId === folderId.value) return
+  moveMutation.mutate({ ids: moving, targetParentId: targetId, targetName })
+}
+
+function onDelete(ids: string[]) {
   if (ids.length === 0) return
-  try {
-    await ElMessageBox.confirm(
-      `确定将${ids.length > 1 ? `所选的 ${ids.length} 个` : ''}项目放入回收站?`,
-      '删除',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
-    )
-  } catch {
-    return // 取消
-  }
   deleteMutation.mutate({ ids })
 }
 
-// ---------- 上传 ----------
+// ---------- 上传:按钮(文件 / 文件夹)、整页拖入、拖到某个文件夹上 ----------
 
 const fileInput = ref<HTMLInputElement | null>(null)
+const dirInput = ref<HTMLInputElement | null>(null)
 
 function onPickFiles() {
   fileInput.value?.click()
+}
+
+function onPickDir() {
+  dirInput.value?.click()
 }
 
 function onFilesChosen(e: Event) {
@@ -267,6 +347,19 @@ function onFilesChosen(e: Event) {
   const files = Array.from(input.files ?? [])
   input.value = '' // 允许重复选择同一文件
   if (files.length > 0) enqueueFiles(files, folderId.value)
+}
+
+/** 选了一个文件夹:按 webkitRelativePath 还原目录结构 */
+function onDirChosen(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  input.value = ''
+  if (!files.length) return
+  const collected = files.map((file) => {
+    const parts = (file.webkitRelativePath || file.name).split('/')
+    return { dirs: parts.slice(0, -1), file }
+  })
+  void uploadCollected(collected, folderId.value)
 }
 
 // 整页拖拽:dragenter/leave 用计数器抵消子元素冒泡(桌面专属,触屏不会触发)
@@ -314,12 +407,10 @@ function entryFile(entry: FileSystemFileEntry): Promise<File> {
   return new Promise((resolve, reject) => entry.file(resolve, reject))
 }
 
-/** 深度优先展开 entry 树 → (相对目录段, 文件) 列表 */
-async function walkEntry(
-  entry: FileSystemEntry,
-  dirs: string[],
-  out: { dirs: string[]; file: File }[],
-): Promise<void> {
+type Collected = { dirs: string[]; file: File }
+
+/** 深度优先展开 entry 树 → (相对目录段, 文件) 列表;空目录记进 emptyDirs */
+async function walkEntry(entry: FileSystemEntry, dirs: string[], out: Collected[], emptyDirs: string[][]): Promise<void> {
   if (out.length >= MAX_DROP_FILES) return
   if (entry.isFile) {
     out.push({ dirs, file: await entryFile(entry as FileSystemFileEntry) })
@@ -329,73 +420,49 @@ async function walkEntry(
     const children = await readAllEntries(entry as FileSystemDirectoryEntry)
     const sub = [...dirs, entry.name]
     if (children.length === 0) {
-      // 空目录也创建,保持结构
-      await ensureDirChain(sub)
+      emptyDirs.push(sub)
       return
     }
-    for (const c of children) {
-      await walkEntry(c, sub, out)
-    }
+    for (const c of children) await walkEntry(c, sub, out, emptyDirs)
   }
 }
 
-/** 确保相对目录链存在于当前文件夹下,返回最深层目录 id;同名目录复用 */
-const dirCache = new Map<string, string | null>()
+/** 一个文件夹下的全部子项(翻完所有页):建目录链时找同名文件夹不能只看第一页 */
+async function allChildren(parentId: string | null) {
+  const out: ChildItem[] = []
+  let cursor: string | null = null
+  do {
+    const res: ChildrenQuery = await request(ChildrenDocument, { parentId, cursor })
+    out.push(...res.children.items)
+    cursor = res.children.nextCursor ?? null
+  } while (cursor)
+  return out
+}
 
-async function ensureDirChain(dirs: string[]): Promise<string | null> {
-  let parent = folderId.value
-  let keyPrefix = parent ?? 'root'
+/** 确保相对目录链存在于 base 下,返回最深层目录 id;同名目录复用 */
+async function ensureDirChain(base: string | null, dirs: string[], cache: Map<string, string | null>): Promise<string | null> {
+  let parent = base
+  let keyPrefix = base ?? 'root'
   for (const name of dirs) {
     keyPrefix += '/' + name
-    const cached = dirCache.get(keyPrefix)
+    const cached = cache.get(keyPrefix)
     if (cached !== undefined) {
       parent = cached
       continue
     }
-    const res = await request(ChildrenDocument, { parentId: parent })
-    const hit = res.children.items.find((i) => i.kind === 'FOLDER' && i.name === name)
-    let id: string
-    if (hit) {
-      id = hit.id
-    } else {
-      const created = await request(CreateFolderDocument, { parentId: parent, name })
-      id = created.createFolder.id
-    }
-    dirCache.set(keyPrefix, id)
+    const hit = (await allChildren(parent)).find((i) => i.kind === 'FOLDER' && i.name === name)
+    const id = hit ? hit.id : (await request(CreateFolderDocument, { parentId: parent, name })).createFolder.id
+    cache.set(keyPrefix, id)
     parent = id
   }
   return parent
 }
 
-useEventListener(window, 'drop', async (e: DragEvent) => {
-  if (!hasFiles(e)) return
-  e.preventDefault()
-  dragDepth.value = 0
-  const entries: FileSystemEntry[] = []
-  const plainFiles: File[] = []
-  for (const item of Array.from(e.dataTransfer?.items ?? [])) {
-    if (item.kind !== 'file') continue
-    const entry = item.webkitGetAsEntry?.()
-    if (entry) {
-      entries.push(entry)
-    } else {
-      const f = item.getAsFile()
-      if (f) plainFiles.push(f)
-    }
-  }
-  if (plainFiles.length > 0) enqueueFiles(plainFiles, folderId.value)
-  if (entries.length === 0) return
-
+/** 按目录分组:先建目录链,再把文件按归属入队 */
+async function uploadCollected(collected: Collected[], base: string | null, emptyDirs: string[][] = []) {
   try {
-    dirCache.clear()
-    const collected: { dirs: string[]; file: File }[] = []
-    for (const entry of entries) {
-      await walkEntry(entry, [], collected)
-    }
-    if (collected.length >= MAX_DROP_FILES) {
-      ElMessage.warning(`单次最多上传 ${MAX_DROP_FILES} 个文件,超出部分已忽略`)
-    }
-    // 按目录分组:先建目录链,再把文件按归属入队
+    const cache = new Map<string, string | null>()
+    for (const d of emptyDirs) await ensureDirChain(base, d, cache)
     const groups = new Map<string, { dirs: string[]; files: File[] }>()
     for (const c of collected) {
       const key = c.dirs.join('/')
@@ -404,53 +471,61 @@ useEventListener(window, 'drop', async (e: DragEvent) => {
       groups.set(key, g)
     }
     for (const g of groups.values()) {
-      const target = g.dirs.length === 0 ? folderId.value : await ensureDirChain(g.dirs)
+      const target = g.dirs.length === 0 ? base : await ensureDirChain(base, g.dirs, cache)
       enqueueFiles(g.files, target)
     }
     invalidate()
   } catch (err) {
-    ElMessage.error(errorText(err, '读取拖入的文件夹失败'))
+    ElMessage.error(errorText(err, '读取文件夹失败'))
   }
-})
-
-// ---------- 下载 ----------
-
-const downloadingId = ref<string | null>(null)
-
-function clickA(href: string, download?: string) {
-  const a = document.createElement('a')
-  a.href = href
-  if (download) a.download = download
-  a.rel = 'noopener'
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
 }
 
-async function onDownload(row: NodeListItem) {
-  if (row.kind === 'FOLDER') {
-    // 文件夹走服务端流式 zip;token 15 分钟有效,点击即用
-    clickA(`/pack?nodes=${row.id}&token=${encodeURIComponent(auth.accessToken ?? '')}`)
+/** 电脑里拖进来的东西(文件、文件夹混着)传到 target */
+async function uploadDataTransfer(dt: DataTransfer, target: string | null) {
+  const entries: FileSystemEntry[] = []
+  const plainFiles: File[] = []
+  for (const item of Array.from(dt.items ?? [])) {
+    if (item.kind !== 'file') continue
+    const entry = item.webkitGetAsEntry?.()
+    if (entry) entries.push(entry)
+    else {
+      const f = item.getAsFile()
+      if (f) plainFiles.push(f)
+    }
+  }
+  if (plainFiles.length > 0) enqueueFiles(plainFiles, target)
+  if (entries.length === 0) return
+  const collected: Collected[] = []
+  const emptyDirs: string[][] = []
+  try {
+    for (const entry of entries) await walkEntry(entry, [], collected, emptyDirs)
+  } catch (err) {
+    ElMessage.error(errorText(err, '读取拖入的文件夹失败'))
     return
   }
-  downloadingId.value = row.id
-  try {
-    // downloadUrl 是 15 分钟预签名,按需查询、即查即用
-    const res = await request(NodeDownloadUrlDocument, { id: row.id })
-    const url = res.node.downloadUrl
-    if (!url) {
-      ElMessage.error('无法获取下载链接')
-      return
-    }
-    clickA(url, row.name)
-  } catch (err) {
-    ElMessage.error(errorText(err, '获取下载链接失败'))
-  } finally {
-    downloadingId.value = null
-  }
+  if (collected.length >= MAX_DROP_FILES) ElMessage.warning(`单次最多上传 ${MAX_DROP_FILES} 个文件,超出部分已忽略`)
+  await uploadCollected(collected, target, emptyDirs)
 }
 
-// ---------- 分享 ----------
+useEventListener(window, 'drop', (e: DragEvent) => {
+  if (!hasFiles(e)) return
+  e.preventDefault()
+  dragDepth.value = 0
+  if (e.dataTransfer) void uploadDataTransfer(e.dataTransfer, folderId.value)
+})
+
+function onDropFilesOnFolder(dt: DataTransfer, targetId: string) {
+  dragDepth.value = 0
+  const name = items.value.find((n) => n.id === targetId)?.name
+  if (name) ElMessage.info(`传到「${name}」`)
+  void uploadDataTransfer(dt, targetId)
+}
+
+// ---------- 下载:单个文件预签名直链,文件夹或多项打 zip ----------
+
+const { download: onDownload, downloadingId } = useNodeDownload()
+
+// ---------- 分享 / 收集 / 离线下载 / 解压 / 直链 / 详情 ----------
 
 const shareDialogVisible = ref(false)
 const shareTarget = ref<{ id: string; name: string } | null>(null)
@@ -460,8 +535,6 @@ function openShare(row: { id: string; name: string }) {
   shareDialogVisible.value = true
 }
 
-// ---------- 收集文件(doc/20):只对文件夹 ----------
-
 const collectDialogVisible = ref(false)
 const collectTarget = ref<{ id: string; name: string } | null>(null)
 
@@ -470,13 +543,8 @@ function openCollect(row: { id: string; name: string }) {
   collectDialogVisible.value = true
 }
 
-// ---------- 离线下载(doc/21) ----------
-
 const fetchEnabled = useFetchEnabled()
 const fetchDialogVisible = ref(false)
-const folderName = computed(() => crumbs.value?.at(-1)?.name ?? '我的文件')
-
-// ---------- 解压(doc/21 四.4):只对压缩包 ----------
 
 const { extract } = useExtract()
 const extractPickVisible = ref(false)
@@ -499,62 +567,6 @@ function onExtractConfirm(parentId: string | null) {
   const row = extractTarget.value
   if (row) void extract({ nodeId: row.id, parentId })
 }
-
-// ---------- 打开 ----------
-// 桌面:双击表格行;手机:轻点卡片。语义一致,只是触发方式不同。
-
-function onOpen(row: NodeListItem) {
-  if (row.kind === 'FOLDER') {
-    void router.push(`/drive/${row.id}`)
-    return
-  }
-  // 多选状态下不触发预览,避免误操作
-  if (selection.value.length > 1) return
-  const files = items.value.filter((n) => n.kind === 'FILE')
-  const idx = files.findIndex((n) => n.id === row.id)
-  if (idx >= 0) {
-    openPreview(
-      files.map((n) => n.id),
-      idx,
-    )
-  }
-}
-
-// ---------- ?open=<nodeId>:通知与推送链接直达(doc/22 三.4) ----------
-// 文件夹 → 进去;文件 → 在所在文件夹的列表里打开预览。做完从地址里去掉,刷新不再弹。
-
-async function openFromQuery(id: string) {
-  try {
-    const res = await request(NodeDocument, { id })
-    const n = res.node
-    if (n.kind === 'FOLDER') {
-      await router.replace(`/drive/${n.id}`)
-      return
-    }
-    await router.replace({ path: route.path, query: withoutQuery(route.query, ['open']) })
-    const list = await queryClient.ensureQueryData({
-      queryKey: ['children', folderId.value],
-      queryFn: () => request(ChildrenDocument, { parentId: folderId.value }),
-    })
-    const files = list.children.items.filter((i) => i.kind === 'FILE')
-    const idx = files.findIndex((f) => f.id === n.id)
-    if (idx >= 0) openPreview(files.map((f) => f.id), idx)
-    else openPreview([n.id], 0)
-  } catch (err) {
-    ElMessage.error(errorText(err, '文件不存在或已被删除'))
-    void router.replace({ path: route.path, query: withoutQuery(route.query, ['open']) })
-  }
-}
-
-watch(
-  () => route.query.open,
-  (id) => {
-    if (typeof id === 'string' && id) void openFromQuery(id)
-  },
-  { immediate: true },
-)
-
-// ---------- 复制直链(doc/22 四.4):只对文件,多选一行一条 ----------
 
 const linksEnabled = useLinksEnabled()
 const linkSheet = ref<{ visible: boolean; nodes: NodeListItem[] }>({ visible: false, nodes: [] })
@@ -580,26 +592,234 @@ function onLinkSheetSelect(key: string) {
   void copyDirectLinks(linkSheet.value.nodes, key as LinkFormat)
 }
 
-// ---------- 详情与历史(doc/23 二.4) ----------
-
 const detail = ref<{ visible: boolean; id: string | null }>({ visible: false, id: null })
 
 function openDetail(node: { id: string }) {
   detail.value = { visible: true, id: node.id }
 }
 
+// ---------- 打开 ----------
+
+function onOpen(row: NodeListItem) {
+  if (row.kind === 'FOLDER') {
+    void router.push(`/drive/${row.id}`)
+    return
+  }
+  const files = items.value.filter((n) => n.kind === 'FILE')
+  const idx = files.findIndex((n) => n.id === row.id)
+  if (idx >= 0) openPreview(files.map((n) => n.id), idx)
+}
+
+function goUp() {
+  const chain = crumbs.value ?? []
+  if (!chain.length) return
+  const parent = chain.length > 1 ? chain[chain.length - 2]! : null
+  void router.push(parent ? `/drive/${parent.id}` : '/drive')
+}
+
+// ---------- ?open=<nodeId>:通知与推送链接直达(doc/22 三.4) ----------
+// 文件夹 → 进去;文件 → 在所在文件夹的列表里打开预览。做完从地址里去掉,刷新不再弹。
+
+async function openFromQuery(id: string) {
+  try {
+    const res = await request(NodeDocument, { id })
+    const n = res.node
+    if (n.kind === 'FOLDER') {
+      await router.replace(`/drive/${n.id}`)
+      return
+    }
+    await router.replace({ path: route.path, query: withoutQuery(route.query, ['open']) })
+    const files = (await allChildren(folderId.value)).filter((i) => i.kind === 'FILE')
+    const idx = files.findIndex((f) => f.id === n.id)
+    if (idx >= 0) openPreview(files.map((f) => f.id), idx)
+    else openPreview([n.id], 0)
+  } catch (err) {
+    ElMessage.error(errorText(err, '文件不存在或已被删除'))
+    void router.replace({ path: route.path, query: withoutQuery(route.query, ['open']) })
+  }
+}
+
+watch(
+  () => route.query.open,
+  (id) => {
+    if (typeof id === 'string' && id) void openFromQuery(id)
+  },
+  { immediate: true },
+)
+
+// ---------- 右键菜单(桌面):条目、空白处 ----------
+
+const menu = ref<{ visible: boolean; x: number; y: number; node: NodeListItem | null }>({ visible: false, x: 0, y: 0, node: null })
+
+function onMenu(node: NodeListItem | null, x: number, y: number) {
+  menu.value = { visible: true, x, y, node }
+}
+
+const menuItems = computed<MenuEntry[]>(() => {
+  if (!menu.value.node) {
+    return [
+      { key: 'upload', label: '上传文件', icon: Upload },
+      { key: 'uploadDir', label: '上传文件夹', icon: FolderOpened },
+      { key: 'mkdir', label: '新建文件夹', icon: FolderAdd },
+      ...(fetchEnabled.value ? [{ key: 'fetch', label: '离线下载', icon: Link }] : []),
+      { key: 'd1', divider: true },
+      ...(items.value.length ? [{ key: 'selectAll', label: '全选', icon: Check, hint: 'Ctrl+A' }] : []),
+      { key: 'refresh', label: '刷新', icon: Refresh },
+    ]
+  }
+  const sel = selection.value
+  const one = single.value
+  const files = fileTargets(sel)
+  const entries: MenuEntry[] = []
+  if (one) entries.push({ key: 'open', label: one.kind === 'FOLDER' ? '打开' : '预览', icon: one.kind === 'FOLDER' ? FolderOpened : View, hint: 'Enter' })
+  entries.push({ key: 'download', label: one && one.kind === 'FILE' ? '下载' : '打包下载', icon: Download })
+  if (one) entries.push({ key: 'share', label: '分享', icon: Share })
+  if (linksEnabled.value && files.length) {
+    entries.push({
+      key: 'link',
+      label: files.length > 1 ? `复制直链(${files.length} 个)` : '复制直链',
+      icon: Paperclip,
+      children: (['url', 'markdown', 'html'] as LinkFormat[]).map((f) => ({ key: `link:${f}`, label: linkFormatLabels[f] })),
+    })
+  }
+  if (one?.kind === 'FOLDER') entries.push({ key: 'collect', label: '收集文件', icon: Tickets })
+  if (one && isArchive(one)) {
+    entries.push({ key: 'extract', label: '解压到这里', icon: FolderOpened }, { key: 'extractTo', label: '解压到…', icon: FolderOpened })
+  }
+  entries.push({ key: 'd1', divider: true })
+  if (one) entries.push({ key: 'rename', label: '重命名', icon: EditPen, hint: 'F2' })
+  entries.push({ key: 'move', label: '移动到…', icon: Rank }, { key: 'copy', label: '复制到…', icon: CopyDocument })
+  if (one) entries.push({ key: 'detail', label: '详情与历史', icon: InfoFilled })
+  entries.push({ key: 'd2', divider: true }, { key: 'delete', label: sel.length > 1 ? `删除 ${sel.length} 项` : '删除', icon: Delete, danger: true, hint: 'Del' })
+  return entries
+})
+
+function onMenuSelect(key: string) {
+  if (key.startsWith('link:')) {
+    void copyDirectLinks(fileTargets(selection.value), key.slice(5) as LinkFormat)
+    return
+  }
+  const sel = selection.value
+  const one = single.value
+  switch (key) {
+    case 'upload':
+      return onPickFiles()
+    case 'uploadDir':
+      return onPickDir()
+    case 'mkdir':
+      return void onCreateFolder()
+    case 'fetch':
+      fetchDialogVisible.value = true
+      return
+    case 'selectAll':
+      selectedIds.value = items.value.map((n) => n.id)
+      return
+    case 'refresh':
+      return invalidate()
+    case 'open':
+      if (one) onOpen(one)
+      return
+    case 'download':
+      return void onDownload(sel)
+    case 'share':
+      if (one) openShare(one)
+      return
+    case 'collect':
+      if (one) openCollect(one)
+      return
+    case 'extract':
+      if (one) extractHere(one)
+      return
+    case 'extractTo':
+      if (one) pickExtract(one)
+      return
+    case 'rename':
+      if (one) void onRename(one)
+      return
+    case 'move':
+      return openMove(selectedIds.value)
+    case 'copy':
+      return openCopy(selectedIds.value)
+    case 'detail':
+      if (one) openDetail(one)
+      return
+    case 'delete':
+      return onDelete(selectedIds.value)
+  }
+}
+
+// ---------- 键盘(桌面):Del 删除、F2 重命名、Enter 打开、Ctrl+A 全选、Esc 取消、↑↓ 移动、Backspace 上一级 ----------
+
+function typingTarget(e: KeyboardEvent): boolean {
+  const t = e.target as HTMLElement | null
+  if (!t) return false
+  return t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)
+}
+
+/** 有弹窗、抽屉、预览开着时不接管键盘 */
+function overlayOpen(): boolean {
+  return !!document.querySelector('.el-overlay:not([style*="display: none"]), .preview-overlay, .el-message-box')
+}
+
+useEventListener(window, 'keydown', (e: KeyboardEvent) => {
+  if (isMobile.value || typingTarget(e) || overlayOpen() || menu.value.visible) return
+  const mod = e.ctrlKey || e.metaKey
+  if (mod && e.key.toLowerCase() === 'a') {
+    e.preventDefault()
+    selectedIds.value = items.value.map((n) => n.id)
+  } else if (e.key === 'Escape' && selectedIds.value.length) {
+    clearSelection()
+  } else if (e.key === 'Delete' && selectedIds.value.length) {
+    e.preventDefault()
+    onDelete(selectedIds.value)
+  } else if (e.key === 'F2' && single.value) {
+    e.preventDefault()
+    void onRename(single.value)
+  } else if (e.key === 'Enter' && single.value) {
+    e.preventDefault()
+    onOpen(single.value)
+  } else if (e.key === 'Backspace' && !mod) {
+    e.preventDefault()
+    goUp()
+  } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    const id = stepSelection(items.value.map((n) => n.id), selectedIds.value, e.key === 'ArrowDown' ? 1 : -1)
+    if (!id) return
+    e.preventDefault()
+    selectedIds.value = [id]
+    void nextTick(() => document.querySelector(`[data-id="${id}"]`)?.scrollIntoView({ block: 'nearest' }))
+  }
+})
+
+// ---------- 面包屑也能当拖放目标:把东西拖回上级 ----------
+
+const crumbDrop = ref<string | null>(null)
+
+function onCrumbDragOver(id: string | null, e: DragEvent) {
+  if (!Array.from(e.dataTransfer?.types ?? []).includes(DRAG_MIME)) return
+  if (id === folderId.value) return
+  e.preventDefault()
+  crumbDrop.value = id ?? 'root'
+}
+
+function onCrumbDrop(id: string | null, name: string, e: DragEvent) {
+  crumbDrop.value = null
+  if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes(DRAG_MIME)) return
+  e.preventDefault()
+  try {
+    moveByDrag(JSON.parse(e.dataTransfer.getData(DRAG_MIME)) as string[], id, name)
+  } catch {
+    // 不是我们拖的东西
+  }
+}
+
 // ---------- 触屏操作菜单 ----------
 
-const sheet = ref<{ visible: boolean; node: NodeListItem | null }>({
-  visible: false,
-  node: null,
-})
+const sheet = ref<{ visible: boolean; node: NodeListItem | null }>({ visible: false, node: null })
 
 function openSheet(node: NodeListItem) {
   sheet.value = { visible: true, node }
 }
 
-/** 长按菜单比桌面右键菜单全:桌面漏掉的重命名/移动/复制在这里补齐 */
 const sheetItems = computed<SheetItem[]>(() => {
   const node = sheet.value.node
   if (!node) return []
@@ -629,167 +849,112 @@ function onSheetSelect(key: string) {
   if (!node) return
   switch (key) {
     case 'open':
-      onOpen(node)
-      break
+      return onOpen(node)
     case 'download':
-      void onDownload(node)
-      break
+      return void onDownload([node])
     case 'share':
-      openShare(node)
-      break
+      return openShare(node)
     case 'link':
-      openLinkSheet([node])
-      break
+      return openLinkSheet([node])
     case 'collect':
-      openCollect(node)
-      break
+      return openCollect(node)
     case 'extract':
-      extractHere(node)
-      break
+      return extractHere(node)
     case 'extractTo':
-      pickExtract(node)
-      break
+      return pickExtract(node)
     case 'rename':
-      void onRename(node)
-      break
+      return void onRename(node)
     case 'move':
-      openMove([node.id])
-      break
+      return openMove([node.id])
     case 'copy':
-      openCopy([node.id])
-      break
+      return openCopy([node.id])
     case 'select':
       if (!ui.selectionMode) {
         ui.selectionMode = true
         toggleSelect(node)
       }
-      break
+      return
     case 'detail':
-      openDetail(node)
-      break
+      return openDetail(node)
     case 'delete':
-      void onDelete([node.id])
-      break
+      return onDelete([node.id])
   }
-}
-
-// ---------- 右键菜单(桌面) ----------
-
-const contextMenu = ref<{ visible: boolean; x: number; y: number; row: NodeListItem | null }>({
-  visible: false,
-  x: 0,
-  y: 0,
-  row: null,
-})
-
-function onRowContextmenu(row: NodeListItem, x: number, y: number) {
-  contextMenu.value = { visible: true, x, y, row }
-}
-
-function closeContextMenu() {
-  contextMenu.value.visible = false
-}
-
-useEventListener(window, 'click', closeContextMenu)
-useEventListener(window, 'contextmenu', (e: MouseEvent) => {
-  // 点在表格行上的 contextmenu 由 onRowContextmenu 接管;其他位置关掉菜单
-  if (!(e.target as HTMLElement | null)?.closest('.el-table__row')) closeContextMenu()
-})
-
-function onContextDownload() {
-  const row = contextMenu.value.row
-  closeContextMenu()
-  if (row) void onDownload(row)
-}
-
-function onContextShare() {
-  const row = contextMenu.value.row
-  closeContextMenu()
-  if (row) openShare(row)
-}
-
-function onContextDetail() {
-  const row = contextMenu.value.row
-  closeContextMenu()
-  if (row) openDetail(row)
-}
-
-function onContextCollect() {
-  const row = contextMenu.value.row
-  closeContextMenu()
-  if (row) openCollect(row)
-}
-
-/** 右键的那一行在多选里就对整组(其中的文件)生效,否则只对这一行 */
-const contextLinkTargets = computed<NodeListItem[]>(() => {
-  const row = contextMenu.value.row
-  if (!row) return []
-  const inSelection = selection.value.length > 1 && selection.value.some((n) => n.id === row.id)
-  return fileTargets(inSelection ? selection.value : [row])
-})
-
-function onContextLink(fmt: LinkFormat) {
-  const targets = contextLinkTargets.value
-  closeContextMenu()
-  void copyDirectLinks(targets, fmt)
-}
-
-function onContextExtract(to: boolean) {
-  const row = contextMenu.value.row
-  closeContextMenu()
-  if (!row) return
-  if (to) pickExtract(row)
-  else extractHere(row)
 }
 </script>
 
 <template>
   <div class="drive" :class="{ 'has-selection-bar': showSelectionBar }">
-    <el-breadcrumb separator="/" class="breadcrumb">
-      <el-breadcrumb-item :to="{ path: '/drive' }">我的文件</el-breadcrumb-item>
-      <el-breadcrumb-item
-        v-for="crumb in crumbs ?? []"
-        :key="crumb.id"
-        :to="{ path: `/drive/${crumb.id}` }"
+    <nav class="crumbs" aria-label="位置">
+      <router-link
+        to="/drive"
+        class="crumb"
+        :class="{ current: !folderId, 'drop-target': crumbDrop === 'root' }"
+        @dragover="onCrumbDragOver(null, $event)"
+        @dragleave="crumbDrop = null"
+        @drop="onCrumbDrop(null, '我的文件', $event)"
       >
-        {{ crumb.name }}
-      </el-breadcrumb-item>
-    </el-breadcrumb>
+        我的文件
+      </router-link>
+      <template v-for="(crumb, i) in crumbs ?? []" :key="crumb.id">
+        <span class="crumb-sep">/</span>
+        <router-link
+          :to="`/drive/${crumb.id}`"
+          class="crumb"
+          :class="{ current: i === (crumbs?.length ?? 0) - 1, 'drop-target': crumbDrop === crumb.id }"
+          @dragover="onCrumbDragOver(crumb.id, $event)"
+          @dragleave="crumbDrop = null"
+          @drop="onCrumbDrop(crumb.id, crumb.name, $event)"
+        >
+          {{ crumb.name }}
+        </router-link>
+      </template>
+    </nav>
 
-    <!-- 桌面工具栏:保持原样 -->
+    <!-- 桌面工具栏:平时是新建类操作;选中了东西就换成对选中项的操作 -->
     <div v-if="!isMobile" class="toolbar">
-      <el-button type="primary" :icon="Upload" @click="onPickFiles">上传文件</el-button>
-      <el-button :icon="FolderAdd" @click="onCreateFolder">新建文件夹</el-button>
-      <el-button v-if="fetchEnabled" :icon="Link" @click="fetchDialogVisible = true">离线下载</el-button>
-      <el-button :icon="EditPen" :disabled="selection.length !== 1" @click="selection[0] && onRename(selection[0])">
-        重命名
-      </el-button>
-      <el-button :icon="Rank" :disabled="selection.length === 0" @click="openMove(selectedIds)">
-        移动
-      </el-button>
-      <el-button :icon="CopyDocument" :disabled="selection.length === 0" @click="openCopy(selectedIds)">
-        复制
-      </el-button>
-      <el-button
-        :icon="Share"
-        :disabled="selection.length !== 1"
-        @click="selection[0] && openShare(selection[0])"
-      >
-        分享
-      </el-button>
-      <el-popconfirm
-        title="确定将所选项目放入回收站?"
-        confirm-button-text="删除"
-        cancel-button-text="取消"
-        @confirm="onDelete(selectedIds)"
-      >
-        <template #reference>
-          <el-button type="danger" :icon="Delete" :disabled="selection.length === 0">
-            删除
-          </el-button>
+      <template v-if="selection.length === 0">
+        <el-dropdown split-button type="primary" trigger="click" @click="onPickFiles" @command="(c: string) => (c === 'dir' ? onPickDir() : onPickFiles())">
+          <el-icon class="el-icon--left"><Upload /></el-icon>上传
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="files" :icon="Upload">上传文件</el-dropdown-item>
+              <el-dropdown-item command="dir" :icon="FolderOpened">上传文件夹</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-button :icon="FolderAdd" @click="onCreateFolder">新建文件夹</el-button>
+        <el-button v-if="fetchEnabled" :icon="Link" @click="fetchDialogVisible = true">离线下载</el-button>
+      </template>
+      <template v-else>
+        <span class="sel-count">
+          <el-button link :icon="Close" title="取消选择(Esc)" aria-label="取消选择" @click="clearSelection" />
+          已选 {{ selection.length }} 项
+        </span>
+        <el-button :icon="Download" @click="onDownload(selection)">{{ single && single.kind === 'FILE' ? '下载' : '打包下载' }}</el-button>
+        <el-button v-if="single" :icon="Share" @click="openShare(single)">分享</el-button>
+        <el-button :icon="Rank" @click="openMove(selectedIds)">移动</el-button>
+        <el-button :icon="CopyDocument" @click="openCopy(selectedIds)">复制</el-button>
+        <el-button v-if="single" :icon="EditPen" @click="onRename(single)">重命名</el-button>
+        <el-button :icon="Delete" class="danger-btn" @click="onDelete(selectedIds)">删除</el-button>
+      </template>
+      <span class="toolbar-spacer" />
+      <el-dropdown trigger="click" @command="(k: SortKey) => onSort(k)">
+        <el-button text class="sort-btn">
+          {{ { NAME: '按名称', SIZE: '按大小', UPDATED_AT: '按修改时间' }[sort.key] }}
+          <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="NAME">名称{{ sort.key === 'NAME' ? (sort.desc ? ' ↓' : ' ↑') : '' }}</el-dropdown-item>
+            <el-dropdown-item command="SIZE">大小{{ sort.key === 'SIZE' ? (sort.desc ? ' ↓' : ' ↑') : '' }}</el-dropdown-item>
+            <el-dropdown-item command="UPDATED_AT">修改时间{{ sort.key === 'UPDATED_AT' ? (sort.desc ? ' ↓' : ' ↑') : '' }}</el-dropdown-item>
+          </el-dropdown-menu>
         </template>
-      </el-popconfirm>
-      <span v-if="selection.length > 0" class="selection-hint">已选 {{ selection.length }} 项</span>
+      </el-dropdown>
+      <el-button-group class="view-toggle">
+        <el-button :type="ui.viewMode === 'list' ? 'primary' : undefined" :icon="List" title="列表" aria-label="列表" @click="ui.viewMode = 'list'" />
+        <el-button :type="ui.viewMode === 'grid' ? 'primary' : undefined" :icon="Grid" title="网格" aria-label="网格" @click="ui.viewMode = 'grid'" />
+      </el-button-group>
     </div>
 
     <!-- 手机工具栏:四个入口,重命名/移动等交给长按菜单与多选底栏 -->
@@ -797,13 +962,7 @@ function onContextExtract(to: boolean) {
       <!-- 390px 宽要放下 5 个入口,文字按钮缩成两个字(图标在,意思不变) -->
       <el-button type="primary" :icon="Upload" @click="onPickFiles">上传</el-button>
       <el-button :icon="FolderAdd" title="新建文件夹" @click="onCreateFolder">新建</el-button>
-      <el-button
-        v-if="fetchEnabled"
-        :icon="Link"
-        title="离线下载"
-        aria-label="离线下载"
-        @click="fetchDialogVisible = true"
-      />
+      <el-button v-if="fetchEnabled" :icon="Link" title="离线下载" aria-label="离线下载" @click="fetchDialogVisible = true" />
       <el-button
         :icon="ui.viewMode === 'grid' ? List : Grid"
         :title="ui.viewMode === 'grid' ? '切换为列表' : '切换为网格'"
@@ -819,17 +978,29 @@ function onContextExtract(to: boolean) {
       />
     </div>
 
-    <NodeTable
+    <NodeBrowser
       v-if="!isMobile"
+      v-model:selected-ids="selectedIds"
       :items="items"
-      :loading="isFetching"
-      :selected-ids="selectedIds"
-      :downloading-id="downloadingId"
-      @select="(rows) => (selection = rows)"
+      :view="ui.viewMode"
+      :loading="initialLoading"
+      :sort="sort"
+      movable
       @open="onOpen"
-      @menu="onRowContextmenu"
-      @download="onDownload"
-    />
+      @menu="onMenu"
+      @download="(n) => onDownload([n])"
+      @share="openShare"
+      @sort="onSort"
+      @move="(ids, target) => moveByDrag(ids, target, items.find((n) => n.id === target)?.name ?? '')"
+      @drop-files="onDropFilesOnFolder"
+    >
+      <template #empty>
+        <el-icon :size="44" class="empty-icon"><Folder /></el-icon>
+        <span>{{ folderId ? '这个文件夹是空的' : '还没有文件' }}</span>
+        <span class="empty-hint">把文件或文件夹拖进来,或者</span>
+        <el-button type="primary" :icon="Upload" @click="onPickFiles">上传文件</el-button>
+      </template>
+    </NodeBrowser>
 
     <NodeCardList
       v-else
@@ -838,7 +1009,7 @@ function onContextExtract(to: boolean) {
       :selection-mode="ui.selectionMode"
       :selected-ids="selectedIds"
       :downloading-id="downloadingId"
-      :loading="isFetching"
+      :loading="initialLoading"
       @open="onOpen"
       @menu="openSheet"
       @toggle="toggleSelect"
@@ -848,40 +1019,19 @@ function onContextExtract(to: boolean) {
     <div v-if="showSelectionBar" class="selection-bar">
       <span class="selection-count">已选 {{ selection.length }}</span>
       <div class="selection-actions">
-        <el-button size="small" :icon="EditPen" :disabled="selection.length !== 1" @click="selection[0] && onRename(selection[0])">
-          重命名
-        </el-button>
-        <el-button size="small" :icon="Rank" :disabled="!selection.length" @click="openMove(selectedIds)">
-          移动
-        </el-button>
-        <el-button size="small" :icon="CopyDocument" :disabled="!selection.length" @click="openCopy(selectedIds)">
-          复制
-        </el-button>
-        <el-button size="small" :icon="Share" :disabled="selection.length !== 1" @click="selection[0] && openShare(selection[0])">
-          分享
-        </el-button>
-        <el-button
-          v-if="linksEnabled"
-          size="small"
-          :icon="Paperclip"
-          :disabled="!fileTargets(selection).length"
-          @click="openLinkSheet(selection)"
-        >
+        <el-button size="small" :icon="EditPen" :disabled="!single" @click="single && onRename(single)">重命名</el-button>
+        <el-button size="small" :icon="Rank" :disabled="!selection.length" @click="openMove(selectedIds)">移动</el-button>
+        <el-button size="small" :icon="CopyDocument" :disabled="!selection.length" @click="openCopy(selectedIds)">复制</el-button>
+        <el-button size="small" :icon="Share" :disabled="!single" @click="single && openShare(single)">分享</el-button>
+        <el-button v-if="linksEnabled" size="small" :icon="Paperclip" :disabled="!fileTargets(selection).length" @click="openLinkSheet(selection)">
           直链
         </el-button>
-        <el-button size="small" type="danger" :icon="Delete" :disabled="!selection.length" @click="onDelete(selectedIds)">
-          删除
-        </el-button>
+        <el-button size="small" type="danger" :icon="Delete" :disabled="!selection.length" @click="onDelete(selectedIds)">删除</el-button>
         <el-button size="small" @click="clearSelection">取消</el-button>
       </div>
     </div>
 
-    <NodeActionSheet
-      v-model:visible="sheet.visible"
-      :title="sheet.node?.name"
-      :items="sheetItems"
-      @select="onSheetSelect"
-    />
+    <NodeActionSheet v-model:visible="sheet.visible" :title="sheet.node?.name" :items="sheetItems" @select="onSheetSelect" />
 
     <NodeActionSheet
       v-model:visible="linkSheet.visible"
@@ -890,116 +1040,114 @@ function onContextExtract(to: boolean) {
       @select="onLinkSheetSelect"
     />
 
-    <MoveDialog
-      v-model="moveDialogVisible"
-      :exclude-ids="pendingIds"
-      @confirm="onMoveConfirm"
-    />
+    <ContextMenu v-model:visible="menu.visible" :x="menu.x" :y="menu.y" :items="menuItems" @select="onMenuSelect" />
 
-    <MoveDialog
-      v-model="copyDialogVisible"
-      mode="copy"
-      :exclude-ids="pendingIds"
-      @confirm="onCopyConfirm"
-    />
+    <MoveDialog v-model="moveDialogVisible" :exclude-ids="pendingIds" :start-id="folderId" @confirm="onMoveConfirm" />
+    <MoveDialog v-model="copyDialogVisible" mode="copy" :exclude-ids="pendingIds" :start-id="folderId" @confirm="onCopyConfirm" />
 
-    <!-- 隐藏文件选择器(多选) -->
+    <!-- 隐藏的文件 / 文件夹选择器 -->
     <input ref="fileInput" type="file" multiple class="hidden-input" @change="onFilesChosen" />
+    <input ref="dirInput" type="file" webkitdirectory multiple class="hidden-input" @change="onDirChosen" />
 
     <!-- 整页拖拽遮罩(桌面) -->
     <div v-if="dragging" class="drop-overlay">
       <div class="drop-hint">
         <el-icon :size="40"><Upload /></el-icon>
-        <p>松开鼠标,上传到当前文件夹</p>
+        <p>松开上传到「{{ folderName }}」<br /><small>拖到某个文件夹上就传进那个文件夹</small></p>
       </div>
     </div>
-
-    <!-- 右键菜单:下载/打包下载 + 分享(桌面) -->
-    <ul
-      v-if="contextMenu.visible"
-      class="context-menu"
-      :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
-    >
-      <li class="context-menu-item" @click="onContextDownload">
-        <el-icon><Download /></el-icon>
-        {{ contextMenu.row?.kind === 'FOLDER' ? '打包下载' : '下载' }}
-      </li>
-      <li class="context-menu-item" @click="onContextShare">
-        <el-icon><Share /></el-icon>
-        分享
-      </li>
-      <li
-        v-if="linksEnabled && contextLinkTargets.length"
-        class="context-menu-item has-sub"
-        @click.stop
-      >
-        <el-icon><Paperclip /></el-icon>
-        复制直链{{ contextLinkTargets.length > 1 ? `(${contextLinkTargets.length} 个)` : '' }}
-        <span class="sub-arrow">›</span>
-        <ul class="context-submenu">
-          <li class="context-menu-item" @click="onContextLink('url')">链接</li>
-          <li class="context-menu-item" @click="onContextLink('markdown')">Markdown</li>
-          <li class="context-menu-item" @click="onContextLink('html')">HTML</li>
-        </ul>
-      </li>
-      <li v-if="contextMenu.row?.kind === 'FOLDER'" class="context-menu-item" @click="onContextCollect">
-        <el-icon><Tickets /></el-icon>
-        收集文件
-      </li>
-      <template v-if="isArchive(contextMenu.row)">
-        <li class="context-menu-item" @click="onContextExtract(false)">
-          <el-icon><FolderOpened /></el-icon>
-          解压到这里
-        </li>
-        <li class="context-menu-item" @click="onContextExtract(true)">
-          <el-icon><FolderOpened /></el-icon>
-          解压到…
-        </li>
-      </template>
-      <li class="context-menu-item" @click="onContextDetail">
-        <el-icon><InfoFilled /></el-icon>
-        详情与历史
-      </li>
-    </ul>
 
     <ShareDialog v-model="shareDialogVisible" :node="shareTarget" />
     <FileRequestDialog v-model="collectDialogVisible" :folder="collectTarget" />
     <FetchDialog v-model="fetchDialogVisible" :folder-id="folderId" :folder-name="folderName" />
-    <MoveDialog v-model="extractPickVisible" mode="extract" :exclude-ids="[]" @confirm="onExtractConfirm" />
+    <MoveDialog v-model="extractPickVisible" mode="extract" :exclude-ids="[]" :start-id="folderId" @confirm="onExtractConfirm" />
     <NodeDetailDrawer v-model="detail.visible" :node-id="detail.id" />
   </div>
 </template>
 
 <style scoped>
-/* 面包屑当页面标题用:当前目录黑色加粗,上级灰色 */
-.breadcrumb {
-  margin-bottom: 18px;
+.drive {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+/* 面包屑当页面标题用:当前目录黑色加粗,上级灰色;上级可以接住拖过来的东西 */
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 16px;
   font-size: 20px;
+  font-weight: 700;
   line-height: 1.4;
 }
-.breadcrumb :deep(.el-breadcrumb__inner) {
+.crumb {
+  padding: 2px 6px;
+  margin: 0 -2px;
+  border-radius: 8px;
   color: var(--gp-ink-3);
-  font-weight: 700;
+  text-decoration: none;
 }
-.breadcrumb :deep(.el-breadcrumb__inner.is-link:hover) {
+.crumb:hover {
+  color: var(--gp-ink);
+  background: var(--el-fill-color-light);
+}
+.crumb.current {
   color: var(--gp-ink);
 }
-.breadcrumb :deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) {
-  color: var(--gp-ink);
+.crumb.current:hover {
+  background: none;
 }
-.breadcrumb :deep(.el-breadcrumb__separator) {
-  margin: 0 8px;
+.crumb.drop-target {
+  background: var(--el-color-primary-light-8);
+  box-shadow: 0 0 0 2px var(--el-color-primary) inset;
+}
+.crumb-sep {
   color: var(--el-border-color-darker);
   font-weight: 400;
+  margin: 0 2px;
 }
 .toolbar {
   display: flex;
   align-items: center;
-  margin-bottom: 12px;
+  gap: 8px;
+  min-height: 36px;
+  margin-bottom: 10px;
 }
-.selection-hint {
-  margin-left: 12px;
-  color: var(--el-text-color-secondary);
+.toolbar :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+.toolbar-spacer {
+  flex: 1;
+}
+/* 列表撑满剩下的高度:下面的空白处也能右键、也能点空白取消选中 */
+.drive > .node-browser {
+  flex: 1;
+}
+.sel-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+  font-weight: 600;
+}
+.danger-btn {
+  --el-button-text-color: var(--el-color-danger);
+  --el-button-hover-text-color: var(--el-color-danger);
+  --el-button-hover-border-color: var(--el-color-danger-light-5);
+  --el-button-hover-bg-color: var(--el-color-danger-light-9);
+}
+.sort-btn {
+  color: var(--gp-ink-2);
+}
+.view-toggle :deep(.el-button) {
+  padding: 8px 10px;
+}
+.empty-icon {
+  color: var(--el-border-color-darker);
+}
+.empty-hint {
   font-size: 13px;
 }
 .hidden-input {
@@ -1010,87 +1158,39 @@ function onContextExtract(to: boolean) {
   inset: 0;
   z-index: 3000;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  background: color-mix(in srgb, var(--el-color-primary) 12%, transparent);
-  border: 2px dashed var(--el-color-primary);
+  padding-bottom: 48px;
   pointer-events: none;
 }
 .drop-hint {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 28px 40px;
-  border-radius: 12px;
-  background: var(--el-bg-color);
-  box-shadow: var(--el-box-shadow);
-  color: var(--el-color-primary);
+  gap: 14px;
+  padding: 16px 24px;
+  border-radius: 14px;
+  background: var(--gp-ink);
+  color: var(--el-bg-color);
+  box-shadow: var(--el-box-shadow-dark);
   font-size: 15px;
 }
-.context-menu {
-  position: fixed;
-  z-index: 3001;
-  min-width: 120px;
+.drop-hint p {
   margin: 0;
-  padding: 4px;
-  list-style: none;
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 6px;
-  box-shadow: var(--el-box-shadow-light);
+  line-height: 1.5;
 }
-.context-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  border-radius: 4px;
-  font-size: 13px;
-  cursor: pointer;
-  color: var(--el-text-color-primary);
-}
-.context-menu-item:hover {
-  background: var(--el-fill-color-light);
-}
-.context-menu-item.has-sub {
-  position: relative;
-}
-.sub-arrow {
-  margin-left: auto;
-  padding-left: 12px;
-  color: var(--el-text-color-secondary);
-}
-.context-submenu {
-  display: none;
-  position: absolute;
-  top: -5px;
-  left: 100%;
-  min-width: 110px;
-  margin: 0;
-  padding: 4px;
-  list-style: none;
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 6px;
-  box-shadow: var(--el-box-shadow-light);
-}
-.has-sub:hover > .context-submenu {
-  display: block;
+.drop-hint small {
+  opacity: 0.7;
+  font-size: 12px;
 }
 
 /* 手机:工具栏可换行,多选时给底部操作栏留出空间 */
 @media (max-width: 767px) {
-  .breadcrumb {
+  .crumbs {
     margin-bottom: 14px;
     font-size: 17px;
   }
   .toolbar.mobile {
     flex-wrap: wrap;
-    gap: 8px;
-  }
-  .toolbar.mobile :deep(.el-button + .el-button) {
-    margin-left: 0;
   }
   .drive.has-selection-bar {
     padding-bottom: 64px;

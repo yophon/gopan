@@ -26,6 +26,7 @@ import {
 } from '@/utils/activity'
 import type { ActivityActionValue, BatchGroup, TimePreset } from '@/utils/activity'
 import ActivityItem from '@/components/activity/ActivityItem.vue'
+import PageHelp from '@/components/PageHelp.vue'
 
 type Item = ActivityFieldsFragment
 
@@ -149,7 +150,7 @@ function onUndo(a: Item) {
 }
 
 function onUndoBatch(b: BatchGroup<Item>) {
-  void undoWithPreview({ batchId: b.batchId }, '撤回这一组')
+  void undoWithPreview(b.mixed ? { ids: b.items.map((i) => i.id) } : { batchId: b.batchId }, '撤回这一组')
 }
 
 function onUndoAll() {
@@ -159,10 +160,10 @@ function onUndoAll() {
 
 <template>
   <div class="activity">
-    <h2 class="page-title">动态</h2>
-    <p class="intro">
-      网页、App、WebDAV、Agent、收集链接、后台任务对网盘做的改动都记在这里,保留 90 天。移动、改名、删除、新建能撤回;覆盖和彻底删除撤不回。
-    </p>
+    <h2 class="page-title">
+      动态
+      <PageHelp text="网页、App、WebDAV、Agent、收集链接、后台任务对网盘做的改动都记在这里,保留 90 天。移动、改名、删除、新建能撤回;覆盖和彻底删除撤不回。" />
+    </h2>
 
     <div class="filters">
       <el-select

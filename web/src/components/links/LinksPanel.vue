@@ -315,9 +315,8 @@ async function copyUploaded(u: UploadItem) {
         </li>
       </ul>
 
-      <p class="intro">
+      <p v-if="!total && query.data.value" class="intro">
         在文件上右键(手机上长按)选「复制直链」生成。直链是公开地址,任何拿到的人都能访问;每次访问都记账,超了每天的流量上限会自动暂停。
-        <template v-if="total"> 共 {{ total }} 条。</template>
       </p>
 
       <el-table

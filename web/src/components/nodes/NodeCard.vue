@@ -127,7 +127,7 @@ const iconSize = computed(() => (props.mode === 'grid' ? 64 : 40))
   border: 1px solid var(--el-border-color);
   border-radius: 50%;
   background: var(--el-bg-color);
-  color: #fff;
+  color: var(--gp-on-primary);
   font-size: 12px;
 }
 .check.on {

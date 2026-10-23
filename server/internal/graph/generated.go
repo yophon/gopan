@@ -624,6 +624,7 @@ type ComplexityRoot struct {
 		Mime         func(childComplexity int) int
 		Name         func(childComplexity int) int
 		ParentID     func(childComplexity int) int
+		Path         func(childComplexity int) int
 		PlayProgress func(childComplexity int) int
 		Preview      func(childComplexity int) int
 		PurgeAt      func(childComplexity int) int
@@ -1057,6 +1058,7 @@ type NodeResolver interface {
 	DownloadURL(ctx context.Context, obj *Node) (*string, error)
 
 	PlayProgress(ctx context.Context, obj *Node) (*PlayProgress, error)
+	Path(ctx context.Context, obj *Node) (*string, error)
 }
 type QueryResolver interface {
 	McpAccessRoots(ctx context.Context) ([]*MCPAccessRoot, error)
@@ -4040,6 +4042,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Node.ParentID(childComplexity), true
+	case "Node.path":
+		if e.ComplexityRoot.Node.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Node.Path(childComplexity), true
 	case "Node.playProgress":
 		if e.ComplexityRoot.Node.PlayProgress == nil {
 			break
@@ -5827,6 +5835,9 @@ type Node {
   statsStale: Boolean
   # 播放进度(doc/22 二.3):音视频、PDF;没记过、访客、文件夹为 null。每个节点一次查询,只在单个节点上取,列表里别请求
   playProgress: PlayProgress
+  # 从根开始的路径,如 /工作资料/合同/报价.pdf;访客与回收站里的节点为 null。
+  # 每个节点一次递归查询:搜索结果这类要显示「位置」的地方取,普通列表别请求
+  path: String
 }
 
 # ARCHIVE:压缩包(zip / 7z / rar / tar.*),用 archiveInfo / archiveEntries 浏览
@@ -8016,6 +8027,8 @@ func (ec *executionContext) childFields_Node(ctx context.Context, field graphql.
 		return ec.fieldContext_Node_statsStale(ctx, field)
 	case "playProgress":
 		return ec.fieldContext_Node_playProgress(ctx, field)
+	case "path":
+		return ec.fieldContext_Node_path(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Node", field.Name)
 }
@@ -22339,6 +22352,29 @@ func (ec *executionContext) fieldContext_Node_playProgress(_ context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _Node_path(ctx context.Context, field graphql.CollectedField, obj *Node) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Node_path(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Node().Path(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Node_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Node", field, true, true, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _NodePage_items(ctx context.Context, field graphql.CollectedField, obj *NodePage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -34615,6 +34651,44 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 					}
 				}()
 				res = ec._Node_playProgress(ctx, field, obj)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "path":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Node_path(ctx, field, obj)
 				if res == graphql.RequiredNull {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
