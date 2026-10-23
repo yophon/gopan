@@ -47,7 +47,15 @@ type Auth struct {
 	// SQL 里还有一层 WHERE 兜底(多实例/重启后也有用),这里是省掉那次必然 no-op 的写。
 	seenMu sync.Mutex
 	seen   map[uuid.UUID]time.Time
+
+	// 密码登录会话"刚核对过、还有效"的缓存:family → 核对时刻,[familyCheckTTL] 内不再查库。
+	okMu sync.Mutex
+	ok   map[uuid.UUID]time.Time
 }
+
+// familyCheckTTL:会话核对结果缓存多久。移除设备、改密码、停用账号最迟这么久之后在别的进程里生效
+// (本进程里吊销时直接清缓存,立即生效)。
+const familyCheckTTL = time.Minute
 
 func NewAuth(q *store.Queries, secret []byte, accessTTL, refreshTTL time.Duration, registerOpen bool, defaultQuota int64) *Auth {
 	return &Auth{
@@ -56,6 +64,7 @@ func NewAuth(q *store.Queries, secret []byte, accessTTL, refreshTTL time.Duratio
 		registerOpen: registerOpen, defaultQuota: defaultQuota,
 		limiter: newKeyedLimiter(6*time.Second, 10),
 		seen:    make(map[uuid.UUID]time.Time),
+		ok:      make(map[uuid.UUID]time.Time),
 	}
 }
 
@@ -118,16 +127,65 @@ func (a *Auth) checkIdentity(ctx context.Context, user, family uuid.UUID) error 
 	if a.identity != nil && user == a.identity.Config.UserID {
 		return a.identity.Check(ctx, user, family)
 	}
-	if a.q != nil && family != uuid.Nil {
-		linked, err := a.q.HasIdentitySession(ctx, family)
-		if err != nil {
-			return err
-		}
-		if linked {
-			return ErrUnauthenticated
+	if a.q == nil || family == uuid.Nil {
+		return nil
+	}
+	if a.recentlyOK(family) {
+		return nil
+	}
+	linked, err := a.q.HasIdentitySession(ctx, family)
+	if err != nil {
+		return err
+	}
+	if linked {
+		return ErrUnauthenticated
+	}
+	// access token 有效期长(默认 4 小时),不能等它过期:这一族 refresh token 被吊销(移除设备、改密码、
+	// 重放检测、管理员停用)或账号被停用,token 就当场作废。按 family 缓存一分钟,省掉每个请求一次查询。
+	active, err := a.q.FamilyActive(ctx, family, user)
+	if err != nil {
+		return err
+	}
+	if !active {
+		return ErrUnauthenticated
+	}
+	a.markOK(family)
+	return nil
+}
+
+func (a *Auth) recentlyOK(family uuid.UUID) bool {
+	a.okMu.Lock()
+	defer a.okMu.Unlock()
+	t, hit := a.ok[family]
+	return hit && time.Since(t) < familyCheckTTL
+}
+
+func (a *Auth) markOK(family uuid.UUID) {
+	now := time.Now()
+	a.okMu.Lock()
+	defer a.okMu.Unlock()
+	a.ok[family] = now
+	// 容量保护:顺手清掉过期的条目
+	if len(a.ok) > 4096 {
+		for k, t := range a.ok {
+			if now.Sub(t) >= familyCheckTTL {
+				delete(a.ok, k)
+			}
 		}
 	}
-	return nil
+}
+
+// forgetOK 让本进程里的缓存立即失效(吊销之后);nil 表示全部。
+func (a *Auth) forgetOK(families ...uuid.UUID) {
+	a.okMu.Lock()
+	defer a.okMu.Unlock()
+	if len(families) == 0 {
+		clear(a.ok)
+		return
+	}
+	for _, f := range families {
+		delete(a.ok, f)
+	}
 }
 
 func (a *Auth) parseAccess(token string) (*Identity, error) {
@@ -344,6 +402,7 @@ func (a *Auth) ChangePassword(ctx context.Context, userID uuid.UUID, oldPw, newP
 	if err := a.q.RevokeAllUserFamilies(ctx, userID); err != nil {
 		return nil, err
 	}
+	a.forgetOK()
 	// 设备列表也要标失效,否则页面上还显示着"在线",实际 token 已经不能用了。
 	if err := a.q.RevokeAllSessions(ctx, userID); err != nil {
 		return nil, err
@@ -433,7 +492,11 @@ func (a *Auth) RevokeSession(ctx context.Context, userID, currentFamily, familyI
 		// 不存在 / 已吊销 / 不属于这个用户 —— 一律 NotFound,不泄露存在性
 		return ErrNotFound
 	}
-	return a.q.RevokeRefreshFamily(ctx, familyID)
+	if err := a.q.RevokeRefreshFamily(ctx, familyID); err != nil {
+		return err
+	}
+	a.forgetOK(familyID)
+	return nil
 }
 
 // TouchSession 推进 last_seen。两层节流:进程内 map 先挡掉绝大多数调用,

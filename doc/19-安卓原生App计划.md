@@ -63,7 +63,7 @@
 2. App 用 AppAuth 发起授权码 + PKCE,Custom Tabs 打开 `https://id.979687.xyz` 登录,回调回自定义 scheme,换到账号中心的 access token(只存内存)。
 3. `POST https://id.979687.xyz/api/mobile/ticket` `{client_id:"gopan", challenge:S256(verifier)}` → 一次性票据。
 4. `POST https://drive.979687.xyz/api/auth/id/mobile`(form:`ticket`、`verifier`,`redirect=manual`)→ 303,`Set-Cookie: gopan_rt=…`。App 把它存进 CookieJar(加密持久化)。
-5. 之后与网页端完全一样:`mutation refresh` 带 cookie 拿 15 分钟 access token,业务请求 Bearer;401 → 单飞 refresh → 重放;refresh 失败 → 回登录页。账号中心撤销设备 → gopan 侧 `refresh` 失败,自动登出。
+5. 之后与网页端完全一样:`mutation refresh` 带 cookie 拿 access token,业务请求 Bearer;401 → 单飞 refresh → 重放;refresh 失败 → 回登录页。账号中心撤销设备 → gopan 侧 `refresh` 失败,自动登出。
 6. 密码登录 / 注册:直接 `login` / `register` mutation,响应的 `Set-Cookie` 同样进 CookieJar。
 
 不需要后端新接口。可选优化(P1 顺手):`/api/auth/id/mobile` 收到 `Accept: application/json` 时直接返回 `{accessToken, user}` 而不是 303,省一次 refresh。

@@ -22,7 +22,7 @@ func TestLoadDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c.Listen != ":8080" || c.PartSize != 16<<20 || c.DefaultQuota != 100<<30 ||
-		c.AccessTTL != 15*time.Minute || c.TrashTTL != 30*24*time.Hour || !c.RegisterOpen {
+		c.AccessTTL != 4*time.Hour || c.TrashTTL != 30*24*time.Hour || !c.RegisterOpen {
 		t.Fatalf("默认值不符:%+v", c)
 	}
 	// 未配公网 endpoint 时回落内网地址
@@ -81,12 +81,13 @@ func TestEnvParsers(t *testing.T) {
 	t.Setenv("GOPAN_REGISTER_OPEN", "false")
 	t.Setenv("GOPAN_DEFAULT_QUOTA", "1024")
 	t.Setenv("GOPAN_TRASH_TTL", "48h")
+	t.Setenv("GOPAN_ACCESS_TTL", "30m")
 	t.Setenv("GOPAN_S3_USE_SSL", "true")
 	c, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.RegisterOpen || c.DefaultQuota != 1024 || c.TrashTTL != 48*time.Hour || !c.S3UseSSL {
+	if c.RegisterOpen || c.DefaultQuota != 1024 || c.TrashTTL != 48*time.Hour || c.AccessTTL != 30*time.Minute || !c.S3UseSSL {
 		t.Fatalf("env 解析不符:%+v", c)
 	}
 	// 非法值回默认,不炸

@@ -18,7 +18,7 @@ type Config struct {
 	JWTSecret                                                     []byte
 	RegisterOpen                                                  bool
 	DefaultQuota                                                  int64
-	AccessTTL                                                     time.Duration
+	AccessTTL                                                     time.Duration // 默认 4 小时;移除设备、改密码不靠它过期生效(service.Auth 每个请求核对会话)
 	RefreshTTL                                                    time.Duration
 	TrashTTL                                                      time.Duration // 回收站保留期,过期自动彻删
 	DevMode                                                       bool          // 关闭 cookie Secure、开 introspection
@@ -83,7 +83,7 @@ func Load() (*Config, error) {
 		DBURL:        env("DB_URL", ""),
 		RegisterOpen: envBool("REGISTER_OPEN", true),
 		DefaultQuota: envInt64("DEFAULT_QUOTA", 100<<30),
-		AccessTTL:    15 * time.Minute,
+		AccessTTL:    envDuration("ACCESS_TTL", 4*time.Hour),
 		RefreshTTL:   14 * 24 * time.Hour,
 		TrashTTL:     envDuration("TRASH_TTL", 30*24*time.Hour),
 		DevMode:      envBool("DEV_MODE", false),

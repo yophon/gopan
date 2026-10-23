@@ -35,7 +35,8 @@ import javax.inject.Singleton
 
 /**
  * 会话生命周期:启动续登、密码登录/注册、单飞 refresh、登出、改密。
- * 协议与网页端一致:refresh token 在 httpOnly cookie(CookieJar 持久化),access token 只在内存。
+ * 协议与网页端一致:refresh token 在 httpOnly cookie(CookieJar 持久化);access token 另外存进加密存储,
+ * 冷启动时还有一段有效期就直接用,省掉那次 refresh(服务端吊销会话时它当场失效,走下面的 refresh 流程)。
  *
  * refresh 的三种结果:
  * - OK:拿到新 token,SignedIn;
@@ -85,19 +86,27 @@ class SessionManager @Inject constructor(
 
     /**
      * 启动续登:没有 cookie 直接 SignedOut;有 cookie 就 refresh。
-     * 有上次缓存的用户时不等网络:先用它进入 SignedIn(token 为空),主界面立刻画出来(目录先显示本地缓存),
+     * 有上次缓存的用户时不等网络:存下的 access token 离过期还有 [REUSE_MIN_REMAINING_MS] 以上,就带着它进入 SignedIn,
+     * 业务请求立刻发出,这次不 refresh;否则先用缓存的用户进入 SignedIn(token 为空),主界面立刻画出来(目录先显示本地缓存),
      * refresh 接着在这里跑——成功换上 token;被拒清会话回登录页;断网保持现状,首个业务请求联网后再刷新。
      * 没有缓存的用户才停在启动页等 refresh,最多 [BOOTSTRAP_TIMEOUT_MS],超时或断网按未登录处理(cookie 保留)。
      */
     suspend fun bootstrap() {
         if (store.state.value !is AuthState.Loading) return
-        val (hasCookie, cached) = withContext(Dispatchers.IO) { cookieJar.hasCookie(REFRESH_COOKIE) to loadCachedUser() }
+        val (hasCookie, cached, saved) = withContext(Dispatchers.IO) {
+            Triple(cookieJar.hasCookie(REFRESH_COOKIE), loadCachedUser(), secureStore.get(KEY_ACCESS_TOKEN))
+        }
         if (!hasCookie) {
             clearLocal()
             return
         }
         if (cached != null) {
             if (store.state.value !is AuthState.Loading) return
+            val expiresAt = saved?.let(AccessTokens::expiresAtMillis)
+            if (saved != null && expiresAt != null && expiresAt - System.currentTimeMillis() > REUSE_MIN_REMAINING_MS) {
+                store.setSignedIn(saved, cached)
+                return
+            }
             store.setSignedIn(null, cached)
             refreshInternal()
             return
@@ -239,7 +248,10 @@ class SessionManager @Inject constructor(
 
     private suspend fun establish(accessToken: String, user: UserSummary) {
         store.setSignedIn(accessToken, user)
-        withContext(Dispatchers.IO) { cacheUser(user) }
+        withContext(Dispatchers.IO) {
+            cacheUser(user)
+            secureStore.put(KEY_ACCESS_TOKEN, accessToken)
+        }
     }
 
     /** 会话失效(refresh 被拒、启动时没有 cookie):清登录态、cookie 与本地数据 */
@@ -248,6 +260,7 @@ class SessionManager @Inject constructor(
         withContext(Dispatchers.IO) {
             cookieJar.clear()
             secureStore.put(KEY_LAST_USER, null)
+            secureStore.put(KEY_ACCESS_TOKEN, null)
         }
         runSignOutHooks()
     }
@@ -261,6 +274,7 @@ class SessionManager @Inject constructor(
             withContext(Dispatchers.IO) {
                 cookieJar.clear()
                 secureStore.put(KEY_LAST_USER, null)
+                secureStore.put(KEY_ACCESS_TOKEN, null)
             }
         }
         runSignOutHooks()
@@ -308,6 +322,10 @@ class SessionManager @Inject constructor(
     companion object {
         const val REFRESH_COOKIE = "gopan_rt"
         const val KEY_LAST_USER = "last_user"
+        const val KEY_ACCESS_TOKEN = "access_token"
+
+        /** 冷启动时存下的 access token 至少还剩这么久才直接用(服务端默认签 4 小时) */
+        const val REUSE_MIN_REMAINING_MS = 5 * 60_000L
 
         /** 没有缓存用户时启动页最多等 refresh 这么久,超时按未登录处理 */
         const val BOOTSTRAP_TIMEOUT_MS = 8_000L

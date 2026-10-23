@@ -274,4 +274,79 @@ class SessionManagerTest {
     }
 
     private val alice = UserSummary(id = "u1", username = "alice", quotaBytes = 1073741824, usedBytes = 12345, isAdmin = false)
+
+    // ---- 冷启动复用存下的 access token ----
+
+    private fun nowSeconds() = System.currentTimeMillis() / 1000
+
+    @Test
+    fun `the access token is kept in secure storage and dropped on logout`() = runBlocking {
+        h.sessionManager.loginWithPassword("alice", "secret")
+        assertThat(h.secureStore.get(SessionManager.KEY_ACCESS_TOKEN)).isEqualTo("t1")
+        h.sessionManager.refresh()
+        assertThat(h.secureStore.get(SessionManager.KEY_ACCESS_TOKEN)).isEqualTo("t2")
+        h.sessionManager.logout()
+        assertThat(h.secureStore.get(SessionManager.KEY_ACCESS_TOKEN)).isNull()
+    }
+
+    @Test
+    fun `a rejected refresh also drops the stored access token`() = runBlocking {
+        h.sessionManager.loginWithPassword("alice", "secret")
+        server.refreshOk = false
+        h.sessionManager.refresh()
+        assertThat(h.secureStore.get(SessionManager.KEY_ACCESS_TOKEN)).isNull()
+    }
+
+    @Test
+    fun `bootstrap reuses a stored token that is still valid and skips the refresh`() = runBlocking {
+        h.sessionManager.loginWithPassword("alice", "secret")
+        val jwt = testJwt(nowSeconds() + 3 * 3600)
+        h.secureStore.put(SessionManager.KEY_ACCESS_TOKEN, jwt)
+        server.validToken = jwt
+        val restarted = TestHarness(server, secureStore = h.secureStore)
+        try {
+            restarted.sessionManager.bootstrap()
+            assertThat(restarted.store.state.value).isEqualTo(AuthState.SignedIn(alice))
+            assertThat(restarted.store.accessToken).isEqualTo(jwt)
+            // 业务请求直接带着它发出,全程没有 refresh
+            assertThat(restarted.apollo.query(MeQuery()).execute().requireData().me.userFields.username).isEqualTo("alice")
+            assertThat(server.refreshCount.get()).isEqualTo(0)
+        } finally {
+            restarted.close()
+        }
+    }
+
+    @Test
+    fun `a stored token about to expire is not reused`() = runBlocking {
+        h.sessionManager.loginWithPassword("alice", "secret")
+        h.secureStore.put(SessionManager.KEY_ACCESS_TOKEN, testJwt(nowSeconds() + 60))
+        val restarted = TestHarness(server, secureStore = h.secureStore)
+        try {
+            restarted.sessionManager.bootstrap()
+            assertThat(server.refreshCount.get()).isEqualTo(1)
+            assertThat(restarted.store.accessToken).isEqualTo("t2")
+        } finally {
+            restarted.close()
+        }
+    }
+
+    @Test
+    fun `a reused token that the server revoked leads to a refresh, and a rejected refresh signs out`() = runBlocking {
+        h.sessionManager.loginWithPassword("alice", "secret")
+        h.secureStore.put(SessionManager.KEY_ACCESS_TOKEN, testJwt(nowSeconds() + 3 * 3600))
+        // 别的设备上移除了这台:服务端不再认这枚 token,refresh 也被拒
+        server.validToken = "other"
+        server.refreshOk = false
+        val restarted = TestHarness(server, secureStore = h.secureStore)
+        try {
+            restarted.sessionManager.bootstrap()
+            assertThat(restarted.store.state.value).isEqualTo(AuthState.SignedIn(alice))
+            val error = runCatching { restarted.apollo.query(MeQuery()).execute().requireData() }.exceptionOrNull()
+            assertThat((error as GopanException).isUnauthenticated).isTrue()
+            assertThat(restarted.store.state.value).isEqualTo(AuthState.SignedOut)
+            assertThat(restarted.secureStore.get(SessionManager.KEY_ACCESS_TOKEN)).isNull()
+        } finally {
+            restarted.close()
+        }
+    }
 }

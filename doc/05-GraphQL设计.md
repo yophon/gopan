@@ -101,7 +101,7 @@ type ShareInfo {                # 公开查询,验密前可见的最小信息
 }
 
 type AuthPayload {
-  accessToken: String!          # JWT 15min;refresh 走 httpOnly cookie,不出现在 body
+  accessToken: String!          # JWT,默认 4 小时;refresh 走 httpOnly cookie,不出现在 body
   user: User!
 }
 

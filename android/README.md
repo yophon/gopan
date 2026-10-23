@@ -189,12 +189,14 @@ GraphQL operations 按域各自一个文件(`nodes.graphql` 归文件线,`chat.g
   标量映射:`Time` → `String`(RFC3339),`Int64` → `Long`。错误看 `errors[].extensions.code`(HTTP 几乎总是 200),
   Repository 统一用 `ApolloResponse.requireData()` 转成 `GopanException(code, 中文 message)`。
 - 认证与网页端一致,后端不改:
-  - `login` / `register` 返回 15 分钟 access token(只在内存)并 `Set-Cookie: gopan_rt`(Path=/query,14 天,每次 refresh 轮换);
+  - `login` / `register` 返回 access token(服务端默认签 4 小时,另存一份进 SecureStore)并 `Set-Cookie: gopan_rt`(Path=/query,14 天,每次 refresh 轮换);
     `GopanCookieJar` 只收基址 host 的 cookie,序列化后存 EncryptedSharedPreferences。
   - 业务请求带 `Authorization: Bearer`;`AuthInterceptor` 拿到 `UNAUTHENTICATED` → `SessionManager` 单飞 refresh → 成功换新 token 重放一次;
     服务端拒绝 refresh → 清 cookie、`AuthState.SignedOut`(自动回登录页);只是网络不通 → 保留登录态,本次按网络错误返回。
   - `Login/Register/Refresh/Logout` 四个 operation 不带 Bearer、不触发刷新。
-  - 启动:有 cookie 且存过上次的用户就不等网络,直接用它进入 SignedIn(token 为空),refresh 在后台跑——成功换上 token,
+  - 启动:有 cookie 且存过上次的用户就不等网络。存下的 access token 离过期还有 5 分钟以上(`AccessTokens` 读 JWT 的 exp)就带着它进入 SignedIn,
+    这次不 refresh,请求立刻发出(会话被吊销时首个请求吃 UNAUTHENTICATED,走下面的 refresh,被拒回登录页);
+    否则用上次的用户进入 SignedIn(token 为空),refresh 在后台跑——成功换上 token,
     被拒清会话回登录页,断网保持现状(首个请求联网后自动刷新);没存过用户才停在启动页等 refresh(最多 8 秒)。
     token 为空时 `AuthInterceptor` 先等那次单飞 refresh(`TokenRefresher.accessTokenForRequest`)再发,
     不会先吃一个 UNAUTHENTICATED 再重放;refresh 刚因网络失败的 5 秒内不再等,直接不带 token 发出。
