@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.builtins.ListSerializer
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.AppConfig
 import xyz.yophon.gopan.core.data.ScreenCache
@@ -64,6 +65,14 @@ class SharesViewModel @Inject constructor(
         if (cached != null) _state.update { it.copy(status = ListStatus.Content, items = cached) }
         cache.mirror(viewModelScope, CACHE_KEY, _state) { s -> s.items.takeIf { s.status == ListStatus.Content } }
         load(silent = cached != null)
+        // 冷启动后内存里还没有:手机上存的上次列表读回来先画,联网结果到了再换
+        if (cached == null) {
+            viewModelScope.launch {
+                cache.load(CACHE_KEY)?.let { items ->
+                    _state.update { s -> if (!loadedOnce && s.status == ListStatus.Loading) s.copy(status = ListStatus.Content, items = items) else s }
+                }
+            }
+        }
     }
 
     fun url(share: Share): String = config.shareUrl(share.token)
@@ -125,7 +134,8 @@ class SharesViewModel @Inject constructor(
     }
 
     companion object {
-        val CACHE_KEY = ScreenKey<List<Share>>("shares")
+        /** 落盘,冷启动后也有 */
+        val CACHE_KEY = ScreenKey("shares", ListSerializer(Share.serializer()))
 
         /** 新建的在前(与网页端一致:服务端按创建时间倒序,这里再保证一次) */
         fun sortShares(items: List<Share>): List<Share> = items.sortedByDescending { it.createdAt }

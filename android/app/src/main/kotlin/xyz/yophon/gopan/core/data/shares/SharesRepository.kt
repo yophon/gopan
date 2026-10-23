@@ -3,6 +3,7 @@ package xyz.yophon.gopan.core.data.shares
 import androidx.compose.runtime.Immutable
 import com.apollographql.apollo.ApolloClient
 import com.apollographql.apollo.api.Optional
+import kotlinx.serialization.Serializable
 import xyz.yophon.gopan.core.network.requireData
 import xyz.yophon.gopan.core.ui.format.parseTime
 import xyz.yophon.gopan.graphql.CreateShareMutation
@@ -16,6 +17,7 @@ import javax.inject.Singleton
 
 /** 一个分享链接。访问计数是近 180 天的(服务端定期清理更早的记录) */
 @Immutable
+@Serializable
 data class Share(
     val id: String,
     val token: String,

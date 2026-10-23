@@ -5,6 +5,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -12,6 +13,7 @@ import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.AppConfig
 import xyz.yophon.gopan.core.auth.SessionStore
 import xyz.yophon.gopan.core.auth.UserSummary
+import xyz.yophon.gopan.core.data.InMemorySnapshotDisk
 import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.shares.Share
 import xyz.yophon.gopan.core.data.shares.ShareVisit
@@ -75,6 +77,24 @@ class SharesViewModelTest {
         assertThat(s.status).isEqualTo(ListStatus.Content)
         assertThat(s.items.map { it.id }).containsExactly("b", "a").inOrder()
         assertThat(vm.url(s.items.first())).isEqualTo("https://drive.example/s/tok-b")
+    }
+
+    @Test
+    fun `after a cold start the list saved on the phone shows while the network is still loading`() = runTest {
+        val session = SessionStore().apply { setSignedIn("t", UserSummary("u1", "alice", 0, 0, false)) }
+        val disk = InMemorySnapshotDisk()
+        ScreenCache(session, disk).put(SharesViewModel.CACHE_KEY, listOf(share("old")))
+        repo.shares = mutableListOf(share("new"), share("old"))
+        repo.listGate = CompletableDeferred()
+
+        val vm = SharesViewModel(repo, testConfig, ScreenCache(session, disk))
+        runCurrent()
+        assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("old")
+
+        repo.listGate!!.complete(Unit)
+        advanceUntilIdle()
+        assertThat(vm.state.value.items.map { it.id }).containsExactly("new", "old")
     }
 
     @Test

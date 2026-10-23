@@ -3,6 +3,7 @@ package xyz.yophon.gopan.core.data.chat
 import androidx.compose.runtime.Immutable
 import com.apollographql.apollo.ApolloClient
 import com.apollographql.apollo.api.Optional
+import kotlinx.serialization.Serializable
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.toNode
 import xyz.yophon.gopan.core.network.GopanErrors
@@ -23,6 +24,7 @@ import javax.inject.Singleton
  * 排序、去重、游标一律用 [id](uuid v7,字典序即时间序);[createdAt] 只用于显示时间与按天分组。
  */
 @Immutable
+@Serializable
 data class ChatMessage(
     val id: String,
     val body: String,

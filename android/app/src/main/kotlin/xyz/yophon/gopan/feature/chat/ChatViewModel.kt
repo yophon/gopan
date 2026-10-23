@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.builtins.ListSerializer
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.ScreenKey
@@ -147,15 +148,14 @@ class ChatViewModel @Inject constructor(
     private var initialDone = false
 
     init {
-        // 启动时预取(或上次)的最新一页先画出来,不等首次轮询;首次刷新照常合并
-        cache[LATEST_CACHE_KEY]?.let { latest ->
-            _state.update {
-                it.copy(
-                    messages = latest,
-                    loading = false,
-                    hasMoreOlder = latest.size >= ChatRepository.LATEST_LIMIT,
-                    latestText = ChatLogic.latestText(latest),
-                )
+        // 启动时预取(或上次)的最新一页先画出来,不等首次轮询;首次刷新照常合并。
+        // 冷启动后内存里还没有:读手机上存的上次那页,通常几十毫秒,赶在整页转圈出现之前
+        val cached = cache[LATEST_CACHE_KEY]
+        if (cached != null) {
+            showCached(cached)
+        } else {
+            viewModelScope.launch {
+                cache.load(LATEST_CACHE_KEY)?.let { if (!initialDone && _state.value.messages.isEmpty()) showCached(it) }
             }
         }
         viewModelScope.launch {
@@ -188,6 +188,18 @@ class ChatViewModel @Inject constructor(
         }
         viewModelScope.launch { shareInbox.receiving.collect { r -> _state.update { it.copy(receiving = r) } } }
         viewModelScope.launch { shareInbox.pending.filterNotNull().collect { consumeShare() } }
+    }
+
+    private fun showCached(latest: List<ChatMessage>) {
+        _state.update {
+            it.copy(
+                messages = latest,
+                loading = false,
+                loadError = null,
+                hasMoreOlder = latest.size >= ChatRepository.LATEST_LIMIT,
+                latestText = ChatLogic.latestText(latest),
+            )
+        }
     }
 
     // ---- 可见性与轮询 ----
@@ -581,8 +593,8 @@ class ChatViewModel @Inject constructor(
     }
 
     companion object {
-        /** 最新一页([ChatRepository.LATEST_LIMIT] 条,升序);启动预取也写这里 */
-        val LATEST_CACHE_KEY = ScreenKey<List<ChatMessage>>("chat.latest")
+        /** 最新一页([ChatRepository.LATEST_LIMIT] 条,升序);启动预取也写这里。落盘,冷启动后也有 */
+        val LATEST_CACHE_KEY = ScreenKey("chat.latest", ListSerializer(ChatMessage.serializer()))
 
         const val POLL_INTERVAL_MS = 2_000L
         const val SEARCH_DEBOUNCE_MS = 300L

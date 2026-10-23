@@ -83,7 +83,7 @@ app/src/main/kotlin/xyz/yophon/gopan/
                                  用默认 insets 或零 insets(feature.drive.NestedScreenInsets)都不会双倍留白;键盘弹起时收起底部栏。
                                  传输列表(Routes.Transfers)是这里的顶层路由,不属于哪个 tab
   MainScaffoldViewModel.kt       跳转请求(分享 → 传输助手、通知 → 传输列表);「打开」的下载完成后弹应用选择器;进来时启动 StartupPrefetch
-  StartupPrefetch.kt             进主界面后并行预取传输助手最新一页与我的分享,写进 ScreenCache(每个账号每个进程一次)
+  StartupPrefetch.kt             进主界面后先把手机上存的传输助手最新一页与我的分享读进 ScreenCache,再并行联网预取(每个账号每个进程一次)
   di/AppModule.kt                Hilt 根模块:AppConfig、OkHttp、Apollo、SecureStore、DataStore;
                                  功能线自己的 @Module(core.data.DataModule、feature.login.LoginModule)由 Hilt 自动聚合
   core/AppConfig.kt              服务端/账号中心地址(BuildConfig → 对象,测试可替换)
@@ -91,7 +91,7 @@ app/src/main/kotlin/xyz/yophon/gopan/
   core/auth/                     AuthState/UserSummary、SessionStore、SessionManager、Pkce、TicketExchange、YophonIdLogin
   core/data/                     Node / NodeListing 模型、NodesRepository(接口)+ NodesRepositoryImpl(Apollo;文件夹 LRU 解析面包屑)、
                                  ListingCache;db/:GopanDatabase、cached_listing 表 + RoomListingCache(按 (用户, 目录) 存首页,进目录先显示、断网回退);
-                                 ScreenCache(各页首屏的进程内快照,先显示后刷新);DataModule
+                                 ScreenCache(各页首屏的快照,先显示后刷新;带序列化器的键经 SnapshotDisk 落盘);DataModule
   core/data/chat/                ChatMessage 模型、ChatRepository(接口)+ ApolloChatRepository(列表 / 翻历史 / 搜索 / 发送 / 删除 / 文件夹)
   core/data/preview/             PreviewRepository:单节点预览信息(预签名地址现取)、Office 转换触发、文本分段拉取(TextFetcher:Range、UTF-8 / GB18030)、
                                  PDF 下到缓存(cacheDir/preview-pdf,内容寻址,300 MB 封顶)
@@ -200,8 +200,10 @@ GraphQL operations 按域各自一个文件(`nodes.graphql` 归文件线,`chat.g
     不会先吃一个 UNAUTHENTICATED 再重放;refresh 刚因网络失败的 5 秒内不再等,直接不带 token 发出。
 - 先显示后刷新(stale-while-revalidate):文件页进目录先画 Room 里的首页缓存(`NodesRepository.cachedFirstPage`),
   联网结果回来再换,首次联网还在路上时 `revalidating` 为真(不出离线提示条,顶上一条细进度);
-  其它列表页用进程内的 `ScreenCache`(按用户隔离、登出清空、LRU 64 条)存上次的首屏,ViewModel 进来先画它再静默刷新,
-  `ScreenCache.mirror` 让本地的乐观修改也留在快照里。进主界面时 `StartupPrefetch` 并行预取传输助手最新一页与我的分享。
+  其它列表页用 `ScreenCache`(按用户隔离、登出清空、内存里 LRU 64 条)存上次的首屏,ViewModel 进来先画它再静默刷新,
+  `ScreenCache.mirror` 让本地的乐观修改也留在快照里。两个底部 tab(传输助手最新一页、我的分享)的键带序列化器,
+  还经 `SnapshotDisk` 存到 noBackupFilesDir/snapshots(内容变了才写),冷启动后内存里没有时 `ScreenCache.load` 读回来:
+  进主界面时 `StartupPrefetch` 先读盘再联网预取,页面自己也会读盘,所以一打开 App 就切过去也不用转圈。
   首次加载的整页转圈延迟 300ms 出现,文件页用骨架行;NavHost 转场统一 180ms 淡入淡出(`core/ui/nav/NavTransitions.kt`)。
   - `changePassword`:服务端吊销其它设备并给当前会话重发一对 token,客户端直接采用(与网页端相同),不需要重新登录。
 - Yophon ID 原生登录(`core/auth/YophonIdLogin` + `TicketExchange`):

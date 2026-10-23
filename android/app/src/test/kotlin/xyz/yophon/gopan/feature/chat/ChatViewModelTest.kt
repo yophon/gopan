@@ -14,6 +14,7 @@ import org.junit.Rule
 import org.junit.Test
 import xyz.yophon.gopan.core.auth.SessionStore
 import xyz.yophon.gopan.core.auth.UserSummary
+import xyz.yophon.gopan.core.data.InMemorySnapshotDisk
 import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.chat.ChatMessage
 import xyz.yophon.gopan.core.data.chat.ChatRepository
@@ -97,6 +98,32 @@ class ChatViewModelTest {
             runCurrent()
             assertThat(vm.state.value.messages.map { it.id }).containsExactly("000001", "000002", "000003").inOrder()
             assertThat(cache[ChatViewModel.LATEST_CACHE_KEY]?.map { it.id }).containsExactly("000001", "000002", "000003").inOrder()
+        } finally {
+            vm.setVisible(false)
+            runCurrent()
+        }
+    }
+
+    @Test
+    fun `after a cold start the latest page saved on the phone shows before any network answer`() = runTest {
+        val session = SessionStore().apply { setSignedIn("t", UserSummary("u1", "alice", 0, 0, false)) }
+        val disk = InMemorySnapshotDisk()
+        // 上一个进程留在手机上的那页
+        ScreenCache(session, disk).put(ChatViewModel.LATEST_CACHE_KEY, listOf(msg("1"), msg("2")))
+        cache = ScreenCache(session, disk)
+        val vm = viewModel()
+        try {
+            runCurrent()
+            assertThat(repo.latestCalls).isEqualTo(0)
+            assertThat(vm.state.value.loading).isFalse()
+            assertThat(vm.state.value.messages.map { it.id }).containsExactly("000001", "000002").inOrder()
+
+            repo.messages += listOf(msg("1"), msg("3"))
+            vm.setVisible(true)
+            runCurrent()
+            // 别端删掉的 2 在服务端的最新页里没有:合并时去掉
+            assertThat(vm.state.value.messages.map { it.id }).containsExactly("000001", "000003").inOrder()
+            assertThat(ScreenCache(session, disk).load(ChatViewModel.LATEST_CACHE_KEY)?.map { it.id }).containsExactly("000001", "000003").inOrder()
         } finally {
             vm.setVisible(false)
             runCurrent()

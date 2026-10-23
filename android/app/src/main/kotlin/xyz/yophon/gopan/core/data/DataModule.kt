@@ -39,7 +39,7 @@ object DataModule {
         cache.clear()
     }
 
-    /** 登出 / 会话失效:各页面的首屏快照一并清掉(本来就按用户隔离,这里只是不让它留在内存里) */
+    /** 登出 / 会话失效:各页面的首屏快照一并清掉(内存里的与落盘的;本来就按用户隔离,这里是不让它留在手机上) */
     @Provides
     @IntoSet
     fun provideScreenCacheSignOutHook(cache: ScreenCache): SignOutHook = SignOutHook { cache.clear() }
@@ -50,6 +50,9 @@ object DataModule {
 abstract class DataBindsModule {
     @Binds
     abstract fun bindListingCache(impl: RoomListingCache): ListingCache
+
+    @Binds
+    abstract fun bindSnapshotDisk(impl: FileSnapshotDisk): SnapshotDisk
 
     @Binds
     abstract fun bindNodesRepository(impl: NodesRepositoryImpl): NodesRepository

@@ -17,7 +17,8 @@ import javax.inject.Singleton
 
 /**
  * 进主界面后顺手把另外几个 tab 的首屏取回来(传输助手最新一页、我的分享),写进 [ScreenCache],
- * 第一次切过去时直接有数据。和文件列表并行发出,HTTP/2 下共用一条连接,几乎不多花时间。
+ * 第一次切过去时直接有数据。先把手机上存的上次那份读进内存(冷启动时网络还没回来也有东西画),
+ * 再联网取新的。和文件列表并行发出,HTTP/2 下共用一条连接,几乎不多花时间。
  * 每个账号每个进程只取一次;失败不重试、不提示,页面自己加载时会再来。
  */
 @Singleton
@@ -43,9 +44,10 @@ class StartupPrefetch @Inject constructor(
     private fun <T : Any> prefetch(uid: String, key: ScreenKey<T>, fetch: suspend () -> T) {
         if (cache[key] != null) return
         scope.launch {
+            val stale = cache.load(key)
             gopanResult { fetch() }
-                // 取的途中换了账号:这份数据不属于现在的用户
-                .onSuccess { if (session.currentUser?.id == uid && cache[key] == null) cache.put(key, it) }
+                // 取的途中换了账号:这份数据不属于现在的用户;页面已经写进更新的数据(不再是读盘那份):不覆盖
+                .onSuccess { if (session.currentUser?.id == uid && cache[key] === stale) cache.put(key, it) }
                 .onFailure { Timber.d("预取 %s 失败:%s", key, it.message) }
         }
     }
