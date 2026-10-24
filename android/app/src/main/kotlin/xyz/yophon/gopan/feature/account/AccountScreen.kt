@@ -51,6 +51,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.OfflinePin
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.SystemUpdate
@@ -156,6 +157,7 @@ fun AccountScreen(
     onOpenSpace: () -> Unit = {},
     onOpenFeeds: () -> Unit = {},
     onOpenClips: () -> Unit = {},
+    onOpenOffline: () -> Unit = {},
     viewModel: AccountViewModel = hiltViewModel(),
     updates: UpdateViewModel = hiltViewModel(),
     crashes: CrashLogViewModel = hiltViewModel(),
@@ -215,6 +217,7 @@ fun AccountScreen(
         onOpenSpace = onOpenSpace,
         onOpenFeeds = onOpenFeeds,
         onOpenClips = onOpenClips,
+        onOpenOffline = onOpenOffline,
     )
     update.phase?.let { UpdateDialog(it, updates) }
 }
@@ -251,6 +254,7 @@ internal fun AccountContent(
     onOpenSpace: () -> Unit = {},
     onOpenFeeds: () -> Unit = {},
     onOpenClips: () -> Unit = {},
+    onOpenOffline: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showThemeDialog by rememberSaveable { mutableStateOf(false) }
@@ -326,6 +330,7 @@ internal fun AccountContent(
                     onOpenSpace = onOpenSpace,
                     onOpenFeeds = onOpenFeeds,
                     onOpenClips = onOpenClips,
+                    onOpenOffline = onOpenOffline,
                 )
             }
         }
@@ -418,6 +423,7 @@ private fun AccountList(
     onOpenSpace: () -> Unit = {},
     onOpenFeeds: () -> Unit = {},
     onOpenClips: () -> Unit = {},
+    onOpenOffline: () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     OnTabReselect(Routes.AccountTab) { listState.animateScrollToItem(0) }
@@ -466,6 +472,16 @@ private fun AccountList(
                     title = stringResource(R.string.account_item_transfers),
                     supporting = stringResource(R.string.account_item_transfers_hint),
                     onClick = onOpenTransfers,
+                )
+            }
+            // 离线可用(doc/26)
+            item("offline") {
+                SettingItem(
+                    icon = Icons.Outlined.OfflinePin,
+                    title = stringResource(R.string.offline_title),
+                    supporting = stringResource(R.string.offline_entry_hint),
+                    onClick = onOpenOffline,
+                    modifier = Modifier.testTag("account_offline"),
                 )
             }
             item("transfer-settings") {

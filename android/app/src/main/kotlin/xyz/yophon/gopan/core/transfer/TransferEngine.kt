@@ -2,6 +2,7 @@ package xyz.yophon.gopan.core.transfer
 
 import androidx.core.net.toUri
 import android.net.Uri
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -127,6 +128,7 @@ class TransferEngine @Inject constructor(
     private val network: NetworkMonitor,
     private val scheduler: TransferScheduler,
     private val incomingShare: IncomingShareStore,
+    private val offline: OfflineSink,
     @ApplicationScope private val appScope: CoroutineScope,
 ) {
     private val uploads = db.uploadDao()
@@ -548,6 +550,7 @@ class TransferEngine @Inject constructor(
                 partsDir = sources.partsDir,
                 report = { setProgress(key, it) },
                 task = t,
+                offlineCopy = { nodeId, sha, size -> offline.existing(t.userId, nodeId, sha, size) },
             )
             applyDownload(t, run.execute())
         }
@@ -603,16 +606,32 @@ class TransferEngine @Inject constructor(
         val now = clock.now()
         when (outcome) {
             is DownloadOutcome.Done -> {
-                if (downloads.markDone(t.id, outcome.location, now) == 1) {
+                val location = if (t.dest == DownloadDest.OFFLINE) {
+                    try {
+                        toOffline(t, outcome.location)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.w(e, "离线副本放不到位")
+                        val error = TransferErrors.saveFailed(e.message)
+                        if (downloads.markFailed(t.id, MAX_ATTEMPTS, error.code, error.message, now) == 1) onDownloadFailed(t.id, error)
+                        t.batchId?.let { refreshBatch(it) }
+                        return
+                    }
+                } else {
+                    outcome.location
+                }
+                if (downloads.markDone(t.id, location, now) == 1) {
                     val done = downloads.get(t.id) ?: return
                     if (done.batchId == null) doneDownloads.add(done)
-                    _events.emit(TransferEvent.DownloadDone(done, outcome.location))
+                    _events.emit(TransferEvent.DownloadDone(done, location))
                 }
             }
             is DownloadOutcome.Expanded -> {
                 if (outcome.children.isNotEmpty()) downloads.insertAll(outcome.children)
                 downloads.markExpanded(t.id, outcome.totalBytes, now)
                 if (outcome.children.isEmpty()) {
+                    if (t.dest == DownloadDest.OFFLINE) offline.roundDone(t, emptySet())
                     downloads.setBatchState(t.id, TransferState.DONE.name, null, null, now, now)
                     downloads.get(t.id)?.let { doneDownloads.add(it) }
                 }
@@ -638,6 +657,13 @@ class TransferEngine @Inject constructor(
         t.batchId?.let { refreshBatch(it) }
     }
 
+    /** 离线可用的文件下完:交给离线模块放到位(离线项已经移除时返回空串,文件已丢掉) */
+    private suspend fun toOffline(t: DownloadTaskEntity, location: String): String {
+        val current = downloads.get(t.id) ?: t
+        val root = current.batchId?.let { downloads.get(it) } ?: current
+        return offline.saved(current, root, location).orEmpty()
+    }
+
     private suspend fun onDownloadFailed(id: Long, error: GopanException) {
         val t = downloads.get(id) ?: return
         if (t.batchId == null) failedDownloads.incrementAndGet()
@@ -655,6 +681,9 @@ class TransferEngine @Inject constructor(
         when {
             terminal && states.none { it == TransferState.FAILED } -> {
                 if (batch.state != TransferState.DONE) {
+                    if (batch.dest == DownloadDest.OFFLINE) {
+                        offline.roundDone(batch, children.filter { it.state == TransferState.DONE }.mapNotNullTo(HashSet()) { it.nodeId })
+                    }
                     downloads.setBatchState(batchId, TransferState.DONE.name, null, null, now, now)
                     downloads.get(batchId)?.let {
                         doneDownloads.add(it)

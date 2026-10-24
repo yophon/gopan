@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 离线可用(doc/26):手动选的文件、文件夹存一份到手机上,不同步 -->
+    <string name="offline_title">离线可用</string>
+    <string name="offline_entry_hint">存在手机上的文件,没网也能打开</string>
+    <string name="offline_mark">离线可用</string>
+    <string name="offline_action_pin">离线可用</string>
+    <string name="offline_action_unpin">取消离线可用</string>
+    <string name="offline_action_update">更新</string>
+    <string name="offline_action_remove">移除</string>
+
+    <string name="offline_confirm_title">离线可用</string>
+    <string name="offline_confirm_one">「%1$s」(%2$s)会存一份到手机上,没网也能打开。云端之后改了不会自动跟着变,可以在「我的 → 离线可用」里手动更新。</string>
+    <string name="offline_confirm_many">这 %1$d 项(%2$s)会存一份到手机上,没网也能打开。云端之后改了不会自动跟着变,可以在「我的 → 离线可用」里手动更新。</string>
+    <string name="offline_confirm_large">比较大,会占用手机 %1$s 的空间。</string>
+    <string name="offline_confirm_metered">现在用的是移动数据,下载会消耗流量。</string>
+    <string name="offline_confirm_action">存到手机</string>
+    <string name="offline_size_unknown">大小未知</string>
+
+    <string name="offline_msg_added">已加入离线可用,下载进度在「传输」里</string>
+    <string name="offline_msg_removed">已移除,手机上的副本删掉了</string>
+    <string name="offline_msg_no_space">手机空间不够</string>
+    <string name="offline_msg_updating">开始更新「%1$s」</string>
+
+    <string name="offline_empty">还没有离线可用的文件</string>
+    <string name="offline_empty_hint">在文件或文件夹的 ⋮ 菜单里选「离线可用」</string>
+    <string name="offline_total">手机上共 %1$s</string>
+    <string name="offline_status_downloading">下载中</string>
+    <string name="offline_status_percent">下载中 %1$d%%</string>
+    <string name="offline_status_files">下载中 %1$d / %2$d 个文件</string>
+    <string name="offline_status_waiting">等待下载</string>
+    <string name="offline_status_failed">下载失败</string>
+    <string name="offline_status_incomplete">没下完,点「更新」接着下</string>
+    <string name="offline_files_count">%1$d 个文件</string>
+    <string name="offline_synced_at">%1$s存的</string>
+
+    <string name="offline_remove_title">移除离线副本?</string>
+    <string name="offline_remove_text">「%1$s」在手机上的副本(%2$s)会删掉,云端的文件不受影响。</string>
+    <string name="offline_folder_empty">这个文件夹是空的</string>
+    <string name="offline_open_copy">打开手机上的副本</string>
+</resources>

@@ -36,6 +36,7 @@ class DownloadRunTest {
     private val publisher = FakePublisher()
     private val expected = mutableListOf<String?>()
     private var freeSpace = Long.MAX_VALUE
+    private var offlineCopy: (suspend (String, String, Long) -> String?)? = null
 
     private fun partsDir(): File = File(tmp.root, "parts")
 
@@ -50,6 +51,7 @@ class DownloadRunTest {
         task = task,
         sleep = { clock.advance(it) },
         usableSpace = { freeSpace },
+        offlineCopy = offlineCopy,
     )
 
     private fun fileTask(nodeId: String = "n1", sha: String? = null, size: Long? = null, dest: DownloadDest = DownloadDest.DOWNLOADS) =
@@ -66,6 +68,36 @@ class DownloadRunTest {
         assertThat(publisher.published.single().second).isEqualTo(bytes)
         assertThat(expected).containsExactly(sha256Hex(bytes))
         assertThat(File(partsDir(), "7.part").exists()).isFalse()
+    }
+
+    @Test
+    fun `offline and open-with use a matching offline copy instead of downloading`() = runTest {
+        val bytes = randomBytes(4_000)
+        api.file("n1", "a.bin", bytes)
+        val sha = sha256Hex(bytes)
+        offlineCopy = { node, s, size -> "/offline/r/n1/a.bin".takeIf { node == "n1" && s == sha && size == 4_000L } }
+
+        for (dest in listOf(DownloadDest.OFFLINE, DownloadDest.OPEN_WITH)) {
+            assertThat(run(fileTask(dest = dest)).execute()).isEqualTo(DownloadOutcome.Done("/offline/r/n1/a.bin"))
+        }
+        assertThat(storage.requests).isEmpty()
+        assertThat(publisher.published).isEmpty()
+
+        // 其它落点照常下(副本在 App 私有目录里,不能当成用户要的那份)
+        run(fileTask(dest = DownloadDest.DOWNLOADS)).execute()
+        assertThat(publisher.published.single().second).isEqualTo(bytes)
+    }
+
+    @Test
+    fun `an offline file whose copy is out of date is downloaded again`() = runTest {
+        val bytes = randomBytes(4_000)
+        api.file("n1", "a.bin", bytes)
+        offlineCopy = { _, s, _ -> "/offline/r/n1/a.bin".takeIf { s == "old-sha" } }
+
+        val outcome = run(fileTask(dest = DownloadDest.OFFLINE)).execute()
+
+        assertThat(outcome).isEqualTo(DownloadOutcome.Done("content://published/a.bin"))
+        assertThat(publisher.published.single().second).isEqualTo(bytes)
     }
 
     @Test

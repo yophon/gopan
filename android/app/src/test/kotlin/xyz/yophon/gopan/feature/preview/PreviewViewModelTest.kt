@@ -49,6 +49,7 @@ class PreviewViewModelTest {
     private val urlFetches = mutableListOf<String>()
     private val mediaUrls = MediaUrls(fetch = { urlFetches += it; "https://s3/$it?fresh" }, now = { 0L })
     private val nowPlaying = NowPlayingStore()
+    private val offline = FakeOfflineLookup()
 
     private fun file(id: String) = Node(id = id, name = "$id.jpg", kind = NodeKind.FILE, size = 10)
 
@@ -57,7 +58,7 @@ class PreviewViewModelTest {
             put(PreviewViewModel.NODE_ID_ARG, start)
             if (current != null) put("preview.current", current)
         }
-        return PreviewViewModel(SavedStateHandle(args), sessions, repo, transfers, OkHttpClient(), archives, navRequests, media, reporter, mediaUrls, nowPlaying, FakeQuickRepository())
+        return PreviewViewModel(SavedStateHandle(args), sessions, repo, transfers, OkHttpClient(), archives, navRequests, media, reporter, mediaUrls, nowPlaying, FakeQuickRepository(), offline)
     }
 
     @Test
@@ -103,7 +104,7 @@ class PreviewViewModelTest {
     fun `the settled page is remembered for recreation`() {
         sessions.open(listOf(file("a"), file("b")))
         val handle = SavedStateHandle(mapOf(PreviewViewModel.NODE_ID_ARG to "a"))
-        val vm = PreviewViewModel(handle, sessions, repo, transfers, OkHttpClient(), archives, navRequests, media, reporter, mediaUrls, nowPlaying, FakeQuickRepository())
+        val vm = PreviewViewModel(handle, sessions, repo, transfers, OkHttpClient(), archives, navRequests, media, reporter, mediaUrls, nowPlaying, FakeQuickRepository(), offline)
         vm.onPageSettled(1)
         assertThat(vm.current.value).isEqualTo(1)
         assertThat(handle.get<String>("preview.current")).isEqualTo("b")

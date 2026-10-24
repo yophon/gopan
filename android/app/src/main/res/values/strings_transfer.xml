@@ -47,6 +47,7 @@
     <string name="transfer_to_chat">发往传输助手</string>
     <string name="transfer_saved_to_downloads">已保存到「下载/gopan」</string>
     <string name="transfer_saved_to_folder">已保存到所选文件夹</string>
+    <string name="transfer_saved_offline">已存到手机,离线可用</string>
 
     <string name="transfer_action_pause">暂停</string>
     <string name="transfer_action_resume">继续</string>

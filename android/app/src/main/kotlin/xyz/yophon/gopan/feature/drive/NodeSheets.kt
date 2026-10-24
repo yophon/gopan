@@ -27,6 +27,8 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
+import androidx.compose.material.icons.filled.OfflinePin
+import androidx.compose.material.icons.outlined.OfflinePin
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
@@ -87,6 +89,8 @@ enum class NodeAction(@StringRes val label: Int, val icon: ImageVector, val dest
     SHARE(R.string.drive_action_share, Icons.Outlined.Share),
     /** 收藏(doc/24):已收藏的显示「取消收藏」,见 [labelFor] */
     STAR(R.string.drive_action_star, Icons.Outlined.StarOutline),
+    /** 离线可用(doc/26):已加过的显示「取消离线可用」 */
+    OFFLINE(R.string.offline_action_pin, Icons.Outlined.OfflinePin),
     /** 直链(doc/22 四):只对文件,本站关了直链时不出现 */
     COPY_LINK(R.string.drive_action_copy_link, Icons.Outlined.Link),
     COLLECT(R.string.drive_action_collect, Icons.Outlined.DriveFolderUpload),
@@ -112,6 +116,7 @@ val DRIVE_ACTIONS = listOf(
     NodeAction.PACK,
     NodeAction.SHARE,
     NodeAction.STAR,
+    NodeAction.OFFLINE,
     NodeAction.COPY_LINK,
     NodeAction.COLLECT,
     NodeAction.EXTRACT_HERE,
@@ -125,10 +130,18 @@ val DRIVE_ACTIONS = listOf(
     NodeAction.DETAILS,
 )
 
-/** 收藏 / 取消收藏随节点变 */
-fun NodeAction.labelFor(node: Node): Int = if (this == NodeAction.STAR && node.starred) R.string.drive_action_unstar else label
+/** 收藏 / 取消收藏随节点变,离线可用随 [offline](手动加过)变 */
+fun NodeAction.labelFor(node: Node, offline: Boolean = false): Int = when {
+    this == NodeAction.STAR && node.starred -> R.string.drive_action_unstar
+    this == NodeAction.OFFLINE && offline -> R.string.offline_action_unpin
+    else -> label
+}
 
-fun NodeAction.iconFor(node: Node): ImageVector = if (this == NodeAction.STAR && node.starred) Icons.Outlined.Star else icon
+fun NodeAction.iconFor(node: Node, offline: Boolean = false): ImageVector = when {
+    this == NodeAction.STAR && node.starred -> Icons.Outlined.Star
+    this == NodeAction.OFFLINE && offline -> Icons.Filled.OfflinePin
+    else -> icon
+}
 
 /** 这个操作对这个节点有没有意义:打开、复制直链只对文件,打包、收集文件只对文件夹,解压只对压缩包 */
 fun NodeAction.appliesTo(node: Node): Boolean = when (this) {
@@ -165,6 +178,7 @@ fun NodeActionSheet(
             onAction(action)
         }
     }
+    val offline = node.id in LocalOfflineMarks.current.pinned
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         ListItem(
             leadingContent = { NodeVisual(node, modifier = Modifier.size(44.dp)) },
@@ -179,8 +193,8 @@ fun NodeActionSheet(
                 val tint = if (action.destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                 ListItem(
                     modifier = Modifier.clickable { pick(action) },
-                    leadingContent = { Icon(action.iconFor(node), contentDescription = null, tint = tint) },
-                    headlineContent = { Text(stringResource(action.labelFor(node)), color = tint) },
+                    leadingContent = { Icon(action.iconFor(node, offline), contentDescription = null, tint = tint) },
+                    headlineContent = { Text(stringResource(action.labelFor(node, offline)), color = tint) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 )
             }
@@ -330,6 +344,7 @@ fun NodeDialogHost(
     // 「复制直链」:选格式的对话框与提示(多选时文件页的选择栏也交给同一个 ViewModel)
     val links: CopyLinkViewModel = hiltViewModel()
     val linkState by links.state.collectAsStateWithLifecycle()
+    val offlinePinned = LocalOfflineMarks.current.pinned
     CopyLinkHost(links, onMessage = viewModel::message)
     when (dialog) {
         null -> Unit
@@ -346,6 +361,7 @@ fun NodeDialogHost(
                     NodeAction.SEND_TO_CHAT -> viewModel.sendToChat(node)
                     NodeAction.SHARE -> viewModel.requestShare(node)
                     NodeAction.STAR -> viewModel.toggleStar(listOf(node))
+                    NodeAction.OFFLINE -> viewModel.toggleOffline(listOf(node), offlinePinned)
                     NodeAction.VERSIONS -> viewModel.showVersions(node)
                     NodeAction.FORGET -> onForget?.invoke(node)
                     NodeAction.COPY_LINK -> links.copy(listOf(node))
@@ -390,6 +406,11 @@ fun NodeDialogHost(
             onConfirm = { viewModel.confirmDelete(dialog.ids) },
             onDismiss = viewModel::dismissDialog,
         )
+        is NodeDialog.ConfirmOffline -> ConfirmOfflineDialog(
+            dialog = dialog,
+            onConfirm = { viewModel.confirmOffline(dialog.nodes) },
+            onDismiss = viewModel::dismissDialog,
+        )
         is NodeDialog.Share -> ShareCreateDialog(
             node = dialog.node,
             instanceKey = dialog.token.toString(),
@@ -427,4 +448,23 @@ fun NodeDialogHost(
         )
         else -> Unit
     }
+}
+
+/** 加入离线可用前的确认(doc/26):写明大小;很大、在用移动数据时多一句提醒 */
+@Composable
+private fun ConfirmOfflineDialog(dialog: NodeDialog.ConfirmOffline, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val size = if (dialog.bytes > 0) formatBytes(dialog.bytes) else stringResource(R.string.offline_size_unknown)
+    val single = dialog.nodes.singleOrNull()
+    val text = listOfNotNull(
+        if (single != null) stringResource(R.string.offline_confirm_one, single.name, size) else stringResource(R.string.offline_confirm_many, dialog.nodes.size, size),
+        if (dialog.bytes >= NodeActionsViewModel.OFFLINE_LARGE_BYTES) stringResource(R.string.offline_confirm_large, size) else null,
+        if (dialog.metered) stringResource(R.string.offline_confirm_metered) else null,
+    ).joinToString("\n\n")
+    ConfirmDialog(
+        title = stringResource(R.string.offline_confirm_title),
+        text = text,
+        confirmText = stringResource(R.string.offline_confirm_action),
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
+    )
 }

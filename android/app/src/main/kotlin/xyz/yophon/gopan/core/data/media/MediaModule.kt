@@ -13,6 +13,8 @@ import xyz.yophon.gopan.core.auth.SessionStore
 import xyz.yophon.gopan.core.auth.SignOutHook
 import xyz.yophon.gopan.core.data.preview.PreviewRepository
 import xyz.yophon.gopan.core.network.TokenRefresher
+import xyz.yophon.gopan.core.offline.OfflineLookup
+import xyz.yophon.gopan.core.offline.uri
 import xyz.yophon.gopan.core.transfer.upload.PartUploader
 import javax.inject.Named
 import javax.inject.Singleton
@@ -45,8 +47,24 @@ abstract class MediaModule {
 
         @Provides
         @Singleton
-        fun provideMediaUrls(previews: PreviewRepository): MediaUrls =
-            MediaUrls(fetch = { previews.preview(it).contentUrl }, now = SystemClock::elapsedRealtime)
+        fun provideMediaUrls(previews: PreviewRepository, offline: OfflineLookup): MediaUrls =
+            MediaUrls(
+                fetch = { id ->
+                    // 没网、或取不到地址时有离线副本就放副本(doc/26)
+                    val copy = offline.localCopy(id)
+                    if (copy != null && !offline.isOnline()) {
+                        copy.uri
+                    } else {
+                        try {
+                            previews.preview(id).contentUrl ?: copy?.uri
+                        } catch (e: Exception) {
+                            if (e is kotlinx.coroutines.CancellationException || copy == null) throw e
+                            copy.uri
+                        }
+                    }
+                },
+                now = SystemClock::elapsedRealtime,
+            )
 
         /** 登出:停播、清空队列与取过的地址 */
         @Provides

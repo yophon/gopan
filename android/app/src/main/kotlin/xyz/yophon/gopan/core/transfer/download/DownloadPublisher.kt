@@ -55,7 +55,8 @@ interface DownloadPublisher {
  * - DOWNLOADS:Android 10+ 写 MediaStore.Downloads(Download/gopan/<相对目录>,IS_PENDING 写完再公开);
  *   8–9 写公共「下载/gopan」目录(需要 WRITE_EXTERNAL_STORAGE)并通知媒体库;
  * - TREE:用户选的 SAF 目录树,逐级找或建子目录;
- * - OPEN_WITH:改名移到 cacheDir/open/<sha256>/<名字>(同一分区,不用拷贝)。
+ * - OPEN_WITH:改名移到 cacheDir/open/<sha256>/<名字>(同一分区,不用拷贝);
+ * - OFFLINE:改名移到离线收件箱,由离线模块放到 filesDir/offline 下(doc/26)。
  */
 @Singleton
 class AndroidDownloadPublisher @Inject constructor(
@@ -77,6 +78,7 @@ class AndroidDownloadPublisher @Inject constructor(
         val result = try {
             when (dest) {
                 DownloadDest.OPEN_WITH -> toOpenCache(file, name, cacheKey)
+                DownloadDest.OFFLINE -> toOfflineInbox(file)
                 DownloadDest.DOWNLOADS ->
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) toMediaStore(file, name, type, relDir) else toLegacyDownloads(file, name, type, relDir)
                 DownloadDest.TREE -> toTree(file, name, type, relDir, treeUri ?: throw TransferErrors.saveFailed("没有选择下载目录"))
@@ -89,13 +91,26 @@ class AndroidDownloadPublisher @Inject constructor(
             if (isNoSpace(e)) throw TransferErrors.noSpace()
             throw TransferErrors.saveFailed(e.message)
         }
-        if (dest != DownloadDest.OPEN_WITH) file.delete()
+        if (dest != DownloadDest.OPEN_WITH && dest != DownloadDest.OFFLINE) file.delete()
         result
     }
 
     override fun cachedOpenFile(cacheKey: String, name: String, size: Long): File? {
         val f = File(File(sources.openDir, cacheKey), SourceStore.sanitizeFileName(name))
         return f.takeIf { it.isFile && it.length() == size }
+    }
+
+    /** 离线可用:先挪进收件箱(同一分区改名),引擎随后交给离线模块放到位 */
+    private fun toOfflineInbox(file: File): String {
+        val inbox = sources.offlineInbox
+        inbox.mkdirs()
+        val target = File(inbox, file.name)
+        target.delete()
+        if (!file.renameTo(target)) {
+            file.inputStream().use { input -> target.outputStream().use { input.copyTo(it, SourceStore.BUFFER) } }
+            file.delete()
+        }
+        return target.absolutePath
     }
 
     private fun toOpenCache(file: File, name: String, cacheKey: String?): String {

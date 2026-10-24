@@ -17,10 +17,12 @@ import xyz.yophon.gopan.feature.about.LicensesScreen
 import xyz.yophon.gopan.feature.activity.ActivityScreen
 import xyz.yophon.gopan.feature.notifications.NotificationNav
 import xyz.yophon.gopan.feature.notifications.NotificationsScreen
+import xyz.yophon.gopan.feature.offline.OfflineFolderScreen
+import xyz.yophon.gopan.feature.offline.OfflineScreen
 import xyz.yophon.gopan.feature.space.SpaceScreen
 
 /**
- * 「我的」tab 的嵌套图:账户页(改密对话框在页内)、站内通知、动态、空间、登录设备、WebDAV 应用密码、Agent 接入、管理端(仅管理员可见)、
+ * 「我的」tab 的嵌套图:账户页(改密对话框在页内)、站内通知、动态、空间、离线可用、登录设备、WebDAV 应用密码、Agent 接入、管理端(仅管理员可见)、
  * 订阅与剪藏。
  * 回收站页属于文件线(driveGraph 里的 [Routes.Trash]),这里只负责导航过去;
  * 通知点开后去的文件夹 / 预览 / 「分享」tab / 传输列表同样只是导航过去([onOpenPreview] 由主界面给)。
@@ -42,6 +44,22 @@ fun NavGraphBuilder.accountGraph(navController: NavController, onOpenPreview: (n
                 onOpenClips = { entry.ifResumed { navController.navigate(Routes.Clips) } },
                 onOpenActivity = { entry.ifResumed { navController.navigate(Routes.Activity()) } },
                 onOpenSpace = { entry.ifResumed { navController.navigate(Routes.Space) { launchSingleTop = true } } },
+                onOpenOffline = { entry.ifResumed { navController.navigate(Routes.Offline) { launchSingleTop = true } } },
+            )
+        }
+        // 离线可用(doc/26):文件夹项按目录往里点,文件交给根导航的预览
+        composable<Routes.Offline> { entry ->
+            OfflineScreen(
+                onBack = { entry.ifResumed { navController.popBackStack() } },
+                onOpenPreview = { id -> entry.ifResumed { onOpenPreview(id) } },
+                onOpenFolder = { route -> entry.ifResumed { navController.navigate(route) } },
+            )
+        }
+        composable<Routes.OfflineFolder> { entry ->
+            OfflineFolderScreen(
+                onBack = { entry.ifResumed { navController.popBackStack() } },
+                onOpenPreview = { id -> entry.ifResumed { onOpenPreview(id) } },
+                onOpenFolder = { route -> entry.ifResumed { navController.navigate(route) } },
             )
         }
         composable<Routes.Activity> { entry ->

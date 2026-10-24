@@ -58,6 +58,14 @@ object Routes {
     @Serializable
     data class Quick(val recent: Boolean)
 
+    /** 离线可用(doc/26):「我的」里进来 */
+    @Serializable
+    data object Offline
+
+    /** 离线可用的文件夹项里按目录浏览手机上的副本;[path] 是相对文件夹项的目录,空串是它自己 */
+    @Serializable
+    data class OfflineFolder(val rootId: String, val path: String = "", val title: String = "")
+
     /** 最近播放(doc/22 二.3):文件页菜单进来 */
     @Serializable
     data object RecentPlays

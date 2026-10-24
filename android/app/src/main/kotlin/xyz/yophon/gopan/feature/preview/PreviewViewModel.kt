@@ -22,6 +22,7 @@ import xyz.yophon.gopan.core.data.archive.ExtractRequest
 import xyz.yophon.gopan.core.data.preview.PreviewInfo
 import xyz.yophon.gopan.core.data.preview.PreviewRepository
 import xyz.yophon.gopan.core.network.gopanResult
+import xyz.yophon.gopan.core.offline.OfflineLookup
 import xyz.yophon.gopan.core.share.AppNavRequests
 import xyz.yophon.gopan.core.share.NavRequest
 import xyz.yophon.gopan.core.transfer.TransferActions
@@ -81,6 +82,8 @@ class PreviewViewModel @Inject constructor(
     nowPlayingStore: NowPlayingStore,
     /** 打开过的文件进「最近」(doc/24) */
     private val quick: QuickRepository,
+    /** 离线副本(doc/26) */
+    private val offline: OfflineLookup,
 ) : ViewModel() {
 
     private val handle = savedStateHandle
@@ -129,7 +132,7 @@ class PreviewViewModel @Inject constructor(
     /** 取(必要时创建并开始加载)某一项的页面 */
     fun page(nodeId: String): PreviewPage {
         pages[nodeId]?.let { return it }
-        val page = PreviewPage(nodeId, repo, viewModelScope, archives)
+        val page = PreviewPage(nodeId, repo, viewModelScope, archives, offline)
         pages[nodeId] = page
         page.start()
         trim()

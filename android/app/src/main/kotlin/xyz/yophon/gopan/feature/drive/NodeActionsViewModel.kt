@@ -17,6 +17,7 @@ import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.network.gopanResult
 import xyz.yophon.gopan.core.network.toGopanException
+import xyz.yophon.gopan.core.offline.OfflineRepository
 import xyz.yophon.gopan.core.transfer.PackResult
 import xyz.yophon.gopan.core.transfer.TransferActions
 import xyz.yophon.gopan.feature.preview.PreviewSessionStore
@@ -61,6 +62,9 @@ sealed interface NodeDialog {
 
     /** 文件的历史版本(doc/24);token 让每次打开都重新加载 */
     data class Versions(val node: Node, val token: Long = System.nanoTime()) : NodeDialog
+
+    /** 加入离线可用前确认(doc/26):文件夹、大文件;[bytes] 是云端大小(文件夹可能是估算),[metered] 正在用移动数据 */
+    data class ConfirmOffline(val nodes: List<Node>, val bytes: Long, val metered: Boolean) : NodeDialog
 }
 
 sealed interface NodeEffect {
@@ -160,6 +164,42 @@ abstract class NodeActionsViewModel(
         val starred = !nodes.all { it.starred }
         val msg = if (starred) UiText.Res(R.string.drive_msg_starred, nodes.size) else UiText.Res(R.string.drive_msg_unstarred)
         runMutation(msg) { repo.setStarred(nodes.map { it.id }, starred) }
+    }
+
+    /**
+     * 离线可用(doc/26):都加过了就移除(副本一起删);否则把没加过的加进去 ——
+     * 文件夹或加起来超过 [OFFLINE_CONFIRM_BYTES] 的先确认(写明大小、是不是在用流量),手机空间不够的直接提示。
+     */
+    fun toggleOffline(nodes: List<Node>, pinned: Set<String>) {
+        if (nodes.isEmpty()) return
+        closeDialog()
+        viewModelScope.launch {
+            if (nodes.all { it.id in pinned }) {
+                transfers.unpinOffline(nodes.map { it.id })
+                send(NodeEffect.Message(UiText.Res(R.string.offline_msg_removed)))
+                return@launch
+            }
+            val todo = nodes.filter { it.id !in pinned }
+            val bytes = todo.sumOf { OfflineRepository.sizeOf(it) ?: 0L }
+            when {
+                bytes > transfers.freeSpace() -> send(NodeEffect.Message(UiText.Res(R.string.offline_msg_no_space)))
+                todo.any { it.isFolder } || bytes >= OFFLINE_CONFIRM_BYTES ->
+                    showDialog(NodeDialog.ConfirmOffline(todo, bytes, metered = !transfers.isUnmetered()))
+                else -> pinOffline(todo)
+            }
+        }
+    }
+
+    fun confirmOffline(nodes: List<Node>) {
+        closeDialog()
+        viewModelScope.launch { pinOffline(nodes) }
+    }
+
+    private suspend fun pinOffline(nodes: List<Node>) {
+        if (transfers.pinOffline(nodes) > 0) {
+            send(NodeEffect.Message(UiText.Res(R.string.offline_msg_added)))
+            send(NodeEffect.TransferQueued)
+        }
     }
 
     /** 历史版本里恢复 / 删除过:文件的大小与时间可能变了,静默刷新列表 */
@@ -317,7 +357,13 @@ abstract class NodeActionsViewModel(
         else -> UiText.Plain(e.message ?: e.code)
     }
 
-    private companion object {
-        val INPUT_ERROR_CODES = setOf(GopanErrors.NAME_CONFLICT, GopanErrors.INVALID_INPUT)
+    companion object {
+        private val INPUT_ERROR_CODES = setOf(GopanErrors.NAME_CONFLICT, GopanErrors.INVALID_INPUT)
+
+        /** 加入离线可用时超过这个大小先确认 */
+        const val OFFLINE_CONFIRM_BYTES = 100L * 1024 * 1024
+
+        /** 确认框里额外提醒「比较大」 */
+        const val OFFLINE_LARGE_BYTES = 1L shl 30
     }
 }

@@ -14,11 +14,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.automirrored.outlined.TextSnippet
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.OfflinePin
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.AudioFile
 import androidx.compose.material.icons.outlined.Description
@@ -42,6 +44,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,13 +57,13 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -72,10 +75,11 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.Node
+import xyz.yophon.gopan.core.offline.OfflineMarks
 import xyz.yophon.gopan.core.ui.components.FolderGlyph
-import xyz.yophon.gopan.core.ui.theme.LocalGopanColors
 import xyz.yophon.gopan.core.ui.format.formatBytes
 import xyz.yophon.gopan.core.ui.format.formatRelativeTime
+import xyz.yophon.gopan.core.ui.theme.LocalGopanColors
 
 /*
  * 节点的行 / 卡片 / 图标:文件页、搜索页、回收站、目录选择器共用。
@@ -223,6 +227,7 @@ fun NodeRow(
         supportingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (node.starred) StarMark(Modifier.padding(end = 4.dp))
+                if (LocalOfflineMarks.current.has(node.id)) OfflineMark(Modifier.padding(end = 4.dp))
                 Text(
                     secondary,
                     maxLines = 1,
@@ -281,7 +286,10 @@ fun NodeCard(
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         ) {
             NodeVisual(node, modifier = Modifier.fillMaxSize(), iconSize = 48.dp, shape = RectangleShape, onThumbError = onThumbError)
-            if (node.starred) StarMark(Modifier.align(Alignment.BottomStart).padding(8.dp), size = 18.dp)
+            Row(Modifier.align(Alignment.BottomStart).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (node.starred) StarMark(size = 18.dp)
+                if (LocalOfflineMarks.current.has(node.id)) OfflineMark(size = 18.dp, onImage = true)
+            }
             if (selectionMode) {
                 Checkbox(
                     checked = selected,
@@ -331,6 +339,20 @@ fun StarMark(modifier: Modifier = Modifier, size: Dp = 14.dp) {
         contentDescription = stringResource(R.string.drive_starred),
         tint = StarTint,
         modifier = modifier.size(size),
+    )
+}
+
+/** 列表上的离线标记(doc/26):主界面在最外层提供,没提供时(预览、测试)什么都不标 */
+val LocalOfflineMarks = compositionLocalOf { OfflineMarks() }
+
+/** 手机上有副本、没网也能打开(doc/26);[onImage] 盖在缩略图上时加一圈底色 */
+@Composable
+fun OfflineMark(modifier: Modifier = Modifier, size: Dp = 14.dp, onImage: Boolean = false) {
+    Icon(
+        Icons.Filled.OfflinePin,
+        contentDescription = stringResource(R.string.offline_mark),
+        tint = MaterialTheme.colorScheme.primary,
+        modifier = if (onImage) modifier.size(size).background(MaterialTheme.colorScheme.surface, CircleShape) else modifier.size(size),
     )
 }
 

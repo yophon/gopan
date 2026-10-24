@@ -28,6 +28,7 @@ import xyz.yophon.gopan.graphql.RequestPreviewMutation
 import xyz.yophon.gopan.graphql.type.TaskStatus
 import java.io.File
 import java.io.IOException
+import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Named
@@ -133,7 +134,8 @@ class DefaultPreviewRepository @Inject constructor(
     private val pdfLocks = ConcurrentHashMap<String, Mutex>()
 
     override suspend fun pdfFile(url: String, key: String, onProgress: (Long, Long?) -> Unit): File =
-        pdfLocks.getOrPut(key) { Mutex() }.withLock { downloadPdf(url, key, onProgress) }
+        // 离线副本(doc/26):本来就在手机上
+        if (url.startsWith("file:")) File(URI(url)) else pdfLocks.getOrPut(key) { Mutex() }.withLock { downloadPdf(url, key, onProgress) }
 
     private suspend fun downloadPdf(url: String, key: String, onProgress: (Long, Long?) -> Unit): File =
         withContext(Dispatchers.IO) {

@@ -27,6 +27,10 @@ class FakeTransferActions : TransferActions {
     val packed = mutableListOf<List<Node>>()
     val opened = mutableListOf<Node>()
     val sent = mutableListOf<Node>()
+    val pinned = mutableListOf<List<Node>>()
+    val unpinned = mutableListOf<List<String>>()
+    var unmetered = true
+    var free = Long.MAX_VALUE
     var packResult: PackResult = PackResult.Queued
     var needsPermission = false
 
@@ -93,4 +97,17 @@ class FakeTransferActions : TransferActions {
     }
 
     override suspend fun needsStoragePermission(): Boolean = needsPermission
+
+    override suspend fun pinOffline(nodes: List<Node>): Int {
+        pinned += nodes
+        return nodes.size
+    }
+
+    override suspend fun unpinOffline(ids: List<String>) {
+        unpinned += ids
+    }
+
+    override fun isUnmetered(): Boolean = unmetered
+
+    override fun freeSpace(): Long = free
 }

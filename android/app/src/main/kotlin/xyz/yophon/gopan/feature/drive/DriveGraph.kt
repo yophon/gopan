@@ -53,6 +53,7 @@ fun NavGraphBuilder.driveGraph(navController: NavController, onOpenPreview: (nod
                 onOpenTransfers = { entry.ifResumed { navController.navigate(Routes.Transfers) } },
                 onOpenPreview = { id -> entry.ifResumed { onOpenPreview(id) } },
                 onOpenRecentPlays = { entry.ifResumed { navController.navigate(Routes.RecentPlays) } },
+                onOpenOffline = { route -> entry.ifResumed { navController.navigate(route) } },
                 onBack = { entry.ifResumed { navController.popBackStack() } },
             )
         }

@@ -59,6 +59,7 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.hilt.navigation.compose.hiltViewModel
+import xyz.yophon.gopan.feature.drive.LocalOfflineMarks
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -215,7 +216,9 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
         clipOpen.consume(nodeId)
     }
 
-    CompositionLocalProvider(LocalTabReselect provides reselect) {
+    // 列表上的离线标记(doc/26):文件页、搜索、收藏 / 最近都读它
+    val offlineMarks by viewModel.offlineMarks.collectAsStateWithLifecycle()
+    CompositionLocalProvider(LocalTabReselect provides reselect, LocalOfflineMarks provides offlineMarks) {
         Row(Modifier.fillMaxSize()) {
             if (rail) {
                 NavigationRail(modifier = Modifier.testTag("main_rail")) {

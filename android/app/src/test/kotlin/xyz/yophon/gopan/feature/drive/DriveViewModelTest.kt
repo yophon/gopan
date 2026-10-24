@@ -1,6 +1,7 @@
 package xyz.yophon.gopan.feature.drive
 
 import androidx.lifecycle.SavedStateHandle
+import app.cash.turbine.Event
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CompletableDeferred
@@ -80,6 +81,53 @@ class DriveViewModelTest {
         advanceUntilIdle()
         assertThat(vm.dialog.value).isNull()
         assertThat(transfers.uploadedUris).hasSize(3)
+    }
+
+    @Test
+    fun `offline pins small files at once, asks first for folders and big files, removes when all are pinned`() = runTest {
+        val small = file("s", "小.txt", size = 1_000)
+        val big = file("b", "大.mkv", size = 3L shl 30)
+        val dir = folder("d", "照片").copy(subtreeBytes = 50)
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.toggleOffline(listOf(small), pinned = emptySet())
+        advanceUntilIdle()
+        assertThat(transfers.pinned.single()).containsExactly(small)
+        assertThat(vm.dialog.value).isNull()
+
+        transfers.unmetered = false
+        vm.toggleOffline(listOf(big, dir), pinned = emptySet())
+        advanceUntilIdle()
+        val ask = vm.dialog.value as NodeDialog.ConfirmOffline
+        assertThat(ask.nodes).containsExactly(big, dir).inOrder()
+        assertThat(ask.bytes).isEqualTo((3L shl 30) + 50)
+        assertThat(ask.metered).isTrue()
+        vm.confirmOffline(ask.nodes)
+        advanceUntilIdle()
+        assertThat(vm.dialog.value).isNull()
+        assertThat(transfers.pinned.last()).containsExactly(big, dir)
+
+        // 有的加过有的没加:只加没加过的
+        vm.toggleOffline(listOf(small, file("t")), pinned = setOf("s"))
+        advanceUntilIdle()
+        assertThat(transfers.pinned.last().map { it.id }).containsExactly("t")
+
+        // 都加过:移除
+        vm.toggleOffline(listOf(small, big), pinned = setOf("s", "b"))
+        advanceUntilIdle()
+        assertThat(transfers.unpinned.single()).containsExactly("s", "b")
+
+        // 手机放不下:不加,提示
+        transfers.free = 10
+        vm.effects.test {
+            vm.toggleOffline(listOf(file("u", size = 100)), pinned = emptySet())
+            advanceUntilIdle()
+            // 前面几步的提示还在通道里,看最后一条
+            val messages = cancelAndConsumeRemainingEvents().mapNotNull { ((it as? Event.Item)?.value as? NodeEffect.Message)?.text as? UiText.Res }
+            assertThat(messages.last().id).isEqualTo(R.string.offline_msg_no_space)
+        }
+        assertThat(transfers.pinned).hasSize(3)
     }
 
     @Test

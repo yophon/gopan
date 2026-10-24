@@ -61,6 +61,8 @@ class DownloadRun(
     private val sleep: suspend (Long) -> Unit = { delay(it) },
     /** 可用空间检查(测试里替换) */
     private val usableSpace: (File) -> Long = { it.usableSpace },
+    /** 离线可用:手机上已有同内容的副本就直接用,返回它的路径(doc/26) */
+    private val offlineCopy: (suspend (nodeId: String, sha256: String, size: Long) -> String?)? = null,
 ) {
     suspend fun execute(): DownloadOutcome = try {
         when (task.kind) {
@@ -113,7 +115,16 @@ class DownloadRun(
                 return DownloadOutcome.Done(it.absolutePath)
             }
         }
-        val needSpace = (size - part.length()).coerceAtLeast(0) + (if (task.dest == DownloadDest.OPEN_WITH) 0 else size) + SPACE_MARGIN
+        // 离线可用、打开方式:手机上有同内容的离线副本就直接用
+        if ((task.dest == DownloadDest.OFFLINE || task.dest == DownloadDest.OPEN_WITH) && cacheKey != null) {
+            offlineCopy?.invoke(requireNotNull(task.nodeId), cacheKey, size)?.let {
+                part.delete()
+                return DownloadOutcome.Done(it)
+            }
+        }
+        // 打开方式与离线可用是在同一分区里改名,不多占一份
+        val inPlace = task.dest == DownloadDest.OPEN_WITH || task.dest == DownloadDest.OFFLINE
+        val needSpace = (size - part.length()).coerceAtLeast(0) + (if (inPlace) 0 else size) + SPACE_MARGIN
         if (usableSpace(partsDir) < needSpace) throw DownloadFailure(TransferErrors.noSpace())
 
         var checksumFailures = 0

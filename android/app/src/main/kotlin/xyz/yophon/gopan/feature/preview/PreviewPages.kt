@@ -108,6 +108,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -143,6 +144,7 @@ import xyz.yophon.gopan.core.ui.components.doubleTapZoom
 import xyz.yophon.gopan.core.ui.components.rememberZoomState
 import xyz.yophon.gopan.core.ui.components.zoomable
 import java.io.File
+import java.net.URI
 
 /** 预览页上的文字颜色(背景恒为黑) */
 internal val OnPreview = Color(0xFFECECEC)
@@ -309,7 +311,8 @@ internal fun ImagePage(
     val context = LocalPlatformContext.current
     val request = remember(content) {
         ImageRequest.Builder(context)
-            .data(content.url)
+            // 离线副本(doc/26)直接给 File
+            .data(if (content.url.startsWith("file:")) File(URI(content.url)) else content.url)
             .memoryCacheKey(content.cacheKey)
             .diskCacheKey(content.cacheKey)
             .placeholderMemoryCacheKey(item.thumbKey)
@@ -376,7 +379,8 @@ internal fun VideoPage(
     var ended by remember { mutableStateOf(false) }
     val player = remember {
         ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(OkHttpDataSource.Factory(client)))
+            // DefaultDataSource:http(s) 交给 OkHttp,离线副本的 file:// 直接读文件(doc/26)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(DefaultDataSource.Factory(context, OkHttpDataSource.Factory(client))))
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
                 true,

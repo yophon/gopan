@@ -8,8 +8,11 @@ import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.network.await
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.IOException
 import java.io.InputStream
+import java.io.RandomAccessFile
+import java.net.URI
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.Charset
@@ -35,6 +38,8 @@ class TextFetcher(private val client: OkHttpClient) {
 
     suspend fun fetch(url: String, offset: Long = 0, charset: String? = null, maxBytes: Int = PreviewRepository.TEXT_MAX_BYTES): TextContent =
         withContext(Dispatchers.IO) {
+            // 离线副本(doc/26):直接读手机上的文件
+            if (url.startsWith("file:")) return@withContext readLocal(File(URI(url)), offset, charset, maxBytes)
             val request = Request.Builder().url(url).header("Accept-Encoding", "identity")
                 .header("Range", "bytes=$offset-${offset + maxBytes - 1}").build()
             val response = try {
@@ -63,6 +68,22 @@ class TextFetcher(private val client: OkHttpClient) {
         }
 
     companion object {
+        /** 本地文件的一段(与 Range 请求同样的切法与解码) */
+        fun readLocal(file: File, offset: Long, charset: String?, maxBytes: Int = PreviewRepository.TEXT_MAX_BYTES): TextContent {
+            val total = file.length()
+            if (!file.isFile) throw GopanException(GopanErrors.HTTP, "手机上的副本不见了")
+            if (offset >= total) return TextContent("", truncated = false, charset = charset ?: "UTF-8", nextOffset = offset, totalBytes = total)
+            val bytes = try {
+                RandomAccessFile(file, "r").use { raf ->
+                    raf.seek(offset)
+                    ByteArray(minOf(maxBytes.toLong(), total - offset).toInt()).also { raf.readFully(it) }
+                }
+            } catch (e: IOException) {
+                throw GopanException(GopanErrors.HTTP, "读取失败", cause = e)
+            }
+            return decode(bytes, truncated = total > offset + bytes.size, offset = offset, charset = charset).copy(totalBytes = total)
+        }
+
         fun contentRangeTotal(header: String?): Long? = header?.substringAfterLast('/', "")?.toLongOrNull()
 
         /**

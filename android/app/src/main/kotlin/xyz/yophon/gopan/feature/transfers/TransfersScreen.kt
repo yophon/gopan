@@ -324,6 +324,7 @@ private fun DownloadItem(row: DownloadRow, viewModel: TransfersViewModel, choose
             DownloadDest.DOWNLOADS -> stringResource(R.string.transfer_saved_to_downloads)
             DownloadDest.TREE -> stringResource(R.string.transfer_saved_to_folder)
             DownloadDest.OPEN_WITH -> stringResource(R.string.transfer_state_done)
+            DownloadDest.OFFLINE -> stringResource(R.string.transfer_saved_offline)
         }
         TransferState.CANCELED -> ""
     }

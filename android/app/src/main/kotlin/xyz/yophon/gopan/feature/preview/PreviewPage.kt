@@ -22,8 +22,13 @@ import xyz.yophon.gopan.core.data.preview.PreviewInfo
 import xyz.yophon.gopan.core.data.preview.PreviewRepository
 import xyz.yophon.gopan.core.data.preview.TextContent
 import xyz.yophon.gopan.core.network.gopanResult
+import xyz.yophon.gopan.core.offline.LocalCopy
+import xyz.yophon.gopan.core.offline.OfflineLookup
+import xyz.yophon.gopan.core.offline.uri
 import xyz.yophon.gopan.feature.archive.ArchiveSummary
 import xyz.yophon.gopan.feature.archive.summary
+import xyz.yophon.gopan.feature.drive.FileCategory
+import xyz.yophon.gopan.feature.drive.fileCategory
 import java.io.File
 
 /** 一页预览的内容 */
@@ -96,6 +101,8 @@ class PreviewPage(
     private val repo: PreviewRepository,
     private val scope: CoroutineScope,
     private val archives: ArchiveRepository,
+    /** 离线副本(doc/26):没网时用它预览;有网且内容没变时原文件也从它读 */
+    private val offline: OfflineLookup? = null,
 ) {
     private val _state = MutableStateFlow(PreviewPageState())
     val state: StateFlow<PreviewPageState> = _state.asStateFlow()
@@ -201,9 +208,21 @@ class PreviewPage(
         markdownSource = null
         set(PreviewContent.Loading)
         job = scope.launch {
-            val info = gopanResult { repo.preview(nodeId) }.getOrElse {
-                set(PreviewContent.Error(it.message ?: "加载失败"))
-                return@launch
+            val copy = offline?.localCopy(nodeId)
+            val info = if (copy != null && offline?.isOnline() == false) {
+                localPreviewInfo(copy)
+            } else {
+                gopanResult { repo.preview(nodeId) }.fold(
+                    onSuccess = { if (copy != null) withLocalCopy(it, copy) else it },
+                    // 取不到预览信息(断网、云端已删):有副本就看副本
+                    onFailure = {
+                        if (copy == null) {
+                            set(PreviewContent.Error(it.message ?: "加载失败"))
+                            return@launch
+                        }
+                        localPreviewInfo(copy)
+                    },
+                )
             }
             _state.update { it.copy(info = info) }
             prepare(info)
@@ -337,3 +356,45 @@ fun PreviewInfo.toNode(): Node = Node(
     mime = mime,
     updatedAt = updatedAt,
 )
+
+/**
+ * 离线副本当预览信息(没网、或取不到预览信息时,doc/26):类型按名字与 mime 猜(图片、音视频、PDF、文本能直接看,
+ * 其余显示「用其他应用打开」),内容地址是手机上的文件。Markdown 没有渲染服务,按文本看。
+ */
+fun localPreviewInfo(copy: LocalCopy): PreviewInfo = PreviewInfo(
+    nodeId = copy.nodeId,
+    parentId = null,
+    name = copy.name,
+    size = copy.size,
+    mime = copy.mime,
+    sha256 = copy.sha256,
+    updatedAt = null,
+    kind = localPreviewKind(copy.name, copy.mime),
+    thumbUrl = null,
+    largeUrl = null,
+    contentUrl = copy.uri,
+    status = null,
+    durationSec = null,
+)
+
+fun localPreviewKind(name: String, mime: String?): PreviewKind = when (fileCategory(NodeKind.FILE, name, mime)) {
+    FileCategory.IMAGE -> PreviewKind.IMAGE
+    FileCategory.VIDEO -> PreviewKind.VIDEO
+    FileCategory.AUDIO -> PreviewKind.AUDIO
+    FileCategory.PDF -> PreviewKind.PDF
+    FileCategory.TEXT -> PreviewKind.TEXT
+    else -> PreviewKind.NONE
+}
+
+/**
+ * 有网时取到的预览信息:内容没变(sha256 一样)就把原文件地址换成手机上的副本 —— 图片看原图、音视频与 PDF 不用再下;
+ * 内容变了照常看云端最新的。Office 的派生 PDF、压缩包照旧走服务端。
+ */
+fun withLocalCopy(info: PreviewInfo, copy: LocalCopy): PreviewInfo {
+    if (info.sha256 == null || info.sha256 != copy.sha256) return info
+    return when (info.kind) {
+        PreviewKind.IMAGE -> info.copy(contentUrl = copy.uri, largeUrl = null)
+        PreviewKind.VIDEO, PreviewKind.AUDIO, PreviewKind.PDF, PreviewKind.NATIVE_PDF, PreviewKind.TEXT -> info.copy(contentUrl = copy.uri)
+        else -> info
+    }
+}

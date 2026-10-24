@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import xyz.yophon.gopan.core.offline.OfflineStore
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileNotFoundException
@@ -54,7 +55,7 @@ interface SourceReader {
  * 上传来源与传输用的私有文件:
  * - 读:content:// 与 file:// 统一成"从某个偏移开始的 InputStream";
  * - 哈希:1 MiB 缓冲流式 SHA-256(小写 hex),可顺手拷一份到私有目录(不可 seek 的来源);
- * - 私有目录:filesDir/transfers/{incoming,camera,text,copies,parts};"打开方式"的文件在 cacheDir/open。
+ * - 私有目录:filesDir/transfers/{incoming,camera,text,copies,parts};"打开方式"的文件在 cacheDir/open;离线副本在 filesDir/offline。
  */
 @Singleton
 class SourceStore @Inject constructor(
@@ -84,6 +85,12 @@ class SourceStore @Inject constructor(
 
     /** "用其他应用打开":按 sha256 分目录缓存 */
     val openDir: File get() = File(context.cacheDir, "open")
+
+    /** 离线可用(doc/26)的副本:filesDir/offline/<离线项 id>/<文件 id>/<名字>;不在 [root] 下,由离线模块自己清 */
+    val offlineDir: File get() = File(context.filesDir, "offline")
+
+    /** 离线下载校验完先挪到这里,再由离线模块放到位(同一分区,改名即可) */
+    val offlineInbox: File get() = File(offlineDir, OfflineStore.INBOX)
 
     // ---- 读 ----
 

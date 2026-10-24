@@ -8,6 +8,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okio.Buffer
 import org.junit.After
 import org.junit.Test
+import java.io.File
 import java.nio.charset.Charset
 
 class TextFetcherTest {
@@ -23,6 +24,23 @@ class TextFetcherTest {
         return MockResponse().setResponseCode(206)
             .setHeader("Content-Range", "bytes $from-${end - 1}/${all.size}")
             .setBody(Buffer().write(all.copyOfRange(from, end)))
+    }
+
+    @Test
+    fun `an offline copy is read from the file in the same segments`() = runBlocking {
+        val all = "汉字ab".toByteArray()
+        val file = File.createTempFile("text", ".txt").apply { writeBytes(all); deleteOnExit() }
+
+        val first = fetcher.fetch(file.toURI().toString(), maxBytes = 4)
+        assertThat(first.text).isEqualTo("汉")
+        assertThat(first.truncated).isTrue()
+        assertThat(first.nextOffset).isEqualTo(3)
+        assertThat(first.totalBytes).isEqualTo(8)
+
+        val rest = fetcher.fetch(file.toURI().toString(), offset = first.nextOffset, charset = first.charset, maxBytes = 8)
+        assertThat(rest.text).isEqualTo("字ab")
+        assertThat(rest.truncated).isFalse()
+        assertThat(server.requestCount).isEqualTo(0)
     }
 
     @Test

@@ -399,6 +399,12 @@ class DriveViewModel @Inject constructor(
         download(nodes)
     }
 
+    fun offlineSelected(pinned: Set<String>) {
+        val nodes = _state.value.selectedNodes
+        clearSelection()
+        toggleOffline(nodes, pinned)
+    }
+
     fun packSelected() {
         val nodes = _state.value.selectedNodes
         clearSelection()

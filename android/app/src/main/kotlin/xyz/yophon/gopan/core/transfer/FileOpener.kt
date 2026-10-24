@@ -46,15 +46,25 @@ class FileOpener @Inject constructor(
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
+    /** 手机上已有的文件(离线副本,doc/26)直接弹"用其他应用打开";没有能打开的应用返回 false */
+    fun openFile(file: File, name: String, mime: String?, title: String): Boolean {
+        val uri = fileUri(file) ?: return false
+        val view = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, AndroidDownloadPublisher.mimeFor(name, mime))
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        return start(Intent.createChooser(view, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     /** 弹"用其他应用打开"选择器;没有能打开的应用返回 false */
     fun openWith(task: DownloadTaskEntity, title: String): Boolean {
         val view = viewIntent(task) ?: return false
-        val chooser = Intent.createChooser(view, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return try {
-            context.startActivity(chooser)
-            true
-        } catch (e: ActivityNotFoundException) {
-            false
-        }
+        return start(Intent.createChooser(view, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    private fun start(intent: Intent): Boolean = try {
+        context.startActivity(intent)
+        true
+    } catch (e: ActivityNotFoundException) {
+        false
     }
 }

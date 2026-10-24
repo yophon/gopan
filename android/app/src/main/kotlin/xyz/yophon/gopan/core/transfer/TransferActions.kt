@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -13,8 +14,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import xyz.yophon.gopan.core.transfer.db.UploadTaskEntity
 import kotlinx.coroutines.withContext
+import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.chat.ChatRepository
+import xyz.yophon.gopan.core.offline.OfflineRepository
 import xyz.yophon.gopan.core.prefs.UserPreferencesRepository
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -89,6 +92,18 @@ interface TransferActions {
     suspend fun sendToChat(node: Node)
 
     suspend fun needsStoragePermission(): Boolean
+
+    /** 离线可用(doc/26):加入,返回新加的个数(已经加过的跳过) */
+    suspend fun pinOffline(nodes: List<Node>): Int
+
+    /** 离线可用:移除,手机上的副本一起删 */
+    suspend fun unpinOffline(ids: List<String>)
+
+    /** 现在用的是不计流量的网络(Wi-Fi 等) */
+    fun isUnmetered(): Boolean
+
+    /** App 私有目录所在分区的剩余空间 */
+    fun freeSpace(): Long
 }
 
 @Singleton
@@ -99,6 +114,9 @@ class DefaultTransferActions @Inject constructor(
     private val prefs: UserPreferencesRepository,
     private val openRequests: OpenRequests,
     private val chat: ChatRepository,
+    private val offline: OfflineRepository,
+    private val network: NetworkMonitor,
+    private val opener: FileOpener,
 ) : TransferActions {
     override val events: Flow<TransferEvent> get() = engine.events
 
@@ -199,8 +217,19 @@ class DefaultTransferActions @Inject constructor(
         return PackResult.Queued
     }
 
-    /** 下到缓存后弹"用其他应用打开" */
+    /**
+     * 下到缓存后弹"用其他应用打开"。没网时手机上有离线副本就直接打开它(有网时照常取最新的,
+     * 内容没变的话下载那一步会直接用离线副本,不重下)
+     */
     override suspend fun open(node: Node): Boolean {
+        if (!network.isOnline()) {
+            offline.localCopy(node.id)?.let { copy ->
+                if (!opener.openFile(copy.file, copy.name, copy.mime, context.getString(R.string.drive_action_open))) {
+                    withContext(Dispatchers.Main) { Toast.makeText(context, R.string.transfer_msg_no_app, Toast.LENGTH_SHORT).show() }
+                }
+                return false
+            }
+        }
         val id = engine.enqueueFile(node, DownloadDest.OPEN_WITH) ?: return false
         openRequests.add(id)
         return true
@@ -209,6 +238,14 @@ class DefaultTransferActions @Inject constructor(
     override suspend fun sendToChat(node: Node) {
         chat.sendNode(node.id)
     }
+
+    override suspend fun pinOffline(nodes: List<Node>): Int = offline.pin(normalize(nodes))
+
+    override suspend fun unpinOffline(ids: List<String>) = offline.unpin(ids)
+
+    override fun isUnmetered(): Boolean = network.isUnmetered()
+
+    override fun freeSpace(): Long = context.filesDir.usableSpace
 
     private suspend fun destination(): Pair<DownloadDest, String?> {
         val tree = prefs.preferences.first().transfer.downloadTreeUri

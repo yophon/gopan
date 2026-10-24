@@ -8,6 +8,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import xyz.yophon.gopan.core.offline.OfflineMarks
+import xyz.yophon.gopan.core.offline.OfflineRepository
 import xyz.yophon.gopan.core.share.AppNavRequests
 import xyz.yophon.gopan.core.share.NavRequest
 import xyz.yophon.gopan.core.transfer.AppVisibility
@@ -32,7 +34,11 @@ class MainScaffoldViewModel @Inject constructor(
     private val opener: FileOpener,
     private val tabRequest: TransfersTabRequest,
     prefetch: StartupPrefetch,
+    offline: OfflineRepository,
 ) : ViewModel() {
+
+    /** 列表上的离线标记(doc/26) */
+    val offlineMarks: StateFlow<OfflineMarks> = offline.marks
 
     val navRequest: StateFlow<NavRequest?> = navRequests.request
 

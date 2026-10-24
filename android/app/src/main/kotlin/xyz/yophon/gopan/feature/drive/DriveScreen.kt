@@ -48,6 +48,7 @@ import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.OfflinePin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
@@ -59,6 +60,7 @@ import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.OfflinePin
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.SelectAll
@@ -83,6 +85,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -159,6 +162,8 @@ fun DriveScreen(
     onOpenRecentPlays: () -> Unit = {},
     /** 网盘首页顶上的「收藏」「最近」入口(doc/24);true = 最近 */
     onOpenQuick: (recent: Boolean) -> Unit = {},
+    /** 离线可用的文件夹没网打不开时,去看手机上的副本(doc/26) */
+    onOpenOffline: (Routes.OfflineFolder) -> Unit = {},
     viewModel: DriveViewModel = hiltViewModel(),
     fetchViewModel: FetchViewModel = hiltViewModel(),
     // 「复制直链」:与 NodeDialogHost 里的是同一个实例(同一个导航条目),对话框与提示由它画
@@ -290,6 +295,7 @@ fun DriveScreen(
                 state = state,
                 viewModel = viewModel,
                 onOpenQuick = onOpenQuick,
+                onOpenOffline = onOpenOffline,
                 bottomPadding = padding.calculateBottomPadding(),
                 modifier = (
                     if (state.isRoot && !state.selectionMode) {
@@ -519,6 +525,17 @@ private fun SelectionMoreMenu(state: DriveUiState, viewModel: DriveViewModel, on
                 },
                 leadingIcon = { Icon(if (allStarred) Icons.Outlined.Star else Icons.Outlined.StarOutline, contentDescription = null) },
             )
+            // 离线可用(doc/26):都加过了就是「取消离线可用」
+            val offlinePinned = LocalOfflineMarks.current.pinned
+            val allOffline = state.selectedNodes.isNotEmpty() && state.selectedNodes.all { it.id in offlinePinned }
+            DropdownMenuItem(
+                text = { Text(stringResource(if (allOffline) R.string.offline_action_unpin else R.string.offline_action_pin)) },
+                onClick = {
+                    expanded = false
+                    viewModel.offlineSelected(offlinePinned)
+                },
+                leadingIcon = { Icon(if (allOffline) Icons.Filled.OfflinePin else Icons.Outlined.OfflinePin, contentDescription = null) },
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.drive_action_copy)) },
                 onClick = {
@@ -647,13 +664,27 @@ private fun DriveContent(
     state: DriveUiState,
     viewModel: DriveViewModel,
     onOpenQuick: (recent: Boolean) -> Unit,
+    onOpenOffline: (Routes.OfflineFolder) -> Unit,
     modifier: Modifier = Modifier,
     bottomPadding: Dp = 0.dp,
 ) {
     PullToRefreshBox(isRefreshing = state.isRefreshing, onRefresh = viewModel::refresh, modifier = modifier) {
         when (val status = state.status) {
             ListStatus.Loading -> if (state.viewMode == DriveViewMode.LIST) ListSkeleton() else GridSkeleton()
-            is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
+            is ListStatus.Error -> FullPage {
+                // 加过离线可用的文件夹没网打不开:手机上有它的副本(doc/26)
+                val folderId = viewModel.parentId
+                val offline = folderId != null && folderId in LocalOfflineMarks.current.pinned
+                ErrorState(
+                    status.message,
+                    onRetry = viewModel::retry,
+                    extra = if (offline && folderId != null) {
+                        { OutlinedButton(onClick = { onOpenOffline(Routes.OfflineFolder(rootId = folderId)) }) { Text(stringResource(R.string.offline_open_copy)) } }
+                    } else {
+                        null
+                    },
+                )
+            }
             ListStatus.Content -> Column(modifier = Modifier.fillMaxSize()) {
                 // 先显示缓存、联网还没回来时不算离线:不出提示条,只在顶上压一条细进度
                 if (state.fromCache && !state.revalidating) OfflineBanner(fetchedAt = state.fetchedAt, onRetry = viewModel::refresh)

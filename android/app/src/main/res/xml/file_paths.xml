@@ -9,5 +9,7 @@
     <files-path name="crash" path="crash/" />
     <!-- 压缩包里单独取出来的文件(用其他应用打开、分享) -->
     <cache-path name="archive" path="archive-entry/" />
+    <!-- 离线可用的副本(doc/26):用其他应用打开、通知里点开 -->
+    <files-path name="offline" path="offline/" />
     <external-path name="downloads" path="Download/gopan/" />
 </paths>

@@ -164,6 +164,8 @@ fun ErrorState(
     message: String,
     modifier: Modifier = Modifier,
     onRetry: (() -> Unit)? = null,
+    /** 重试下面再放一个按钮(例如没网时「打开手机上的副本」) */
+    extra: (@Composable () -> Unit)? = null,
 ) {
     Box(modifier = modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -182,6 +184,7 @@ fun ErrorState(
             if (onRetry != null) {
                 Button(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
             }
+            extra?.invoke()
         }
     }
 }
