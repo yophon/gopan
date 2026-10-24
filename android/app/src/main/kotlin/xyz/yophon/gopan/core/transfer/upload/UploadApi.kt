@@ -43,7 +43,8 @@ sealed interface InitResult {
  */
 interface UploadApi {
     /** 不幂等:每调一次都建一个新会话(秒传时建一个新节点),只在确认上一次没发出去时重试 */
-    suspend fun init(parentId: String?, name: String, sha256: String, size: Long): InitResult
+    /** [replace]:目标位置有同名文件就覆盖它(旧内容进历史版本),而不是自动改名 */
+    suspend fun init(parentId: String?, name: String, sha256: String, size: Long, replace: Boolean = false): InitResult
 
     /** 只读:已传分片 + 缺失分片的新签名;非 uploading 状态返回快照(partUrls 为空) */
     suspend fun session(id: String): SessionInfo
@@ -60,13 +61,14 @@ interface UploadApi {
 @Singleton
 class ApolloUploadApi @Inject constructor(private val apollo: ApolloClient) : UploadApi {
 
-    override suspend fun init(parentId: String?, name: String, sha256: String, size: Long): InitResult {
+    override suspend fun init(parentId: String?, name: String, sha256: String, size: Long, replace: Boolean): InitResult {
         val data = apollo.mutation(
             InitUploadMutation(
                 parentId = Optional.presentIfNotNull(parentId),
                 name = name,
                 sha256 = sha256,
                 size = size,
+                replace = Optional.present(replace),
             ),
         ).execute().requireData().initUpload
         val node = data.node?.nodeItem

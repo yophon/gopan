@@ -13,6 +13,8 @@ interface PreviewState {
   index: number
   /** PDF 打开时先翻到的页(内容搜索命中页),按节点 id */
   pages: Record<string, number>
+  /** 打开后直接进入编辑的节点(刚新建的文本文件,doc/25);进入后清掉 */
+  editOnOpen: string | null
 }
 
 export const previewState = reactive<PreviewState>({
@@ -20,12 +22,14 @@ export const previewState = reactive<PreviewState>({
   ids: [],
   index: 0,
   pages: {},
+  editOnOpen: null,
 })
 
-export function openPreview(ids: string[], index: number, pages: Record<string, number> = {}): void {
+export function openPreview(ids: string[], index: number, pages: Record<string, number> = {}, opts: { edit?: boolean } = {}): void {
   if (ids.length === 0) return
   previewState.ids = [...ids]
   previewState.pages = { ...pages }
+  previewState.editOnOpen = opts.edit ? (ids[Math.min(Math.max(index, 0), ids.length - 1)] ?? null) : null
   const i = Number.isFinite(index) ? index : 0
   previewState.index = Math.min(Math.max(i, 0), ids.length - 1)
   previewState.visible = true

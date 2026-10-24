@@ -100,6 +100,11 @@ import xyz.yophon.gopan.feature.media.followPage
 import xyz.yophon.gopan.feature.media.pdfStartPage
 import xyz.yophon.gopan.feature.shares.ShareCreateDialog
 import xyz.yophon.gopan.core.ui.exposeTestTags
+import androidx.compose.material.icons.outlined.Edit
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import xyz.yophon.gopan.core.ui.nav.LocalOpenTextEditor
+import xyz.yophon.gopan.core.data.PreviewKind
 
 private class PdfZoomRequest(val doc: PdfDocument, val page: Int)
 
@@ -215,6 +220,15 @@ private fun PreviewBody(onBack: () -> Unit, viewModel: PreviewViewModel, session
     val currentIndex = pagerState.currentPage.coerceIn(0, items.lastIndex)
     val currentItem = items[currentIndex]
     val currentPage = remember(currentItem.nodeId) { viewModel.page(currentItem.nodeId) }
+    val openTextEditor = LocalOpenTextEditor.current
+    // 去编辑过的那一页:回到预览时重新加载(内容可能改了)。去编辑页时预览离开了组合,要用 rememberSaveable 才留得住
+    var editedId by rememberSaveable { mutableStateOf<String?>(null) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        editedId?.let { id ->
+            editedId = null
+            viewModel.page(id).retry()
+        }
+    }
     val currentState by currentPage.state.collectAsStateWithLifecycle()
 
     // 下滑(或上滑)关闭:只在全屏的图片页、没放大时。拖动时整页跟着手指走并缩小一点,
@@ -311,6 +325,15 @@ private fun PreviewBody(onBack: () -> Unit, viewModel: PreviewViewModel, session
                 onSendToChat = viewModel::sendToChat,
                 onShare = { viewModel.shareTarget()?.let { shareDialog = it to System.nanoTime().toString() } },
                 onShowOriginal = currentPage::showOriginal,
+                // 文本文件能在线编辑(doc/25);从编辑页回来重新加载这一页
+                onEdit = if (info?.kind == PreviewKind.TEXT) {
+                    {
+                        editedId = currentItem.nodeId
+                        openTextEditor(Routes.TextEdit(nodeId = currentItem.nodeId, name = info.name))
+                    }
+                } else {
+                    null
+                },
             )
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
@@ -420,6 +443,7 @@ private fun PreviewTopBar(
     onSendToChat: () -> Unit,
     onShare: () -> Unit,
     onShowOriginal: () -> Unit,
+    onEdit: (() -> Unit)? = null,
 ) {
     Box(
         modifier = Modifier
@@ -465,6 +489,11 @@ private fun PreviewTopBar(
                     } else {
                         Icon(Icons.AutoMirrored.Outlined.Article, contentDescription = stringResource(R.string.md_show_rendered), tint = OnPreview)
                     }
+                }
+            }
+            if (onEdit != null) {
+                IconButton(onClick = onEdit, modifier = Modifier.testTag("preview_edit")) {
+                    Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.textedit_edit), tint = OnPreview)
                 }
             }
             IconButton(onClick = onDownload, modifier = Modifier.testTag("preview_download")) {

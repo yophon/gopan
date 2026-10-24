@@ -583,6 +583,7 @@ type ComplexityRoot struct {
 		CreateMCPAPIKey          func(childComplexity int, name string, scopes []string) int
 		CreateNotifyChannel      func(childComplexity int, input NotifyChannelInput) int
 		CreateShare              func(childComplexity int, nodeID string, password *string, expiresAt *time.Time) int
+		CreateTextFile           func(childComplexity int, parentID *string, name string, content *string) int
 		DecideOAuthAuthorization func(childComplexity int, input OAuthAuthorizationInput, approved bool) int
 		DeleteChatMessage        func(childComplexity int, id string) int
 		DeleteFeed               func(childComplexity int, id string) int
@@ -623,6 +624,7 @@ type ComplexityRoot struct {
 		RevokeSession            func(childComplexity int, familyID string) int
 		RevokeShare              func(childComplexity int, id string) int
 		SaveProgress             func(childComplexity int, nodeID string, position float64, duration float64) int
+		SaveTextFile             func(childComplexity int, nodeID string, content string, baseSha256 *string) int
 		SendChatMessage          func(childComplexity int, body *string, nodeID *string) int
 		SetClipPrefs             func(childComplexity int, input ClipPrefsInput) int
 		SetLinkPrefs             func(childComplexity int, input LinkPrefsInput) int
@@ -833,6 +835,7 @@ type ComplexityRoot struct {
 		SpaceOverview             func(childComplexity int) int
 		SpaceStaleFiles           func(childComplexity int, days *int, minSize *int64, limit *int) int
 		StarredNodes              func(childComplexity int) int
+		TextFile                  func(childComplexity int, nodeID string) int
 		Trash                     func(childComplexity int, cursor *string) int
 		UndoPreview               func(childComplexity int, selection UndoSelection) int
 		UploadSession             func(childComplexity int, id string) int
@@ -943,6 +946,12 @@ type ComplexityRoot struct {
 		Status func(childComplexity int) int
 	}
 
+	TextFile struct {
+		Content func(childComplexity int) int
+		Sha256  func(childComplexity int) int
+		Size    func(childComplexity int) int
+	}
+
 	TextRange struct {
 		Length func(childComplexity int) int
 		Start  func(childComplexity int) int
@@ -1031,6 +1040,8 @@ type MutationResolver interface {
 	RestoreFileVersion(ctx context.Context, id string) (*Node, error)
 	DeleteFileVersions(ctx context.Context, ids []string) (bool, error)
 	PurgeFileVersions(ctx context.Context, nodeID *string) (int64, error)
+	SaveTextFile(ctx context.Context, nodeID string, content string, baseSha256 *string) (*Node, error)
+	CreateTextFile(ctx context.Context, parentID *string, name string, content *string) (*Node, error)
 	InitUpload(ctx context.Context, parentID *string, name string, sha256 string, size int64, replace *bool) (*UploadInit, error)
 	CompleteUpload(ctx context.Context, sessionID string, etags []*PartEtag) (*Node, error)
 	AbortUpload(ctx context.Context, sessionID string) (bool, error)
@@ -1153,6 +1164,7 @@ type QueryResolver interface {
 	StarredNodes(ctx context.Context) ([]*Node, error)
 	RecentFiles(ctx context.Context, limit *int) ([]*Node, error)
 	FileVersions(ctx context.Context, nodeID string) (*FileVersionList, error)
+	TextFile(ctx context.Context, nodeID string) (*TextFile, error)
 	SpaceOverview(ctx context.Context) (*SpaceOverview, error)
 	SpaceFolders(ctx context.Context, parentID *string) (*SpaceFolderLevel, error)
 	SpaceLargeFiles(ctx context.Context, category *FileCategory, limit *int) ([]*SpaceFile, error)
@@ -3612,6 +3624,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateShare(childComplexity, args["nodeId"].(string), args["password"].(*string), args["expiresAt"].(*time.Time)), true
+	case "Mutation.createTextFile":
+		if e.ComplexityRoot.Mutation.CreateTextFile == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createTextFile_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateTextFile(childComplexity, args["parentId"].(*string), args["name"].(string), args["content"].(*string)), true
 	case "Mutation.decideOAuthAuthorization":
 		if e.ComplexityRoot.Mutation.DecideOAuthAuthorization == nil {
 			break
@@ -4032,6 +4055,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SaveProgress(childComplexity, args["nodeId"].(string), args["position"].(float64), args["duration"].(float64)), true
+	case "Mutation.saveTextFile":
+		if e.ComplexityRoot.Mutation.SaveTextFile == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_saveTextFile_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SaveTextFile(childComplexity, args["nodeId"].(string), args["content"].(string), args["baseSha256"].(*string)), true
 	case "Mutation.sendChatMessage":
 		if e.ComplexityRoot.Mutation.SendChatMessage == nil {
 			break
@@ -5276,6 +5310,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.StarredNodes(childComplexity), true
+	case "Query.textFile":
+		if e.ComplexityRoot.Query.TextFile == nil {
+			break
+		}
+
+		args, err := ec.field_Query_textFile_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.TextFile(childComplexity, args["nodeId"].(string)), true
 	case "Query.trash":
 		if e.ComplexityRoot.Query.Trash == nil {
 			break
@@ -5702,6 +5747,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.TaskCount.Status(childComplexity), true
 
+	case "TextFile.content":
+		if e.ComplexityRoot.TextFile.Content == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TextFile.Content(childComplexity), true
+	case "TextFile.sha256":
+		if e.ComplexityRoot.TextFile.Sha256 == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TextFile.Sha256(childComplexity), true
+	case "TextFile.size":
+		if e.ComplexityRoot.TextFile.Size == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TextFile.Size(childComplexity), true
+
 	case "TextRange.length":
 		if e.ComplexityRoot.TextRange.Length == nil {
 			break
@@ -6097,6 +6161,13 @@ type FileVersion {
   replacedAt: Time!
   # 预签名下载地址(15 分钟有效),文件名是文件现在的名字
   downloadUrl: String!
+}
+
+# 在线编辑(doc/25):整份文本 + 打开时的 sha256(保存时带回去做冲突检查)
+type TextFile {
+  content: String!
+  sha256: String!
+  size: Int64!
 }
 
 type FileVersionList {
@@ -7102,6 +7173,8 @@ type Query {
   recentFiles(limit: Int = 100): [Node!]!
   # 一个文件的历史版本,最近换下来的在前
   fileVersions(nodeId: ID!): FileVersionList!
+  # 在线编辑:整份读出一个文本文件。超过 2 MB TOO_LARGE,不是 UTF-8 文本 NOT_TEXT
+  textFile(nodeId: ID!): TextFile!
 
   # 空间分析:都是现算的只读查询
   spaceOverview: SpaceOverview!
@@ -7181,6 +7254,12 @@ type Mutation {
   deleteFileVersions(ids: [ID!]!): Boolean!
   # 清空历史版本:给 nodeId 只清这个文件的,不给清自己全部文件的。返回释放的字节
   purgeFileVersions(nodeId: ID): Int64!
+
+  # 在线编辑(doc/25):按节点覆盖内容,旧内容进历史版本;内容没变什么都不做。
+  # baseSha256 是打开时的 sha256,对不上(在别处改过了)EDIT_CONFLICT;不给 = 不检查(「仍然保存」)
+  saveTextFile(nodeId: ID!, content: String!, baseSha256: String): Node!
+  # 新建文本文件(同名自动改名),内容可以为空
+  createTextFile(parentId: ID, name: String!, content: String = ""): Node!
 
   # replace = true:目标位置有同名文件就覆盖它(旧内容进历史版本,doc/24),而不是自动改名;同名的是文件夹时照旧改名
   initUpload(parentId: ID, name: String!, sha256: String!, size: Int64!, replace: Boolean = false): UploadInit!
@@ -8783,6 +8862,18 @@ func (ec *executionContext) childFields_TaskCount(ctx context.Context, field gra
 	return nil, fmt.Errorf("no field named %q was found under type TaskCount", field.Name)
 }
 
+func (ec *executionContext) childFields_TextFile(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "content":
+		return ec.fieldContext_TextFile_content(ctx, field)
+	case "sha256":
+		return ec.fieldContext_TextFile_sha256(ctx, field)
+	case "size":
+		return ec.fieldContext_TextFile_size(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TextFile", field.Name)
+}
+
 func (ec *executionContext) childFields_TextRange(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "start":
@@ -9475,6 +9566,36 @@ func (ec *executionContext) field_Mutation_createShare_args(ctx context.Context,
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_createTextFile_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "parentId",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["parentId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "name",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "content",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["content"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_decideOAuthAuthorization_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -10136,6 +10257,36 @@ func (ec *executionContext) field_Mutation_saveProgress_args(ctx context.Context
 		return nil, err
 	}
 	args["duration"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_saveTextFile_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "nodeId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["nodeId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "content",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["content"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "baseSha256",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["baseSha256"] = arg2
 	return args, nil
 }
 
@@ -11168,6 +11319,20 @@ func (ec *executionContext) field_Query_spaceStaleFiles_args(ctx context.Context
 		return nil, err
 	}
 	args["limit"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_textFile_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "nodeId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["nodeId"] = arg0
 	return args, nil
 }
 
@@ -20393,6 +20558,94 @@ func (ec *executionContext) fieldContext_Mutation_purgeFileVersions(ctx context.
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_saveTextFile(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_saveTextFile(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SaveTextFile(ctx, fc.Args["nodeId"].(string), fc.Args["content"].(string), fc.Args["baseSha256"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Node) graphql.Marshaler {
+			return ec.marshalNNode2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNode(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_saveTextFile(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Node(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_saveTextFile_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createTextFile(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createTextFile(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateTextFile(ctx, fc.Args["parentId"].(*string), fc.Args["name"].(string), fc.Args["content"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Node) graphql.Marshaler {
+			return ec.marshalNNode2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNode(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createTextFile(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Node(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createTextFile_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_initUpload(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -26904,6 +27157,50 @@ func (ec *executionContext) fieldContext_Query_fileVersions(ctx context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_textFile(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_textFile(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().TextFile(ctx, fc.Args["nodeId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *TextFile) graphql.Marshaler {
+			return ec.marshalNTextFile2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐTextFile(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_textFile(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TextFile(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_textFile_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_spaceOverview(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29216,6 +29513,75 @@ func (ec *executionContext) _TaskCount_count(ctx context.Context, field graphql.
 }
 func (ec *executionContext) fieldContext_TaskCount_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("TaskCount", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TextFile_content(ctx context.Context, field graphql.CollectedField, obj *TextFile) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TextFile_content(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Content, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TextFile_content(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TextFile", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TextFile_sha256(ctx context.Context, field graphql.CollectedField, obj *TextFile) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TextFile_sha256(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Sha256, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TextFile_sha256(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TextFile", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TextFile_size(ctx context.Context, field graphql.CollectedField, obj *TextFile) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TextFile_size(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Size, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TextFile_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TextFile", field, false, false, errors.New("field of type Int64 does not have child fields"))
 }
 
 func (ec *executionContext) _TextRange_start(ctx context.Context, field graphql.CollectedField, obj *TextRange) (ret graphql.Marshaler) {
@@ -35459,6 +35825,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "saveTextFile":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_saveTextFile(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createTextFile":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createTextFile(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "initUpload":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_initUpload(ctx, field)
@@ -38165,6 +38545,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "textFile":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_textFile(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "spaceOverview":
 			field := field
 
@@ -39349,6 +39751,54 @@ func (ec *executionContext) _TaskCount(ctx context.Context, sel ast.SelectionSet
 			}
 		case "count":
 			out.Values[i] = ec._TaskCount_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var textFileImplementors = []string{"TextFile"}
+
+func (ec *executionContext) _TextFile(ctx context.Context, sel ast.SelectionSet, obj *TextFile) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, textFileImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TextFile")
+		case "content":
+			out.Values[i] = ec._TextFile_content(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sha256":
+			out.Values[i] = ec._TextFile_sha256(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "size":
+			out.Values[i] = ec._TextFile_size(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -42214,6 +42664,20 @@ func (ec *executionContext) marshalNTaskCount2ᚖgithubᚗcomᚋyophonᚋgopan�
 		return graphql.Null
 	}
 	return ec._TaskCount(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNTextFile2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐTextFile(ctx context.Context, sel ast.SelectionSet, v TextFile) graphql.Marshaler {
+	return ec._TextFile(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNTextFile2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐTextFile(ctx context.Context, sel ast.SelectionSet, v *TextFile) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TextFile(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNTextRange2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐTextRangeᚄ(ctx context.Context, sel ast.SelectionSet, v []*TextRange) graphql.Marshaler {

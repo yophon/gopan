@@ -45,6 +45,11 @@
     <string name="drive_starred">已收藏</string>
     <string name="drive_msg_starred">已收藏 %1$d 项</string>
     <string name="drive_msg_unstarred">已取消收藏</string>
+    <string name="drive_replace_title">有同名文件</string>
+    <string name="drive_replace_text_one">「%1$s」这里已经有了。替换后,原来的内容留在历史版本里,随时能恢复。</string>
+    <string name="drive_replace_text_many">「%1$s」等 %2$d 个文件这里已经有了。替换后,原来的内容留在历史版本里,随时能恢复。</string>
+    <string name="drive_replace_yes">替换</string>
+    <string name="drive_replace_keep">保留两者</string>
     <string name="drive_action_open">用其他应用打开</string>
     <string name="drive_action_preview">预览</string>
     <string name="drive_action_download">下载</string>

@@ -10,6 +10,7 @@ import {
   Close,
   CopyDocument,
   Delete,
+  Document,
   Download,
   EditPen,
   Folder,
@@ -36,6 +37,7 @@ import {
   ChildrenDocument,
   CopyNodesDocument,
   CreateFolderDocument,
+  CreateTextFileDocument,
   DeleteNodesDocument,
   MoveNodesDocument,
   NodeDocument,
@@ -58,6 +60,7 @@ import { withoutQuery } from '@/utils/notifications'
 import { actionToast } from '@/utils/toast'
 import { useNodeDownload } from '@/composables/nodeDownload'
 import { useStars } from '@/composables/quick'
+import { NEW_TEXT_NAME } from '@/utils/textEdit'
 import NodeBrowser from '@/components/nodes/NodeBrowser.vue'
 import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
@@ -276,6 +279,37 @@ async function onCreateFolder() {
   } catch {
     // 取消
   }
+}
+
+/** 新建文本文件(doc/25):起好名字就建出来,直接打开编辑 */
+async function onCreateTextFile() {
+  try {
+    selectInPrompt(baseNameRange(NEW_TEXT_NAME, false))
+    const { value } = await ElMessageBox.prompt('', '新建文本文件', {
+      confirmButtonText: '创建',
+      cancelButtonText: '取消',
+      inputValue: NEW_TEXT_NAME,
+      inputPattern: /\S+/,
+      inputErrorMessage: '名称不能为空',
+    })
+    const res = await request(CreateTextFileDocument, { parentId: folderId.value, name: value.trim() })
+    invalidate()
+    selectedIds.value = [res.createTextFile.id]
+    openPreview([res.createTextFile.id], 0, {}, { edit: true })
+  } catch (err) {
+    if (err !== 'cancel' && err !== 'close') ElMessage.error(errorText(err, '创建失败'))
+  }
+}
+
+const newSheetVisible = ref(false)
+const newSheetItems: SheetItem[] = [
+  { key: 'folder', label: '文件夹', icon: FolderAdd },
+  { key: 'text', label: '文本文件', icon: Document },
+]
+
+function onNewSheetSelect(key: string) {
+  if (key === 'folder') void onCreateFolder()
+  else if (key === 'text') void onCreateTextFile()
 }
 
 async function onRename(node: NodeListItem) {
@@ -717,6 +751,7 @@ const menuItems = computed<MenuEntry[]>(() => {
       { key: 'upload', label: '上传文件', icon: Upload },
       { key: 'uploadDir', label: '上传文件夹', icon: FolderOpened },
       { key: 'mkdir', label: '新建文件夹', icon: FolderAdd },
+      { key: 'mktext', label: '新建文本文件', icon: Document },
       ...(fetchEnabled.value ? [{ key: 'fetch', label: '离线下载', icon: Link }] : []),
       { key: 'd1', divider: true },
       ...(items.value.length ? [{ key: 'selectAll', label: '全选', icon: Check, hint: 'Ctrl+A' }] : []),
@@ -766,6 +801,8 @@ function onMenuSelect(key: string) {
       return onPickDir()
     case 'mkdir':
       return void onCreateFolder()
+    case 'mktext':
+      return void onCreateTextFile()
     case 'fetch':
       fetchDialogVisible.value = true
       return
@@ -985,7 +1022,15 @@ function onSheetSelect(key: string) {
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button :icon="FolderAdd" @click="onCreateFolder">新建文件夹</el-button>
+        <el-dropdown split-button trigger="click" @click="onCreateFolder" @command="(c: string) => (c === 'text' ? onCreateTextFile() : onCreateFolder())">
+          <el-icon class="el-icon--left"><FolderAdd /></el-icon>新建文件夹
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="folder" :icon="FolderAdd">新建文件夹</el-dropdown-item>
+              <el-dropdown-item command="text" :icon="Document">新建文本文件</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button v-if="fetchEnabled" :icon="Link" @click="fetchDialogVisible = true">离线下载</el-button>
       </template>
       <template v-else>
@@ -1027,7 +1072,7 @@ function onSheetSelect(key: string) {
     <div v-else class="toolbar mobile">
       <!-- 390px 宽要放下 5 个入口,文字按钮缩成两个字(图标在,意思不变) -->
       <el-button type="primary" :icon="Upload" @click="onPickFiles">上传</el-button>
-      <el-button :icon="FolderAdd" title="新建文件夹" @click="onCreateFolder">新建</el-button>
+      <el-button :icon="FolderAdd" title="新建" @click="newSheetVisible = true">新建</el-button>
       <el-button v-if="fetchEnabled" :icon="Link" title="离线下载" aria-label="离线下载" @click="fetchDialogVisible = true" />
       <el-button
         :icon="ui.viewMode === 'grid' ? List : Grid"
@@ -1098,6 +1143,7 @@ function onSheetSelect(key: string) {
     </div>
 
     <NodeActionSheet v-model:visible="sheet.visible" :title="sheet.node?.name" :items="sheetItems" @select="onSheetSelect" />
+    <NodeActionSheet v-model:visible="newSheetVisible" title="新建" :items="newSheetItems" @select="onNewSheetSelect" />
 
     <NodeActionSheet
       v-model:visible="linkSheet.visible"

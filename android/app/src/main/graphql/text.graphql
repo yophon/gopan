@@ -1,0 +1,22 @@
+# 在线编辑文本(doc/25):整份读出 / 按节点保存(带打开时的 sha256 做冲突检查)/ 新建
+
+query TextFile($nodeId: ID!) {
+  textFile(nodeId: $nodeId) {
+    content
+    sha256
+    size
+  }
+}
+
+mutation SaveTextFile($nodeId: ID!, $content: String!, $baseSha256: String) {
+  saveTextFile(nodeId: $nodeId, content: $content, baseSha256: $baseSha256) {
+    id
+    sha256
+  }
+}
+
+mutation CreateTextFile($parentId: ID, $name: String!) {
+  createTextFile(parentId: $parentId, name: $name) {
+    ...NodeItem
+  }
+}

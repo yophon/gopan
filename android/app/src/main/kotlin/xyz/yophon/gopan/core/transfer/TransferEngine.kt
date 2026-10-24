@@ -66,6 +66,8 @@ data class UploadSource(
     val owns: Boolean = false,
     /** 已持久化的读授权:任务结束后释放 */
     val persisted: Boolean = false,
+    /** 目标文件夹里有同名文件时覆盖它(旧内容进历史版本),而不是自动改名 */
+    val replace: Boolean = false,
 )
 
 sealed interface TransferEvent {
@@ -200,6 +202,7 @@ class TransferEngine @Inject constructor(
                 size = it.size,
                 lastModified = it.lastModified,
                 mime = it.mime,
+                replaceExisting = it.replace,
                 createdAt = now,
                 updatedAt = now,
             )

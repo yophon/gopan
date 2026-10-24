@@ -114,8 +114,12 @@ class FakeUploadServer(private val partSize: Long = 1_000) : UploadApi {
     val initCalls = mutableListOf<String?>()
     var completeCalls = 0
 
-    override suspend fun init(parentId: String?, name: String, sha256: String, size: Long): InitResult {
+    /** 每次 init 的 replace 参数 */
+    val initReplace = mutableListOf<Boolean>()
+
+    override suspend fun init(parentId: String?, name: String, sha256: String, size: Long, replace: Boolean): InitResult {
         initCalls += parentId
+        initReplace += replace
         initError?.let {
             initError = null
             throw it

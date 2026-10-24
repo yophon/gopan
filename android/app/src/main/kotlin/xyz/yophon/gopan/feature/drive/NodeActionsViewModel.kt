@@ -71,6 +71,9 @@ sealed interface NodeEffect {
     /** 打开预览:会话列表已放进 PreviewSessionStore */
     data class OpenPreview(val nodeId: String) : NodeEffect
 
+    /** 打开在线编辑(doc/25):刚新建的文本文件 */
+    data class OpenTextEditor(val nodeId: String, val name: String) : NodeEffect
+
     /** Android 9 及以下保存到公共「下载」目录前要申请存储权限;结果回 [NodeActionsViewModel.onStoragePermission] */
     data object RequestStoragePermission : NodeEffect
 

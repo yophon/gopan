@@ -30,10 +30,19 @@ class FakeTransferActions : TransferActions {
     var packResult: PackResult = PackResult.Queued
     var needsPermission = false
 
-    override suspend fun uploadUris(uris: List<Uri>, parentId: String?, toChat: Boolean): EnqueueResult {
+    /** 每次 uploadUris 的 replaceNames */
+    val replaceNames = mutableListOf<Set<String>>()
+
+    /** uploadNames 的结果:默认取 URI 的最后一段 */
+    var names: (Uri) -> String = { it.lastPathSegment ?: "未命名" }
+
+    override suspend fun uploadUris(uris: List<Uri>, parentId: String?, toChat: Boolean, replaceNames: Set<String>): EnqueueResult {
         uploadedUris += Triple(uris, parentId, toChat)
+        this.replaceNames += replaceNames
         return EnqueueResult(uris.size, 0, 0)
     }
+
+    override suspend fun uploadNames(uris: List<Uri>): List<String> = uris.distinct().map(names)
 
     override suspend fun uploadOwnedFiles(files: List<File>, parentId: String?, toChat: Boolean): EnqueueResult {
         uploadedFiles += Triple(files, parentId, toChat)

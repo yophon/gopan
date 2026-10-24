@@ -69,6 +69,10 @@ object Routes {
     @Serializable
     data class Archive(val nodeId: String, val name: String = "", val parentId: String? = null)
 
+    /** 在线编辑文本(doc/25):根导航上的全屏页,从预览的「编辑」或文件页的「新建文本文件」进来 */
+    @Serializable
+    data class TextEdit(val nodeId: String, val name: String = "")
+
     // ---- 传输助手 ----
     @Serializable
     data object Chat

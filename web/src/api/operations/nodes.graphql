@@ -264,3 +264,29 @@ mutation DeleteFileVersions($ids: [ID!]!) {
 mutation PurgeFileVersions($nodeId: ID) {
   purgeFileVersions(nodeId: $nodeId)
 }
+
+# ---- 在线编辑(doc/25) ----
+
+query TextFile($nodeId: ID!) {
+  textFile(nodeId: $nodeId) {
+    content
+    sha256
+    size
+  }
+}
+
+mutation SaveTextFile($nodeId: ID!, $content: String!, $baseSha256: String) {
+  saveTextFile(nodeId: $nodeId, content: $content, baseSha256: $baseSha256) {
+    id
+    size
+    sha256
+    updatedAt
+  }
+}
+
+mutation CreateTextFile($parentId: ID, $name: String!, $content: String) {
+  createTextFile(parentId: $parentId, name: $name, content: $content) {
+    id
+    name
+  }
+}

@@ -15,6 +15,7 @@ import xyz.yophon.gopan.core.prefs.DriveSortOrder
 import xyz.yophon.gopan.graphql.ChildrenQuery
 import xyz.yophon.gopan.graphql.CopyNodesMutation
 import xyz.yophon.gopan.graphql.CreateFolderMutation
+import xyz.yophon.gopan.graphql.CreateTextFileMutation
 import xyz.yophon.gopan.graphql.DeleteNodesMutation
 import xyz.yophon.gopan.graphql.MoveNodesMutation
 import xyz.yophon.gopan.graphql.NodeQuery
@@ -179,6 +180,11 @@ class NodesRepositoryImpl @Inject constructor(
         apollo.mutation(RestoreNodesMutation(ids = ids)).execute().requireData()
         forget(ids)
         bump()
+    }
+
+    override suspend fun createTextFile(parentId: String?, name: String): Node {
+        val data = apollo.mutation(CreateTextFileMutation(parentId = Optional.present(parentId), name = name)).execute().requireData()
+        return data.createTextFile.nodeItem.toNode().also { bump() }
     }
 
     override suspend fun setStarred(ids: List<String>, starred: Boolean) {

@@ -49,6 +49,40 @@ class DriveViewModelTest {
     )
 
     @Test
+    fun `uploading a name that already exists asks to replace or keep both`() = runTest {
+        repo.listings[null] = listOf(page(file("f1", "报告.docx"), file("f2", "笔记.md")))
+        val vm = viewModel()
+        advanceUntilIdle()
+        // JVM 单测里 Uri.parse 是桩(返回 null);名字由假的 uploadNames 给
+        val uris = listOf(android.net.Uri.parse("content://x/1"))
+
+        transfers.names = { "报告.docx" }
+        vm.uploadUris(uris)
+        advanceUntilIdle()
+        val d = vm.dialog.value as DriveDialog.ReplaceUploads
+        assertThat(d.names).containsExactly("报告.docx")
+        assertThat(transfers.uploadedUris).isEmpty()
+        vm.confirmReplaceUploads(d, replace = true)
+        advanceUntilIdle()
+        assertThat(vm.dialog.value).isNull()
+        assertThat(transfers.replaceNames.last()).containsExactly("报告.docx")
+
+        // 保留两者:照常传,不替换
+        vm.uploadUris(uris)
+        advanceUntilIdle()
+        vm.confirmReplaceUploads(vm.dialog.value as DriveDialog.ReplaceUploads, replace = false)
+        advanceUntilIdle()
+        assertThat(transfers.replaceNames.last()).isEmpty()
+
+        // 不同名:不问,直接传
+        transfers.names = { "新的.txt" }
+        vm.uploadUris(uris)
+        advanceUntilIdle()
+        assertThat(vm.dialog.value).isNull()
+        assertThat(transfers.uploadedUris).hasSize(3)
+    }
+
+    @Test
     fun `loads the first page with the stored sort and pages until the cursor runs out`() = runTest {
         repo.listings[null] = listOf(
             page(folder("d"), file("a"), nextCursor = "1", total = 4),

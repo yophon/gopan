@@ -33,6 +33,8 @@ import xyz.yophon.gopan.core.auth.AuthState
 import xyz.yophon.gopan.core.ui.components.AfterDelay
 import xyz.yophon.gopan.core.ui.components.LOADING_INDICATOR_DELAY_MS
 import xyz.yophon.gopan.core.ui.nav.LocalOpenArchive
+import xyz.yophon.gopan.core.ui.nav.LocalOpenTextEditor
+import xyz.yophon.gopan.feature.textedit.TextEditScreen
 import xyz.yophon.gopan.core.ui.nav.Routes
 import xyz.yophon.gopan.core.ui.nav.navEnter
 import xyz.yophon.gopan.core.ui.nav.navExit
@@ -65,7 +67,10 @@ fun RootNavHost(authState: AuthState) {
         val openArchive: (Routes.Archive) -> Unit = remember(navController) {
             { route -> navController.currentBackStackEntry?.ifResumed { navController.navigate(route) } }
         }
-        CompositionLocalProvider(LocalOpenArchive provides openArchive) {
+        val openTextEditor: (Routes.TextEdit) -> Unit = remember(navController) {
+            { route -> navController.currentBackStackEntry?.ifResumed { navController.navigate(route) } }
+        }
+        CompositionLocalProvider(LocalOpenArchive provides openArchive, LocalOpenTextEditor provides openTextEditor) {
             NavHost(navController = navController, startDestination = Routes.Startup, enterTransition = navEnter, exitTransition = navExit) {
                 composable<Routes.Startup> { StartupScreen() }
                 loginGraph(navController)
@@ -80,6 +85,10 @@ fun RootNavHost(authState: AuthState) {
                     popExitTransition = { fadeOut(tween(FADE_MS)) },
                 ) { entry ->
                     PreviewScreen(onBack = { entry.ifResumed { navController.popBackStack() } })
+                }
+                // 在线编辑文本:盖住底部导航
+                composable<Routes.TextEdit> { entry ->
+                    TextEditScreen(onBack = { entry.ifResumed { navController.popBackStack() } })
                 }
                 // 压缩包浏览:同样盖住底部导航;「查看」解压进度时退回主界面,由它跳到传输列表
                 composable<Routes.Archive>(

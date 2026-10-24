@@ -162,6 +162,11 @@ class FakeNodesRepository : NodesRepository {
 
     override suspend fun setStarred(ids: List<String>, starred: Boolean) = mutate("setStarred")
 
+    override suspend fun createTextFile(parentId: String?, name: String): Node {
+        mutate("createTextFile($name)")
+        return file("new-text", name, parentId)
+    }
+
     private fun mutate(call: String) {
         calls += call
         nextMutationError?.let {

@@ -138,6 +138,9 @@ import androidx.compose.ui.platform.testTag
 import java.time.Instant
 import androidx.compose.material.icons.outlined.Link
 import xyz.yophon.gopan.feature.links.CopyLinkViewModel
+import androidx.compose.material.icons.outlined.NoteAdd
+import xyz.yophon.gopan.core.ui.nav.LocalOpenTextEditor
+import androidx.compose.material3.AlertDialog
 
 /**
  * 文件页:根目录与任意文件夹共用(由路由决定 parentId)。
@@ -183,6 +186,7 @@ fun DriveScreen(
         onNoApp = { scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.transfer_msg_no_app)) } },
     )
     val permissions = rememberTransferPermissions(onStorageResult = viewModel::onStoragePermission)
+    val openTextEditor = LocalOpenTextEditor.current
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -190,6 +194,7 @@ fun DriveScreen(
                 is NodeEffect.Message -> launch { snackbarHostState.showSnackbar(effect.text.resolve(context)) }
                 is NodeEffect.OpenFolder -> currentOnOpenFolder(effect.folderId)
                 is NodeEffect.OpenPreview -> if (currentTwoPane) paneNodeId = effect.nodeId else currentOnOpenPreview(effect.nodeId)
+                is NodeEffect.OpenTextEditor -> openTextEditor(Routes.TextEdit(nodeId = effect.nodeId, name = effect.name))
                 NodeEffect.RequestStoragePermission -> permissions.requestStoragePermission()
                 NodeEffect.TransferQueued -> permissions.onTransferQueued()
             }
@@ -304,6 +309,7 @@ fun DriveScreen(
     when (val d = dialog) {
         DriveDialog.FabMenu -> FabMenuSheet(
             onCreateFolder = viewModel::requestCreateFolder,
+            onCreateText = viewModel::requestCreateTextFile,
             onUploadFiles = {
                 viewModel.dismissDialog()
                 pickers.pickFiles()
@@ -324,6 +330,40 @@ fun DriveScreen(
             } else {
                 null
             },
+            onDismiss = viewModel::dismissDialog,
+        )
+        is DriveDialog.ReplaceUploads -> AlertDialog(
+            onDismissRequest = viewModel::dismissDialog,
+            modifier = Modifier.testTag("drive_replace_dialog"),
+            title = { Text(stringResource(R.string.drive_replace_title)) },
+            text = {
+                Text(
+                    if (d.names.size > 1) {
+                        stringResource(R.string.drive_replace_text_many, d.names.first(), d.names.size)
+                    } else {
+                        stringResource(R.string.drive_replace_text_one, d.names.first())
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmReplaceUploads(d, replace = true) }, modifier = Modifier.testTag("drive_replace_yes")) {
+                    Text(stringResource(R.string.drive_replace_yes))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.confirmReplaceUploads(d, replace = false) }, modifier = Modifier.testTag("drive_replace_keep")) {
+                    Text(stringResource(R.string.drive_replace_keep))
+                }
+            },
+        )
+        DriveDialog.CreateTextFile -> NodeNameDialog(
+            title = stringResource(R.string.textedit_new),
+            label = stringResource(R.string.textedit_new_hint),
+            initialValue = stringResource(R.string.textedit_new_default),
+            confirmText = stringResource(R.string.drive_dialog_create),
+            busy = busy,
+            inputError = inputError,
+            onConfirm = viewModel::createTextFile,
             onDismiss = viewModel::dismissDialog,
         )
         DriveDialog.CreateFolder -> NodeNameDialog(
@@ -817,6 +857,7 @@ private fun StickToTop(firstKey: String?, isScrolling: () -> Boolean, atTop: () 
 @Composable
 private fun FabMenuSheet(
     onCreateFolder: () -> Unit,
+    onCreateText: () -> Unit,
     onUploadFiles: () -> Unit,
     onUploadMedia: () -> Unit,
     onCamera: () -> Unit,
@@ -834,6 +875,11 @@ private fun FabMenuSheet(
             modifier = Modifier.clickable { pick(onCreateFolder) },
             leadingContent = { Icon(Icons.Outlined.CreateNewFolder, contentDescription = null) },
             headlineContent = { Text(stringResource(R.string.drive_fab_new_folder)) },
+        )
+        ListItem(
+            modifier = Modifier.clickable { pick(onCreateText) }.testTag("drive_fab_new_text"),
+            leadingContent = { Icon(Icons.Outlined.NoteAdd, contentDescription = null) },
+            headlineContent = { Text(stringResource(R.string.textedit_new)) },
         )
         ListItem(
             modifier = Modifier.clickable { pick(onUploadFiles) },

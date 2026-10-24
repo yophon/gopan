@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 在线编辑文本(doc/25) -->
+    <string name="textedit_edit">编辑</string>
+    <string name="textedit_save">保存</string>
+    <string name="textedit_loading">读取中…</string>
+    <string name="textedit_unsaved">未保存</string>
+    <string name="textedit_saved_state">已保存</string>
+    <string name="textedit_saved">已保存,原来的内容留在历史版本里</string>
+    <string name="textedit_too_large_app">超过 512 KB 的文件请到网页上编辑</string>
+    <string name="textedit_conflict_title">文件被改过了</string>
+    <string name="textedit_conflict_text">这个文件在你打开之后又被改过了。仍然保存会盖掉那次改动,那次的内容会留在历史版本里。</string>
+    <string name="textedit_save_anyway">仍然保存</string>
+    <string name="textedit_leave_title">放弃修改?</string>
+    <string name="textedit_leave_text">改动还没保存,离开就丢了。</string>
+    <string name="textedit_discard">放弃</string>
+    <string name="textedit_new">新建文本文件</string>
+    <string name="textedit_new_hint">文件名</string>
+    <string name="textedit_new_default">未命名.md</string>
+</resources>

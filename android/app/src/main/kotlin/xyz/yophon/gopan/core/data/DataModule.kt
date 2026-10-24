@@ -26,6 +26,7 @@ object DataModule {
         Room.databaseBuilder(context, GopanDatabase::class.java, GopanDatabase.NAME)
             // 只从版本 1(只有可丢的目录缓存)破坏性升级;以后的版本必须写 Migration,保住队列里的任务
             .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1)
+            .addMigrations(GopanDatabase.MIGRATION_2_3)
             .build()
 
     @Provides

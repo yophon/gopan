@@ -9,6 +9,7 @@ import {
   Close,
   Document,
   Download,
+  EditPen,
   Headset,
   Reading,
   View,
@@ -37,6 +38,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePlayerStore } from '@/stores/player'
 import { formatDuration, resumePage } from '@/utils/media'
 import { siteOf } from '@/utils/clips'
+import { canEditText } from '@/utils/textEdit'
 import {
   currentConnection,
   prefetchBudget,
@@ -45,6 +47,8 @@ import {
 
 // pdfjs-dist 体积大(~1MB),按需异步加载,只有真正预览 PDF 时才拉
 const PdfViewer = defineAsyncComponent(() => import('./PdfViewer.vue'))
+// 在线编辑(doc/25):点「编辑」时才加载
+const TextEditor = defineAsyncComponent(() => import('./TextEditor.vue'))
 import ImageViewer from './ImageViewer.vue'
 import ArchiveViewer from './ArchiveViewer.vue'
 import VideoPlayer from './VideoPlayer.vue'
@@ -282,6 +286,55 @@ async function toggleClipRead() {
   }
 }
 
+// ---------- 在线编辑(doc/25):文本文件在预览里直接改,有没保存的修改时离开要确认 ----------
+
+const editing = ref(false)
+const editorRef = ref<{ confirmLeave: () => Promise<boolean> } | null>(null)
+/** 每存一次 +1:渲染着看的 Markdown 跟着重新打开 */
+const editVersion = ref(0)
+const canEdit = computed(() => !props.guestToken && !!node.value && canEditText(preview.value?.kind, node.value.size))
+
+async function leaveEditing(): Promise<boolean> {
+  if (!editing.value) return true
+  const ok = (await editorRef.value?.confirmLeave()) ?? true
+  if (ok) editing.value = false
+  return ok
+}
+
+async function guardedClose() {
+  if (await leaveEditing()) closePreview()
+}
+
+async function guardedPrev() {
+  if (await leaveEditing()) previewPrev()
+}
+
+async function guardedNext() {
+  if (await leaveEditing()) previewNext()
+}
+
+// 换了文件 / 关掉了:退出编辑
+watch(currentId, () => (editing.value = false))
+// 刚新建的文本文件:预览信息到了就直接进编辑
+watch(
+  [currentId, preview],
+  ([id, p]) => {
+    if (id && p && previewState.editOnOpen === id) {
+      previewState.editOnOpen = null
+      if (canEdit.value) editing.value = true
+    }
+  },
+  { immediate: true },
+)
+
+function onEditorSaved() {
+  editVersion.value++
+  void refetch()
+  for (const key of ['children', 'nodeDetail', 'fileVersions', 'activities', 'recent', 'starred', 'me']) {
+    void queryClient.invalidateQueries({ queryKey: [key] })
+  }
+}
+
 // ---------- TEXT:拉取文本内容 ----------
 
 const TEXT_MAX_CHARS = 200_000
@@ -364,10 +417,10 @@ const previewBodyRef = ref<HTMLElement | null>(null)
 useSwipe(previewBodyRef, {
   threshold: 60,
   onSwipeEnd(_e, direction) {
-    if (!isMobile.value || imageMagnified.value || videoPlaying.value) return
+    if (!isMobile.value || imageMagnified.value || videoPlaying.value || editing.value) return
     if (preview.value?.kind === 'AUDIO' && useGlobalAudio.value && player.playing) return
-    if (direction === 'left' && hasNext.value) previewNext()
-    else if (direction === 'right' && hasPrev.value) previewPrev()
+    if (direction === 'left' && hasNext.value) void guardedNext()
+    else if (direction === 'right' && hasPrev.value) void guardedPrev()
   },
 })
 
@@ -397,13 +450,16 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   if (!previewState.visible) return
   const tag = (e.target as HTMLElement | null)?.tagName
   if (e.key === 'Escape') {
-    closePreview()
+    // 编辑器里有确认框开着时,Esc 交给确认框
+    if (document.querySelector('.el-message-box')) return
+    void guardedClose()
     return
   }
   // video/audio 聚焦时方向键留给播放器做快进
   if (tag === 'VIDEO' || tag === 'AUDIO' || tag === 'INPUT' || tag === 'TEXTAREA') return
-  if (e.key === 'ArrowLeft') previewPrev()
-  else if (e.key === 'ArrowRight') previewNext()
+  if (editing.value) return
+  if (e.key === 'ArrowLeft') void guardedPrev()
+  else if (e.key === 'ArrowRight') void guardedNext()
 })
 
 </script>
@@ -414,7 +470,7 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
       <div
         v-if="previewState.visible"
         class="preview-overlay"
-        @click.self="!isMobile && closePreview()"
+        @click.self="!isMobile && !editing && guardedClose()"
       >
         <!-- 顶部栏 -->
         <header class="preview-header">
@@ -434,8 +490,9 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
             >
               查看原图
             </el-button>
+            <el-button v-if="canEdit && !editing" :icon="EditPen" text class="header-btn" @click="editing = true">编辑</el-button>
             <el-button
-              v-if="preview?.kind === 'TEXT' && preview.markdown"
+              v-if="preview?.kind === 'TEXT' && preview.markdown && !editing"
               :icon="mdSource ? Reading : Document"
               text
               class="header-btn"
@@ -453,24 +510,24 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
             >
               下载
             </el-button>
-            <el-button :icon="Close" text circle class="header-btn" title="关闭 (Esc)" @click="closePreview()" />
+            <el-button :icon="Close" text circle class="header-btn" title="关闭 (Esc)" @click="guardedClose()" />
           </div>
         </header>
 
         <!-- 左右切换 -->
         <button
-          v-if="hasPrev && !isMobile"
+          v-if="hasPrev && !isMobile && !editing"
           class="nav-btn nav-prev"
           title="上一个 (←)"
-          @click="previewPrev()"
+          @click="guardedPrev()"
         >
           <el-icon :size="22"><ArrowLeft /></el-icon>
         </button>
         <button
-          v-if="hasNext && !isMobile"
+          v-if="hasNext && !isMobile && !editing"
           class="nav-btn nav-next"
           title="下一个 (→)"
-          @click="previewNext()"
+          @click="guardedNext()"
         >
           <el-icon :size="22"><ArrowRight /></el-icon>
         </button>
@@ -484,6 +541,11 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
             class="preview-placeholder"
             :description="errorText(error, '加载预览信息失败')"
           />
+
+          <!-- 在线编辑 -->
+          <div v-else-if="editing && node" class="preview-editor">
+            <TextEditor ref="editorRef" :node-id="node.id" @saved="onEditorSaved" @close="editing = false" />
+          </div>
 
           <!-- IMAGE:滚轮缩放 / 拖拽平移 / 双击复位 -->
           <ImageViewer
@@ -540,7 +602,7 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
                 {{ clip.readAt ? '标为未读' : '标记已读' }}
               </el-button>
             </div>
-            <MarkdownFrame :node-id="node.id" :token="mediaToken" class="md-body" />
+            <MarkdownFrame :key="editVersion" :node-id="node.id" :token="mediaToken" class="md-body" />
           </div>
 
           <!-- TEXT -->
@@ -854,5 +916,15 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
 .placeholder-actions {
   display: flex;
   gap: 8px;
+}
+.preview-editor {
+  width: 100%;
+  height: 100%;
+  padding: 12px 64px 16px;
+}
+@media (max-width: 767px) {
+  .preview-editor {
+    padding: 0;
+  }
 }
 </style>

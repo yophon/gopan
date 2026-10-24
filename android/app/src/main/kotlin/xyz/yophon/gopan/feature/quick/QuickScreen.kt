@@ -99,6 +99,7 @@ fun QuickScreen(
                 is NodeEffect.Message -> launch { snackbarHostState.showSnackbar(effect.text.resolve(context)) }
                 is NodeEffect.OpenFolder -> currentOnOpenFolder(effect.folderId)
                 is NodeEffect.OpenPreview -> currentOnOpenPreview(effect.nodeId)
+                is NodeEffect.OpenTextEditor -> Unit
                 NodeEffect.RequestStoragePermission -> permissions.requestStoragePermission()
                 NodeEffect.TransferQueued -> permissions.onTransferQueued()
             }

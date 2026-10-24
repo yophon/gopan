@@ -41,6 +41,12 @@ import kotlinx.coroutines.flow.drop
 sealed interface DriveDialog : NodeDialog {
     data object CreateFolder : DriveDialog
 
+    /** 新建文本文件(doc/25):起名字 */
+    data object CreateTextFile : DriveDialog
+
+    /** 要传的文件里有和这里已有文件同名的(doc/24):替换还是保留两者 */
+    data class ReplaceUploads(val uris: List<Uri>, val names: List<String>) : DriveDialog
+
     data object FabMenu : DriveDialog
 }
 
@@ -370,6 +376,15 @@ class DriveViewModel @Inject constructor(
             UiText.Res(R.string.drive_msg_created, created.name)
         }
 
+    fun requestCreateTextFile() = showDialog(DriveDialog.CreateTextFile)
+
+    /** 建好直接打开编辑;名字用服务端返回的(同名时自动改成「名称 (1)」) */
+    fun createTextFile(name: String) =
+        runMutationFor(inputName = name, block = { repo.createTextFile(parentId, name) }) { created ->
+            send(NodeEffect.OpenTextEditor(created.id, created.name))
+            UiText.Res(R.string.drive_msg_created, created.name)
+        }
+
     /** 多选里恰好选了一项时可以直接重命名(与网页端一致) */
     fun renameSelected() {
         val node = _state.value.selectedNodes.singleOrNull() ?: return
@@ -392,12 +407,25 @@ class DriveViewModel @Inject constructor(
 
     // ---- 上传 ----
 
-    /** SAF 多选 / 相册选择器选中的文件 */
+    /** SAF 多选 / 相册选择器选中的文件传进当前文件夹:先看有没有和已有文件同名的,有就问「替换 / 保留两者」 */
     fun uploadUris(uris: List<Uri>) {
         if (uris.isEmpty()) return
         viewModelScope.launch {
-            val r = transfers.uploadUris(uris, parentId)
-            reportEnqueue(r)
+            val taken = _state.value.items.filterNot { it.isFolder }.mapTo(HashSet()) { it.name }
+            val dup = transfers.uploadNames(uris).filter { it in taken }.distinct()
+            if (dup.isEmpty()) {
+                reportEnqueue(transfers.uploadUris(uris, parentId))
+            } else {
+                showDialog(DriveDialog.ReplaceUploads(uris, dup))
+            }
+        }
+    }
+
+    /** 同名的覆盖(旧内容进历史版本)或照常自动改名;取消就不传 */
+    fun confirmReplaceUploads(dialog: DriveDialog.ReplaceUploads, replace: Boolean) {
+        dismissDialog()
+        viewModelScope.launch {
+            reportEnqueue(transfers.uploadUris(dialog.uris, parentId, replaceNames = if (replace) dialog.names.toSet() else emptySet()))
         }
     }
 

@@ -1,8 +1,8 @@
 # 上传协议(doc/03 · 浏览器直传):initUpload → 预签名分片 PUT → completeUpload 轮询;uploadSession 对账续传。
 # 返回的节点用 NodeItem 片段,与列表同一个领域模型(秒传返回的节点 size/mime 可能为空,定稿返回的完整)。
 
-mutation InitUpload($parentId: ID, $name: String!, $sha256: String!, $size: Int64!) {
-  initUpload(parentId: $parentId, name: $name, sha256: $sha256, size: $size) {
+mutation InitUpload($parentId: ID, $name: String!, $sha256: String!, $size: Int64!, $replace: Boolean) {
+  initUpload(parentId: $parentId, name: $name, sha256: $sha256, size: $size, replace: $replace) {
     instant
     node {
       ...NodeItem

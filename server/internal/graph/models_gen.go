@@ -868,6 +868,12 @@ type TaskCount struct {
 	Count  int    `json:"count"`
 }
 
+type TextFile struct {
+	Content string `json:"content"`
+	Sha256  string `json:"sha256"`
+	Size    int64  `json:"size"`
+}
+
 type TextRange struct {
 	Start  int `json:"start"`
 	Length int `json:"length"`

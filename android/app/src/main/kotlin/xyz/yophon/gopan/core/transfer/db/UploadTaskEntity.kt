@@ -46,6 +46,8 @@ data class UploadTaskEntity(
     /** 服务端最终的名字(同名时会自动改成 "名字 (1).ext") */
     val finalName: String? = null,
     val instant: Boolean = false,
+    /** 目标文件夹里有同名文件时覆盖它(旧内容进历史版本,doc/24),而不是自动改名;库版本 3 加的 */
+    val replaceExisting: Boolean = false,
     val createdAt: Long,
     val updatedAt: Long,
     val finishedAt: Long? = null,

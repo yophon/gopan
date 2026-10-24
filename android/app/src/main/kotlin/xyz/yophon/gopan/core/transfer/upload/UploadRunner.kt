@@ -158,7 +158,7 @@ class UploadRun(
         val sid = task.sessionId
         if (sid == null) {
             val result = try {
-                api.init(task.parentId, task.name, requireNotNull(task.sha256), task.size)
+                api.init(task.parentId, task.name, requireNotNull(task.sha256), task.size, task.replaceExisting)
             } catch (e: GopanException) {
                 return when {
                     task.toChat && (e.code == GopanErrors.NOT_A_FOLDER || e.code == GopanErrors.NOT_FOUND) ->

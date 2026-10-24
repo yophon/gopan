@@ -491,6 +491,24 @@ extend type Mutation {
 - 覆盖类动态(`OVERWRITE`)留了版本时 `undoable = true`,撤回 = 恢复那个版本;恢复版本本身也记一条 `OVERWRITE`(`note` 是「恢复到 … 的版本」)。
 - `restoreFileVersion`:版本已被清理 `NOT_FOUND`,文件在回收站里 `NODE_DELETED`;`fileVersions` 对文件夹 `NOT_A_FILE`。
 
+## 在线编辑文本(v3.11)
+
+```graphql
+type TextFile { content: String!, sha256: String!, size: Int64! }
+
+extend type Query {
+  textFile(nodeId: ID!): TextFile!                    # 整份读出;sha256 = 打开时的版本
+}
+extend type Mutation {
+  saveTextFile(nodeId: ID!, content: String!, baseSha256: String): Node!   # 不给 baseSha256 = 不查冲突
+  createTextFile(parentId: ID, name: String!, content: String = ""): Node! # 同名自动改名
+}
+```
+
+- 只给不超过 2 MB 的 UTF-8 文本:太大 `TOO_LARGE`,不是 UTF-8 或含 NUL 字节 `NOT_TEXT`,文件夹 `NOT_A_FILE`。
+- `saveTextFile` 按节点覆盖,旧内容进历史版本,动态记 `OVERWRITE`(`note` 是「在线编辑」,能撤回);内容没变什么都不做。`baseSha256` 与现在的内容对不上时 `EDIT_CONFLICT`。
+- `createTextFile` 动态记成 `UPLOAD`;配额不够 `QUOTA_EXCEEDED`。
+
 ## 版本策略
 
 v1 不做 schema 版本化;字段只加不删,废弃用 `@deprecated`。前端 codegen 在 CI 里跑,schema 不兼容改动直接编译失败暴露。

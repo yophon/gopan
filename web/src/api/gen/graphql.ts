@@ -743,6 +743,7 @@ export type Mutation = {
   createMCPAPIKey: McpapiKeyCreated;
   createNotifyChannel: NotifyChannel;
   createShare: Share;
+  createTextFile: Node;
   decideOAuthAuthorization: OAuthAuthorizationResult;
   deleteChatMessage: Scalars['Boolean']['output'];
   deleteFeed: Scalars['Boolean']['output'];
@@ -783,6 +784,7 @@ export type Mutation = {
   revokeSession: Scalars['Boolean']['output'];
   revokeShare: Scalars['Boolean']['output'];
   saveProgress?: Maybe<PlayProgress>;
+  saveTextFile: Node;
   sendChatMessage: ChatMessage;
   setClipPrefs: ClipPrefs;
   setLinkPrefs: LinkPrefs;
@@ -938,6 +940,13 @@ export type MutationCreateShareArgs = {
   expiresAt?: InputMaybe<Scalars['Time']['input']>;
   nodeId: Scalars['ID']['input'];
   password?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type MutationCreateTextFileArgs = {
+  content?: InputMaybe<Scalars['String']['input']>;
+  name: Scalars['String']['input'];
+  parentId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 
@@ -1138,6 +1147,13 @@ export type MutationSaveProgressArgs = {
   duration: Scalars['Float']['input'];
   nodeId: Scalars['ID']['input'];
   position: Scalars['Float']['input'];
+};
+
+
+export type MutationSaveTextFileArgs = {
+  baseSha256?: InputMaybe<Scalars['String']['input']>;
+  content: Scalars['String']['input'];
+  nodeId: Scalars['ID']['input'];
 };
 
 
@@ -1488,6 +1504,7 @@ export type Query = {
   spaceOverview: SpaceOverview;
   spaceStaleFiles: Array<SpaceFile>;
   starredNodes: Array<Node>;
+  textFile: TextFile;
   trash: NodePage;
   undoPreview: UndoResult;
   uploadSession: UploadSession;
@@ -1718,6 +1735,11 @@ export type QuerySpaceStaleFilesArgs = {
 };
 
 
+export type QueryTextFileArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
 export type QueryTrashArgs = {
   cursor?: InputMaybe<Scalars['String']['input']>;
 };
@@ -1857,6 +1879,13 @@ export type TaskStatus =
   | 'PENDING'
   | 'RUNNING'
   | 'UNAVAILABLE';
+
+export type TextFile = {
+  __typename?: 'TextFile';
+  content: Scalars['String']['output'];
+  sha256: Scalars['String']['output'];
+  size: Scalars['Int64']['output'];
+};
 
 export type TextRange = {
   __typename?: 'TextRange';
@@ -2771,6 +2800,31 @@ export type PurgeFileVersionsMutationVariables = Exact<{
 
 
 export type PurgeFileVersionsMutation = { __typename?: 'Mutation', purgeFileVersions: number };
+
+export type TextFileQueryVariables = Exact<{
+  nodeId: Scalars['ID']['input'];
+}>;
+
+
+export type TextFileQuery = { __typename?: 'Query', textFile: { __typename?: 'TextFile', content: string, sha256: string, size: number } };
+
+export type SaveTextFileMutationVariables = Exact<{
+  nodeId: Scalars['ID']['input'];
+  content: Scalars['String']['input'];
+  baseSha256?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type SaveTextFileMutation = { __typename?: 'Mutation', saveTextFile: { __typename?: 'Node', id: string, size?: number | null, sha256?: string | null, updatedAt: string } };
+
+export type CreateTextFileMutationVariables = Exact<{
+  parentId?: InputMaybe<Scalars['ID']['input']>;
+  name: Scalars['String']['input'];
+  content?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type CreateTextFileMutation = { __typename?: 'Mutation', createTextFile: { __typename?: 'Node', id: string, name: string } };
 
 export type NotificationsQueryVariables = Exact<{
   cursor?: InputMaybe<Scalars['String']['input']>;
@@ -5412,6 +5466,33 @@ export const PurgeFileVersionsDocument = new TypedDocumentString(`
   purgeFileVersions(nodeId: $nodeId)
 }
     `) as unknown as TypedDocumentString<PurgeFileVersionsMutation, PurgeFileVersionsMutationVariables>;
+export const TextFileDocument = new TypedDocumentString(`
+    query TextFile($nodeId: ID!) {
+  textFile(nodeId: $nodeId) {
+    content
+    sha256
+    size
+  }
+}
+    `) as unknown as TypedDocumentString<TextFileQuery, TextFileQueryVariables>;
+export const SaveTextFileDocument = new TypedDocumentString(`
+    mutation SaveTextFile($nodeId: ID!, $content: String!, $baseSha256: String) {
+  saveTextFile(nodeId: $nodeId, content: $content, baseSha256: $baseSha256) {
+    id
+    size
+    sha256
+    updatedAt
+  }
+}
+    `) as unknown as TypedDocumentString<SaveTextFileMutation, SaveTextFileMutationVariables>;
+export const CreateTextFileDocument = new TypedDocumentString(`
+    mutation CreateTextFile($parentId: ID, $name: String!, $content: String) {
+  createTextFile(parentId: $parentId, name: $name, content: $content) {
+    id
+    name
+  }
+}
+    `) as unknown as TypedDocumentString<CreateTextFileMutation, CreateTextFileMutationVariables>;
 export const NotificationsDocument = new TypedDocumentString(`
     query Notifications($cursor: String, $unreadOnly: Boolean) {
   notifications(cursor: $cursor, unreadOnly: $unreadOnly) {

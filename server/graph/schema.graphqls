@@ -158,6 +158,13 @@ type FileVersion {
   downloadUrl: String!
 }
 
+# 在线编辑(doc/25):整份文本 + 打开时的 sha256(保存时带回去做冲突检查)
+type TextFile {
+  content: String!
+  sha256: String!
+  size: Int64!
+}
+
 type FileVersionList {
   items: [FileVersion!]!
   # 本站的保留策略:每个文件最多留几个(0 = 覆盖时不留旧版本),换下来后留几天
@@ -1161,6 +1168,8 @@ type Query {
   recentFiles(limit: Int = 100): [Node!]!
   # 一个文件的历史版本,最近换下来的在前
   fileVersions(nodeId: ID!): FileVersionList!
+  # 在线编辑:整份读出一个文本文件。超过 2 MB TOO_LARGE,不是 UTF-8 文本 NOT_TEXT
+  textFile(nodeId: ID!): TextFile!
 
   # 空间分析:都是现算的只读查询
   spaceOverview: SpaceOverview!
@@ -1240,6 +1249,12 @@ type Mutation {
   deleteFileVersions(ids: [ID!]!): Boolean!
   # 清空历史版本:给 nodeId 只清这个文件的,不给清自己全部文件的。返回释放的字节
   purgeFileVersions(nodeId: ID): Int64!
+
+  # 在线编辑(doc/25):按节点覆盖内容,旧内容进历史版本;内容没变什么都不做。
+  # baseSha256 是打开时的 sha256,对不上(在别处改过了)EDIT_CONFLICT;不给 = 不检查(「仍然保存」)
+  saveTextFile(nodeId: ID!, content: String!, baseSha256: String): Node!
+  # 新建文本文件(同名自动改名),内容可以为空
+  createTextFile(parentId: ID, name: String!, content: String = ""): Node!
 
   # replace = true:目标位置有同名文件就覆盖它(旧内容进历史版本,doc/24),而不是自动改名;同名的是文件夹时照旧改名
   initUpload(parentId: ID, name: String!, sha256: String!, size: Int64!, replace: Boolean = false): UploadInit!

@@ -175,3 +175,61 @@ func (r *Resolver) purgeFileVersions(ctx context.Context, nodeID *string) (int64
 	_, bytes, err := r.Versions.Purge(ctx, ident.UserID, id)
 	return bytes, err
 }
+
+// ---- 在线编辑(doc/25) ----
+
+func (r *Resolver) textFile(ctx context.Context, nodeID string) (*TextFile, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := parseID(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	t, err := r.Uploads.ReadTextFile(ctx, ident.UserID, id)
+	if err != nil {
+		return nil, err
+	}
+	return &TextFile{Content: t.Content, Sha256: t.Sha256, Size: t.Size}, nil
+}
+
+func (r *Resolver) saveTextFile(ctx context.Context, nodeID, content string, baseSha256 *string) (*Node, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := parseID(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	base := ""
+	if baseSha256 != nil {
+		base = *baseSha256
+	}
+	n, err := r.Uploads.SaveTextFile(ctx, ident.UserID, id, content, base)
+	if err != nil {
+		return nil, err
+	}
+	return r.getNodeFull(ctx, ident.UserID, n.ID)
+}
+
+func (r *Resolver) createTextFile(ctx context.Context, parentID *string, name string, content *string) (*Node, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pid, err := parseIDPtr(parentID)
+	if err != nil {
+		return nil, err
+	}
+	body := ""
+	if content != nil {
+		body = *content
+	}
+	n, err := r.Uploads.CreateTextFile(ctx, ident.UserID, pid, name, body)
+	if err != nil {
+		return nil, err
+	}
+	return r.getNodeFull(ctx, ident.UserID, n.ID)
+}

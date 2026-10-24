@@ -77,6 +77,9 @@ interface NodesRepository {
 
     /** 收藏 / 取消收藏(doc/24);回收站里的服务端会跳过。不算内容改动,但列表上的星标要跟着变,所以也 +1 [version] */
     suspend fun setStarred(ids: List<String>, starred: Boolean)
+
+    /** 新建文本文件(doc/25,同名服务端自动改名),内容为空;返回新节点 */
+    suspend fun createTextFile(parentId: String?, name: String): Node
 }
 
 /** [NodesRepository.firstPage] 的结果:数据 + 来源 */

@@ -345,6 +345,16 @@ func (r *mutationResolver) PurgeFileVersions(ctx context.Context, nodeID *string
 	return r.purgeFileVersions(ctx, nodeID)
 }
 
+// SaveTextFile is the resolver for the saveTextFile field.
+func (r *mutationResolver) SaveTextFile(ctx context.Context, nodeID string, content string, baseSha256 *string) (*Node, error) {
+	return r.saveTextFile(ctx, nodeID, content, baseSha256)
+}
+
+// CreateTextFile is the resolver for the createTextFile field.
+func (r *mutationResolver) CreateTextFile(ctx context.Context, parentID *string, name string, content *string) (*Node, error) {
+	return r.createTextFile(ctx, parentID, name, content)
+}
+
 // InitUpload is the resolver for the initUpload field.
 func (r *mutationResolver) InitUpload(ctx context.Context, parentID *string, name string, sha256 string, size int64, replace *bool) (*UploadInit, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -2228,6 +2238,11 @@ func (r *queryResolver) RecentFiles(ctx context.Context, limit *int) ([]*Node, e
 // FileVersions is the resolver for the fileVersions field.
 func (r *queryResolver) FileVersions(ctx context.Context, nodeID string) (*FileVersionList, error) {
 	return r.fileVersions(ctx, nodeID)
+}
+
+// TextFile is the resolver for the textFile field.
+func (r *queryResolver) TextFile(ctx context.Context, nodeID string) (*TextFile, error) {
+	return r.textFile(ctx, nodeID)
 }
 
 // SpaceOverview is the resolver for the spaceOverview field.

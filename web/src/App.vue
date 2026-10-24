@@ -19,7 +19,10 @@ onBeforeUnmount(()=>{clearInterval(timer);document.removeEventListener('visibili
 </script>
 
 <template>
-  <router-view />
+  <!-- Element 的弹层(确认框、提示、对话框)从 3000 起排:要盖得住全屏预览层(2500),在预览里编辑时的确认框才看得见 -->
+  <el-config-provider :z-index="3000">
+    <router-view />
+  </el-config-provider>
 </template>
 
 <style>

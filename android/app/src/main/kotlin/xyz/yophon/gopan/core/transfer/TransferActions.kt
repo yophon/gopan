@@ -72,7 +72,11 @@ interface TransferActions {
      */
     suspend fun uploadCopies(uris: List<Uri>, parentId: String?, toChat: Boolean): EnqueueResult
 
-    suspend fun uploadUris(uris: List<Uri>, parentId: String?, toChat: Boolean = false): EnqueueResult
+    /** [replaceNames]:这些名字的文件覆盖目标文件夹里的同名文件(旧内容进历史版本),其余照常(同名自动改名) */
+    suspend fun uploadUris(uris: List<Uri>, parentId: String?, toChat: Boolean = false, replaceNames: Set<String> = emptySet()): EnqueueResult
+
+    /** 这些文件上传后叫什么(与 [uploadUris] 定的名字一致):入队前先和目标文件夹比对同名 */
+    suspend fun uploadNames(uris: List<Uri>): List<String>
 
     suspend fun uploadOwnedFiles(files: List<File>, parentId: String?, toChat: Boolean = false): EnqueueResult
 
@@ -137,7 +141,11 @@ class DefaultTransferActions @Inject constructor(
     }
 
     /** SAF / 相册选择器选中的 URI:持久化读授权(续传要用),取名字与大小;空文件跳过 */
-    override suspend fun uploadUris(uris: List<Uri>, parentId: String?, toChat: Boolean): EnqueueResult {
+    override suspend fun uploadNames(uris: List<Uri>): List<String> = withContext(Dispatchers.IO) {
+        uris.distinct().map { uri -> SourceStore.withExtension(sources.displayName(uri) ?: "未命名", sources.mimeOf(uri)) }
+    }
+
+    override suspend fun uploadUris(uris: List<Uri>, parentId: String?, toChat: Boolean, replaceNames: Set<String>): EnqueueResult {
         val prepared = withContext(Dispatchers.IO) {
             uris.distinct().map { uri ->
                 val persisted = sources.takePersistableRead(uri)
@@ -151,7 +159,7 @@ class DefaultTransferActions @Inject constructor(
                 } else {
                     val mime = sources.mimeOf(uri)
                     val name = SourceStore.withExtension(sources.displayName(uri) ?: "未命名", mime)
-                    UploadSource(uri, name, stat.size, stat.lastModified, mime, owns = false, persisted = persisted) to -1
+                    UploadSource(uri, name, stat.size, stat.lastModified, mime, owns = false, persisted = persisted, replace = name in replaceNames) to -1
                 }
             }
         }
