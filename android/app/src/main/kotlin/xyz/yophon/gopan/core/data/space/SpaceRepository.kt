@@ -18,6 +18,7 @@ import xyz.yophon.gopan.graphql.SpaceEmptyFoldersQuery
 import xyz.yophon.gopan.graphql.SpaceFoldersQuery
 import xyz.yophon.gopan.graphql.SpaceIdleQuery
 import xyz.yophon.gopan.graphql.SpaceLargeFilesQuery
+import xyz.yophon.gopan.graphql.PurgeAllFileVersionsMutation
 import xyz.yophon.gopan.graphql.SpaceOverviewQuery
 import xyz.yophon.gopan.graphql.SpaceStaleFilesQuery
 import xyz.yophon.gopan.graphql.fragment.SpaceFileFields
@@ -52,6 +53,9 @@ data class SpaceOverview(
     /** 重复文件:组数与删掉多余的能省下的配额 */
     val duplicateGroups: Long,
     val duplicateBytes: Long,
+    /** 历史版本(doc/24):同名覆盖时留下的旧内容,计入已用 */
+    val versionFiles: Long = 0,
+    val versionBytes: Long = 0,
 )
 
 /** 文件夹逐层看:[folders] 按子树大小从大到小,[looseFiles] 是直接放在这一层的文件 */
@@ -134,6 +138,9 @@ interface SpaceRepository {
     suspend fun revokeLink(id: String)
 
     suspend fun revokeRequest(id: String)
+
+    /** 清空自己所有文件的历史版本,返回释放的字节 */
+    suspend fun purgeVersions(): Long
 }
 
 @Singleton
@@ -149,6 +156,8 @@ class ApolloSpaceRepository @Inject constructor(private val apollo: ApolloClient
             byType = o.byType.mapNotNull { c -> c.category.toDomain()?.let { CategoryUsage(it, c.files, c.bytes) } },
             duplicateGroups = o.duplicateGroups,
             duplicateBytes = o.duplicateBytes,
+            versionFiles = o.versionFiles,
+            versionBytes = o.versionBytes,
         )
     }
 
@@ -203,6 +212,9 @@ class ApolloSpaceRepository @Inject constructor(private val apollo: ApolloClient
     override suspend fun revokeRequest(id: String) {
         apollo.mutation(RevokeFileRequestMutation(id)).execute().requireData()
     }
+
+    override suspend fun purgeVersions(): Long =
+        apollo.mutation(PurgeAllFileVersionsMutation()).execute().requireData().purgeFileVersions
 
     companion object {
         const val LIST_LIMIT = 100

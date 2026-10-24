@@ -94,6 +94,10 @@ import xyz.yophon.gopan.feature.drive.icon
 import xyz.yophon.gopan.feature.drive.isNearEnd
 import xyz.yophon.gopan.feature.drive.resolve
 import xyz.yophon.gopan.feature.drive.tint
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.pinnedHeaderTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
+import androidx.compose.material3.TopAppBarScrollBehavior
 
 /**
  * 压缩包浏览页(doc/21 四.3):顶栏是压缩包名,下面是包内面包屑(根显示格式,如 ZIP)与当前目录的条目。
@@ -101,6 +105,7 @@ import xyz.yophon.gopan.feature.drive.tint
  * 底栏「全部解压 / 解压此目录 / 解压选中的 N 项」解到压缩包旁边,「解压到…」先选文件夹。
  * 系统返回先关查看器、退出多选、回上一级目录,都没有了才离开。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArchiveScreen(
     onBack: () -> Unit,
@@ -135,13 +140,15 @@ fun ArchiveScreen(
     }
 
     val info = state.readyInfo
+    val topBarScroll = rememberSubPageScroll()
     Box(Modifier.fillMaxSize()) {
         Scaffold(
+            modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
             topBar = {
                 if (state.selectionMode) {
                     SelectionTopBar(state, viewModel)
                 } else {
-                    ArchiveTopBar(state.name, info, onBack)
+                    ArchiveTopBar(state.name, info, onBack, topBarScroll)
                 }
             },
             bottomBar = {
@@ -157,7 +164,7 @@ fun ArchiveScreen(
             // 查看器盖在上面时 Snackbar 由查看器自己显示(同一个 hostState 只挂一处)
             snackbarHost = { if (state.viewer == null) SnackbarHost(snackbar) },
         ) { padding ->
-            Column(Modifier.padding(padding).fillMaxSize()) {
+            Column(Modifier.padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding()).fillMaxSize()) {
                 when (val s = state.info) {
                     ArchiveInfoState.Loading -> LoadingState()
                     ArchiveInfoState.Pending -> LoadingState(message = stringResource(R.string.archive_pending))
@@ -190,8 +197,10 @@ fun ArchiveScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ArchiveTopBar(name: String, info: ArchiveInfo?, onBack: () -> Unit) {
+private fun ArchiveTopBar(name: String, info: ArchiveInfo?, onBack: () -> Unit, scroll: TopAppBarScrollBehavior) {
     TopAppBar(
+        scrollBehavior = scroll,
+        colors = pinnedHeaderTopBarColors(),
         title = {
             Column {
                 Text(name, maxLines = 1, overflow = TextOverflow.MiddleEllipsis, modifier = Modifier.testTag("archive_title"))

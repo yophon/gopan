@@ -461,7 +461,7 @@ extend type Mutation {
 - 订阅:`FEED_EXISTS`(重复)、`TOO_MANY_FEEDS`(100 个)、`FETCH_DISABLED`(本站关了离线下载,订阅与剪藏一起关)、`NOT_A_FEED`、`GITHUB_NOT_FOUND`、`GITHUB_RATE_LIMITED`。GitHub 仓库写 `owner/repo` 或 github.com 链接都行。
 - 剪藏:同一个地址剪过、那篇还在时返回 `existing`;`html` 最大 5 MB(`TOO_LARGE`)。剪藏任务是 `Job`(`kind: CLIP_URL`),结果节点是那篇 `.md`。
 - 不走 GraphQL 的:
-  - `GET /md/{nodeId}?token=<access>[&theme=light|dark]`:Markdown 渲染成一页 HTML(CSP sandbox、`X-Frame-Options: SAMEORIGIN`);错误也是一页 HTML(401 / 404 / 413 超过 2 MB / 415 不是 Markdown)。
+  - `GET /md/{nodeId}?token=<access>[&theme=light|dark][&pt=<px>][&pb=<px>]`:Markdown 渲染成一页 HTML(CSP sandbox、`X-Frame-Options: SAMEORIGIN`);错误也是一页 HTML(401 / 404 / 413 超过 2 MB / 415 不是 Markdown)。`pt` / `pb` 是正文前后多留的空白(0–400 px,站内跳转沿用):App 的阅读页铺满整屏,让出浮在上面的顶栏、下面的底部导航。
   - `GET /md/{nodeId}/f?p=<相对路径>&token=<access>`:那篇里的相对路径,按 .md 所在文件夹解析;图片与文件 302 到签名地址(大图给 2048 缩略图),`.md` 302 到它自己的渲染页。分享访客出不了分享范围。
 
 ## 收藏、最近打开与历史版本(v3.10)

@@ -87,6 +87,12 @@ import xyz.yophon.gopan.feature.drive.ListStatus
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
 import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.resolve
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.belowCollapsingTopBar
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.collapsingTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
+import androidx.compose.foundation.layout.PaddingValues
 
 /** 管理端(仅管理员可见):概览卡片、用户列表、建号;点用户出操作(配额 / 重置密码 / 禁用启用) */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -104,11 +110,15 @@ fun AdminScreen(onBack: () -> Unit, viewModel: AdminViewModel = hiltViewModel())
         }
     }
 
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 windowInsets = TopBarInsets,
+                scrollBehavior = topBarScroll,
+                colors = collapsingTopBarColors(topBarScroll),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))
@@ -132,12 +142,12 @@ fun AdminScreen(onBack: () -> Unit, viewModel: AdminViewModel = hiltViewModel())
         PullToRefreshBox(
             isRefreshing = state.refreshing,
             onRefresh = viewModel::refresh,
-            modifier = Modifier.padding(padding).fillMaxSize(),
+            modifier = Modifier.belowCollapsingTopBar(padding, topBarScroll).fillMaxSize(),
         ) {
             when (val status = state.status) {
                 ListStatus.Loading -> LoadingState()
                 is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
-                ListStatus.Content -> LazyColumn(Modifier.fillMaxSize().testTag("admin_list")) {
+                ListStatus.Content -> LazyColumn(Modifier.fillMaxSize().testTag("admin_list"), contentPadding = PaddingValues(bottom = bottomBarPadding(88.dp))) {
                     state.overview?.let { o ->
                         item { OverviewCards(o, retrying = state.retrying, onRetryFailed = viewModel::retryFailedTasks) }
                     }

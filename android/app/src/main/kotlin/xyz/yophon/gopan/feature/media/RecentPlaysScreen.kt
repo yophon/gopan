@@ -55,6 +55,11 @@ import xyz.yophon.gopan.feature.drive.NestedScreenInsets
 import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.NodeVisual
 import java.time.Instant
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.belowCollapsingTopBar
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.collapsingTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
 
 /** 最近播放:名称、看到哪(时间或页码)、多久以前;点一条接着看,右边的 × 移出 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,11 +84,15 @@ fun RecentPlaysScreen(
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
 
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 windowInsets = TopBarInsets,
+                scrollBehavior = topBarScroll,
+                colors = collapsingTopBarColors(topBarScroll),
                 title = { Text(stringResource(R.string.media_recent_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -98,7 +107,7 @@ fun RecentPlaysScreen(
             isRefreshing = state.isRefreshing,
             onRefresh = viewModel::refresh,
             modifier = Modifier
-                .padding(padding)
+                .belowCollapsingTopBar(padding, topBarScroll)
                 .fillMaxSize()
                 .testTag("recent_plays"),
         ) {
@@ -114,7 +123,7 @@ fun RecentPlaysScreen(
                         )
                     }
                 } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp))) {
                         items(state.items, key = { it.node.id }) { play ->
                             RecentPlayRow(
                                 play = play,

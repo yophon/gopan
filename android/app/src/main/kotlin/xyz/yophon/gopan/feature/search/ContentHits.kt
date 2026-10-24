@@ -44,6 +44,7 @@ import xyz.yophon.gopan.feature.drive.LoadMoreFooter
 import xyz.yophon.gopan.feature.drive.LoadMoreTrigger
 import xyz.yophon.gopan.feature.drive.NodeVisual
 import xyz.yophon.gopan.feature.drive.isNearEnd
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
 
 /*
  * 搜索页「内容」标签的结果(doc/20):一行一个文件——图标 / 缩略图、名字、命中页、带高亮的片段、修改时间、所在目录。
@@ -96,7 +97,7 @@ internal fun ContentHitList(
         isNearEnd = { listState.isNearEnd() },
         onLoadMore = onLoadMore,
     )
-    LazyColumn(state = listState, modifier = modifier.testTag("search_content_list"), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(state = listState, modifier = modifier.testTag("search_content_list"), contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp))) {
         items(content.hits, key = { it.node.id }, contentType = { "hit" }) { hit ->
             ContentHitRow(hit, onClick = { onClick(hit) }, onLongClick = { onLongClick(hit) }, onLocate = { onLocate(hit.node) })
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))

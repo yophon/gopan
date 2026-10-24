@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodesRepository
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.quick.QuickItem
 import xyz.yophon.gopan.core.data.quick.QuickRepository
 import xyz.yophon.gopan.core.network.gopanResult
@@ -46,6 +47,7 @@ class QuickViewModel @Inject constructor(
     transfers: TransferActions,
     previews: PreviewSessionStore,
     private val quick: QuickRepository,
+    cache: ScreenCache,
 ) : NodeActionsViewModel(repo, transfers, previews) {
 
     private val _state = MutableStateFlow(QuickUiState(recent = savedStateHandle[RECENT_ARG] ?: false))
@@ -55,7 +57,29 @@ class QuickViewModel @Inject constructor(
     private var resumedOnce = false
 
     init {
-        load(LoadMode.INITIAL)
+        // 预取过的(启动时、别处改过之后)先画出来,再静默刷新;没有内存里的就读手机上存的上次那份
+        val key = if (_state.value.recent) QuickRepository.RECENT_KEY else QuickRepository.STARRED_KEY
+        val cached = cache[key]
+        if (cached != null) {
+            showCached(cached)
+            load(LoadMode.SILENT)
+        } else {
+            viewModelScope.launch {
+                val stored = cache.load(key)
+                if (stored != null && _state.value.status == ListStatus.Loading) {
+                    showCached(stored)
+                    load(LoadMode.SILENT)
+                } else {
+                    load(LoadMode.INITIAL)
+                }
+            }
+        }
+        // 乐观修改(从最近里拿掉、清空)也跟着写回快照
+        cache.mirror(viewModelScope, key, _state) { s -> s.items.takeIf { s.status == ListStatus.Content } }
+    }
+
+    private fun showCached(items: List<QuickItem>) {
+        _state.update { it.copy(items = items, status = ListStatus.Content) }
     }
 
     private enum class LoadMode { INITIAL, REFRESH, SILENT }

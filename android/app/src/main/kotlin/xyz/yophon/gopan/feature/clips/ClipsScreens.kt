@@ -79,6 +79,16 @@ import xyz.yophon.gopan.feature.drive.NestedScreenInsets
 import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.isNearEnd
 import xyz.yophon.gopan.feature.drive.resolve
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.pinnedHeaderTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.material3.TopAppBarDefaults
+import xyz.yophon.gopan.feature.drive.collapsingTopBarColors
 
 /** 「我的 → 剪藏」:标题、站点、摘要、日期、未读圆点;全部 / 未读;点一篇进阅读页 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,11 +100,15 @@ fun ClipsScreen(onBack: () -> Unit, onOpen: (Clip) -> Unit, viewModel: ClipsView
     LaunchedEffect(viewModel) { viewModel.messages.collect { launch { snackbar.showSnackbar(it.resolve(context)) } } }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
 
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 windowInsets = TopBarInsets,
+                scrollBehavior = topBarScroll,
+                colors = pinnedHeaderTopBarColors(),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))
@@ -105,7 +119,8 @@ fun ClipsScreen(onBack: () -> Unit, onOpen: (Clip) -> Unit, viewModel: ClipsView
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+        // 顶栏收起时筛选顶到最上面;列表能滚到底部导航后面
+        Column(modifier = Modifier.padding(top = padding.calculateTopPadding()).fillMaxSize()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = !state.unreadOnly,
@@ -145,7 +160,7 @@ fun ClipsScreen(onBack: () -> Unit, onOpen: (Clip) -> Unit, viewModel: ClipsView
 private fun ClipList(state: ClipsUiState, viewModel: ClipsViewModel, onOpen: (Clip) -> Unit) {
     val listState = rememberLazyListState()
     LoadMoreTrigger(itemCount = state.items.size, isNearEnd = { listState.isNearEnd() }, onLoadMore = viewModel::loadMore)
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("clips_list")) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("clips_list"), contentPadding = PaddingValues(bottom = bottomBarPadding())) {
         items(state.items, key = { it.id }) { clip ->
             ClipRow(clip, onClick = { onOpen(clip) })
             HorizontalDivider()
@@ -245,11 +260,19 @@ fun ClipReaderScreen(title: String, onBack: () -> Unit, viewModel: ClipReaderVie
     }
 
     val clip = state.clip
+    // 正文铺满整屏,顶栏浮在上面、底部导航浮在下面(页面前后留出它们的高度);顶栏跟着正文的滚动收放
+    val topBarScroll = rememberSubPageScroll()
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val padTop = remember { statusTop + TopAppBarDefaults.TopAppBarExpandedHeight }
+    val bottomInset = bottomBarPadding(16.dp)
+    val padBottom = remember { bottomInset }
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
         topBar = {
             TopAppBar(
                 windowInsets = TopBarInsets,
+                scrollBehavior = topBarScroll,
+                colors = collapsingTopBarColors(topBarScroll),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))
@@ -300,7 +323,13 @@ fun ClipReaderScreen(title: String, onBack: () -> Unit, viewModel: ClipReaderVie
                 url = state.url,
                 baseUrl = viewModel.baseUrl,
                 retoken = viewModel::retoken,
-                modifier = Modifier.padding(padding).fillMaxSize(),
+                modifier = Modifier.fillMaxSize(),
+                padTop = padTop,
+                padBottom = padBottom,
+                onScrollDelta = { dy ->
+                    val bar = topBarScroll.state
+                    bar.heightOffset = (bar.heightOffset - dy).coerceIn(bar.heightOffsetLimit, 0f)
+                },
             )
         }
     }

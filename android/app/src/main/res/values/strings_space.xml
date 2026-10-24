@@ -20,6 +20,13 @@
     <string name="space_trash_open">查看</string>
     <string name="space_trash_purge">清空</string>
     <string name="space_trash_purge_text">回收站里的 %1$d 个文件(%2$s)会被永久删除,无法找回。</string>
+    <string name="space_versions">历史版本</string>
+    <string name="space_versions_desc">%1$d 个,%2$s:文件被同名覆盖时留下的旧内容,占用配额</string>
+    <string name="space_versions_none">文件被同名覆盖时,原来的内容会留在这里</string>
+    <string name="space_versions_purge">清空历史版本</string>
+    <string name="space_versions_purge_title">清空历史版本</string>
+    <string name="space_versions_purge_text">所有文件的 %1$d 个历史版本(%2$s)会被删掉,文件本身不受影响,删了找不回来。</string>
+    <string name="space_versions_purged">历史版本已清空</string>
     <string name="space_duplicates_desc">%1$d 组,删掉多余的能省 %2$s</string>
     <string name="space_duplicates_none">没有重复文件</string>
     <string name="space_duplicates_show">去看看</string>

@@ -80,6 +80,11 @@ import xyz.yophon.gopan.feature.drive.isNearEnd
 import xyz.yophon.gopan.feature.drive.resolve
 import java.time.LocalDate
 import java.time.ZoneId
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
+import androidx.compose.foundation.layout.PaddingValues
+import xyz.yophon.gopan.feature.drive.pinnedHeaderTopBarColors
 
 /**
  * 「我的 → 通知」(doc/22 三.4):按天分组,新的在前;顶栏「全部已读」「清空」;点一条标已读并跳过去
@@ -116,46 +121,56 @@ fun NotificationsScreen(
         entry.clearPosted()
     }
 
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                windowInsets = TopBarInsets,
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))
-                    }
-                },
-                title = { Text(stringResource(R.string.notifications_title)) },
-                actions = {
-                    IconButton(
-                        onClick = viewModel::markAllRead,
-                        enabled = state.hasUnread && !state.busy,
-                        modifier = Modifier.testTag("notifications_read_all"),
-                    ) {
-                        Icon(Icons.Outlined.DoneAll, contentDescription = stringResource(R.string.notifications_action_read_all))
-                    }
-                    IconButton(
-                        onClick = { confirmClear = true },
-                        enabled = state.items.isNotEmpty() && !state.busy,
-                        modifier = Modifier.testTag("notifications_clear"),
-                    ) {
-                        Icon(Icons.Outlined.DeleteSweep, contentDescription = stringResource(R.string.notifications_action_clear))
-                    }
-                },
-            )
+            Column {
+                TopAppBar(
+                    windowInsets = TopBarInsets,
+                    scrollBehavior = topBarScroll,
+                    colors = pinnedHeaderTopBarColors(),
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))
+                        }
+                    },
+                    title = { Text(stringResource(R.string.notifications_title)) },
+                    actions = {
+                        IconButton(
+                            onClick = viewModel::markAllRead,
+                            enabled = state.hasUnread && !state.busy,
+                            modifier = Modifier.testTag("notifications_read_all"),
+                        ) {
+                            Icon(Icons.Outlined.DoneAll, contentDescription = stringResource(R.string.notifications_action_read_all))
+                        }
+                        IconButton(
+                            onClick = { confirmClear = true },
+                            enabled = state.items.isNotEmpty() && !state.busy,
+                            modifier = Modifier.testTag("notifications_clear"),
+                        ) {
+                            Icon(Icons.Outlined.DeleteSweep, contentDescription = stringResource(R.string.notifications_action_clear))
+                        }
+                    },
+                )
+                // 筛选钉在顶栏下面:顶栏收起时它留在最上面
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilterChip(
+                        selected = state.unreadOnly,
+                        onClick = { viewModel.setUnreadOnly(!state.unreadOnly) },
+                        label = { Text(stringResource(R.string.notifications_filter_unread)) },
+                        modifier = Modifier.testTag("notifications_unread_only"),
+                    )
+                }
+            }
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                FilterChip(
-                    selected = state.unreadOnly,
-                    onClick = { viewModel.setUnreadOnly(!state.unreadOnly) },
-                    label = { Text(stringResource(R.string.notifications_filter_unread)) },
-                    modifier = Modifier.testTag("notifications_unread_only"),
-                )
-            }
+        Column(modifier = Modifier.padding(top = padding.calculateTopPadding()).fillMaxSize()) {
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = viewModel::refresh, modifier = Modifier.fillMaxSize()) {
                 when (val status = state.status) {
                     ListStatus.Loading -> ListSkeleton()
@@ -199,7 +214,7 @@ private fun NotificationList(state: NotificationsUiState, viewModel: Notificatio
     val today = remember(state.items) { LocalDate.now(zone) }
     val rows = remember(state.items, today) { NotificationsLogic.rows(state.items, zone, today) }
     LoadMoreTrigger(itemCount = state.items.size, isNearEnd = { listState.isNearEnd() }, onLoadMore = viewModel::loadMore)
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("notifications_list")) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("notifications_list"), contentPadding = PaddingValues(bottom = bottomBarPadding())) {
         items(rows, key = { it.key }, contentType = { it::class }) { row ->
             when (row) {
                 is NotificationRow.DayHeader -> DayHeader(row.label)

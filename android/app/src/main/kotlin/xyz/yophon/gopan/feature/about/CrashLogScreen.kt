@@ -62,6 +62,12 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.inject.Inject
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.belowCollapsingTopBar
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.collapsingTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
+import androidx.compose.foundation.layout.PaddingValues
 
 @Immutable
 data class CrashLogUiState(val reports: List<CrashReport> = emptyList(), val open: CrashReport? = null, val openText: String = "")
@@ -120,11 +126,15 @@ fun CrashLogScreen(onBack: () -> Unit, viewModel: CrashLogViewModel = hiltViewMo
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var confirmClear by remember { mutableStateOf(false) }
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 windowInsets = TopBarInsets,
+                scrollBehavior = topBarScroll,
+                colors = collapsingTopBarColors(topBarScroll),
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back)) }
                 },
@@ -147,10 +157,10 @@ fun CrashLogScreen(onBack: () -> Unit, viewModel: CrashLogViewModel = hiltViewMo
                 title = stringResource(R.string.crash_empty),
                 description = stringResource(R.string.crash_empty_hint),
                 icon = Icons.Outlined.BugReport,
-                modifier = Modifier.padding(padding),
+                modifier = Modifier.belowCollapsingTopBar(padding, topBarScroll),
             )
         } else {
-            LazyColumn(Modifier.padding(padding).fillMaxSize()) {
+            LazyColumn(Modifier.belowCollapsingTopBar(padding, topBarScroll).fillMaxSize(), contentPadding = PaddingValues(bottom = bottomBarPadding())) {
                 items(state.reports, key = { it.file.name }) { r ->
                     ListItem(
                         modifier = Modifier.clickable { viewModel.open(r) }.testTag("crash_row"),

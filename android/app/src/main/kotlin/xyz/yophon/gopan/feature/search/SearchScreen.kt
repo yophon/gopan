@@ -73,6 +73,10 @@ import xyz.yophon.gopan.feature.drive.SEARCH_ACTIONS
 import xyz.yophon.gopan.feature.drive.isNearEnd
 import xyz.yophon.gopan.feature.drive.nodeSecondaryText
 import xyz.yophon.gopan.feature.drive.resolve
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.pinnedHeaderTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
 
 /**
  * 搜索页:顶栏就是输入框(自动聚焦,300ms 防抖),下面「文件名」「内容」两个标签。
@@ -126,12 +130,16 @@ fun SearchScreen(
     // 「所在目录」:跳到结果的父文件夹(根目录下的直接回网盘首页);内容结果的按钮与操作菜单共用
     val locate: (Node) -> Unit = { node -> node.parentId?.let(onOpenFolder) ?: onOpenRoot() }
 
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             Column {
                 TopAppBar(
                     windowInsets = TopBarInsets,
+                    scrollBehavior = topBarScroll,
+                    colors = pinnedHeaderTopBarColors(),
                     title = {
                         TextField(
                             value = text,
@@ -173,9 +181,9 @@ fun SearchScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
-        // 键盘弹起时结果末尾、加载更多与重试不被挡住
+        // 键盘弹起时结果末尾、加载更多与重试不被挡住;平时结果能滚到底部导航后面(底部留白在列表里)
         val contentModifier = Modifier
-            .padding(padding)
+            .padding(top = padding.calculateTopPadding())
             .consumeWindowInsets(padding)
             .imePadding()
             .fillMaxSize()
@@ -290,7 +298,7 @@ private fun SearchResults(state: SearchUiState, viewModel: SearchViewModel, modi
         isNearEnd = { listState.isNearEnd() },
         onLoadMore = viewModel::loadMore,
     )
-    LazyColumn(state = listState, modifier = modifier, contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(state = listState, modifier = modifier, contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp))) {
         item(key = "count", contentType = "count") {
             Text(
                 stringResource(R.string.search_result_count, state.total),

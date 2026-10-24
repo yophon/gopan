@@ -22,7 +22,14 @@ query SpaceOverview {
     }
     duplicateGroups
     duplicateBytes
+    versionFiles
+    versionBytes
   }
+}
+
+# 清空自己所有文件的历史版本(doc/24),返回释放的字节
+mutation PurgeAllFileVersions {
+  purgeFileVersions
 }
 
 query SpaceFolders($parentId: ID) {

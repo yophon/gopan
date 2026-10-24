@@ -85,6 +85,12 @@ import xyz.yophon.gopan.feature.drive.NestedScreenInsets
 import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.resolve
 import xyz.yophon.gopan.core.ui.exposeTestTags
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.belowCollapsingTopBar
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.collapsingTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
+import androidx.compose.foundation.layout.PaddingValues
 
 // ---------------- 公共部分 ----------------
 
@@ -98,11 +104,16 @@ private fun SecurityScaffold(
     onRefresh: () -> Unit,
     content: @Composable () -> Unit,
 ) {
+    // 顶栏随滚动收起;列表铺到底,底部留白在各列表里(bottomBarPadding)
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 windowInsets = TopBarInsets,
+                scrollBehavior = topBarScroll,
+                colors = collapsingTopBarColors(topBarScroll),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))
@@ -113,7 +124,7 @@ private fun SecurityScaffold(
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh, modifier = Modifier.padding(padding).fillMaxSize()) {
+        PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh, modifier = Modifier.belowCollapsingTopBar(padding, topBarScroll).fillMaxSize()) {
             content()
         }
     }
@@ -200,7 +211,7 @@ private fun <T> ListBody(
     when (status) {
         ListStatus.Loading -> LoadingState()
         is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = onRetry) }
-        ListStatus.Content -> LazyColumn(Modifier.fillMaxSize()) {
+        ListStatus.Content -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottomBarPadding())) {
             header()
             if (items.isEmpty()) item { EmptyState(title = emptyTitle, modifier = Modifier.padding(top = 32.dp)) }
             content()
@@ -427,6 +438,7 @@ fun AgentScreen(onBack: () -> Unit, viewModel: AgentViewModel = hiltViewModel())
                         onPrevious = { AgentTab.entries.getOrNull(state.tab.ordinal - 1)?.let(viewModel::selectTab) },
                     )
                     .testTag("agent_list"),
+                contentPadding = PaddingValues(bottom = bottomBarPadding()),
             ) {
                 item { CopyRow(stringResource(R.string.agent_endpoint), viewModel.endpoint, { copy(viewModel.endpoint) }, "mcp_copy") }
                 if (viewModel.isAdmin) {

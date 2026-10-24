@@ -39,6 +39,12 @@ import xyz.yophon.gopan.core.ui.exposeTestTags
 import xyz.yophon.gopan.core.ui.rememberSystemActions
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
 import xyz.yophon.gopan.feature.drive.TopBarInsets
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.belowCollapsingTopBar
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.collapsingTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
+import androidx.compose.foundation.layout.PaddingValues
 
 enum class OssLicense(val label: String, @RawRes val text: Int) {
     APACHE_2_0("Apache License 2.0", R.raw.license_apache_2_0),
@@ -79,11 +85,15 @@ fun LicensesScreen(onBack: () -> Unit) {
     val system = rememberSystemActions()
     val context = LocalContext.current
     var showing by remember { mutableStateOf<OssLicense?>(null) }
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 windowInsets = TopBarInsets,
+                scrollBehavior = topBarScroll,
+                colors = collapsingTopBarColors(topBarScroll),
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back)) }
                 },
@@ -91,7 +101,10 @@ fun LicensesScreen(onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        LazyColumn(Modifier.padding(padding).fillMaxSize().testTag("licenses_list")) {
+        LazyColumn(
+            Modifier.belowCollapsingTopBar(padding, topBarScroll).fillMaxSize().testTag("licenses_list"),
+            contentPadding = PaddingValues(bottom = bottomBarPadding()),
+        ) {
             item {
                 Text(
                     stringResource(R.string.licenses_hint),

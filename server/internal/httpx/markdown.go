@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -21,7 +22,8 @@ const markdownCSP = "sandbox allow-popups allow-popups-to-escape-sandbox; defaul
 
 // MarkdownHandler Markdown 渲染(doc/23 五.2):
 //
-//	GET /md/{node}?token=<access>[&theme=light|dark]      渲染成一页 HTML
+//	GET /md/{node}?token=<access>[&theme=light|dark][&pt=<px>][&pb=<px>]  渲染成一页 HTML;pt / pb:正文前后多留的空白
+//	                                                       (App 的阅读页铺满整屏,顶栏浮在上面、底部导航浮在下面,要让出它们)
 //	GET /md/{node}/f?p=<相对路径>&token=<access>           那篇里的相对路径:图片 / 文件 302 到签名地址,.md 跳到它的渲染页
 //
 // 相对路径放在查询参数里而不是路径里:路径里的 ../ 会被浏览器和路由先规范化掉。
@@ -52,9 +54,16 @@ func MarkdownHandler(auth *service.Auth, md *service.Markdown, shares *service.S
 		if theme != "light" && theme != "dark" {
 			theme = ""
 		}
+		padTop, padBottom := mdPad(q.Get("pt")), mdPad(q.Get("pb"))
 		suffix := "?token=" + url.QueryEscape(token)
 		if theme != "" {
 			suffix += "&theme=" + theme
+		}
+		if padTop > 0 {
+			suffix += "&pt=" + strconv.Itoa(padTop)
+		}
+		if padBottom > 0 {
+			suffix += "&pb=" + strconv.Itoa(padBottom)
 		}
 
 		if strings.HasSuffix(r.URL.Path, "/f") {
@@ -97,7 +106,7 @@ func MarkdownHandler(auth *service.Auth, md *service.Markdown, shares *service.S
 		}
 		base := "/md/" + nodeID.String() + "/f?p="
 		tail := "&" + strings.TrimPrefix(suffix, "?")
-		out, err := mdrender.Render(src, mdrender.Options{Theme: theme, Title: row.Name, Resolve: func(rel string, _ bool) string {
+		out, err := mdrender.Render(src, mdrender.Options{Theme: theme, PadTop: padTop, PadBottom: padBottom, Title: row.Name, Resolve: func(rel string, _ bool) string {
 			return base + url.QueryEscape(strings.TrimPrefix(rel, "./")) + tail
 		}})
 		if err != nil {
@@ -146,4 +155,10 @@ func mdError(w http.ResponseWriter, status int, msg string) {
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(`<!doctype html><meta charset="utf-8"><body style="font:15px/1.6 sans-serif;color:#888;text-align:center;padding:48px 16px">` +
 		html.EscapeString(msg) + `</body>`))
+}
+
+// mdPad 前后留白的参数:0–400 px,不认识的当 0
+func mdPad(v string) int {
+	n, _ := strconv.Atoi(v)
+	return min(max(n, 0), 400)
 }

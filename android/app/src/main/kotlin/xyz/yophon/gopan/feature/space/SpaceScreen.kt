@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOff
 import androidx.compose.material.icons.outlined.Link
@@ -107,6 +108,10 @@ import xyz.yophon.gopan.feature.drive.NodeVisual
 import xyz.yophon.gopan.feature.drive.isNearEnd
 import xyz.yophon.gopan.feature.drive.resolve
 import xyz.yophon.gopan.feature.notifications.NotificationNav
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.pinnedHeaderTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
 
 /** 空间页的标签;顺序即显示顺序 */
 enum class SpaceTab(@StringRes val label: Int) {
@@ -132,11 +137,15 @@ fun SpaceScreen(
 ) {
     var tab by rememberSaveable { mutableStateOf(SpaceTab.OVERVIEW) }
     val snackbar = remember { SnackbarHostState() }
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 windowInsets = TopBarInsets,
+                scrollBehavior = topBarScroll,
+                colors = pinnedHeaderTopBarColors(),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))
@@ -147,7 +156,8 @@ fun SpaceScreen(
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+        // 顶栏收起时标签顶到最上面;各标签的列表能滚到底部导航后面
+        Column(modifier = Modifier.padding(top = padding.calculateTopPadding()).fillMaxSize()) {
             val pager = rememberTabPager(selected = tab.ordinal, pageCount = SpaceTab.entries.size, onSelect = { tab = SpaceTab.entries[it] })
             PrimaryScrollableTabRow(selectedTabIndex = pager.currentPage, edgePadding = 8.dp, modifier = Modifier.testTag("space_tabs")) {
                 SpaceTab.entries.forEach { t ->
@@ -249,13 +259,26 @@ private fun OverviewTab(snackbar: SnackbarHostState, onOpenTrash: () -> Unit, on
     TabEffects(viewModel, snackbar, onOpen = {})
     TabBody(state.status, state.refreshing, viewModel::refresh, viewModel::retry) {
         val overview = state.overview ?: return@TabBody
-        LazyColumn(modifier = Modifier.fillMaxSize().testTag("space_overview"), contentPadding = PaddingValues(vertical = 8.dp)) {
+        LazyColumn(modifier = Modifier.fillMaxSize().testTag("space_overview"), contentPadding = PaddingValues(top = 8.dp, bottom = bottomBarPadding(8.dp))) {
             item("usage") { UsageCard(overview) }
             item("types-title") { SectionTitle(stringResource(R.string.space_by_type)) }
             item("types") { CategoryCard(overview) }
             item("trash") { TrashCard(overview, purging = state.purging, onOpenTrash = onOpenTrash, onPurge = viewModel::requestPurgeTrash) }
+            item("versions") { VersionsCard(overview, purging = state.purgingVersions, onPurge = viewModel::requestPurgeVersions) }
             item("dups") { DuplicatesSummaryCard(overview, onShow = { onShowTab(SpaceTab.DUPLICATES) }) }
         }
+    }
+    if (state.confirmPurgeVersions) {
+        val o = state.overview
+        ConfirmDialog(
+            title = stringResource(R.string.space_versions_purge_title),
+            text = stringResource(R.string.space_versions_purge_text, o?.versionFiles ?: 0, formatBytes(o?.versionBytes ?: 0)),
+            confirmText = stringResource(R.string.space_versions_purge),
+            destructive = true,
+            busy = state.purgingVersions,
+            onConfirm = viewModel::confirmPurgeVersions,
+            onDismiss = viewModel::dismissPurgeVersions,
+        )
     }
     if (state.confirmPurge) {
         val o = state.overview
@@ -345,6 +368,41 @@ private fun TrashCard(overview: SpaceOverview, purging: Boolean, onOpenTrash: ()
     }
 }
 
+/** 历史版本(doc/24):同名覆盖时留下的旧内容占多少,可以一键清空 */
+@Composable
+private fun VersionsCard(overview: SpaceOverview, purging: Boolean, onPurge: () -> Unit) {
+    SpaceCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.History, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.space_versions), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    if (overview.versionFiles > 0) {
+                        stringResource(R.string.space_versions_desc, overview.versionFiles, formatBytes(overview.versionBytes))
+                    } else {
+                        stringResource(R.string.space_versions_none)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (overview.versionFiles > 0) {
+            Spacer(Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Spacer(Modifier.weight(1f))
+                OutlinedButton(
+                    onClick = onPurge,
+                    enabled = !purging,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.testTag("space_purge_versions"),
+                ) { Text(stringResource(R.string.space_versions_purge)) }
+            }
+        }
+    }
+}
+
 @Composable
 private fun DuplicatesSummaryCard(overview: SpaceOverview, onShow: () -> Unit) {
     SpaceCard {
@@ -403,7 +461,7 @@ private fun FoldersTab(snackbar: SnackbarHostState, onOpen: (NotificationNav.Dri
                 if (shares.isEmpty()) {
                     FullPage { EmptyState(title = stringResource(R.string.space_folders_empty), icon = Icons.Outlined.Folder) }
                 } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize().testTag("space_folders"), contentPadding = PaddingValues(bottom = 24.dp)) {
+                    LazyColumn(modifier = Modifier.fillMaxSize().testTag("space_folders"), contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp))) {
                         items(shares, key = { it.node?.id ?: "loose" }) { share ->
                             FolderShareRow(
                                 share = share,
@@ -526,7 +584,7 @@ private fun FilesTab(
                         )
                     }
                 } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize().testTag("space_files"), contentPadding = PaddingValues(bottom = 24.dp)) {
+                    LazyColumn(modifier = Modifier.fillMaxSize().testTag("space_files"), contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp))) {
                         item("select-all") {
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                                 Text(
@@ -662,7 +720,7 @@ private fun DuplicatesTab(snackbar: SnackbarHostState, onOpen: (NotificationNav.
                 } else {
                     val listState = rememberLazyListState()
                     LoadMoreTrigger(itemCount = state.groups.size, isNearEnd = { listState.isNearEnd() }, onLoadMore = viewModel::loadMore)
-                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("space_duplicates"), contentPadding = PaddingValues(bottom = 24.dp)) {
+                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("space_duplicates"), contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp))) {
                         state.groups.forEach { group -> duplicateGroup(group, state.selection, viewModel) }
                         if (state.nextOffset != null || state.loadingMore || state.loadMoreError != null) {
                             item("more") { LoadMoreFooter(isLoading = state.loadingMore, error = state.loadMoreError, onRetry = viewModel::loadMore) }
@@ -741,7 +799,7 @@ private fun IdleTab(snackbar: SnackbarHostState) {
                 if (idle.isEmpty) {
                     FullPage { EmptyState(title = stringResource(R.string.space_idle_none), icon = Icons.Outlined.Link) }
                 } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize().testTag("space_idle"), contentPadding = PaddingValues(bottom = 24.dp)) {
+                    LazyColumn(modifier = Modifier.fillMaxSize().testTag("space_idle"), contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp))) {
                         if (idle.shares.isNotEmpty()) {
                             item("shares") { SectionTitle(stringResource(R.string.space_idle_shares)) }
                             items(idle.shares, key = { "s-${it.id}" }) { s ->

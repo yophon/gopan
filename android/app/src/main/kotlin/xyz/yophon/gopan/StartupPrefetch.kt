@@ -7,6 +7,7 @@ import xyz.yophon.gopan.core.auth.SessionStore
 import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.chat.ChatRepository
+import xyz.yophon.gopan.core.data.quick.QuickRepository
 import xyz.yophon.gopan.core.data.shares.SharesRepository
 import xyz.yophon.gopan.core.network.gopanResult
 import xyz.yophon.gopan.di.ApplicationScope
@@ -16,7 +17,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 进主界面后顺手把另外几个 tab 的首屏取回来(传输助手最新一页、我的分享),写进 [ScreenCache],
+ * 进主界面后顺手把另外几个 tab 的首屏取回来(传输助手最新一页、我的分享、收藏与最近),写进 [ScreenCache],
  * 第一次切过去时直接有数据。先把手机上存的上次那份读进内存(冷启动时网络还没回来也有东西画),
  * 再联网取新的。和文件列表并行发出,HTTP/2 下共用一条连接,几乎不多花时间。
  * 每个账号每个进程只取一次;失败不重试、不提示,页面自己加载时会再来。
@@ -27,6 +28,7 @@ class StartupPrefetch @Inject constructor(
     private val cache: ScreenCache,
     private val chat: ChatRepository,
     private val shares: SharesRepository,
+    private val quick: QuickRepository,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
     private var doneFor: String? = null
@@ -39,6 +41,8 @@ class StartupPrefetch @Inject constructor(
         }
         prefetch(uid, ChatViewModel.LATEST_CACHE_KEY) { chat.latest(ChatRepository.LATEST_LIMIT) }
         prefetch(uid, SharesViewModel.CACHE_KEY) { SharesViewModel.sortShares(shares.myShares()) }
+        // 文件页顶上的「收藏」「最近」
+        quick.prefetch()
     }
 
     private fun <T : Any> prefetch(uid: String, key: ScreenKey<T>, fetch: suspend () -> T) {

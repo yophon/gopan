@@ -68,6 +68,12 @@ import xyz.yophon.gopan.feature.drive.isNearEnd
 import xyz.yophon.gopan.feature.drive.TRASH_ACTIONS
 import xyz.yophon.gopan.feature.drive.resolve
 import java.time.Instant
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.belowCollapsingTopBar
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.collapsingTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
+import androidx.compose.material3.TopAppBarScrollBehavior
 
 /** 回收站页:列表(名称、原大小、删除时间、剩余天数)、还原、彻底删除、清空、多选批量 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,14 +91,16 @@ fun TrashScreen(
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
     BackHandler(enabled = state.selectionMode) { viewModel.clearSelection() }
+    val topBarScroll = rememberSubPageScroll()
 
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             if (state.selectionMode) {
                 TrashSelectionTopBar(state, viewModel)
             } else {
-                TrashTopBar(onBack = onBack, canPurgeAll = state.items.isNotEmpty(), onPurgeAll = viewModel::requestPurgeAll)
+                TrashTopBar(onBack = onBack, canPurgeAll = state.items.isNotEmpty(), onPurgeAll = viewModel::requestPurgeAll, scroll = topBarScroll)
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -100,9 +108,9 @@ fun TrashScreen(
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = viewModel::refresh,
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
+            modifier = (
+                if (state.selectionMode) Modifier.padding(top = padding.calculateTopPadding()) else Modifier.belowCollapsingTopBar(padding, topBarScroll)
+                ).fillMaxSize(),
         ) {
             when (val status = state.status) {
                 ListStatus.Loading -> ListSkeleton()
@@ -127,10 +135,12 @@ fun TrashScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TrashTopBar(onBack: () -> Unit, canPurgeAll: Boolean, onPurgeAll: () -> Unit) {
+private fun TrashTopBar(onBack: () -> Unit, canPurgeAll: Boolean, onPurgeAll: () -> Unit, scroll: TopAppBarScrollBehavior) {
     var expanded by remember { mutableStateOf(false) }
     TopAppBar(
         windowInsets = TopBarInsets,
+        scrollBehavior = scroll,
+        colors = collapsingTopBarColors(scroll),
         title = { Text(stringResource(R.string.trash_title)) },
         navigationIcon = {
             IconButton(onClick = onBack) {
@@ -213,7 +223,7 @@ private fun TrashList(state: TrashUiState, viewModel: TrashViewModel) {
         isNearEnd = { listState.isNearEnd() },
         onLoadMore = viewModel::loadMore,
     )
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp))) {
         items(state.items, key = { it.id }, contentType = { "node" }) { node ->
             NodeRow(
                 modifier = Modifier.animateItem(),

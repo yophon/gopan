@@ -78,6 +78,10 @@ import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.fileCategory
 import xyz.yophon.gopan.feature.drive.icon
 import xyz.yophon.gopan.feature.drive.tint
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.pinnedHeaderTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
 
 /** 传输列表(上传 / 下载 / 后台任务);从文件页菜单、「我的」、传输助手、通知点按进入 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -137,11 +141,15 @@ fun TransfersScreen(
         }
     }
 
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 windowInsets = TopBarInsets,
+                scrollBehavior = topBarScroll,
+                colors = pinnedHeaderTopBarColors(),
                 title = { Text(stringResource(R.string.transfers_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -166,7 +174,8 @@ fun TransfersScreen(
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+        // 顶栏收起时标签顶到最上面;列表能滚到底部导航后面
+        Column(modifier = Modifier.padding(top = padding.calculateTopPadding()).fillMaxSize()) {
             val pager = rememberTabPager(selected = tab, pageCount = 3, onSelect = ::selectTab)
             PrimaryTabRow(selectedTabIndex = pager.currentPage) {
                 Tab(
@@ -198,7 +207,7 @@ fun TransfersScreen(
                     if (state.loaded && state.uploads.isEmpty()) {
                         EmptyState(title = stringResource(R.string.transfers_empty_uploads), icon = Icons.Outlined.CloudUpload)
                     } else {
-                        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp)), modifier = Modifier.fillMaxSize()) {
                             items(state.uploads, key = { it.task.id }) { row ->
                                 Column(Modifier.animateItem()) {
                                     UploadItem(row, viewModel)
@@ -212,7 +221,7 @@ fun TransfersScreen(
                         EmptyState(title = stringResource(R.string.transfers_empty_downloads), icon = Icons.Outlined.CloudDownload)
                     } else {
                         val chooser = stringResource(R.string.drive_action_open)
-                        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp)), modifier = Modifier.fillMaxSize()) {
                             items(state.downloads, key = { it.task.id }) { row ->
                                 Column(Modifier.animateItem()) {
                                     DownloadItem(row, viewModel, chooser)

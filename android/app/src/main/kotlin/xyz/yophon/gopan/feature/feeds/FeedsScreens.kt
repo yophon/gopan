@@ -118,6 +118,12 @@ import xyz.yophon.gopan.feature.drive.NestedScreenInsets
 import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.isNearEnd
 import xyz.yophon.gopan.feature.drive.resolve
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.belowCollapsingTopBar
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.collapsingTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
+import androidx.compose.material3.TopAppBarScrollBehavior
 
 // ---- 共用 ----
 
@@ -137,9 +143,11 @@ private fun kindIcon(feed: Feed): ImageVector = when {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NestedTopBar(title: String, onBack: () -> Unit, actions: @Composable () -> Unit = {}) {
+private fun NestedTopBar(title: String, onBack: () -> Unit, scroll: TopAppBarScrollBehavior, actions: @Composable () -> Unit = {}) {
     TopAppBar(
         windowInsets = TopBarInsets,
+        scrollBehavior = scroll,
+        colors = collapsingTopBarColors(scroll),
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))
@@ -180,9 +188,11 @@ fun FeedsScreen(
     LaunchedEffect(viewModel) { viewModel.messages.collect { launch { snackbar.showSnackbar(it.resolve(context)) } } }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
 
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
-        topBar = { NestedTopBar(stringResource(R.string.feeds_title), onBack) },
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
+        topBar = { NestedTopBar(stringResource(R.string.feeds_title), onBack, topBarScroll) },
         floatingActionButton = {
             if (state.status == ListStatus.Content && state.feeds.isNotEmpty()) {
                 ExtendedFloatingActionButton(
@@ -195,7 +205,7 @@ fun FeedsScreen(
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = viewModel::refresh, modifier = Modifier.padding(padding).fillMaxSize()) {
+        PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = viewModel::refresh, modifier = Modifier.belowCollapsingTopBar(padding, topBarScroll).fillMaxSize()) {
             when (val status = state.status) {
                 ListStatus.Loading -> ListSkeleton()
                 is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
@@ -215,7 +225,7 @@ fun FeedsScreen(
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize().testTag("feeds_list"),
-                        contentPadding = PaddingValues(bottom = 96.dp),
+                        contentPadding = PaddingValues(bottom = bottomBarPadding(96.dp)),
                     ) {
                         items(state.feeds, key = { it.id }) { feed ->
                             FeedRow(feed, onClick = { onOpen(feed) })
@@ -280,9 +290,11 @@ fun FeedAddScreen(onBack: () -> Unit, onCreated: (Feed) -> Unit, viewModel: Feed
     val currentOnCreated by rememberUpdatedState(onCreated)
     LaunchedEffect(viewModel) { viewModel.created.collect { currentOnCreated(it) } }
 
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
-        topBar = { NestedTopBar(stringResource(R.string.feeds_add), onBack) },
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
+        topBar = { NestedTopBar(stringResource(R.string.feeds_add), onBack, topBarScroll) },
         bottomBar = {
             Surface(tonalElevation = 3.dp) {
                 Button(
@@ -300,8 +312,8 @@ fun FeedAddScreen(onBack: () -> Unit, onCreated: (Feed) -> Unit, viewModel: Feed
         },
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.padding(padding).fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            modifier = Modifier.belowCollapsingTopBar(padding, topBarScroll).fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = padding.calculateBottomPadding() + 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item("url") {
@@ -468,10 +480,12 @@ fun FeedDetailScreen(
     }
 
     val feed = state.feed
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
-            NestedTopBar(feed?.title?.ifEmpty { feed.url } ?: title, onBack) {
+            NestedTopBar(feed?.title?.ifEmpty { feed.url } ?: title, onBack, topBarScroll) {
                 if (feed != null) {
                     if (state.checking) {
                         Box48 { CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp) }
@@ -522,7 +536,7 @@ fun FeedDetailScreen(
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = viewModel::refresh, modifier = Modifier.padding(padding).fillMaxSize()) {
+        PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = viewModel::refresh, modifier = Modifier.belowCollapsingTopBar(padding, topBarScroll).fillMaxSize()) {
             when (val status = state.status) {
                 ListStatus.Loading -> ListSkeleton()
                 is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
@@ -557,7 +571,7 @@ private fun Box48(content: @Composable () -> Unit) {
 private fun FeedDetailList(feed: Feed, state: FeedDetailUiState, viewModel: FeedDetailViewModel, onOpenNode: (String) -> Unit) {
     val listState = rememberLazyListState()
     LoadMoreTrigger(itemCount = state.items.size, isNearEnd = { listState.isNearEnd() }, onLoadMore = viewModel::loadMore)
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("feed_items"), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("feed_items"), contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp))) {
         item("header") { FeedHeader(feed) }
         item("items-title") {
             Text(

@@ -28,6 +28,8 @@ type Options struct {
 	Theme string
 	// Title 没有 YAML 标题时用的页面标题(文件名)
 	Title string
+	// PadTop / PadBottom 正文前后多留的空白(CSS px):嵌进 App 的页面铺满整屏时让出浮在上面的顶栏、下面的底部导航
+	PadTop, PadBottom int
 	// Resolve 改写相对地址(image 区分图片和链接);返回空串保留原样
 	Resolve func(rel string, image bool) string
 }
@@ -157,6 +159,12 @@ func Render(src []byte, opt Options) ([]byte, error) {
 	out.WriteString("><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">")
 	out.WriteString("<meta name=\"referrer\" content=\"no-referrer\"><title>" + html.EscapeString(title) + "</title><style>")
 	out.WriteString(css)
+	if opt.PadTop > 0 {
+		out.WriteString("body{padding-top:" + strconv.Itoa(opt.PadTop) + "px}")
+	}
+	if opt.PadBottom > 0 {
+		out.WriteString("body{padding-bottom:" + strconv.Itoa(opt.PadBottom) + "px}")
+	}
 	out.WriteString("</style></head><body><main class=\"md\">")
 	if len(fm) > 0 {
 		writeCard(&out, fm)

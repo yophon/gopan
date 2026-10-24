@@ -105,6 +105,8 @@ import xyz.yophon.gopan.feature.drive.resolve
 import xyz.yophon.gopan.core.ui.exposeTestTags
 import xyz.yophon.gopan.feature.links.DirectLinksTab
 import xyz.yophon.gopan.feature.links.DirectLinksViewModel
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
 
 /**
  * 「分享」tab:上面「分享」「收集」「直链」三个标签(与网页端一致;本站关了直链时没有「直链」)。
@@ -395,11 +397,15 @@ private fun SheetAction(icon: ImageVector, label: String, destructive: Boolean =
 @Composable
 fun ShareVisitsScreen(onBack: () -> Unit, viewModel: ShareVisitsViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 windowInsets = TopBarInsets,
+                scrollBehavior = topBarScroll,
+                colors = collapsingTopBarColors(topBarScroll),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))
@@ -422,11 +428,11 @@ fun ShareVisitsScreen(onBack: () -> Unit, viewModel: ShareVisitsViewModel = hilt
             )
         },
     ) { padding ->
-        val modifier = Modifier.padding(padding).fillMaxSize()
+        val modifier = Modifier.belowCollapsingTopBar(padding, topBarScroll).fillMaxSize()
         when (val status = state.status) {
             ListStatus.Loading -> LoadingState(modifier = modifier)
             is ListStatus.Error -> ErrorState(status.message, modifier = modifier, onRetry = viewModel::load)
-            ListStatus.Content -> LazyColumn(modifier = modifier.testTag("visits_list")) {
+            ListStatus.Content -> LazyColumn(modifier = modifier.testTag("visits_list"), contentPadding = PaddingValues(bottom = bottomBarPadding())) {
                 item {
                     Text(
                         stringResource(R.string.visits_hint),

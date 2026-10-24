@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -34,10 +35,13 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.markdown.MarkdownLinkRoute
 import xyz.yophon.gopan.core.data.markdown.MarkdownLinks
@@ -49,6 +53,9 @@ import xyz.yophon.gopan.core.ui.components.ErrorState
  * 别的网址交给浏览器;file: / javascript: 之类什么都不做。页面开着久了 token 过期,点到的链接与重试都会换新的。
  *
  * [url] 为 null 表示地址还在拼(显示进度条);变了(比如深浅主题变了)整页重新打开。
+ *
+ * [padTop] / [padBottom]:页面铺满整屏、上面浮着顶栏下面浮着底部导航时,让服务端在正文前后留出它们的高度(/md 的 pt / pb);
+ * [onScrollDelta]:正文每次滚动的像素(往下读为正),阅读页拿它收放顶栏。
  */
 @Composable
 fun MarkdownView(
@@ -57,7 +64,13 @@ fun MarkdownView(
     retoken: suspend (String) -> String,
     modifier: Modifier = Modifier,
     background: Color = MaterialTheme.colorScheme.background,
+    padTop: Dp = 0.dp,
+    padBottom: Dp = 0.dp,
+    onScrollDelta: ((Int) -> Unit)? = null,
 ) {
+    val currentOnScroll by rememberUpdatedState(onScrollDelta)
+    val pads = remember(padTop, padBottom) { padTop.value.roundToInt() to padBottom.value.roundToInt() }
+    fun padded(target: String): String = withPads(target, pads.first, pads.second)
     val scope = rememberCoroutineScope()
     val currentRetoken by rememberUpdatedState(retoken)
     val fontScale = LocalDensity.current.fontScale
@@ -71,9 +84,9 @@ fun MarkdownView(
         val view = holder.view ?: return
         scope.launch {
             val next = if (fresh) runCatching { currentRetoken(target) }.getOrDefault(target) else target
-            holder.current = next
+            holder.current = padded(next)
             holder.retried401 = false
-            view.loadUrl(next)
+            view.loadUrl(holder.current!!)
         }
     }
 
@@ -87,6 +100,7 @@ fun MarkdownView(
             factory = { context ->
                 WebView(context).apply {
                     setBackgroundColor(background.toArgb())
+                    setOnScrollChangeListener { _, _, y, _, oldY -> currentOnScroll?.invoke(y - oldY) }
                     settings.apply {
                         javaScriptEnabled = false
                         javaScriptCanOpenWindowsAutomatically = false
@@ -122,10 +136,10 @@ fun MarkdownView(
             update = { view ->
                 if (url != null && url != holder.root) {
                     holder.root = url
-                    holder.current = url
+                    holder.current = padded(url)
                     holder.retried401 = false
                     history.clear()
-                    view.loadUrl(url)
+                    view.loadUrl(holder.current!!)
                 }
             },
             onRelease = { view ->
@@ -135,17 +149,30 @@ fun MarkdownView(
             },
         )
         if (url == null || loading) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter))
+            LinearProgressIndicator(modifier = Modifier.padding(top = padTop).fillMaxWidth().align(Alignment.TopCenter))
         }
         if (failed) {
             ErrorState(
                 message = stringResource(R.string.md_load_failed),
                 // 盖住 WebView 自己的「网页无法打开」
-                modifier = Modifier.fillMaxSize().background(background),
+                modifier = Modifier.fillMaxSize().background(background).padding(top = padTop, bottom = padBottom),
                 onRetry = { holder.current?.let { load(it, fresh = true) } },
             )
         }
     }
+}
+
+/** 地址上带好 pt / pb(先去掉旧的;0 不带) */
+private fun withPads(url: String, top: Int, bottom: Int): String {
+    if (top <= 0 && bottom <= 0 && !url.contains("pt=") && !url.contains("pb=")) return url
+    val uri = url.toUri()
+    val b = uri.buildUpon().clearQuery()
+    uri.queryParameterNames.filter { it != "pt" && it != "pb" }.forEach { name ->
+        uri.getQueryParameters(name).forEach { b.appendQueryParameter(name, it) }
+    }
+    if (top > 0) b.appendQueryParameter("pt", top.toString())
+    if (bottom > 0) b.appendQueryParameter("pb", bottom.toString())
+    return b.build().toString()
 }
 
 /** WebView 与它当前打开的地址(Compose 状态之外,给 WebViewClient 与重试用) */

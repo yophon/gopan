@@ -68,13 +68,14 @@ class ApolloSpaceRepositoryTest {
         handlers["SpaceOverview"] = {
             """{"data":{"spaceOverview":{"__typename":"SpaceOverview","usedBytes":1000,"quotaBytes":5000,"trashFiles":2,"trashBytes":100,
             "byType":[{"__typename":"SpaceCategory","category":"VIDEO","files":3,"bytes":600},{"__typename":"SpaceCategory","category":"HOLOGRAM","files":1,"bytes":1}],
-            "duplicateGroups":4,"duplicateBytes":70}}}"""
+            "duplicateGroups":4,"duplicateBytes":70,"versionFiles":2,"versionBytes":30}}}"""
         }
         val o = repo.overview()
         assertThat(o.usedBytes).isEqualTo(1000)
         assertThat(o.byType).containsExactly(CategoryUsage(SpaceCategory.VIDEO, 3, 600))
         assertThat(o.duplicateGroups).isEqualTo(4)
         assertThat(o.duplicateBytes).isEqualTo(70)
+        assertThat(o.versionBytes).isEqualTo(30)
     }
 
     @Test

@@ -50,6 +50,7 @@ import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.ui.components.EmptyState
 import xyz.yophon.gopan.core.ui.components.ErrorState
 import xyz.yophon.gopan.core.ui.components.LoadingState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 
 /**
  * 移动 / 复制 / 解压的目标选择器(全屏对话框):从根开始逐级进入,底部「选择此文件夹」。
@@ -78,10 +79,13 @@ fun FolderPickerDialog(
     ) {
         BackHandler(enabled = state.canGoUp) { viewModel.up() }
         DialogSystemBarsAppearance()
+        val topBarScroll = rememberSubPageScroll()
         Scaffold(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().nestedScroll(topBarScroll.nestedScrollConnection),
             topBar = {
                 TopAppBar(
+                    scrollBehavior = topBarScroll,
+                    colors = pinnedHeaderTopBarColors(),
                     title = {
                         Text(
                             stringResource(

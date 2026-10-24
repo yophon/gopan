@@ -106,9 +106,12 @@ data class SpaceOverviewUiState(
     val refreshing: Boolean = false,
     val confirmPurge: Boolean = false,
     val purging: Boolean = false,
+    /** 清空历史版本(doc/24):先确认 */
+    val confirmPurgeVersions: Boolean = false,
+    val purgingVersions: Boolean = false,
 )
 
-/** 总览:已用 / 配额、按类型、回收站(清空)、重复文件的合计 */
+/** 总览:已用 / 配额、按类型、回收站(清空)、历史版本(清空)、重复文件的合计 */
 @HiltViewModel
 class SpaceOverviewViewModel @Inject constructor(
     private val repo: SpaceRepository,
@@ -171,6 +174,32 @@ class SpaceOverviewViewModel @Inject constructor(
                 }
                 .onFailure { e ->
                     _state.update { it.copy(purging = false) }
+                    message(UiText.Plain(e.message ?: "操作失败"))
+                }
+        }
+    }
+
+    fun requestPurgeVersions() {
+        if ((_state.value.overview?.versionFiles ?: 0) <= 0) return
+        _state.update { it.copy(confirmPurgeVersions = true) }
+    }
+
+    fun dismissPurgeVersions() {
+        if (!_state.value.purgingVersions) _state.update { it.copy(confirmPurgeVersions = false) }
+    }
+
+    fun confirmPurgeVersions() {
+        if (_state.value.purgingVersions) return
+        _state.update { it.copy(purgingVersions = true) }
+        viewModelScope.launch {
+            gopanResult { repo.purgeVersions() }
+                .onSuccess {
+                    _state.update { it.copy(purgingVersions = false, confirmPurgeVersions = false) }
+                    message(UiText.Res(R.string.space_versions_purged))
+                    load(silent = true)
+                }
+                .onFailure { e ->
+                    _state.update { it.copy(purgingVersions = false) }
                     message(UiText.Plain(e.message ?: "操作失败"))
                 }
         }

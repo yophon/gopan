@@ -8,7 +8,12 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
+import xyz.yophon.gopan.core.auth.SessionStore
+import xyz.yophon.gopan.core.auth.UserSummary
+import xyz.yophon.gopan.core.data.InMemorySnapshotDisk
+import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.quick.FakeQuickRepository
+import xyz.yophon.gopan.core.data.quick.QuickRepository
 import xyz.yophon.gopan.core.data.quick.FileVersion
 import xyz.yophon.gopan.core.data.quick.FileVersionList
 import xyz.yophon.gopan.core.data.quick.QuickItem
@@ -30,9 +35,23 @@ class QuickViewModelTest {
     private val repo = FakeNodesRepository()
     private val quick = FakeQuickRepository()
     private val sessions = PreviewSessionStore()
+    private val cache = ScreenCache(SessionStore().apply { setSignedIn("t", UserSummary("u1", "u1", 0, 0, false)) }, InMemorySnapshotDisk())
 
     private fun viewModel(recent: Boolean) =
-        QuickViewModel(SavedStateHandle(mapOf(QuickViewModel.RECENT_ARG to recent)), repo, FakeTransferActions(), sessions, quick)
+        QuickViewModel(SavedStateHandle(mapOf(QuickViewModel.RECENT_ARG to recent)), repo, FakeTransferActions(), sessions, quick, cache)
+
+    @Test
+    fun `prefetched snapshot shows at once, then refreshes silently and writes back`() = runTest {
+        cache.put(QuickRepository.STARRED_KEY, listOf(QuickItem(folder("old", "旧的"), "/旧的")))
+        quick.starredItems = listOf(QuickItem(folder("d1", "工作"), "/工作"))
+        val vm = viewModel(recent = false)
+        // 构造完立刻就是上次的快照,不经过加载中
+        assertThat(vm.state.value.status).isEqualTo(ListStatus.Content)
+        assertThat(vm.state.value.items.map { it.node.id }).containsExactly("old")
+        advanceUntilIdle()
+        assertThat(vm.state.value.items.map { it.node.id }).containsExactly("d1")
+        assertThat(cache[QuickRepository.STARRED_KEY]?.map { it.node.id }).containsExactly("d1")
+    }
 
     @Test
     fun `starred loads folders and files, folder opens and file previews with file siblings`() = runTest {

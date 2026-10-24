@@ -74,6 +74,21 @@ class SpaceViewModelsTest {
     }
 
     @Test
+    fun `purging all file versions confirms first and reloads`() = vmTest({ SpaceOverviewViewModel(repo, nodes, noCache) }) { vm, effects ->
+        repo.overview = repo.overview.copy(versionFiles = 3, versionBytes = 300)
+        vm.refresh()
+        advanceUntilIdle()
+        vm.requestPurgeVersions()
+        assertThat(vm.state.value.confirmPurgeVersions).isTrue()
+        assertThat(repo.calls).doesNotContain("purgeVersions")
+        vm.confirmPurgeVersions()
+        advanceUntilIdle()
+        assertThat(repo.calls).contains("purgeVersions")
+        assertThat(vm.state.value.confirmPurgeVersions).isFalse()
+        assertThat(effects.resIds()).contains(R.string.space_versions_purged)
+    }
+
+    @Test
     fun `overview reloads when the drive changed elsewhere`() = vmTest({ SpaceOverviewViewModel(repo, nodes, noCache) }) { vm, _ ->
         vm.onShown()
         advanceUntilIdle()

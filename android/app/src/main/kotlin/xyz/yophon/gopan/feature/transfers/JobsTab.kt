@@ -55,6 +55,7 @@ import xyz.yophon.gopan.feature.drive.FileCategory
 import xyz.yophon.gopan.feature.drive.fileCategory
 import xyz.yophon.gopan.feature.drive.icon
 import xyz.yophon.gopan.feature.drive.tint
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
 
 /** 「后台任务」栏:离线下载、解压与剪藏(服务端执行,关掉 App 也继续) */
 @Composable
@@ -67,7 +68,7 @@ internal fun JobsTab(state: JobsUiState, viewModel: JobsViewModel) {
             description = stringResource(R.string.jobs_empty_desc),
             icon = Icons.Outlined.CloudSync,
         )
-        else -> LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
+        else -> LazyColumn(contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp)), modifier = Modifier.fillMaxSize()) {
             items(state.rows, key = { it.job.id }) { row ->
                 JobItem(row, viewModel)
                 HorizontalDivider()

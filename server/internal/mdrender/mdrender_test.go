@@ -54,3 +54,17 @@ func TestNoFrontMatter(t *testing.T) {
 		t.Fatalf("out = %s %v", out, err)
 	}
 }
+
+func TestRenderPadBottom(t *testing.T) {
+	out, err := Render([]byte("# a"), Options{Title: "a.md", PadTop: 88, PadBottom: 96})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "body{padding-top:88px}") || !strings.Contains(string(out), "body{padding-bottom:96px}") {
+		t.Fatal("没有留出前后空白")
+	}
+	plain, _ := Render([]byte("# a"), Options{Title: "a.md"})
+	if strings.Contains(string(plain), "body{padding-") {
+		t.Fatal("不给 PadBottom 不该加")
+	}
+}

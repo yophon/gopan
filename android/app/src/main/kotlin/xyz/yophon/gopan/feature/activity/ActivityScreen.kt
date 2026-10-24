@@ -99,6 +99,10 @@ import xyz.yophon.gopan.feature.drive.resolve
 import xyz.yophon.gopan.feature.notifications.NotificationNav
 import java.time.LocalDate
 import java.time.ZoneId
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.pinnedHeaderTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
 
 /**
  * 「我的 → 动态」(doc/23 二.4):按天分组,同一批折叠成一组;顶部按来源筛选;每行「撤回」,一组「撤回这一组」(先预览);
@@ -126,11 +130,15 @@ fun ActivityScreen(
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
 
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 windowInsets = TopBarInsets,
+                scrollBehavior = topBarScroll,
+                colors = pinnedHeaderTopBarColors(),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))
@@ -156,7 +164,8 @@ fun ActivityScreen(
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+        // 顶栏收起时筛选条顶到最上面;列表能滚到底部导航后面
+        Column(modifier = Modifier.padding(top = padding.calculateTopPadding()).fillMaxSize()) {
             FilterBar(state, viewModel)
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = viewModel::refresh, modifier = Modifier.fillMaxSize()) {
                 when (val status = state.status) {
@@ -233,7 +242,7 @@ private fun ActivityList(state: ActivityUiState, viewModel: ActivityViewModel) {
     val today = remember(state.items) { LocalDate.now(zone) }
     val rows = remember(state.items, state.expanded, today) { ActivityLogic.rows(state.items, state.expanded, zone, today) }
     LoadMoreTrigger(itemCount = state.items.size, isNearEnd = { listState.isNearEnd() }, onLoadMore = viewModel::loadMore)
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("activity_list"), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("activity_list"), contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp))) {
         items(rows, key = { it.key }, contentType = { it::class }) { row ->
             when (row) {
                 is ActivityRow.DayHeader -> DayHeader(row.label)

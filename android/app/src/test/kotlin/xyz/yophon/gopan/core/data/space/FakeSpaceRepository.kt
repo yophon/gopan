@@ -80,6 +80,11 @@ class FakeSpaceRepository : SpaceRepository {
 
     override suspend fun revokeRequest(id: String) = record("revokeRequest($id)")
 
+    override suspend fun purgeVersions(): Long {
+        record("purgeVersions")
+        return overview.versionBytes
+    }
+
     companion object {
         fun spaceFile(id: String, size: Long = 100, path: String = "/", category: SpaceCategory? = SpaceCategory.OTHER, folder: Boolean = false) =
             SpaceFile(

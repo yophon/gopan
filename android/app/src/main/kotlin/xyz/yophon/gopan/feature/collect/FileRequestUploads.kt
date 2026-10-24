@@ -72,6 +72,11 @@ import xyz.yophon.gopan.feature.drive.UiText
 import xyz.yophon.gopan.feature.drive.isNearEnd
 import xyz.yophon.gopan.feature.drive.resolve
 import javax.inject.Inject
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.belowCollapsingTopBar
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.collapsingTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
 
 @Immutable
 data class FileRequestUploadsUiState(
@@ -195,11 +200,15 @@ fun FileRequestUploadsScreen(
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { launch { snackbar.showSnackbar(it) } }
     }
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 windowInsets = TopBarInsets,
+                scrollBehavior = topBarScroll,
+                colors = collapsingTopBarColors(topBarScroll),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.preview_back))
@@ -226,7 +235,7 @@ fun FileRequestUploadsScreen(
         PullToRefreshBox(
             isRefreshing = state.refreshing,
             onRefresh = viewModel::refresh,
-            modifier = Modifier.padding(padding).fillMaxSize(),
+            modifier = Modifier.belowCollapsingTopBar(padding, topBarScroll).fillMaxSize(),
         ) {
             when (val status = state.status) {
                 ListStatus.Loading -> ListSkeleton()
@@ -255,7 +264,7 @@ private fun UploadList(
 ) {
     val listState = rememberLazyListState()
     LoadMoreTrigger(itemCount = state.items.size, isNearEnd = { listState.isNearEnd() }, onLoadMore = viewModel::loadMore)
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("collect_uploads_list"), contentPadding = PaddingValues(bottom = 24.dp)) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("collect_uploads_list"), contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp))) {
         items(state.items, key = { it.id }) { upload ->
             UploadRow(upload, uploader = FileRequestUploadsViewModel.uploaderText(upload).resolve(), onClick = { onOpen(upload) })
         }

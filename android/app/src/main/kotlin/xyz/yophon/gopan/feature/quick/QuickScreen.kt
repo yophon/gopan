@@ -53,6 +53,11 @@ import xyz.yophon.gopan.feature.drive.NodeRow
 import xyz.yophon.gopan.feature.drive.TopBarInsets
 import xyz.yophon.gopan.feature.drive.resolve
 import java.time.Instant
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import xyz.yophon.gopan.feature.drive.belowCollapsingTopBar
+import xyz.yophon.gopan.feature.drive.bottomBarPadding
+import xyz.yophon.gopan.feature.drive.collapsingTopBarColors
+import xyz.yophon.gopan.feature.drive.rememberSubPageScroll
 
 private val STARRED_ACTIONS = listOf(
     NodeAction.LOCATE,
@@ -102,11 +107,15 @@ fun QuickScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
     val locate: (Node) -> Unit = { node -> node.parentId?.let(onOpenFolder) ?: onOpenRoot() }
 
+    val topBarScroll = rememberSubPageScroll()
     Scaffold(
         contentWindowInsets = NestedScreenInsets,
+        modifier = Modifier.nestedScroll(topBarScroll.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 windowInsets = TopBarInsets,
+                scrollBehavior = topBarScroll,
+                colors = collapsingTopBarColors(topBarScroll),
                 title = { Text(stringResource(if (state.recent) R.string.quick_recent_title else R.string.quick_starred_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -126,7 +135,7 @@ fun QuickScreen(
             isRefreshing = state.isRefreshing,
             onRefresh = viewModel::refresh,
             modifier = Modifier
-                .padding(padding)
+                .belowCollapsingTopBar(padding, topBarScroll)
                 .fillMaxSize()
                 .testTag(if (state.recent) "quick_recent" else "quick_starred"),
         ) {
@@ -150,7 +159,7 @@ fun QuickScreen(
                         }
                     }
                 } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp))) {
                         items(state.items, key = { it.node.id }) { item ->
                             NodeRow(
                                 node = item.node,

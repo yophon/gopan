@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.foundation.layout.Box
@@ -125,3 +126,27 @@ fun Modifier.belowCollapsingTopBar(padding: PaddingValues, scroll: TopAppBarScro
         layout(placeable.width, placeable.height + top) { placeable.place(0, top) }
     }
 }
+
+/**
+ * 列表底部留白:让出底部浮着的迷你播放条与胶囊导航(列表能滚到它们后面,背后透明),再多留 [extra]。
+ * 配合 [belowCollapsingTopBar]:页面内容只让顶部,底部这段放进列表的 contentPadding。
+ */
+@Composable
+fun bottomBarPadding(extra: Dp = 0.dp): Dp = LocalBottomBarInset.current + extra
+
+/**
+ * 二级页面(带返回键)的顶栏随滚动收起:与各 tab 首页同一套 —— 往上滚收起、往回滚就出来,收起时连状态栏那条淡成透明。
+ * 页面:Scaffold 挂上 nestedScroll(scroll.nestedScrollConnection),内容用 [belowCollapsingTopBar],列表底部用 [bottomBarPadding]。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun rememberSubPageScroll(): TopAppBarScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+
+/**
+ * 顶栏下面还钉着一排东西(标签、筛选)的二级页面:顶栏照样随滚动收起,那一排留在最上面;
+ * 状态栏那一条保持实底(否则那一排会和状态栏的图标叠在一起)。内容用 Modifier.padding(top = padding.calculateTopPadding())。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun pinnedHeaderTopBarColors(): TopAppBarColors =
+    TopAppBarDefaults.topAppBarColors(scrolledContainerColor = MaterialTheme.colorScheme.surface)
