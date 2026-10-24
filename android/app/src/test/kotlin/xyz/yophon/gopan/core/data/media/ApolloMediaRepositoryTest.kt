@@ -133,5 +133,5 @@ class ApolloMediaRepositoryTest {
     private fun nodeJson(id: String, name: String, previewKind: String): String =
         """{"__typename":"Node","id":"$id","parentId":"p","name":"$name","kind":"FILE","size":10,"mime":null,""" +
             """"createdAt":"2026-10-13T00:00:00Z","updatedAt":"2026-10-14T00:00:00Z","deletedAt":null,"purgeAt":null,""" +
-            """"subtreeBytes":null,"subtreeCount":null,"statsStale":null,"preview":{"__typename":"PreviewInfo","kind":"$previewKind","thumbUrl":null}}"""
+            """"subtreeBytes":null,"subtreeCount":null,"statsStale":null,"starred":false,"preview":{"__typename":"PreviewInfo","kind":"$previewKind","thumbUrl":null}}"""
 }

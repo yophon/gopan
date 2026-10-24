@@ -1,10 +1,12 @@
 import { ref } from 'vue'
+import { useQueryClient } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
 import { NodeDownloadUrlDocument } from '@/api/gen/graphql'
 import { useAuthStore } from '@/stores/auth'
+import { markOpened } from '@/composables/quick'
 import type { NodeListItem } from '@/components/nodes/types'
 
 function clickA(href: string, download?: string) {
@@ -23,6 +25,7 @@ function clickA(href: string, download?: string) {
  */
 export function useNodeDownload() {
   const auth = useAuthStore()
+  const queryClient = useQueryClient()
   const downloadingId = ref<string | null>(null)
 
   async function download(nodes: NodeListItem[]) {
@@ -41,6 +44,7 @@ export function useNodeDownload() {
         return
       }
       clickA(url, only.name)
+      markOpened(queryClient, only.id)
     } catch (err) {
       ElMessage.error(errorText(err, '获取下载链接失败'))
     } finally {

@@ -384,3 +384,40 @@ UPDATE nodes SET
     stats_stale   = false
 FROM agg
 WHERE nodes.id = $1;
+
+-- ---- 收藏与最近打开(doc/24) ----
+
+-- name: GetActiveNodeForUpdate :one
+SELECT * FROM nodes WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL FOR UPDATE;
+
+-- name: SetNodesStarred :many
+-- 收藏不算改动:updated_at 不动;已收藏的再收藏一次保留原来的时刻
+UPDATE nodes SET starred_at = CASE WHEN @starred::boolean THEN COALESCE(starred_at, now()) ELSE NULL END
+WHERE owner_id = @owner_id AND id = ANY(@ids::uuid[]) AND deleted_at IS NULL
+RETURNING *;
+
+-- name: ListStarredNodes :many
+SELECT sqlc.embed(n), b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1 AND n.starred_at IS NOT NULL AND n.deleted_at IS NULL
+ORDER BY n.starred_at DESC, n.id
+LIMIT $2;
+
+-- name: MarkNodeOpened :execrows
+UPDATE nodes SET opened_at = now()
+WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL AND kind = 'file';
+
+-- name: ListRecentOpened :many
+SELECT sqlc.embed(n), b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1 AND n.opened_at IS NOT NULL AND n.deleted_at IS NULL AND n.kind = 'file'
+ORDER BY n.opened_at DESC, n.id
+LIMIT $2;
+
+-- name: ClearNodesOpened :execrows
+-- ids 为空 = 全部清掉
+UPDATE nodes SET opened_at = NULL
+WHERE owner_id = @owner_id AND opened_at IS NOT NULL
+  AND (cardinality(@ids::uuid[]) = 0 OR id = ANY(@ids::uuid[]));

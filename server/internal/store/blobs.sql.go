@@ -151,7 +151,7 @@ func (q *Queries) ListGCableBlobs(ctx context.Context) ([]Blob, error) {
 }
 
 const listNodesByBlob = `-- name: ListNodesByBlob :many
-SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale FROM nodes WHERE blob_id = $1
+SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale, starred_at, opened_at FROM nodes WHERE blob_id = $1
 `
 
 func (q *Queries) ListNodesByBlob(ctx context.Context, blobID *uuid.UUID) ([]Node, error) {
@@ -176,6 +176,8 @@ func (q *Queries) ListNodesByBlob(ctx context.Context, blobID *uuid.UUID) ([]Nod
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 		); err != nil {
 			return nil, err
 		}

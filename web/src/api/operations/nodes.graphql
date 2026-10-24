@@ -10,6 +10,7 @@ query Children($parentId: ID, $cursor: String, $order: NodeOrder, $desc: Boolean
       subtreeCount
       statsStale
       updatedAt
+      starred
       preview {
         kind
         thumbUrl
@@ -85,6 +86,7 @@ query NodeDetail($id: ID!) {
     sha256
     createdAt
     updatedAt
+    starred
     subtreeBytes
     subtreeCount
     statsStale
@@ -183,4 +185,82 @@ query SearchContent($q: String!, $cursor: String) {
     }
     nextCursor
   }
+}
+
+# ---- 收藏、最近打开与历史版本(doc/24) ----
+
+fragment QuickNode on Node {
+  id
+  parentId
+  name
+  kind
+  size
+  subtreeBytes
+  subtreeCount
+  statsStale
+  updatedAt
+  openedAt
+  starred
+  path
+  preview {
+    kind
+    thumbUrl
+  }
+}
+
+query StarredNodes {
+  starredNodes {
+    ...QuickNode
+  }
+}
+
+query RecentFiles {
+  recentFiles {
+    ...QuickNode
+  }
+}
+
+mutation SetStarred($ids: [ID!]!, $starred: Boolean!) {
+  setStarred(ids: $ids, starred: $starred) {
+    id
+    starred
+  }
+}
+
+mutation MarkOpened($nodeId: ID!) {
+  markOpened(nodeId: $nodeId)
+}
+
+mutation ClearRecent($ids: [ID!]) {
+  clearRecent(ids: $ids)
+}
+
+query FileVersions($nodeId: ID!) {
+  fileVersions(nodeId: $nodeId) {
+    items {
+      id
+      size
+      savedAt
+      replacedAt
+      downloadUrl
+    }
+    keep
+    keepDays
+  }
+}
+
+mutation RestoreFileVersion($id: ID!) {
+  restoreFileVersion(id: $id) {
+    id
+    size
+    updatedAt
+  }
+}
+
+mutation DeleteFileVersions($ids: [ID!]!) {
+  deleteFileVersions(ids: $ids)
+}
+
+mutation PurgeFileVersions($nodeId: ID) {
+  purgeFileVersions(nodeId: $nodeId)
 }

@@ -118,6 +118,14 @@ func gqlNode(n store.Node) *Node {
 		t := n.DeletedAt.Time
 		out.DeletedAt = &t
 	}
+	if n.StarredAt.Valid {
+		t := n.StarredAt.Time
+		out.StarredAt = &t
+	}
+	if n.OpenedAt.Valid {
+		t := n.OpenedAt.Time
+		out.OpenedAtRaw = &t
+	}
 	if n.Kind == "folder" {
 		sb, sc, st := n.SubtreeBytes, n.SubtreeCount, n.StatsStale
 		out.SubtreeBytes, out.SubtreeCount, out.StatsStale = &sb, &sc, &st
@@ -274,5 +282,6 @@ func (r *Resolver) getNodeFull(ctx context.Context, owner, id uuid.UUID) (*Node,
 		Kind: row.Kind, BlobID: row.BlobID, DeletedAt: row.DeletedAt,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 		SubtreeBytes: row.SubtreeBytes, SubtreeCount: row.SubtreeCount, StatsStale: row.StatsStale,
+		StarredAt: row.StarredAt, OpenedAt: row.OpenedAt,
 	}, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256}), nil
 }

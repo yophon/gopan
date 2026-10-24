@@ -160,6 +160,8 @@ class FakeNodesRepository : NodesRepository {
 
     override suspend fun purgeTrash() = mutate("purgeTrash")
 
+    override suspend fun setStarred(ids: List<String>, starred: Boolean) = mutate("setStarred")
+
     private fun mutate(call: String) {
         calls += call
         nextMutationError?.let {

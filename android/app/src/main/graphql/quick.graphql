@@ -1,0 +1,60 @@
+# 收藏、最近打开与历史版本(doc/24)。列表节点用 NodeItem 片段,与文件页同一个 toNode()。
+
+query StarredNodes {
+  starredNodes {
+    ...NodeItem
+    path
+  }
+}
+
+query RecentFiles {
+  recentFiles {
+    ...NodeItem
+    openedAt
+    path
+  }
+}
+
+mutation SetStarred($ids: [ID!]!, $starred: Boolean!) {
+  setStarred(ids: $ids, starred: $starred) {
+    id
+    starred
+  }
+}
+
+# 预览成功 / 下载时上报,进「最近」
+mutation MarkOpened($nodeId: ID!) {
+  markOpened(nodeId: $nodeId)
+}
+
+mutation ClearRecent($ids: [ID!]) {
+  clearRecent(ids: $ids)
+}
+
+query FileVersions($nodeId: ID!) {
+  fileVersions(nodeId: $nodeId) {
+    items {
+      id
+      size
+      savedAt
+      replacedAt
+      downloadUrl
+    }
+    keep
+    keepDays
+  }
+}
+
+mutation RestoreFileVersion($id: ID!) {
+  restoreFileVersion(id: $id) {
+    id
+  }
+}
+
+mutation DeleteFileVersions($ids: [ID!]!) {
+  deleteFileVersions(ids: $ids)
+}
+
+mutation PurgeFileVersions($nodeId: ID) {
+  purgeFileVersions(nodeId: $nodeId)
+}

@@ -93,6 +93,8 @@ services:
       # 回收站保留期,到期由 worker 每小时扫描彻删。回收站页面显示的"还剩 N 天"读的就是它。
       # ⚠ 调小会让下一轮清理立刻删掉历史回收站内容,改之前先备份。
       GOPAN_TRASH_TTL: ${GOPAN_TRASH_TTL:-720h}
+      GOPAN_VERSION_KEEP: ${GOPAN_VERSION_KEEP:-10}
+      GOPAN_VERSION_TTL: ${GOPAN_VERSION_TTL:-720h}
       # 信任哪些来源的 X-Forwarded-For。两档反代(Caddy 容器 / 宿主 nginx)都经容器网络
       # 进来,所以默认信任 docker 私有网段。不配的话后端看到的客户端 IP 永远是网关地址:
       # 登录限速会退化成"全站共用一个桶"。这个容器唯一的入网口是 127.0.0.1 的端口发布,

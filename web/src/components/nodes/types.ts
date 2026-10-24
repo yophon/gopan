@@ -18,6 +18,8 @@ export interface NodeListItem {
   subtreeBytes?: number | null
   subtreeCount?: number | null
   statsStale?: boolean | null
+  /** 收藏(doc/24);访客页、回收站不选这个字段 */
+  starred?: boolean | null
 }
 
 /** 长按/⋮ 弹出的操作条目 */

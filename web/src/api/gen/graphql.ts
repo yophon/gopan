@@ -522,6 +522,24 @@ export type FileRequestUploadPage = {
   nextCursor?: Maybe<Scalars['String']['output']>;
 };
 
+export type FileVersion = {
+  __typename?: 'FileVersion';
+  downloadUrl: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  mime: Scalars['String']['output'];
+  replacedAt: Scalars['Time']['output'];
+  savedAt: Scalars['Time']['output'];
+  sha256: Scalars['String']['output'];
+  size: Scalars['Int64']['output'];
+};
+
+export type FileVersionList = {
+  __typename?: 'FileVersionList';
+  items: Array<FileVersion>;
+  keep: Scalars['Int']['output'];
+  keepDays: Scalars['Int']['output'];
+};
+
 export type IdleLink = {
   __typename?: 'IdleLink';
   createdAt: Scalars['Time']['output'];
@@ -710,6 +728,7 @@ export type Mutation = {
   clearFinishedJobs: Scalars['Int']['output'];
   clearNotifications: Scalars['Int']['output'];
   clearProgress: Scalars['Boolean']['output'];
+  clearRecent: Scalars['Boolean']['output'];
   clipUrl: ClipResult;
   collectAbortUpload: Scalars['Boolean']['output'];
   collectCompleteUpload: CollectUpload;
@@ -727,6 +746,7 @@ export type Mutation = {
   decideOAuthAuthorization: OAuthAuthorizationResult;
   deleteChatMessage: Scalars['Boolean']['output'];
   deleteFeed: Scalars['Boolean']['output'];
+  deleteFileVersions: Scalars['Boolean']['output'];
   deleteNodes: Scalars['Boolean']['output'];
   deleteNotifyChannel: Scalars['Boolean']['output'];
   ensureChatFolder: Node;
@@ -740,9 +760,11 @@ export type Mutation = {
   markClipRead: Clip;
   markFileRequestSeen: Scalars['Boolean']['output'];
   markNotificationsRead: Scalars['Int']['output'];
+  markOpened: Scalars['Boolean']['output'];
   moveNodes: Array<Node>;
   openFileRequest: CollectAuth;
   pauseLink: DirectLink;
+  purgeFileVersions: Scalars['Int64']['output'];
   purgeNodes: Scalars['Boolean']['output'];
   purgeTrash: Scalars['Boolean']['output'];
   refresh: AuthPayload;
@@ -750,6 +772,7 @@ export type Mutation = {
   register: AuthPayload;
   renameNode: Node;
   requestPreview: PreviewInfo;
+  restoreFileVersion: Node;
   restoreNodes: Array<Node>;
   retryJob: Job;
   revokeAppPassword: Scalars['Boolean']['output'];
@@ -764,6 +787,7 @@ export type Mutation = {
   setClipPrefs: ClipPrefs;
   setLinkPrefs: LinkPrefs;
   setMCPAccessRoot: Scalars['Boolean']['output'];
+  setStarred: Array<Node>;
   testNotifyChannel: Scalars['Boolean']['output'];
   undoActivities: UndoResult;
   updateFeed: Feed;
@@ -827,6 +851,11 @@ export type MutationChangePasswordArgs = {
 
 export type MutationClearProgressArgs = {
   nodeId: Scalars['ID']['input'];
+};
+
+
+export type MutationClearRecentArgs = {
+  ids?: InputMaybe<Array<Scalars['ID']['input']>>;
 };
 
 
@@ -928,6 +957,11 @@ export type MutationDeleteFeedArgs = {
 };
 
 
+export type MutationDeleteFileVersionsArgs = {
+  ids: Array<Scalars['ID']['input']>;
+};
+
+
 export type MutationDeleteNodesArgs = {
   ids: Array<Scalars['ID']['input']>;
 };
@@ -966,6 +1000,7 @@ export type MutationImportOpmlArgs = {
 export type MutationInitUploadArgs = {
   name: Scalars['String']['input'];
   parentId?: InputMaybe<Scalars['ID']['input']>;
+  replace?: InputMaybe<Scalars['Boolean']['input']>;
   sha256: Scalars['String']['input'];
   size: Scalars['Int64']['input'];
 };
@@ -993,6 +1028,11 @@ export type MutationMarkNotificationsReadArgs = {
 };
 
 
+export type MutationMarkOpenedArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
 export type MutationMoveNodesArgs = {
   ids: Array<Scalars['ID']['input']>;
   targetParentId?: InputMaybe<Scalars['ID']['input']>;
@@ -1009,6 +1049,11 @@ export type MutationOpenFileRequestArgs = {
 export type MutationPauseLinkArgs = {
   id: Scalars['ID']['input'];
   paused: Scalars['Boolean']['input'];
+};
+
+
+export type MutationPurgeFileVersionsArgs = {
+  nodeId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 
@@ -1036,6 +1081,11 @@ export type MutationRenameNodeArgs = {
 
 export type MutationRequestPreviewArgs = {
   nodeId: Scalars['ID']['input'];
+};
+
+
+export type MutationRestoreFileVersionArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1114,6 +1164,12 @@ export type MutationSetMcpAccessRootArgs = {
 };
 
 
+export type MutationSetStarredArgs = {
+  ids: Array<Scalars['ID']['input']>;
+  starred: Scalars['Boolean']['input'];
+};
+
+
 export type MutationTestNotifyChannelArgs = {
   id: Scalars['ID']['input'];
 };
@@ -1162,6 +1218,7 @@ export type Node = {
   kind: NodeKind;
   mime?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
+  openedAt?: Maybe<Scalars['Time']['output']>;
   parentId?: Maybe<Scalars['ID']['output']>;
   path?: Maybe<Scalars['String']['output']>;
   playProgress?: Maybe<PlayProgress>;
@@ -1169,6 +1226,7 @@ export type Node = {
   purgeAt?: Maybe<Scalars['Time']['output']>;
   sha256?: Maybe<Scalars['String']['output']>;
   size?: Maybe<Scalars['Int64']['output']>;
+  starred: Scalars['Boolean']['output'];
   statsStale?: Maybe<Scalars['Boolean']['output']>;
   subtreeBytes?: Maybe<Scalars['Int64']['output']>;
   subtreeCount?: Maybe<Scalars['Int64']['output']>;
@@ -1388,6 +1446,7 @@ export type Query = {
   fetchEnabled: Scalars['Boolean']['output'];
   fileRequestInfo: FileRequestInfo;
   fileRequestUploads: FileRequestUploadPage;
+  fileVersions: FileVersionList;
   job: Job;
   link: DirectLink;
   linkHits: LinkHitPage;
@@ -1413,6 +1472,7 @@ export type Query = {
   oauthGrants: Array<OAuthGrant>;
   playlist: Array<Node>;
   previewFeed: FeedPreview;
+  recentFiles: Array<Node>;
   recentPlays: Array<RecentPlay>;
   searchContent: ContentHitPage;
   searchNodes: NodePage;
@@ -1427,6 +1487,7 @@ export type Query = {
   spaceLargeFiles: Array<SpaceFile>;
   spaceOverview: SpaceOverview;
   spaceStaleFiles: Array<SpaceFile>;
+  starredNodes: Array<Node>;
   trash: NodePage;
   undoPreview: UndoResult;
   uploadSession: UploadSession;
@@ -1504,6 +1565,11 @@ export type QueryFileRequestInfoArgs = {
 export type QueryFileRequestUploadsArgs = {
   cursor?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryFileVersionsArgs = {
+  nodeId: Scalars['ID']['input'];
 };
 
 
@@ -1587,6 +1653,11 @@ export type QueryPreviewFeedArgs = {
   assetPattern?: InputMaybe<Scalars['String']['input']>;
   prerelease?: InputMaybe<Scalars['Boolean']['input']>;
   url: Scalars['String']['input'];
+};
+
+
+export type QueryRecentFilesArgs = {
+  limit?: InputMaybe<Scalars['Int']['input']>;
 };
 
 
@@ -1761,6 +1832,8 @@ export type SpaceOverview = {
   trashBytes: Scalars['Int64']['output'];
   trashFiles: Scalars['Int64']['output'];
   usedBytes: Scalars['Int64']['output'];
+  versionBytes: Scalars['Int64']['output'];
+  versionFiles: Scalars['Int64']['output'];
 };
 
 export type SubtitleTrack = {
@@ -2552,7 +2625,7 @@ export type ChildrenQueryVariables = Exact<{
 }>;
 
 
-export type ChildrenQuery = { __typename?: 'Query', children: { __typename?: 'NodePage', nextCursor?: string | null, total: number, items: Array<{ __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, subtreeBytes?: number | null, subtreeCount?: number | null, statsStale?: boolean | null, updatedAt: string, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null } }> } };
+export type ChildrenQuery = { __typename?: 'Query', children: { __typename?: 'NodePage', nextCursor?: string | null, total: number, items: Array<{ __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, subtreeBytes?: number | null, subtreeCount?: number | null, statsStale?: boolean | null, updatedAt: string, starred: boolean, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null } }> } };
 
 export type NodePreviewQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -2580,7 +2653,7 @@ export type NodeDetailQueryVariables = Exact<{
 }>;
 
 
-export type NodeDetailQuery = { __typename?: 'Query', node: { __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, mime?: string | null, sha256?: string | null, createdAt: string, updatedAt: string, subtreeBytes?: number | null, subtreeCount?: number | null, statsStale?: boolean | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null } } };
+export type NodeDetailQuery = { __typename?: 'Query', node: { __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, mime?: string | null, sha256?: string | null, createdAt: string, updatedAt: string, starred: boolean, subtreeBytes?: number | null, subtreeCount?: number | null, statsStale?: boolean | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null } } };
 
 export type CreateFolderMutationVariables = Exact<{
   parentId?: InputMaybe<Scalars['ID']['input']>;
@@ -2636,6 +2709,68 @@ export type SearchContentQueryVariables = Exact<{
 
 
 export type SearchContentQuery = { __typename?: 'Query', searchContent: { __typename?: 'ContentHitPage', nextCursor?: string | null, items: Array<{ __typename?: 'ContentHit', snippet: string, page?: number | null, node: { __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, mime?: string | null, updatedAt: string, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null } }, highlights: Array<{ __typename?: 'TextRange', start: number, length: number }> }> } };
+
+export type QuickNodeFragment = { __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, subtreeBytes?: number | null, subtreeCount?: number | null, statsStale?: boolean | null, updatedAt: string, openedAt?: string | null, starred: boolean, path?: string | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null } };
+
+export type StarredNodesQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type StarredNodesQuery = { __typename?: 'Query', starredNodes: Array<{ __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, subtreeBytes?: number | null, subtreeCount?: number | null, statsStale?: boolean | null, updatedAt: string, openedAt?: string | null, starred: boolean, path?: string | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null } }> };
+
+export type RecentFilesQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type RecentFilesQuery = { __typename?: 'Query', recentFiles: Array<{ __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, subtreeBytes?: number | null, subtreeCount?: number | null, statsStale?: boolean | null, updatedAt: string, openedAt?: string | null, starred: boolean, path?: string | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null } }> };
+
+export type SetStarredMutationVariables = Exact<{
+  ids: Array<Scalars['ID']['input']> | Scalars['ID']['input'];
+  starred: Scalars['Boolean']['input'];
+}>;
+
+
+export type SetStarredMutation = { __typename?: 'Mutation', setStarred: Array<{ __typename?: 'Node', id: string, starred: boolean }> };
+
+export type MarkOpenedMutationVariables = Exact<{
+  nodeId: Scalars['ID']['input'];
+}>;
+
+
+export type MarkOpenedMutation = { __typename?: 'Mutation', markOpened: boolean };
+
+export type ClearRecentMutationVariables = Exact<{
+  ids?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
+}>;
+
+
+export type ClearRecentMutation = { __typename?: 'Mutation', clearRecent: boolean };
+
+export type FileVersionsQueryVariables = Exact<{
+  nodeId: Scalars['ID']['input'];
+}>;
+
+
+export type FileVersionsQuery = { __typename?: 'Query', fileVersions: { __typename?: 'FileVersionList', keep: number, keepDays: number, items: Array<{ __typename?: 'FileVersion', id: string, size: number, savedAt: string, replacedAt: string, downloadUrl: string }> } };
+
+export type RestoreFileVersionMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type RestoreFileVersionMutation = { __typename?: 'Mutation', restoreFileVersion: { __typename?: 'Node', id: string, size?: number | null, updatedAt: string } };
+
+export type DeleteFileVersionsMutationVariables = Exact<{
+  ids: Array<Scalars['ID']['input']> | Scalars['ID']['input'];
+}>;
+
+
+export type DeleteFileVersionsMutation = { __typename?: 'Mutation', deleteFileVersions: boolean };
+
+export type PurgeFileVersionsMutationVariables = Exact<{
+  nodeId?: InputMaybe<Scalars['ID']['input']>;
+}>;
+
+
+export type PurgeFileVersionsMutation = { __typename?: 'Mutation', purgeFileVersions: number };
 
 export type NotificationsQueryVariables = Exact<{
   cursor?: InputMaybe<Scalars['String']['input']>;
@@ -2764,7 +2899,7 @@ export type SpaceFileFieldsFragment = { __typename?: 'SpaceFile', path: string, 
 export type SpaceOverviewQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type SpaceOverviewQuery = { __typename?: 'Query', spaceOverview: { __typename?: 'SpaceOverview', usedBytes: number, quotaBytes: number, trashFiles: number, trashBytes: number, duplicateGroups: number, duplicateBytes: number, byType: Array<{ __typename?: 'SpaceCategory', category: FileCategory, files: number, bytes: number }> } };
+export type SpaceOverviewQuery = { __typename?: 'Query', spaceOverview: { __typename?: 'SpaceOverview', usedBytes: number, quotaBytes: number, trashFiles: number, trashBytes: number, duplicateGroups: number, duplicateBytes: number, versionFiles: number, versionBytes: number, byType: Array<{ __typename?: 'SpaceCategory', category: FileCategory, files: number, bytes: number }> } };
 
 export type SpaceFoldersQueryVariables = Exact<{
   parentId?: InputMaybe<Scalars['ID']['input']>;
@@ -2846,6 +2981,7 @@ export type InitUploadMutationVariables = Exact<{
   name: Scalars['String']['input'];
   sha256: Scalars['String']['input'];
   size: Scalars['Int64']['input'];
+  replace?: InputMaybe<Scalars['Boolean']['input']>;
 }>;
 
 
@@ -3180,6 +3316,26 @@ export const PlayProgressFieldsFragmentDoc = new TypedDocumentString(`
   updatedAt
 }
     `, {"fragmentName":"PlayProgressFields"}) as unknown as TypedDocumentString<PlayProgressFieldsFragment, unknown>;
+export const QuickNodeFragmentDoc = new TypedDocumentString(`
+    fragment QuickNode on Node {
+  id
+  parentId
+  name
+  kind
+  size
+  subtreeBytes
+  subtreeCount
+  statsStale
+  updatedAt
+  openedAt
+  starred
+  path
+  preview {
+    kind
+    thumbUrl
+  }
+}
+    `, {"fragmentName":"QuickNode"}) as unknown as TypedDocumentString<QuickNodeFragment, unknown>;
 export const NotifyChannelFieldsFragmentDoc = new TypedDocumentString(`
     fragment NotifyChannelFields on NotifyChannel {
   id
@@ -4972,6 +5128,7 @@ export const ChildrenDocument = new TypedDocumentString(`
       subtreeCount
       statsStale
       updatedAt
+      starred
       preview {
         kind
         thumbUrl
@@ -5048,6 +5205,7 @@ export const NodeDetailDocument = new TypedDocumentString(`
     sha256
     createdAt
     updatedAt
+    starred
     subtreeBytes
     subtreeCount
     statsStale
@@ -5154,6 +5312,106 @@ export const SearchContentDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<SearchContentQuery, SearchContentQueryVariables>;
+export const StarredNodesDocument = new TypedDocumentString(`
+    query StarredNodes {
+  starredNodes {
+    ...QuickNode
+  }
+}
+    fragment QuickNode on Node {
+  id
+  parentId
+  name
+  kind
+  size
+  subtreeBytes
+  subtreeCount
+  statsStale
+  updatedAt
+  openedAt
+  starred
+  path
+  preview {
+    kind
+    thumbUrl
+  }
+}`) as unknown as TypedDocumentString<StarredNodesQuery, StarredNodesQueryVariables>;
+export const RecentFilesDocument = new TypedDocumentString(`
+    query RecentFiles {
+  recentFiles {
+    ...QuickNode
+  }
+}
+    fragment QuickNode on Node {
+  id
+  parentId
+  name
+  kind
+  size
+  subtreeBytes
+  subtreeCount
+  statsStale
+  updatedAt
+  openedAt
+  starred
+  path
+  preview {
+    kind
+    thumbUrl
+  }
+}`) as unknown as TypedDocumentString<RecentFilesQuery, RecentFilesQueryVariables>;
+export const SetStarredDocument = new TypedDocumentString(`
+    mutation SetStarred($ids: [ID!]!, $starred: Boolean!) {
+  setStarred(ids: $ids, starred: $starred) {
+    id
+    starred
+  }
+}
+    `) as unknown as TypedDocumentString<SetStarredMutation, SetStarredMutationVariables>;
+export const MarkOpenedDocument = new TypedDocumentString(`
+    mutation MarkOpened($nodeId: ID!) {
+  markOpened(nodeId: $nodeId)
+}
+    `) as unknown as TypedDocumentString<MarkOpenedMutation, MarkOpenedMutationVariables>;
+export const ClearRecentDocument = new TypedDocumentString(`
+    mutation ClearRecent($ids: [ID!]) {
+  clearRecent(ids: $ids)
+}
+    `) as unknown as TypedDocumentString<ClearRecentMutation, ClearRecentMutationVariables>;
+export const FileVersionsDocument = new TypedDocumentString(`
+    query FileVersions($nodeId: ID!) {
+  fileVersions(nodeId: $nodeId) {
+    items {
+      id
+      size
+      savedAt
+      replacedAt
+      downloadUrl
+    }
+    keep
+    keepDays
+  }
+}
+    `) as unknown as TypedDocumentString<FileVersionsQuery, FileVersionsQueryVariables>;
+export const RestoreFileVersionDocument = new TypedDocumentString(`
+    mutation RestoreFileVersion($id: ID!) {
+  restoreFileVersion(id: $id) {
+    id
+    size
+    updatedAt
+  }
+}
+    `) as unknown as TypedDocumentString<RestoreFileVersionMutation, RestoreFileVersionMutationVariables>;
+export const DeleteFileVersionsDocument = new TypedDocumentString(`
+    mutation DeleteFileVersions($ids: [ID!]!) {
+  deleteFileVersions(ids: $ids)
+}
+    `) as unknown as TypedDocumentString<DeleteFileVersionsMutation, DeleteFileVersionsMutationVariables>;
+export const PurgeFileVersionsDocument = new TypedDocumentString(`
+    mutation PurgeFileVersions($nodeId: ID) {
+  purgeFileVersions(nodeId: $nodeId)
+}
+    `) as unknown as TypedDocumentString<PurgeFileVersionsMutation, PurgeFileVersionsMutationVariables>;
 export const NotificationsDocument = new TypedDocumentString(`
     query Notifications($cursor: String, $unreadOnly: Boolean) {
   notifications(cursor: $cursor, unreadOnly: $unreadOnly) {
@@ -5388,6 +5646,8 @@ export const SpaceOverviewDocument = new TypedDocumentString(`
     }
     duplicateGroups
     duplicateBytes
+    versionFiles
+    versionBytes
   }
 }
     `) as unknown as TypedDocumentString<SpaceOverviewQuery, SpaceOverviewQueryVariables>;
@@ -5600,8 +5860,14 @@ export const PurgeTrashDocument = new TypedDocumentString(`
 }
     `) as unknown as TypedDocumentString<PurgeTrashMutation, PurgeTrashMutationVariables>;
 export const InitUploadDocument = new TypedDocumentString(`
-    mutation InitUpload($parentId: ID, $name: String!, $sha256: String!, $size: Int64!) {
-  initUpload(parentId: $parentId, name: $name, sha256: $sha256, size: $size) {
+    mutation InitUpload($parentId: ID, $name: String!, $sha256: String!, $size: Int64!, $replace: Boolean) {
+  initUpload(
+    parentId: $parentId
+    name: $name
+    sha256: $sha256
+    size: $size
+    replace: $replace
+  ) {
     instant
     node {
       id

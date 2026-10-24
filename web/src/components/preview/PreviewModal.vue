@@ -32,6 +32,7 @@ import { useBreakpoints } from '@/composables/breakpoints'
 import { useSwipe } from '@vueuse/core'
 import { closePreview, openPreview, previewNext, previewPrev, previewState } from '@/composables/preview'
 import { reportProgress } from '@/composables/media'
+import { markOpened } from '@/composables/quick'
 import { useAuthStore } from '@/stores/auth'
 import { usePlayerStore } from '@/stores/player'
 import { formatDuration, resumePage } from '@/utils/media'
@@ -253,6 +254,14 @@ const showMarkdown = computed(
 
 /** 是不是一篇剪藏:是的话顶上给来源与已读(访客看不到别人的剪藏记录) */
 const queryClient = useQueryClient()
+
+// 「最近」(doc/24):自己的文件预览成功一次记一次;访客不记
+watch(
+  () => node.value?.id,
+  (id) => {
+    if (id && !props.guestToken) markOpened(queryClient, id)
+  },
+)
 const { data: clipData } = useQuery({
   queryKey: ['nodeClip', currentId],
   enabled: computed(() => !props.guestToken && currentId.value !== null && !!preview.value?.markdown),

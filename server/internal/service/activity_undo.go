@@ -26,13 +26,16 @@ const (
 )
 
 type Activities struct {
-	q     *store.Queries
-	nodes *Nodes
+	q        *store.Queries
+	nodes    *Nodes
+	versions *Versions // 撤回覆盖 = 恢复覆盖前留下的版本(doc/24)
 }
 
 func NewActivities(pool *pgxpool.Pool, nodes *Nodes) *Activities {
 	return &Activities{q: store.New(pool), nodes: nodes}
 }
+
+func (a *Activities) SetVersions(v *Versions) { a.versions = v }
 
 // ActivityFilter 列表与按来源撤回的筛选;零值字段不限。
 type ActivityFilter struct {
@@ -113,7 +116,16 @@ func ActivityDetail(raw []byte) (from, to *string, oldName, newName string, file
 
 // Undoable 这类操作原则上能不能撤回(不看现在的状态;能不能真撤见 PreviewUndo)。
 func Undoable(act store.Activity) bool {
-	return !act.UndoneAt.Valid && act.NodeID != nil && act.Action != OpOverwrite && act.Action != OpPurge
+	if act.UndoneAt.Valid || act.NodeID == nil || act.Action == OpPurge {
+		return false
+	}
+	if act.Action == OpOverwrite {
+		// 覆盖时留下了旧版本才撤得回(空间不够、没开历史版本时没留)
+		var d actDetail
+		_ = json.Unmarshal(act.Detail, &d)
+		return d.Version != nil
+	}
+	return true
 }
 
 // UndoSelection 撤回哪些:给 id、给一批、或按筛选(某个来源某段时间);三选一。
@@ -204,7 +216,7 @@ func (a *Activities) undoOne(ctx context.Context, owner uuid.UUID, act store.Act
 	}
 	switch act.Action {
 	case OpOverwrite:
-		return "覆盖掉的内容找不回来(没有历史版本)", nil
+		return a.undoOverwrite(ctx, owner, act, dry)
 	case OpPurge:
 		return "已彻底删除,找不回来", nil
 	}
@@ -292,6 +304,35 @@ func (a *Activities) undoOne(ctx context.Context, owner uuid.UUID, act store.Act
 		}
 		return businessReason(a.nodes.Delete(ctx, owner, []uuid.UUID{n.ID}))
 	}
+}
+
+// undoOverwrite 撤回一次覆盖:把覆盖时换下来的那个版本恢复回来(现在的内容也留成版本,撤回本身也能反悔)。
+func (a *Activities) undoOverwrite(ctx context.Context, owner uuid.UUID, act store.Activity, dry bool) (string, error) {
+	var d actDetail
+	_ = json.Unmarshal(act.Detail, &d)
+	if d.Version == nil || a.versions == nil || act.NodeID == nil {
+		return "覆盖时没有留下旧版本", nil
+	}
+	if _, err := a.q.GetNodeVersion(ctx, store.GetNodeVersionParams{ID: *d.Version, OwnerID: owner}); errors.Is(err, pgx.ErrNoRows) {
+		return "覆盖前的版本已经被清理", nil
+	} else if err != nil {
+		return "", err
+	}
+	n, err := a.q.GetNode(ctx, *act.NodeID)
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && n.OwnerID != owner {
+		return "文件已彻底删除", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if n.DeletedAt.Valid {
+		return "文件在回收站里", nil
+	}
+	if dry {
+		return "", nil
+	}
+	_, err = a.versions.Restore(ctx, owner, *d.Version)
+	return businessReason(err)
 }
 
 // folderUsable 撤回要放回去的文件夹还在不在(nil = 根目录,总在)。

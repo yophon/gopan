@@ -1,5 +1,5 @@
-mutation InitUpload($parentId: ID, $name: String!, $sha256: String!, $size: Int64!) {
-  initUpload(parentId: $parentId, name: $name, sha256: $sha256, size: $size) {
+mutation InitUpload($parentId: ID, $name: String!, $sha256: String!, $size: Int64!, $replace: Boolean) {
+  initUpload(parentId: $parentId, name: $name, sha256: $sha256, size: $size, replace: $replace) {
     instant
     node {
       id

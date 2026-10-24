@@ -12,6 +12,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearNodesOpened = `-- name: ClearNodesOpened :execrows
+UPDATE nodes SET opened_at = NULL
+WHERE owner_id = $1 AND opened_at IS NOT NULL
+  AND (cardinality($2::uuid[]) = 0 OR id = ANY($2::uuid[]))
+`
+
+type ClearNodesOpenedParams struct {
+	OwnerID uuid.UUID
+	Ids     []uuid.UUID
+}
+
+// ids 为空 = 全部清掉
+func (q *Queries) ClearNodesOpened(ctx context.Context, arg ClearNodesOpenedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, clearNodesOpened, arg.OwnerID, arg.Ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countChildren = `-- name: CountChildren :one
 SELECT count(*) FROM nodes
 WHERE owner_id = $1 AND parent_id IS NOT DISTINCT FROM $2 AND deleted_at IS NULL
@@ -86,7 +106,7 @@ func (q *Queries) CountTrash(ctx context.Context, ownerID uuid.UUID) (int64, err
 const createNode = `-- name: CreateNode :one
 INSERT INTO nodes (id, owner_id, parent_id, name, kind, blob_id)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale
+RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale, starred_at, opened_at
 `
 
 type CreateNodeParams struct {
@@ -121,6 +141,8 @@ func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (Node, e
 		&i.SubtreeBytes,
 		&i.SubtreeCount,
 		&i.StatsStale,
+		&i.StarredAt,
+		&i.OpenedAt,
 	)
 	return i, err
 }
@@ -138,7 +160,7 @@ func (q *Queries) DecrementBlobRefs(ctx context.Context, dollar_1 []uuid.UUID) e
 }
 
 const getActiveChildByName = `-- name: GetActiveChildByName :one
-SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale FROM nodes
+SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale, starred_at, opened_at FROM nodes
 WHERE owner_id = $1 AND parent_id IS NOT DISTINCT FROM $2 AND name = $3 AND deleted_at IS NULL
 `
 
@@ -165,12 +187,47 @@ func (q *Queries) GetActiveChildByName(ctx context.Context, arg GetActiveChildBy
 		&i.SubtreeBytes,
 		&i.SubtreeCount,
 		&i.StatsStale,
+		&i.StarredAt,
+		&i.OpenedAt,
+	)
+	return i, err
+}
+
+const getActiveNodeForUpdate = `-- name: GetActiveNodeForUpdate :one
+
+SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale, starred_at, opened_at FROM nodes WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL FOR UPDATE
+`
+
+type GetActiveNodeForUpdateParams struct {
+	ID      uuid.UUID
+	OwnerID uuid.UUID
+}
+
+// ---- 收藏与最近打开(doc/24) ----
+func (q *Queries) GetActiveNodeForUpdate(ctx context.Context, arg GetActiveNodeForUpdateParams) (Node, error) {
+	row := q.db.QueryRow(ctx, getActiveNodeForUpdate, arg.ID, arg.OwnerID)
+	var i Node
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.ParentID,
+		&i.Name,
+		&i.Kind,
+		&i.BlobID,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SubtreeBytes,
+		&i.SubtreeCount,
+		&i.StatsStale,
+		&i.StarredAt,
+		&i.OpenedAt,
 	)
 	return i, err
 }
 
 const getActiveNodeOwned = `-- name: GetActiveNodeOwned :one
-SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale FROM nodes WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL
+SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale, starred_at, opened_at FROM nodes WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL
 `
 
 type GetActiveNodeOwnedParams struct {
@@ -194,12 +251,14 @@ func (q *Queries) GetActiveNodeOwned(ctx context.Context, arg GetActiveNodeOwned
 		&i.SubtreeBytes,
 		&i.SubtreeCount,
 		&i.StatsStale,
+		&i.StarredAt,
+		&i.OpenedAt,
 	)
 	return i, err
 }
 
 const getNode = `-- name: GetNode :one
-SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale FROM nodes WHERE id = $1
+SELECT id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale, starred_at, opened_at FROM nodes WHERE id = $1
 `
 
 func (q *Queries) GetNode(ctx context.Context, id uuid.UUID) (Node, error) {
@@ -218,12 +277,14 @@ func (q *Queries) GetNode(ctx context.Context, id uuid.UUID) (Node, error) {
 		&i.SubtreeBytes,
 		&i.SubtreeCount,
 		&i.StatsStale,
+		&i.StarredAt,
+		&i.OpenedAt,
 	)
 	return i, err
 }
 
 const getNodeWithBlob = `-- name: GetNodeWithBlob :one
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256, b.verified AS blob_verified
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256, b.verified AS blob_verified
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.id = $1 AND n.owner_id = $2 AND n.deleted_at IS NULL
@@ -247,6 +308,8 @@ type GetNodeWithBlobRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -271,6 +334,8 @@ func (q *Queries) GetNodeWithBlob(ctx context.Context, arg GetNodeWithBlobParams
 		&i.SubtreeBytes,
 		&i.SubtreeCount,
 		&i.StatsStale,
+		&i.StarredAt,
+		&i.OpenedAt,
 		&i.BlobSize,
 		&i.BlobMime,
 		&i.BlobSha256,
@@ -349,7 +414,7 @@ func (q *Queries) ListActiveChildrenLite(ctx context.Context, parentID *uuid.UUI
 }
 
 const listChildren = `-- name: ListChildren :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1
@@ -388,6 +453,8 @@ type ListChildrenRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -423,6 +490,8 @@ func (q *Queries) ListChildren(ctx context.Context, arg ListChildrenParams) ([]L
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -486,7 +555,7 @@ func (q *Queries) ListChildrenAll(ctx context.Context, arg ListChildrenAllParams
 }
 
 const listChildrenNameAsc = `-- name: ListChildrenNameAsc :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1
@@ -522,6 +591,8 @@ type ListChildrenNameAscRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -556,6 +627,8 @@ func (q *Queries) ListChildrenNameAsc(ctx context.Context, arg ListChildrenNameA
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -571,7 +644,7 @@ func (q *Queries) ListChildrenNameAsc(ctx context.Context, arg ListChildrenNameA
 }
 
 const listChildrenNameDesc = `-- name: ListChildrenNameDesc :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1
@@ -607,6 +680,8 @@ type ListChildrenNameDescRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -641,6 +716,8 @@ func (q *Queries) ListChildrenNameDesc(ctx context.Context, arg ListChildrenName
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -656,7 +733,7 @@ func (q *Queries) ListChildrenNameDesc(ctx context.Context, arg ListChildrenName
 }
 
 const listChildrenSizeAsc = `-- name: ListChildrenSizeAsc :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1
@@ -695,6 +772,8 @@ type ListChildrenSizeAscRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -731,6 +810,8 @@ func (q *Queries) ListChildrenSizeAsc(ctx context.Context, arg ListChildrenSizeA
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -746,7 +827,7 @@ func (q *Queries) ListChildrenSizeAsc(ctx context.Context, arg ListChildrenSizeA
 }
 
 const listChildrenSizeDesc = `-- name: ListChildrenSizeDesc :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1
@@ -786,6 +867,8 @@ type ListChildrenSizeDescRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -822,6 +905,8 @@ func (q *Queries) ListChildrenSizeDesc(ctx context.Context, arg ListChildrenSize
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -837,7 +922,7 @@ func (q *Queries) ListChildrenSizeDesc(ctx context.Context, arg ListChildrenSize
 }
 
 const listChildrenUpdatedAsc = `-- name: ListChildrenUpdatedAsc :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1
@@ -873,6 +958,8 @@ type ListChildrenUpdatedAscRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -907,6 +994,8 @@ func (q *Queries) ListChildrenUpdatedAsc(ctx context.Context, arg ListChildrenUp
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -922,7 +1011,7 @@ func (q *Queries) ListChildrenUpdatedAsc(ctx context.Context, arg ListChildrenUp
 }
 
 const listChildrenUpdatedDesc = `-- name: ListChildrenUpdatedDesc :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1
@@ -958,6 +1047,8 @@ type ListChildrenUpdatedDescRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -992,6 +1083,8 @@ func (q *Queries) ListChildrenUpdatedDesc(ctx context.Context, arg ListChildrenU
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -1040,6 +1133,65 @@ func (q *Queries) ListExpiredTrashRoots(ctx context.Context, deletedAt pgtype.Ti
 	return items, nil
 }
 
+const listRecentOpened = `-- name: ListRecentOpened :many
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1 AND n.opened_at IS NOT NULL AND n.deleted_at IS NULL AND n.kind = 'file'
+ORDER BY n.opened_at DESC, n.id
+LIMIT $2
+`
+
+type ListRecentOpenedParams struct {
+	OwnerID uuid.UUID
+	Limit   int32
+}
+
+type ListRecentOpenedRow struct {
+	Node       Node
+	BlobSize   *int64
+	BlobMime   *string
+	BlobSha256 *string
+}
+
+func (q *Queries) ListRecentOpened(ctx context.Context, arg ListRecentOpenedParams) ([]ListRecentOpenedRow, error) {
+	rows, err := q.db.Query(ctx, listRecentOpened, arg.OwnerID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecentOpenedRow
+	for rows.Next() {
+		var i ListRecentOpenedRow
+		if err := rows.Scan(
+			&i.Node.ID,
+			&i.Node.OwnerID,
+			&i.Node.ParentID,
+			&i.Node.Name,
+			&i.Node.Kind,
+			&i.Node.BlobID,
+			&i.Node.DeletedAt,
+			&i.Node.CreatedAt,
+			&i.Node.UpdatedAt,
+			&i.Node.SubtreeBytes,
+			&i.Node.SubtreeCount,
+			&i.Node.StatsStale,
+			&i.Node.StarredAt,
+			&i.Node.OpenedAt,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStaleFolders = `-- name: ListStaleFolders :many
 SELECT id FROM nodes
 WHERE kind = 'folder' AND stats_stale AND deleted_at IS NULL
@@ -1066,8 +1218,67 @@ func (q *Queries) ListStaleFolders(ctx context.Context, limit int32) ([]uuid.UUI
 	return items, nil
 }
 
+const listStarredNodes = `-- name: ListStarredNodes :many
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1 AND n.starred_at IS NOT NULL AND n.deleted_at IS NULL
+ORDER BY n.starred_at DESC, n.id
+LIMIT $2
+`
+
+type ListStarredNodesParams struct {
+	OwnerID uuid.UUID
+	Limit   int32
+}
+
+type ListStarredNodesRow struct {
+	Node       Node
+	BlobSize   *int64
+	BlobMime   *string
+	BlobSha256 *string
+}
+
+func (q *Queries) ListStarredNodes(ctx context.Context, arg ListStarredNodesParams) ([]ListStarredNodesRow, error) {
+	rows, err := q.db.Query(ctx, listStarredNodes, arg.OwnerID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListStarredNodesRow
+	for rows.Next() {
+		var i ListStarredNodesRow
+		if err := rows.Scan(
+			&i.Node.ID,
+			&i.Node.OwnerID,
+			&i.Node.ParentID,
+			&i.Node.Name,
+			&i.Node.Kind,
+			&i.Node.BlobID,
+			&i.Node.DeletedAt,
+			&i.Node.CreatedAt,
+			&i.Node.UpdatedAt,
+			&i.Node.SubtreeBytes,
+			&i.Node.SubtreeCount,
+			&i.Node.StatsStale,
+			&i.Node.StarredAt,
+			&i.Node.OpenedAt,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTrash = `-- name: ListTrash :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1 AND n.deleted_at IS NOT NULL
@@ -1096,6 +1307,8 @@ type ListTrashRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -1123,6 +1336,8 @@ func (q *Queries) ListTrash(ctx context.Context, arg ListTrashParams) ([]ListTra
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -1138,7 +1353,7 @@ func (q *Queries) ListTrash(ctx context.Context, arg ListTrashParams) ([]ListTra
 }
 
 const listTrashAfter = `-- name: ListTrashAfter :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1 AND n.deleted_at IS NOT NULL
@@ -1170,6 +1385,8 @@ type ListTrashAfterRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -1202,6 +1419,8 @@ func (q *Queries) ListTrashAfter(ctx context.Context, arg ListTrashAfterParams) 
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -1261,10 +1480,28 @@ func (q *Queries) MarkAncestorsStale(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const markNodeOpened = `-- name: MarkNodeOpened :execrows
+UPDATE nodes SET opened_at = now()
+WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL AND kind = 'file'
+`
+
+type MarkNodeOpenedParams struct {
+	ID      uuid.UUID
+	OwnerID uuid.UUID
+}
+
+func (q *Queries) MarkNodeOpened(ctx context.Context, arg MarkNodeOpenedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markNodeOpened, arg.ID, arg.OwnerID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const moveNode = `-- name: MoveNode :one
 UPDATE nodes SET parent_id = $3, updated_at = now()
 WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL
-RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale
+RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale, starred_at, opened_at
 `
 
 type MoveNodeParams struct {
@@ -1289,6 +1526,8 @@ func (q *Queries) MoveNode(ctx context.Context, arg MoveNodeParams) (Node, error
 		&i.SubtreeBytes,
 		&i.SubtreeCount,
 		&i.StatsStale,
+		&i.StarredAt,
+		&i.OpenedAt,
 	)
 	return i, err
 }
@@ -1360,7 +1599,7 @@ func (q *Queries) RecomputeFolderStats(ctx context.Context, id uuid.UUID) error 
 const renameNode = `-- name: RenameNode :one
 UPDATE nodes SET name = $3, updated_at = now()
 WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL
-RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale
+RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale, starred_at, opened_at
 `
 
 type RenameNodeParams struct {
@@ -1385,6 +1624,8 @@ func (q *Queries) RenameNode(ctx context.Context, arg RenameNodeParams) (Node, e
 		&i.SubtreeBytes,
 		&i.SubtreeCount,
 		&i.StatsStale,
+		&i.StarredAt,
+		&i.OpenedAt,
 	)
 	return i, err
 }
@@ -1409,7 +1650,7 @@ func (q *Queries) RenameNodeAnyState(ctx context.Context, arg RenameNodeAnyState
 const replaceNodeBlob = `-- name: ReplaceNodeBlob :one
 UPDATE nodes SET blob_id = $3, updated_at = now()
 WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL AND kind = 'file'
-RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale
+RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale, starred_at, opened_at
 `
 
 type ReplaceNodeBlobParams struct {
@@ -1435,6 +1676,8 @@ func (q *Queries) ReplaceNodeBlob(ctx context.Context, arg ReplaceNodeBlobParams
 		&i.SubtreeBytes,
 		&i.SubtreeCount,
 		&i.StatsStale,
+		&i.StarredAt,
+		&i.OpenedAt,
 	)
 	return i, err
 }
@@ -1461,7 +1704,7 @@ func (q *Queries) RestoreSubtree(ctx context.Context, arg RestoreSubtreeParams) 
 }
 
 const searchNodes = `-- name: SearchNodes :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1 AND n.deleted_at IS NULL AND n.name ILIKE '%' || $2 || '%'
@@ -1488,6 +1731,8 @@ type SearchNodesRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -1515,6 +1760,8 @@ func (q *Queries) SearchNodes(ctx context.Context, arg SearchNodesParams) ([]Sea
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -1530,7 +1777,7 @@ func (q *Queries) SearchNodes(ctx context.Context, arg SearchNodesParams) ([]Sea
 }
 
 const searchNodesAfter = `-- name: SearchNodesAfter :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1 AND n.deleted_at IS NULL AND n.name ILIKE '%' || $2 || '%'
@@ -1561,6 +1808,8 @@ type SearchNodesAfterRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -1594,6 +1843,8 @@ func (q *Queries) SearchNodesAfter(ctx context.Context, arg SearchNodesAfterPara
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -1615,7 +1866,7 @@ WITH RECURSIVE sub AS (
     SELECT n.id FROM nodes n JOIN sub s ON n.parent_id = s.id
     WHERE n.deleted_at IS NULL
 )
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.id IN (SELECT s.id FROM sub s) AND n.name ILIKE '%' || $2 || '%'
@@ -1642,6 +1893,8 @@ type SearchNodesInSubtreeRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -1670,6 +1923,8 @@ func (q *Queries) SearchNodesInSubtree(ctx context.Context, arg SearchNodesInSub
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -1691,7 +1946,7 @@ WITH RECURSIVE sub AS (
     SELECT n.id FROM nodes n JOIN sub s ON n.parent_id = s.id
     WHERE n.deleted_at IS NULL
 )
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.id IN (SELECT s.id FROM sub s) AND n.name ILIKE '%' || $2 || '%'
@@ -1722,6 +1977,8 @@ type SearchNodesInSubtreeAfterRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     *int64
 	BlobMime     *string
 	BlobSha256   *string
@@ -1755,9 +2012,59 @@ func (q *Queries) SearchNodesInSubtreeAfter(ctx context.Context, arg SearchNodes
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setNodesStarred = `-- name: SetNodesStarred :many
+UPDATE nodes SET starred_at = CASE WHEN $1::boolean THEN COALESCE(starred_at, now()) ELSE NULL END
+WHERE owner_id = $2 AND id = ANY($3::uuid[]) AND deleted_at IS NULL
+RETURNING id, owner_id, parent_id, name, kind, blob_id, deleted_at, created_at, updated_at, subtree_bytes, subtree_count, stats_stale, starred_at, opened_at
+`
+
+type SetNodesStarredParams struct {
+	Starred bool
+	OwnerID uuid.UUID
+	Ids     []uuid.UUID
+}
+
+// 收藏不算改动:updated_at 不动;已收藏的再收藏一次保留原来的时刻
+func (q *Queries) SetNodesStarred(ctx context.Context, arg SetNodesStarredParams) ([]Node, error) {
+	rows, err := q.db.Query(ctx, setNodesStarred, arg.Starred, arg.OwnerID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Node
+	for rows.Next() {
+		var i Node
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.ParentID,
+			&i.Name,
+			&i.Kind,
+			&i.BlobID,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 		); err != nil {
 			return nil, err
 		}

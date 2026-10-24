@@ -18,6 +18,7 @@ fragment NodeItem on Node {
   subtreeBytes
   subtreeCount
   statsStale
+  starred
   preview {
     kind
     thumbUrl

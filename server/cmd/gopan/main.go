@@ -218,6 +218,11 @@ func run() error {
 	jobs.SetClips(clips)
 	feeds := service.NewFeeds(pool, jobs, clips, nodes, uploads, notifier, fetchGuard, "gopan-feed (+https://github.com/yophon/gopan)")
 	wk.SetV35(activities, feeds)
+	// 收藏、最近与历史版本(doc/24)
+	versions := service.NewVersions(pool, obj, service.VersionPolicy{Keep: cfg.VersionKeep, TTL: cfg.VersionTTL})
+	uploads.SetVersionKeep(cfg.VersionKeep)
+	activities.SetVersions(versions)
+	wk.SetVersions(versions)
 	go wk.Run(ctx, cfg.Workers)
 	go jobs.Run(ctx, cfg.JobWorkers)
 	go notifier.Run(ctx)
@@ -228,6 +233,7 @@ func run() error {
 		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass, MCPTokens: mcpTokens, OAuth: oauth, Chats: chats, Collects: collects, Content: content, Jobs: jobs, Archives: archives,
 		Media: media, Notify: notifier, Links: links,
 		Activities: activities, Space: space, Feeds: feeds, Clips: clips,
+		Versions: versions,
 	}})
 
 	mux := http.NewServeMux()

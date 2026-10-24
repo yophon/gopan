@@ -15,11 +15,13 @@ import {
   Folder,
   Key,
   Lock,
+  Memo,
   Monitor,
   Scissor,
   Search,
   Setting,
   Share,
+  Star,
   SwitchButton,
   VideoPlay,
 } from '@element-plus/icons-vue'
@@ -157,6 +159,14 @@ const quotaStatus = computed(() => {
         <el-icon><Folder /></el-icon>
         <span>我的文件</span>
       </el-menu-item>
+      <el-menu-item index="/recent">
+        <el-icon><Clock /></el-icon>
+        <span>最近</span>
+      </el-menu-item>
+      <el-menu-item index="/starred">
+        <el-icon><Star /></el-icon>
+        <span>收藏</span>
+      </el-menu-item>
       <el-menu-item index="/chat">
         <el-icon><ChatDotRound /></el-icon>
         <span>传输助手</span>
@@ -174,7 +184,7 @@ const quotaStatus = computed(() => {
         <span>剪藏</span>
       </el-menu-item>
       <el-menu-item index="/activity">
-        <el-icon><Clock /></el-icon>
+        <el-icon><Memo /></el-icon>
         <span>动态</span>
       </el-menu-item>
       <el-menu-item index="/trash">

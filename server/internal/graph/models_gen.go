@@ -438,6 +438,22 @@ type FileRequestUploadPage struct {
 	NextCursor *string              `json:"nextCursor,omitempty"`
 }
 
+type FileVersion struct {
+	ID          string    `json:"id"`
+	Size        int64     `json:"size"`
+	Sha256      string    `json:"sha256"`
+	Mime        string    `json:"mime"`
+	SavedAt     time.Time `json:"savedAt"`
+	ReplacedAt  time.Time `json:"replacedAt"`
+	DownloadURL string    `json:"downloadUrl"`
+}
+
+type FileVersionList struct {
+	Items    []*FileVersion `json:"items"`
+	Keep     int            `json:"keep"`
+	KeepDays int            `json:"keepDays"`
+}
+
 type IdleLink struct {
 	ID        string     `json:"id"`
 	NodeID    string     `json:"nodeId"`
@@ -604,8 +620,14 @@ type Node struct {
 	StatsStale   *bool         `json:"statsStale,omitempty"`
 	PlayProgress *PlayProgress `json:"playProgress,omitempty"`
 	Path         *string       `json:"path,omitempty"`
+	Starred      bool          `json:"starred"`
+	OpenedAt     *time.Time    `json:"openedAt,omitempty"`
 	// 由列表转换器置位:preview 走零查询乐观路径
 	InList bool `json:"-"`
+	// 由转换器置位
+	OpenedAtRaw *time.Time `json:"-"`
+	// 由转换器置位;starred / openedAt 字段 resolver 按身份决定给不给
+	StarredAt *time.Time `json:"-"`
 }
 
 type NodePage struct {
@@ -829,6 +851,8 @@ type SpaceOverview struct {
 	ByType          []*SpaceCategory `json:"byType"`
 	DuplicateGroups int64            `json:"duplicateGroups"`
 	DuplicateBytes  int64            `json:"duplicateBytes"`
+	VersionFiles    int64            `json:"versionFiles"`
+	VersionBytes    int64            `json:"versionBytes"`
 }
 
 type SubtitleTrack struct {

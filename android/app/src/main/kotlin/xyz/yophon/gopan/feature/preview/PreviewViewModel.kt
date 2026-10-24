@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.Node
+import xyz.yophon.gopan.core.data.quick.QuickRepository
 import xyz.yophon.gopan.core.data.NodeKind
 import xyz.yophon.gopan.core.data.archive.ArchiveRepository
 import xyz.yophon.gopan.core.data.archive.ExtractRequest
@@ -78,6 +79,8 @@ class PreviewViewModel @Inject constructor(
     private val reporter: PlayProgressReporter,
     private val mediaUrls: MediaUrls,
     nowPlayingStore: NowPlayingStore,
+    /** 打开过的文件进「最近」(doc/24) */
+    private val quick: QuickRepository,
 ) : ViewModel() {
 
     private val handle = savedStateHandle
@@ -148,6 +151,15 @@ class PreviewViewModel @Inject constructor(
         val item = items.getOrNull(index) ?: return
         _current.value = index
         handle[CURRENT_KEY] = item.nodeId
+        markOpened(item.nodeId)
+    }
+
+    /** 每个文件在这次预览里只报一次;失败无所谓(只影响「最近」列表) */
+    private val opened = mutableSetOf<String>()
+
+    private fun markOpened(nodeId: String) {
+        if (!opened.add(nodeId)) return
+        viewModelScope.launch { gopanResult { quick.markOpened(nodeId) } }
     }
 
     /** 当前项的节点信息:加载完用服务端的,否则用列表带来的 */

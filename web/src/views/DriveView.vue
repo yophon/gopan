@@ -23,6 +23,8 @@ import {
   Rank,
   Refresh,
   Share,
+  Star,
+  StarFilled,
   Tickets,
   Upload,
   View,
@@ -55,6 +57,7 @@ import type { LinkFormat } from '@/utils/links'
 import { withoutQuery } from '@/utils/notifications'
 import { actionToast } from '@/utils/toast'
 import { useNodeDownload } from '@/composables/nodeDownload'
+import { useStars } from '@/composables/quick'
 import NodeBrowser from '@/components/nodes/NodeBrowser.vue'
 import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
@@ -331,6 +334,8 @@ function onDelete(ids: string[]) {
   deleteMutation.mutate({ ids })
 }
 
+const stars = useStars()
+
 // ---------- 上传:按钮(文件 / 文件夹)、整页拖入、拖到某个文件夹上 ----------
 
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -348,7 +353,44 @@ function onFilesChosen(e: Event) {
   const input = e.target as HTMLInputElement
   const files = Array.from(input.files ?? [])
   input.value = '' // 允许重复选择同一文件
-  if (files.length > 0) enqueueFiles(files, folderId.value)
+  if (files.length > 0) void enqueueInto(files, folderId.value)
+}
+
+/**
+ * 传进 target 的文件里有和已有文件同名的:问一次「替换」还是「保留两者」(doc/24)。
+ * 返回要替换的文件名(保留两者 / 没有同名时为空);关掉对话框 = 这次不传了,返回 null。
+ */
+async function askReplace(files: File[], target: string | null): Promise<Set<string> | null> {
+  let existing: { name: string; kind: string }[]
+  try {
+    existing = target === folderId.value ? items.value : await allChildren(target)
+  } catch {
+    return new Set()
+  }
+  const taken = new Set(existing.filter((n) => n.kind === 'FILE').map((n) => n.name))
+  const dup = new Set(files.filter((f) => taken.has(f.name)).map((f) => f.name))
+  if (!dup.size) return dup
+  const first = [...dup][0]!
+  try {
+    await ElMessageBox.confirm(
+      `${dup.size > 1 ? `「${first}」等 ${dup.size} 个文件` : `「${first}」`}这里已经有了。替换后,原来的内容留在历史版本里,随时能恢复。`,
+      '有同名文件',
+      { confirmButtonText: '替换', cancelButtonText: '保留两者', distinguishCancelAndClose: true },
+    )
+    return dup
+  } catch (action) {
+    return action === 'cancel' ? new Set() : null
+  }
+}
+
+/** 文件传进 target:先处理同名,同名的带上「替换」,其余照常 */
+async function enqueueInto(files: File[], target: string | null) {
+  const replace = await askReplace(files, target)
+  if (!replace) return
+  const rest = files.filter((f) => !replace.has(f.name))
+  const rep = files.filter((f) => replace.has(f.name))
+  if (rest.length) enqueueFiles(rest, target)
+  if (rep.length) enqueueFiles(rep, target, { replace: true })
 }
 
 /** 选了一个文件夹:按 webkitRelativePath 还原目录结构 */
@@ -473,8 +515,9 @@ async function uploadCollected(collected: Collected[], base: string | null, empt
       groups.set(key, g)
     }
     for (const g of groups.values()) {
-      const target = g.dirs.length === 0 ? base : await ensureDirChain(base, g.dirs, cache)
-      enqueueFiles(g.files, target)
+      // 直接放在目标文件夹里的文件问同名;子文件夹里的照常自动改名
+      if (g.dirs.length === 0) await enqueueInto(g.files, base)
+      else enqueueFiles(g.files, await ensureDirChain(base, g.dirs, cache))
     }
     invalidate()
   } catch (err) {
@@ -495,7 +538,7 @@ async function uploadDataTransfer(dt: DataTransfer, target: string | null) {
       if (f) plainFiles.push(f)
     }
   }
-  if (plainFiles.length > 0) enqueueFiles(plainFiles, target)
+  if (plainFiles.length > 0) await enqueueInto(plainFiles, target)
   if (entries.length === 0) return
   const collected: Collected[] = []
   const emptyDirs: string[][] = []
@@ -687,6 +730,8 @@ const menuItems = computed<MenuEntry[]>(() => {
   if (one) entries.push({ key: 'open', label: one.kind === 'FOLDER' ? '打开' : '预览', icon: one.kind === 'FOLDER' ? FolderOpened : View, hint: 'Enter' })
   entries.push({ key: 'download', label: one && one.kind === 'FILE' ? '下载' : '打包下载', icon: Download })
   if (one) entries.push({ key: 'share', label: '分享', icon: Share })
+  const starred = stars.allStarred(sel)
+  entries.push({ key: 'star', label: starred ? '取消收藏' : '收藏', icon: starred ? Star : StarFilled })
   if (linksEnabled.value && files.length) {
     entries.push({
       key: 'link',
@@ -737,6 +782,8 @@ function onMenuSelect(key: string) {
     case 'share':
       if (one) openShare(one)
       return
+    case 'star':
+      return void stars.toggle(sel)
     case 'collect':
       if (one) openCollect(one)
       return
@@ -840,6 +887,7 @@ const sheetItems = computed<SheetItem[]>(() => {
     { key: 'open', label: node.kind === 'FOLDER' ? '打开' : '预览' },
     { key: 'download', label: node.kind === 'FOLDER' ? '打包下载' : '下载', icon: Download },
     { key: 'share', label: '分享', icon: Share },
+    { key: 'star', label: node.starred ? '取消收藏' : '收藏', icon: node.starred ? Star : StarFilled },
     ...(node.kind === 'FILE' && linksEnabled.value ? [{ key: 'link', label: '复制直链', icon: Paperclip }] : []),
     ...(node.kind === 'FOLDER' ? [{ key: 'collect', label: '收集文件', icon: Tickets }] : []),
     ...(isArchive(node)
@@ -867,6 +915,8 @@ function onSheetSelect(key: string) {
       return void onDownload([node])
     case 'share':
       return openShare(node)
+    case 'star':
+      return void stars.toggle([node])
     case 'link':
       return openLinkSheet([node])
     case 'collect':
@@ -945,6 +995,9 @@ function onSheetSelect(key: string) {
         </span>
         <el-button :icon="Download" @click="onDownload(selection)">{{ single && single.kind === 'FILE' ? '下载' : '打包下载' }}</el-button>
         <el-button v-if="single" :icon="Share" @click="openShare(single)">分享</el-button>
+        <el-button :icon="stars.allStarred(selection) ? Star : StarFilled" @click="stars.toggle(selection)">
+          {{ stars.allStarred(selection) ? '取消收藏' : '收藏' }}
+        </el-button>
         <el-button :icon="Rank" @click="openMove(selectedIds)">移动</el-button>
         <el-button :icon="CopyDocument" @click="openCopy(selectedIds)">复制</el-button>
         <el-button v-if="single" :icon="EditPen" @click="onRename(single)">重命名</el-button>

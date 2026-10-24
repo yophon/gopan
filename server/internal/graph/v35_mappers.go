@@ -252,6 +252,7 @@ func (r *Resolver) spaceOverview(ctx context.Context) (*SpaceOverview, error) {
 	out := &SpaceOverview{
 		UsedBytes: ov.UsedBytes, QuotaBytes: ov.QuotaBytes, TrashFiles: ov.TrashFiles, TrashBytes: ov.TrashBytes,
 		DuplicateGroups: ov.DuplicateGroups, DuplicateBytes: ov.DuplicateReclaimable, ByType: []*SpaceCategory{},
+		VersionFiles: ov.VersionFiles, VersionBytes: ov.VersionBytes,
 	}
 	for _, t := range ov.ByType {
 		out.ByType = append(out.ByType, &SpaceCategory{Category: *gqlCategory(t.Category), Files: t.Files, Bytes: t.Bytes})

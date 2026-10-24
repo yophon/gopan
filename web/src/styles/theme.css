@@ -19,6 +19,8 @@
   --gp-panel-2: #e9e7e1;
   --gp-line: #e6e4de;
   --gp-accent: #f2541b;
+  /* 收藏的星标(doc/24) */
+  --gp-star: #e0a030;
   /* 主色底上的字、主色按钮的悬停 / 按下:浅色是墨黑底白字,深色反过来 */
   --gp-folder-back: #e3dfd5;
   --gp-folder-front: #cfc9bc;
@@ -126,6 +128,7 @@ html.dark {
   --gp-panel-2: #2c2b29;
   --gp-line: #34322f;
   --gp-accent: #f4652e;
+  --gp-star: #e8b04a;
   --gp-folder-back: #4a4741;
   --gp-folder-front: #6a655c;
   --gp-on-primary: #121212;

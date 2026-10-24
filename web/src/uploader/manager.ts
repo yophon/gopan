@@ -85,7 +85,7 @@ export function setUploadDoneListener(fn: (task: UploadTask) => void) { uploadDo
 
 // ---------- 入队 ----------
 
-export function enqueueFiles(files: File[], parentId: string | null) {
+export function enqueueFiles(files: File[], parentId: string | null, opts: { replace?: boolean } = {}) {
   const store = useUploadsStore()
   for (const file of files) {
     // 断点续传匹配:同 (name, size, lastModified) 的记录 → 挂上 sessionId 走恢复
@@ -104,6 +104,7 @@ export function enqueueFiles(files: File[], parentId: string | null) {
       sessionId: record?.sessionId ?? null,
       sha256: null,
       nodeId: null,
+      replace: opts.replace || undefined,
     }
     runtimes.set(task.id, {
       file,
@@ -200,6 +201,7 @@ async function runTask(taskId: string) {
         name: task.fileName,
         sha256: task.sha256,
         size: task.size,
+        replace: task.replace ?? false,
       })
       throwIfInterrupted(rt)
       if (res.initUpload.instant) {

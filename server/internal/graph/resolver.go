@@ -31,4 +31,6 @@ type Resolver struct {
 	Space      *service.Space
 	Feeds      *service.Feeds
 	Clips      *service.Clips
+
+	Versions *service.Versions
 }

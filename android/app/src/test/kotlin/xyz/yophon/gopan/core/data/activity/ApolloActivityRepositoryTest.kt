@@ -59,7 +59,7 @@ class ApolloActivityRepositoryTest {
 
     private val nodeJson = """{"__typename":"Node","id":"f1","parentId":"dir","name":"b.txt","kind":"FILE","size":12,"mime":"text/plain",
         "createdAt":"2026-10-01T00:00:00Z","updatedAt":"2026-10-21T00:00:00Z","deletedAt":null,"purgeAt":null,
-        "subtreeBytes":null,"subtreeCount":null,"statsStale":false,"preview":{"__typename":"PreviewInfo","kind":"TEXT","thumbUrl":null}}"""
+        "subtreeBytes":null,"subtreeCount":null,"statsStale":false,"starred":false,"preview":{"__typename":"PreviewInfo","kind":"TEXT","thumbUrl":null}}"""
 
     private fun activityJson(id: String, kind: String = "WEBDAV", action: String = "RENAME", node: String = "null", extra: String = "") =
         """{"__typename":"Activity","id":"$id","at":"2026-10-21T10:00:00Z",

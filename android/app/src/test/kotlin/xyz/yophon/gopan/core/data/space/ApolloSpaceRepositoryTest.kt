@@ -58,7 +58,7 @@ class ApolloSpaceRepositoryTest {
     private fun node(id: String, kind: String = "FILE", size: String = "100", subtree: String = "null") =
         """{"__typename":"Node","id":"$id","parentId":null,"name":"$id","kind":"$kind","size":$size,"mime":null,
         "createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","deletedAt":null,"purgeAt":null,
-        "subtreeBytes":$subtree,"subtreeCount":null,"statsStale":null,"preview":{"__typename":"PreviewInfo","kind":"NONE","thumbUrl":null}}"""
+        "subtreeBytes":$subtree,"subtreeCount":null,"statsStale":null,"starred":false,"preview":{"__typename":"PreviewInfo","kind":"NONE","thumbUrl":null}}"""
 
     private fun spaceFile(id: String, category: String = "VIDEO") =
         """{"__typename":"SpaceFile","node":${node(id)},"path":"/影视","category":"$category"}"""

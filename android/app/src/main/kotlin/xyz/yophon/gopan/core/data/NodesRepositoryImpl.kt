@@ -24,6 +24,7 @@ import xyz.yophon.gopan.graphql.RenameNodeMutation
 import xyz.yophon.gopan.graphql.RestoreNodesMutation
 import xyz.yophon.gopan.graphql.SearchContentQuery
 import xyz.yophon.gopan.graphql.SearchNodesQuery
+import xyz.yophon.gopan.graphql.SetStarredMutation
 import xyz.yophon.gopan.graphql.TrashQuery
 import xyz.yophon.gopan.graphql.type.NodeOrder
 import javax.inject.Inject
@@ -177,6 +178,11 @@ class NodesRepositoryImpl @Inject constructor(
     override suspend fun restore(ids: List<String>) {
         apollo.mutation(RestoreNodesMutation(ids = ids)).execute().requireData()
         forget(ids)
+        bump()
+    }
+
+    override suspend fun setStarred(ids: List<String>, starred: Boolean) {
+        apollo.mutation(SetStarredMutation(ids = ids, starred = starred)).execute().requireData()
         bump()
     }
 

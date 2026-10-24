@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -58,6 +59,8 @@ import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material.icons.outlined.Download
@@ -101,6 +104,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -150,6 +154,8 @@ fun DriveScreen(
     onOpenPreview: (nodeId: String) -> Unit,
     onBack: (() -> Unit)?,
     onOpenRecentPlays: () -> Unit = {},
+    /** 网盘首页顶上的「收藏」「最近」入口(doc/24);true = 最近 */
+    onOpenQuick: (recent: Boolean) -> Unit = {},
     viewModel: DriveViewModel = hiltViewModel(),
     fetchViewModel: FetchViewModel = hiltViewModel(),
     // 「复制直链」:与 NodeDialogHost 里的是同一个实例(同一个导航条目),对话框与提示由它画
@@ -278,6 +284,7 @@ fun DriveScreen(
             DriveContent(
                 state = state,
                 viewModel = viewModel,
+                onOpenQuick = onOpenQuick,
                 bottomPadding = padding.calculateBottomPadding(),
                 modifier = (
                     if (state.isRoot && !state.selectionMode) {
@@ -463,6 +470,15 @@ private fun SelectionMoreMenu(state: DriveUiState, viewModel: DriveViewModel, on
                 },
                 leadingIcon = { Icon(Icons.Outlined.DriveFileRenameOutline, contentDescription = null) },
             )
+            val allStarred = state.selectedNodes.isNotEmpty() && state.selectedNodes.all { it.starred }
+            DropdownMenuItem(
+                text = { Text(stringResource(if (allStarred) R.string.drive_action_unstar else R.string.drive_action_star)) },
+                onClick = {
+                    expanded = false
+                    viewModel.toggleStar(state.selectedNodes)
+                },
+                leadingIcon = { Icon(if (allStarred) Icons.Outlined.Star else Icons.Outlined.StarOutline, contentDescription = null) },
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.drive_action_copy)) },
                 onClick = {
@@ -587,7 +603,13 @@ private fun OverflowMenu(onOpenTrash: () -> Unit, onOpenTransfers: () -> Unit, o
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DriveContent(state: DriveUiState, viewModel: DriveViewModel, modifier: Modifier = Modifier, bottomPadding: Dp = 0.dp) {
+private fun DriveContent(
+    state: DriveUiState,
+    viewModel: DriveViewModel,
+    onOpenQuick: (recent: Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    bottomPadding: Dp = 0.dp,
+) {
     PullToRefreshBox(isRefreshing = state.isRefreshing, onRefresh = viewModel::refresh, modifier = modifier) {
         when (val status = state.status) {
             ListStatus.Loading -> if (state.viewMode == DriveViewMode.LIST) ListSkeleton() else GridSkeleton()
@@ -604,8 +626,8 @@ private fun DriveContent(state: DriveUiState, viewModel: DriveViewModel, modifie
                                 icon = Icons.Outlined.FolderOpen,
                             )
                         }
-                        state.viewMode == DriveViewMode.LIST -> NodeList(state, viewModel, bottomPadding)
-                        else -> NodeGrid(state, viewModel, bottomPadding)
+                        state.viewMode == DriveViewMode.LIST -> NodeList(state, viewModel, bottomPadding, onOpenQuick)
+                        else -> NodeGrid(state, viewModel, bottomPadding, onOpenQuick)
                     }
                     if (state.revalidating) {
                         AfterDelay(LOADING_INDICATOR_DELAY_MS) {
@@ -644,7 +666,7 @@ private fun OfflineBanner(fetchedAt: Long, onRetry: () -> Unit) {
 
 /** 列表模式:一行一个文件;宽屏(横屏、平板)按宽度分成两三栏,不让一行拉得老长 */
 @Composable
-private fun NodeList(state: DriveUiState, viewModel: DriveViewModel, bottomPadding: Dp) {
+private fun NodeList(state: DriveUiState, viewModel: DriveViewModel, bottomPadding: Dp, onOpenQuick: (Boolean) -> Unit) {
     val listState = rememberLazyGridState()
     // 换排序后新列表到达:回到顶部。否则 LazyColumn 按旧首项的 key 锚定,升降序一换直接跳到底
     LaunchedEffect(state.scrollToTopToken) { if (state.scrollToTopToken > 0) listState.scrollToItem(0) }
@@ -667,6 +689,11 @@ private fun NodeList(state: DriveUiState, viewModel: DriveViewModel, bottomPaddi
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = bottomPadding + FAB_CLEARANCE),
     ) {
+        if (state.isRoot && !state.selectionMode) {
+            item(key = "quick", contentType = "quick", span = { GridItemSpan(maxLineSpan) }) {
+                QuickEntries(onOpenQuick, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp))
+            }
+        }
         items(state.items, key = { it.id }, contentType = { "node" }) { node ->
             NodeRow(
                 modifier = Modifier.animateItem(),
@@ -691,8 +718,36 @@ private fun NodeList(state: DriveUiState, viewModel: DriveViewModel, bottomPaddi
 /** 列表末尾给新建按钮留的空 */
 private val FAB_CLEARANCE = 88.dp
 
+/** 网盘首页顶上的两个入口:收藏、最近(doc/24) */
 @Composable
-private fun NodeGrid(state: DriveUiState, viewModel: DriveViewModel, bottomPadding: Dp) {
+private fun QuickEntries(onOpenQuick: (recent: Boolean) -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        QuickEntry(Icons.Outlined.StarOutline, stringResource(R.string.quick_starred_title), "quick_entry_starred", Modifier.weight(1f)) { onOpenQuick(false) }
+        QuickEntry(Icons.Outlined.History, stringResource(R.string.quick_recent_title), "quick_entry_recent", Modifier.weight(1f)) { onOpenQuick(true) }
+    }
+}
+
+@Composable
+private fun QuickEntry(icon: ImageVector, label: String, tag: String, modifier: Modifier, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(48.dp).testTag(tag),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+@Composable
+private fun NodeGrid(state: DriveUiState, viewModel: DriveViewModel, bottomPadding: Dp, onOpenQuick: (Boolean) -> Unit) {
     val gridState = rememberLazyGridState()
     LaunchedEffect(state.scrollToTopToken) { if (state.scrollToTopToken > 0) gridState.scrollToItem(0) }
     OnTabReselect(Routes.DriveTab, enabled = state.isRoot) { gridState.animateScrollToItem(0) }
@@ -715,6 +770,11 @@ private fun NodeGrid(state: DriveUiState, viewModel: DriveViewModel, bottomPaddi
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (state.isRoot && !state.selectionMode) {
+            item(key = "quick", contentType = "quick", span = { GridItemSpan(maxLineSpan) }) {
+                QuickEntries(onOpenQuick)
+            }
+        }
         items(state.items, key = { it.id }, contentType = { "node" }) { node ->
             NodeCard(
                 modifier = Modifier.animateItem(),

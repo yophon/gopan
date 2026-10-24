@@ -27,6 +27,10 @@ type Config struct {
 	// 登录限速会退化成"全站共用一个桶",设备列表里的 IP 也没有意义。
 	TrustedProxies []*net.IPNet
 
+	// 历史版本(doc/24):同名覆盖时每个文件最多留几份旧内容(0 = 不留),留多久
+	VersionKeep int
+	VersionTTL  time.Duration
+
 	// 对象存储
 	S3Endpoint       string // 服务端内部访问地址
 	S3PublicEndpoint string // 预签名 URL 用的外部地址(浏览器可达)
@@ -86,6 +90,8 @@ func Load() (*Config, error) {
 		AccessTTL:    envDuration("ACCESS_TTL", 4*time.Hour),
 		RefreshTTL:   14 * 24 * time.Hour,
 		TrashTTL:     envDuration("TRASH_TTL", 30*24*time.Hour),
+		VersionKeep:  int(envInt64("VERSION_KEEP", 10)),
+		VersionTTL:   envDuration("VERSION_TTL", 30*24*time.Hour),
 		DevMode:      envBool("DEV_MODE", false),
 
 		S3Endpoint:       env("S3_ENDPOINT", "127.0.0.1:9000"),
@@ -146,6 +152,9 @@ func Load() (*Config, error) {
 	}
 	if c.FetchMaxSize <= 0 || c.FetchRate < 0 {
 		return nil, fmt.Errorf("GOPAN_FETCH_MAX_SIZE 必须大于 0,GOPAN_FETCH_RATE 不能为负")
+	}
+	if c.VersionKeep < 0 || c.VersionKeep > 100 || c.VersionTTL < time.Hour {
+		return nil, fmt.Errorf("GOPAN_VERSION_KEEP 必须在 0 到 100 之间,GOPAN_VERSION_TTL 不能短于 1 小时")
 	}
 
 	if c.DBURL == "" {

@@ -173,6 +173,7 @@ func nodeOf(r store.GetNodeWithBlobRow) store.Node {
 		ID: r.ID, OwnerID: r.OwnerID, ParentID: r.ParentID, Name: r.Name, Kind: r.Kind, BlobID: r.BlobID,
 		DeletedAt: r.DeletedAt, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		SubtreeBytes: r.SubtreeBytes, SubtreeCount: r.SubtreeCount, StatsStale: r.StatsStale,
+		StarredAt: r.StarredAt, OpenedAt: r.OpenedAt,
 	}
 }
 

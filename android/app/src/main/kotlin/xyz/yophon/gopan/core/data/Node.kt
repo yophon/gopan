@@ -54,6 +54,8 @@ data class Node(
     val subtreeBytes: Long? = null,
     val subtreeCount: Long? = null,
     val statsStale: Boolean = false,
+    /** 收藏(doc/24) */
+    val starred: Boolean = false,
 ) {
     val isFolder: Boolean get() = kind == NodeKind.FOLDER
 
@@ -98,6 +100,7 @@ fun NodeItem.toNode(): Node = Node(
     subtreeBytes = subtreeBytes,
     subtreeCount = subtreeCount,
     statsStale = statsStale ?: false,
+    starred = starred,
 )
 
 private fun GqlPreviewKind.toDomain(): PreviewKind =

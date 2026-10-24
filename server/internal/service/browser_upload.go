@@ -202,7 +202,18 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 		}
 		return nil, errf("UNAUTHENTICATED", "账号已停用")
 	}
-	if u.UsedBytes+sess.Size > u.QuotaBytes {
+	// 「替换」上传(doc/24):同名文件还在就覆盖它,配额由覆盖逻辑按是否留旧版本细算
+	var replaceTarget *store.Node
+	if sess.ReplaceExisting && collect == nil {
+		ex, err := q.GetActiveChildByName(ctx, store.GetActiveChildByNameParams{OwnerID: sess.OwnerID, ParentID: parent, Name: name})
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+		if err == nil {
+			replaceTarget = &ex
+		}
+	}
+	if replaceTarget == nil && u.UsedBytes+sess.Size > u.QuotaBytes {
 		if collect != nil {
 			s.notify.noteCollectFull(ctx, sess.OwnerID, collect.request.ID, collect.request.Title)
 			return nil, errCollectFull // 不向访客透露属主的空间状态
@@ -229,6 +240,9 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 	}
 	if blob.Size != size {
 		return nil, errf("SIZE_MISMATCH", "已有文件的大小与上传内容不一致")
+	}
+	if replaceTarget != nil {
+		return s.finalizeReplace(ctx, q, sess, u, *replaceTarget, blob)
 	}
 	n, err := q.CreateNode(ctx, store.CreateNodeParams{ID: uuid.Must(uuid.NewV7()), OwnerID: sess.OwnerID, ParentID: parent, Name: name, Kind: "file", BlobID: &blob.ID})
 	if isUniqueViolation(err) {
@@ -289,6 +303,36 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 		return nil, err
 	}
 	return &n, nil
+}
+
+// finalizeReplace 「替换」上传定稿:字节已校验,发布 blob 后覆盖同名文件。
+func (s *Uploads) finalizeReplace(ctx context.Context, q *store.Queries, sess store.UploadSession, locked store.User, existing store.Node, blob store.Blob) (*store.Node, error) {
+	if !blob.Verified {
+		if err := s.obj.Promote(ctx, objstore.BlobKey(blob.Sha256), *sess.ObjectKey, blob.Size, mimeByName(sess.TargetName)); err != nil {
+			return nil, err
+		}
+		if err := q.MarkBlobVerified(ctx, blob.ID); err != nil {
+			return nil, err
+		}
+	}
+	res, err := overwriteFileTx(ctx, q, s.versionKeep, locked, existing, blob)
+	if err != nil {
+		return nil, err
+	}
+	if res.Changed {
+		act := fileAct(OpOverwrite, res.Node, blob.Size)
+		act.Detail.Version = res.Version
+		if err := recordActs(actorFromJSON(ctx, sess.Actor), q, sess.OwnerID, act); err != nil {
+			return nil, err
+		}
+	}
+	if err := q.FinishUploadSession(ctx, store.FinishUploadSessionParams{ID: sess.ID, NodeID: &res.Node.ID}); err != nil {
+		return nil, err
+	}
+	if err := q.EnqueueTask(ctx, store.EnqueueTaskParams{ID: uuid.Must(uuid.NewV7()), Kind: "verify_hash", BlobID: blob.ID}); err != nil {
+		return nil, err
+	}
+	return &res.Node, nil
 }
 
 func (s *Uploads) cleanUploadObject(ctx context.Context, sess store.UploadSession) error {

@@ -34,6 +34,8 @@ type Uploads struct {
 	ttl      time.Duration
 	enqueue  func(ctx context.Context, kind string, blobID uuid.UUID) // worker 注入
 	notify   *Notifier
+	// 同名覆盖时每个文件最多留几份旧内容(doc/24);0 = 不留,覆盖即丢(测试默认)
+	versionKeep int
 }
 
 func NewUploads(pool *pgxpool.Pool, obj *objstore.Store, nodes *Nodes, partSize int64, ttl time.Duration) *Uploads {
@@ -43,6 +45,9 @@ func NewUploads(pool *pgxpool.Pool, obj *objstore.Store, nodes *Nodes, partSize 
 		enqueue: func(context.Context, string, uuid.UUID) {},
 	}
 }
+
+// SetVersionKeep 同名覆盖时的历史版本保留个数(见 VersionPolicy)。
+func (s *Uploads) SetVersionKeep(n int) { s.versionKeep = n }
 
 // SetEnqueue 由 worker 包在启动时注入,避免 service ↔ worker 循环依赖。
 func (s *Uploads) SetEnqueue(fn func(ctx context.Context, kind string, blobID uuid.UUID)) {
@@ -62,6 +67,12 @@ type SessionView struct {
 }
 
 func (s *Uploads) Init(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID, name, sha string, size int64) (*InitResult, error) {
+	return s.InitWith(ctx, owner, parentID, name, sha, size, false)
+}
+
+// InitWith 同 Init;replace = true 时目标位置有同名文件就覆盖它(旧内容进历史版本,doc/24),
+// 而不是自动改名。同名的是文件夹时照旧改名。
+func (s *Uploads) InitWith(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID, name, sha string, size int64, replace bool) (*InitResult, error) {
 	if !sha256Re.MatchString(sha) {
 		return nil, errf("INVALID_INPUT", "sha256 必须是 64 位小写十六进制")
 	}
@@ -71,17 +82,39 @@ func (s *Uploads) Init(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID
 	if err := s.nodes.ensureFolder(ctx, owner, parentID); err != nil {
 		return nil, err
 	}
-	name, err := s.nodes.cleanName(ctx, owner, parentID, name)
-	if err != nil {
-		return nil, err
+	var target *store.Node // 「替换」要覆盖的同名文件
+	if replace {
+		name = strings.TrimSpace(name)
+		if err := validateName(name); err != nil {
+			return nil, err
+		}
+		ex, err := s.q.GetActiveChildByName(ctx, store.GetActiveChildByNameParams{OwnerID: owner, ParentID: parentID, Name: name})
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+		if err == nil && ex.Kind == "file" {
+			target = &ex
+		}
+	}
+	if target == nil {
+		var err error
+		if name, err = s.nodes.cleanName(ctx, owner, parentID, name); err != nil {
+			return nil, err
+		}
 	}
 
-	// 配额(逻辑记账,秒传同样占额)
+	// 配额(逻辑记账,秒传同样占额);覆盖按差额预检,定稿时再按是否留旧版本细算
 	u, err := s.q.GetUserByID(ctx, owner)
 	if err != nil {
 		return nil, err
 	}
-	if u.UsedBytes+size > u.QuotaBytes {
+	need := size
+	if target != nil && target.BlobID != nil {
+		if old, err := s.q.GetBlob(ctx, *target.BlobID); err == nil {
+			need -= old.Size
+		}
+	}
+	if u.UsedBytes+need > u.QuotaBytes {
 		return nil, errf("QUOTA_EXCEEDED", "存储配额不足")
 	}
 
@@ -91,7 +124,12 @@ func (s *Uploads) Init(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID
 		if blob.Size != size {
 			return nil, errf("INVALID_INPUT", "hash 与文件大小不匹配")
 		}
-		n, err := s.linkBlob(ctx, owner, parentID, name, blob)
+		var n store.Node
+		if target != nil {
+			n, err = s.replaceBlob(ctx, owner, parentID, name, blob)
+		} else {
+			n, err = s.linkBlob(ctx, owner, parentID, name, blob)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -130,6 +168,13 @@ func (s *Uploads) Init(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID
 	if err := s.q.SetUploadSessionActor(ctx, store.SetUploadSessionActorParams{ID: sess.ID, Actor: actorJSON(ctx)}); err != nil {
 		_ = s.Abort(context.WithoutCancel(ctx), owner, id)
 		return nil, err
+	}
+	if target != nil {
+		if err := s.q.SetUploadSessionReplace(ctx, store.SetUploadSessionReplaceParams{ID: sess.ID, OwnerID: owner}); err != nil {
+			_ = s.Abort(context.WithoutCancel(ctx), owner, id)
+			return nil, err
+		}
+		sess.ReplaceExisting = true
 	}
 	view, err := s.sessionView(ctx, sess)
 	if err != nil {
@@ -203,6 +248,44 @@ func partLen(sess store.UploadSession, n int) int64 {
 	return ps
 }
 
+// replaceBlob 秒传 +「替换」:同名文件还在就覆盖它,已经不在了就照常新建。
+func (s *Uploads) replaceBlob(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID, name string, blob store.Blob) (store.Node, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return store.Node{}, err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+	locked, err := qtx.GetUserByIDForUpdate(ctx, owner)
+	if err != nil {
+		return store.Node{}, err
+	}
+	existing, err := qtx.GetActiveChildByName(ctx, store.GetActiveChildByNameParams{OwnerID: owner, ParentID: parentID, Name: name})
+	if errors.Is(err, pgx.ErrNoRows) {
+		_ = tx.Rollback(ctx)
+		return s.linkBlob(ctx, owner, parentID, name, blob)
+	}
+	if err != nil {
+		return store.Node{}, err
+	}
+	res, err := overwriteFileTx(ctx, qtx, s.versionKeep, locked, existing, blob)
+	if err != nil {
+		return store.Node{}, err
+	}
+	if res.Changed {
+		act := fileAct(OpOverwrite, res.Node, blob.Size)
+		act.Detail.Version = res.Version
+		if err := recordActs(ctx, qtx, owner, act); err != nil {
+			return store.Node{}, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return store.Node{}, err
+	}
+	s.notify.CheckQuota(ctx, owner)
+	return res.Node, nil
+}
+
 // linkBlob 秒传:只建引用。
 func (s *Uploads) linkBlob(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID, name string, blob store.Blob) (store.Node, error) {
 	tx, err := s.pool.Begin(ctx)
@@ -251,8 +334,8 @@ func (s *Uploads) linkBlob(ctx context.Context, owner uuid.UUID, parentID *uuid.
 }
 
 // CommitStreamed WebDAV 写入定稿:字节已流式转存到 tmpKey,sha/size 是服务端算的。
-// 覆盖语义:目标已有同名文件 → 换 blob 指向并调整引用与配额(不进回收站,
-// rclone sync 高频覆盖不能变成垃圾制造机);同名文件夹 → 冲突报错。
+// 覆盖语义:目标已有同名文件 → 换 blob 指向,旧内容按保留策略留成历史版本(不进回收站;
+// 每个文件有个数上限、到期清理,rclone sync 高频覆盖也不会无限堆积);同名文件夹 → 冲突报错。
 // WebDAV/Agent 的新 blob 仍标 pending 并入队 verify_hash,通过后触发派生物。
 // 浏览器则在独立 staging 上先校验,定稿见 browser_upload.go。
 func (s *Uploads) CommitStreamed(ctx context.Context, owner uuid.UUID, parentID *uuid.UUID, name, sha string, size int64, tmpKey string) (*store.Node, error) {
@@ -311,7 +394,7 @@ func (s *Uploads) CommitStreamed(ctx context.Context, owner uuid.UUID, parentID 
 	if err != nil {
 		return nil, err
 	}
-	if locked.UsedBytes+size-oldSize > locked.QuotaBytes {
+	if !overwrite && locked.UsedBytes+size > locked.QuotaBytes {
 		return nil, errf("QUOTA_EXCEEDED", "存储配额不足")
 	}
 
@@ -326,35 +409,21 @@ func (s *Uploads) CommitStreamed(ctx context.Context, owner uuid.UUID, parentID 
 	}
 
 	var node store.Node
-	act := OpUpload
-	switch {
-	case overwrite && existing.BlobID != nil && *existing.BlobID == blob.ID:
-		// 内容没变:只碰 updated_at,引用与配额原样
-		node, err = qtx.ReplaceNodeBlob(ctx, store.ReplaceNodeBlobParams{ID: existing.ID, OwnerID: owner, BlobID: &blob.ID})
+	if overwrite {
+		res, err := overwriteFileTx(ctx, qtx, s.versionKeep, locked, existing, blob)
 		if err != nil {
 			return nil, err
 		}
-	case overwrite:
-		act = OpOverwrite
-		node, err = qtx.ReplaceNodeBlob(ctx, store.ReplaceNodeBlobParams{ID: existing.ID, OwnerID: owner, BlobID: &blob.ID})
-		if err != nil {
-			return nil, err
-		}
-		if err := qtx.IncrementBlobRef(ctx, blob.ID); err != nil {
-			return nil, err
-		}
-		if existing.BlobID != nil {
-			if err := qtx.DecrementBlobRefs(ctx, []uuid.UUID{*existing.BlobID}); err != nil {
+		node = res.Node
+		// 内容没变的覆盖(rclone 重传同一个文件)不记
+		if res.Changed {
+			act := fileAct(OpOverwrite, node, size)
+			act.Detail.Version = res.Version
+			if err := recordActs(ctx, qtx, owner, act); err != nil {
 				return nil, err
 			}
 		}
-		if err := qtx.AddUsedBytes(ctx, store.AddUsedBytesParams{ID: owner, UsedBytes: size}); err != nil {
-			return nil, err
-		}
-		if err := qtx.SubtractUsedBytes(ctx, store.SubtractUsedBytesParams{ID: owner, UsedBytes: oldSize}); err != nil {
-			return nil, err
-		}
-	default:
+	} else {
 		node, err = qtx.CreateNode(ctx, store.CreateNodeParams{
 			ID: uuid.Must(uuid.NewV7()), OwnerID: owner, ParentID: parentID,
 			Name: name, Kind: "file", BlobID: &blob.ID,
@@ -374,13 +443,10 @@ func (s *Uploads) CommitStreamed(ctx context.Context, owner uuid.UUID, parentID 
 		if err := attachChatMessage(ctx, qtx, owner, parentID, node.ID); err != nil {
 			return nil, err
 		}
-	}
-	if err := qtx.MarkAncestorsStale(ctx, node.ID); err != nil {
-		return nil, err
-	}
-	// 内容没变的覆盖(rclone 重传同一个文件)不记
-	if !(overwrite && existing.BlobID != nil && *existing.BlobID == blob.ID) {
-		if err := recordActs(ctx, qtx, owner, fileAct(act, node, size)); err != nil {
+		if err := qtx.MarkAncestorsStale(ctx, node.ID); err != nil {
+			return nil, err
+		}
+		if err := recordActs(ctx, qtx, owner, fileAct(OpUpload, node, size)); err != nil {
 			return nil, err
 		}
 	}
@@ -474,4 +540,3 @@ func (s *Uploads) ReadText(ctx context.Context, owner, nodeID uuid.UUID, offset,
 	}
 	return string(b), offset+int64(len(b)) >= *row.BlobSize, nil
 }
-

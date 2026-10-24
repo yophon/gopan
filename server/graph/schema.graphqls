@@ -138,6 +138,31 @@ type Node {
   # 从根开始的路径,如 /工作资料/合同/报价.pdf;访客与回收站里的节点为 null。
   # 每个节点一次递归查询:搜索结果这类要显示「位置」的地方取,普通列表别请求
   path: String
+  # 收藏(doc/24);分享访客看到的一律是 false
+  starred: Boolean!
+  # 最后一次在网页 / App 里打开(预览、播放、下载)的时刻;没打开过、访客为 null
+  openedAt: Time
+}
+
+# 历史版本(doc/24):文件被同名覆盖时留下的旧内容
+type FileVersion {
+  id: ID!
+  size: Int64!
+  sha256: String!
+  mime: String!
+  # 这份内容当初写进来的时刻
+  savedAt: Time!
+  # 被换下来的时刻;过了保留期(keepDays 天)自动清理
+  replacedAt: Time!
+  # 预签名下载地址(15 分钟有效),文件名是文件现在的名字
+  downloadUrl: String!
+}
+
+type FileVersionList {
+  items: [FileVersion!]!
+  # 本站的保留策略:每个文件最多留几个(0 = 覆盖时不留旧版本),换下来后留几天
+  keep: Int!
+  keepDays: Int!
 }
 
 # ARCHIVE:压缩包(zip / 7z / rar / tar.*),用 archiveInfo / archiveEntries 浏览
@@ -786,6 +811,9 @@ type SpaceOverview {
   # 重复文件:组数与删掉多余的能省下的配额(服务器上同一份内容本来只存一份)
   duplicateGroups: Int64!
   duplicateBytes: Int64!
+  # 历史版本(doc/24):计入已用空间
+  versionFiles: Int64!
+  versionBytes: Int64!
 }
 
 type SpaceFolderLevel {
@@ -1127,6 +1155,13 @@ type Query {
   # 撤回前先看:会撤回哪些、哪些撤不了(不改任何东西)
   undoPreview(selection: UndoSelection!): UndoResult!
 
+  # 收藏(doc/24):最近收藏的在前,最多 500 个;回收站里的不列
+  starredNodes: [Node!]!
+  # 最近打开的文件(doc/24):最近的在前,最多 100 个
+  recentFiles(limit: Int = 100): [Node!]!
+  # 一个文件的历史版本,最近换下来的在前
+  fileVersions(nodeId: ID!): FileVersionList!
+
   # 空间分析:都是现算的只读查询
   spaceOverview: SpaceOverview!
   spaceFolders(parentId: ID): SpaceFolderLevel!
@@ -1194,7 +1229,20 @@ type Mutation {
   purgeNodes(ids: [ID!]!): Boolean!
   purgeTrash: Boolean!
 
-  initUpload(parentId: ID, name: String!, sha256: String!, size: Int64!): UploadInit!
+  # 收藏 / 取消收藏(doc/24);回收站里的跳过,返回改到的节点
+  setStarred(ids: [ID!]!, starred: Boolean!): [Node!]!
+  # 网页 / App 打开(预览、播放、下载)一个文件时上报,进「最近」;文件夹忽略
+  markOpened(nodeId: ID!): Boolean!
+  # 从「最近」里拿掉(文件本身不动);ids 不给 = 全部清掉
+  clearRecent(ids: [ID!]): Boolean!
+  # 把文件恢复成某个历史版本:现在的内容留成一个新版本,恢复本身也能反悔
+  restoreFileVersion(id: ID!): Node!
+  deleteFileVersions(ids: [ID!]!): Boolean!
+  # 清空历史版本:给 nodeId 只清这个文件的,不给清自己全部文件的。返回释放的字节
+  purgeFileVersions(nodeId: ID): Int64!
+
+  # replace = true:目标位置有同名文件就覆盖它(旧内容进历史版本,doc/24),而不是自动改名;同名的是文件夹时照旧改名
+  initUpload(parentId: ID, name: String!, sha256: String!, size: Int64!, replace: Boolean = false): UploadInit!
   completeUpload(sessionId: ID!, etags: [PartEtag!]!): Node!
   abortUpload(sessionId: ID!): Boolean!
 

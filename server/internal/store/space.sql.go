@@ -161,7 +161,7 @@ func (q *Queries) SpaceDuplicateTotals(ctx context.Context, ownerID uuid.UUID) (
 }
 
 const spaceEmptyFolders = `-- name: SpaceEmptyFolders :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale FROM nodes n
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at FROM nodes n
 LEFT JOIN nodes p ON p.id = n.parent_id
 WHERE n.owner_id = $1 AND n.deleted_at IS NULL AND n.kind = 'folder'
   AND n.subtree_count = 0 AND NOT n.stats_stale
@@ -203,6 +203,8 @@ func (q *Queries) SpaceEmptyFolders(ctx context.Context, arg SpaceEmptyFoldersPa
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -257,7 +259,7 @@ func (q *Queries) SpaceExpiredRequests(ctx context.Context, ownerID uuid.UUID) (
 }
 
 const spaceFolders = `-- name: SpaceFolders :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at
 FROM nodes n
 WHERE n.owner_id = $1 AND n.parent_id IS NOT DISTINCT FROM $2 AND n.deleted_at IS NULL AND n.kind = 'folder'
 ORDER BY n.subtree_bytes DESC, n.id
@@ -292,6 +294,8 @@ func (q *Queries) SpaceFolders(ctx context.Context, arg SpaceFoldersParams) ([]N
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -406,7 +410,7 @@ func (q *Queries) SpaceIdleShares(ctx context.Context, createdBy uuid.UUID) ([]S
 }
 
 const spaceLargeFiles = `-- name: SpaceLargeFiles :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, gopan_file_category(n.name, b.mime)::text AS category
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, gopan_file_category(n.name, b.mime)::text AS category
 FROM nodes n JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1 AND n.deleted_at IS NULL AND n.kind = 'file'
   AND ($2::text = '' OR gopan_file_category(n.name, b.mime) = $2::text)
@@ -433,6 +437,8 @@ type SpaceLargeFilesRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     int64
 	BlobMime     string
 	Category     string
@@ -460,6 +466,8 @@ func (q *Queries) SpaceLargeFiles(ctx context.Context, arg SpaceLargeFilesParams
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.Category,
@@ -499,7 +507,7 @@ func (q *Queries) SpaceLooseFiles(ctx context.Context, arg SpaceLooseFilesParams
 }
 
 const spaceNodesByBlobs = `-- name: SpaceNodesByBlobs :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale FROM nodes n
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at FROM nodes n
 WHERE n.owner_id = $1 AND n.deleted_at IS NULL AND n.kind = 'file' AND n.blob_id = ANY($2::uuid[])
 ORDER BY n.created_at, n.id
 `
@@ -531,6 +539,8 @@ func (q *Queries) SpaceNodesByBlobs(ctx context.Context, arg SpaceNodesByBlobsPa
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -543,7 +553,7 @@ func (q *Queries) SpaceNodesByBlobs(ctx context.Context, arg SpaceNodesByBlobsPa
 }
 
 const spaceStaleFiles = `-- name: SpaceStaleFiles :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, gopan_file_category(n.name, b.mime)::text AS category
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, gopan_file_category(n.name, b.mime)::text AS category
 FROM nodes n JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1 AND n.deleted_at IS NULL AND n.kind = 'file'
   AND n.updated_at < $2::timestamptz AND b.size >= $3::bigint
@@ -571,6 +581,8 @@ type SpaceStaleFilesRow struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
 	BlobSize     int64
 	BlobMime     string
 	Category     string
@@ -604,6 +616,8 @@ func (q *Queries) SpaceStaleFiles(ctx context.Context, arg SpaceStaleFilesParams
 			&i.SubtreeBytes,
 			&i.SubtreeCount,
 			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.Category,

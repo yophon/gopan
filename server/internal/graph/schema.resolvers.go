@@ -315,8 +315,38 @@ func (r *mutationResolver) PurgeTrash(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// SetStarred is the resolver for the setStarred field.
+func (r *mutationResolver) SetStarred(ctx context.Context, ids []string, starred bool) ([]*Node, error) {
+	return r.setStarred(ctx, ids, starred)
+}
+
+// MarkOpened is the resolver for the markOpened field.
+func (r *mutationResolver) MarkOpened(ctx context.Context, nodeID string) (bool, error) {
+	return r.markOpened(ctx, nodeID)
+}
+
+// ClearRecent is the resolver for the clearRecent field.
+func (r *mutationResolver) ClearRecent(ctx context.Context, ids []string) (bool, error) {
+	return r.clearRecent(ctx, ids)
+}
+
+// RestoreFileVersion is the resolver for the restoreFileVersion field.
+func (r *mutationResolver) RestoreFileVersion(ctx context.Context, id string) (*Node, error) {
+	return r.restoreFileVersion(ctx, id)
+}
+
+// DeleteFileVersions is the resolver for the deleteFileVersions field.
+func (r *mutationResolver) DeleteFileVersions(ctx context.Context, ids []string) (bool, error) {
+	return r.deleteFileVersions(ctx, ids)
+}
+
+// PurgeFileVersions is the resolver for the purgeFileVersions field.
+func (r *mutationResolver) PurgeFileVersions(ctx context.Context, nodeID *string) (int64, error) {
+	return r.purgeFileVersions(ctx, nodeID)
+}
+
 // InitUpload is the resolver for the initUpload field.
-func (r *mutationResolver) InitUpload(ctx context.Context, parentID *string, name string, sha256 string, size int64) (*UploadInit, error) {
+func (r *mutationResolver) InitUpload(ctx context.Context, parentID *string, name string, sha256 string, size int64, replace *bool) (*UploadInit, error) {
 	ident, err := httpx.UserFrom(ctx)
 	if err != nil {
 		return nil, err
@@ -325,7 +355,7 @@ func (r *mutationResolver) InitUpload(ctx context.Context, parentID *string, nam
 	if err != nil {
 		return nil, err
 	}
-	res, err := r.Uploads.Init(ctx, ident.UserID, pid, name, sha256, size)
+	res, err := r.Uploads.InitWith(ctx, ident.UserID, pid, name, sha256, size, replace != nil && *replace)
 	if err != nil {
 		return nil, err
 	}
@@ -1249,6 +1279,16 @@ func (r *nodeResolver) Path(ctx context.Context, obj *Node) (*string, error) {
 	return &p, nil
 }
 
+// Starred is the resolver for the starred field.
+func (r *nodeResolver) Starred(ctx context.Context, obj *Node) (bool, error) {
+	return nodeStarred(ctx, obj), nil
+}
+
+// OpenedAt is the resolver for the openedAt field.
+func (r *nodeResolver) OpenedAt(ctx context.Context, obj *Node) (*time.Time, error) {
+	return nodeOpenedAt(ctx, obj), nil
+}
+
 // McpAccessRoots is the resolver for the mcpAccessRoots field.
 func (r *queryResolver) McpAccessRoots(ctx context.Context) ([]*MCPAccessRoot, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -1372,6 +1412,7 @@ func (r *queryResolver) Children(ctx context.Context, parentID *string, cursor *
 			Kind: row.Kind, BlobID: row.BlobID, DeletedAt: row.DeletedAt,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 			SubtreeBytes: row.SubtreeBytes, SubtreeCount: row.SubtreeCount, StatsStale: row.StatsStale,
+			StarredAt: row.StarredAt, OpenedAt: row.OpenedAt,
 		}, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256})
 	}), nil
 }
@@ -1398,6 +1439,7 @@ func (r *queryResolver) SearchNodes(ctx context.Context, q string, cursor *strin
 				Kind: row.Kind, BlobID: row.BlobID, DeletedAt: row.DeletedAt,
 				CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 				SubtreeBytes: row.SubtreeBytes, SubtreeCount: row.SubtreeCount, StatsStale: row.StatsStale,
+				StarredAt: row.StarredAt, OpenedAt: row.OpenedAt,
 			}, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256})
 		}), nil
 	}
@@ -1411,6 +1453,7 @@ func (r *queryResolver) SearchNodes(ctx context.Context, q string, cursor *strin
 			Kind: row.Kind, BlobID: row.BlobID, DeletedAt: row.DeletedAt,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 			SubtreeBytes: row.SubtreeBytes, SubtreeCount: row.SubtreeCount, StatsStale: row.StatsStale,
+			StarredAt: row.StarredAt, OpenedAt: row.OpenedAt,
 		}, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256})
 	}), nil
 }
@@ -1456,6 +1499,7 @@ func (r *queryResolver) Trash(ctx context.Context, cursor *string) (*NodePage, e
 			Kind: row.Kind, BlobID: row.BlobID, DeletedAt: row.DeletedAt,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 			SubtreeBytes: row.SubtreeBytes, SubtreeCount: row.SubtreeCount, StatsStale: row.StatsStale,
+			StarredAt: row.StarredAt, OpenedAt: row.OpenedAt,
 		}, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256, PurgeAt: purgeAt})
 	}), nil
 }
@@ -2169,6 +2213,21 @@ func (r *queryResolver) ActivityActors(ctx context.Context) ([]*ActivityActorSum
 // UndoPreview is the resolver for the undoPreview field.
 func (r *queryResolver) UndoPreview(ctx context.Context, selection UndoSelection) (*UndoResult, error) {
 	return r.undo(ctx, selection, true)
+}
+
+// StarredNodes is the resolver for the starredNodes field.
+func (r *queryResolver) StarredNodes(ctx context.Context) ([]*Node, error) {
+	return r.starredNodes(ctx)
+}
+
+// RecentFiles is the resolver for the recentFiles field.
+func (r *queryResolver) RecentFiles(ctx context.Context, limit *int) ([]*Node, error) {
+	return r.recentFiles(ctx, limit)
+}
+
+// FileVersions is the resolver for the fileVersions field.
+func (r *queryResolver) FileVersions(ctx context.Context, nodeID string) (*FileVersionList, error) {
+	return r.fileVersions(ctx, nodeID)
 }
 
 // SpaceOverview is the resolver for the spaceOverview field.

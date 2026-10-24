@@ -714,6 +714,7 @@ func (s *Nodes) Purge(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) err
 		blobs []uuid.UUID
 	}
 	var roots []purged
+	var versions []store.NodeVersion
 	for _, id := range ids {
 		n, err := qtx.GetNode(ctx, id)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -723,6 +724,12 @@ func (s *Nodes) Purge(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) err
 		if err := qtx.MarkAncestorsStale(ctx, id); err != nil {
 			return err
 		}
+		// 历史版本也在节点行删掉之前收走,一起退引用退配额
+		vs, err := qtx.PurgeSubtreeVersions(ctx, store.PurgeSubtreeVersionsParams{ID: id, OwnerID: owner})
+		if err != nil {
+			return err
+		}
+		versions = append(versions, vs...)
 		got, err := qtx.PurgeSubtree(ctx, store.PurgeSubtreeParams{ID: id, OwnerID: owner})
 		if err != nil {
 			return err
@@ -759,8 +766,11 @@ func (s *Nodes) Purge(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) err
 	if err := recordActs(ctx, qtx, owner, acts...); err != nil {
 		return err
 	}
+	if err := releaseVersions(ctx, qtx, versions); err != nil {
+		return err
+	}
 	if len(blobIDs) > 0 {
-		if err := qtx.DecrementBlobRefs(ctx, blobIDs); err != nil {
+		if err := decrementBlobRefs(ctx, qtx, blobIDs); err != nil {
 			return err
 		}
 		// used_bytes 是逻辑记账:同 blob 被引用两次要扣两次,按出现次数累加
@@ -773,6 +783,21 @@ func (s *Nodes) Purge(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) err
 		}
 	}
 	return tx.Commit(ctx)
+}
+
+// decrementBlobRefs 按出现次数退引用:子树里两个文件指向同一份内容,要退两次
+// (DecrementBlobRefs 用 = ANY,重复的 id 只会退一次)。
+func decrementBlobRefs(ctx context.Context, q *store.Queries, ids []uuid.UUID) error {
+	counts := map[uuid.UUID]int32{}
+	for _, id := range ids {
+		counts[id]++
+	}
+	for id, n := range counts {
+		if err := q.DecrementBlobRefN(ctx, store.DecrementBlobRefNParams{ID: id, N: n}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Nodes) PurgeTrash(ctx context.Context, owner uuid.UUID) error {

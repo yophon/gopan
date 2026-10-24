@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Check, MoreFilled } from '@element-plus/icons-vue'
+import { Check, MoreFilled, StarFilled } from '@element-plus/icons-vue'
 
 import { useLongPress } from '@/composables/longPress'
 import { formatTime } from '@/utils/format'
@@ -54,7 +54,9 @@ const iconSize = computed(() => (props.mode === 'grid' ? 120 : 40))
     <NodeIcon v-else class="icon" :node="node" :size="iconSize" />
 
     <div class="info">
-      <div class="name" :title="node.name">{{ node.name }}</div>
+      <div class="name" :title="node.name">
+        <el-icon v-if="node.starred" class="star" aria-label="已收藏"><StarFilled /></el-icon>{{ node.name }}
+      </div>
       <div v-if="props.secondary" class="meta">{{ props.secondary }}</div>
       <div v-else class="meta">
         <span>{{ meta }}</span>
@@ -110,6 +112,11 @@ const iconSize = computed(() => (props.mode === 'grid' ? 120 : 40))
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--el-text-color-primary);
+}
+.star {
+  margin-right: 4px;
+  vertical-align: -2px;
+  color: var(--gp-star);
 }
 .meta {
   margin-top: 2px;

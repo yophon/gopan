@@ -58,6 +58,9 @@ sealed interface NodeDialog {
 
     /** token 区分两次打开:选择器 ViewModel 据此决定要不要回到根目录 */
     data class Picker(val mode: PickerMode, val ids: List<String>, val token: Long = System.nanoTime()) : NodeDialog
+
+    /** 文件的历史版本(doc/24);token 让每次打开都重新加载 */
+    data class Versions(val node: Node, val token: Long = System.nanoTime()) : NodeDialog
 }
 
 sealed interface NodeEffect {
@@ -142,6 +145,23 @@ abstract class NodeActionsViewModel(
 
     fun requestCopy(ids: Collection<String>) {
         if (ids.isNotEmpty()) showDialog(NodeDialog.Picker(PickerMode.COPY, ids.toList()))
+    }
+
+    fun showVersions(node: Node) {
+        if (!node.isFolder) showDialog(NodeDialog.Versions(node))
+    }
+
+    /** 收藏 / 取消收藏:选中的里面只要有一个没收藏就是「收藏」,全收藏了才是「取消收藏」 */
+    fun toggleStar(nodes: List<Node>) {
+        if (nodes.isEmpty()) return
+        val starred = !nodes.all { it.starred }
+        val msg = if (starred) UiText.Res(R.string.drive_msg_starred, nodes.size) else UiText.Res(R.string.drive_msg_unstarred)
+        runMutation(msg) { repo.setStarred(nodes.map { it.id }, starred) }
+    }
+
+    /** 历史版本里恢复 / 删除过:文件的大小与时间可能变了,静默刷新列表 */
+    fun onVersionsChanged() {
+        viewModelScope.launch { afterMutation() }
     }
 
     fun rename(id: String, name: String) =

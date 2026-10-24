@@ -7,12 +7,12 @@ import { Delete } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
-import { PurgeTrashDocument, SpaceOverviewDocument } from '@/api/gen/graphql'
+import { PurgeFileVersionsDocument, PurgeTrashDocument, SpaceOverviewDocument } from '@/api/gen/graphql'
 import { useSpaceCleanup } from '@/composables/space'
 import { formatBytes } from '@/utils/format'
 import { barWidth, categoryLabel, fillCategories, shareText } from '@/utils/space'
 
-/** 空间总览(doc/23 三.1):已用 / 配额、按类型的条形、回收站与清空、重复文件的概要 */
+/** 空间总览(doc/23 三.1):已用 / 配额、按类型的条形、回收站与清空、历史版本与清空(doc/24)、重复文件的概要 */
 
 const emit = defineEmits<{ go: [tab: string] }>()
 
@@ -55,6 +55,27 @@ async function onPurgeTrash() {
   }
   refresh()
 }
+
+async function onPurgeVersions() {
+  const o = ov.value
+  if (!o) return
+  try {
+    await ElMessageBox.confirm(
+      `所有文件的 ${o.versionFiles} 个历史版本(${formatBytes(o.versionBytes)})会被删掉,文件本身不受影响,删了找不回来。`,
+      '清空历史版本?',
+      { confirmButtonText: '清空', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  try {
+    await request(PurgeFileVersionsDocument, { nodeId: null })
+    ElMessage.success('历史版本已清空')
+  } catch (err) {
+    ElMessage.error(errorText(err, '清空失败'))
+  }
+  refresh()
+}
 </script>
 
 <template>
@@ -70,7 +91,9 @@ async function onPurgeTrash() {
           :status="percent >= 90 ? 'exception' : percent >= 70 ? 'warning' : undefined"
           :stroke-width="10"
         />
-        <p class="muted">已用里含回收站的 {{ formatBytes(ov.trashBytes) }}:还占着配额,彻底删除或到期后才释放。</p>
+        <p class="muted">
+          已用里含回收站的 {{ formatBytes(ov.trashBytes) }}<template v-if="ov.versionBytes">、历史版本的 {{ formatBytes(ov.versionBytes) }}</template>:还占着配额,彻底删除或到期后才释放。
+        </p>
       </section>
 
       <section class="block">
@@ -100,6 +123,19 @@ async function onPurgeTrash() {
             <el-button size="small" @click="router.push('/trash')">打开回收站</el-button>
             <el-button size="small" type="danger" plain :icon="Delete" :disabled="!ov.trashFiles" @click="onPurgeTrash">
               清空回收站
+            </el-button>
+          </span>
+        </div>
+        <div class="tile">
+          <span class="tile-label">历史版本</span>
+          <span class="tile-value">{{ ov.versionFiles ? formatBytes(ov.versionBytes) : '没有' }}</span>
+          <span class="muted">
+            <template v-if="ov.versionFiles">{{ ov.versionFiles }} 个,文件被同名覆盖时留下的旧内容</template>
+            <template v-else>文件被同名覆盖时,原来的内容会留在这里</template>
+          </span>
+          <span class="tile-actions">
+            <el-button size="small" type="danger" plain :icon="Delete" :disabled="!ov.versionFiles" @click="onPurgeVersions">
+              清空历史版本
             </el-button>
           </span>
         </div>

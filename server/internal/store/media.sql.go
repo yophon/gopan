@@ -90,7 +90,7 @@ func (q *Queries) GetPlayProgress(ctx context.Context, arg GetPlayProgressParams
 }
 
 const listFolderMedia = `-- name: ListFolderMedia :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
 WHERE n.owner_id = $1 AND n.parent_id IS NOT DISTINCT FROM $2::uuid
@@ -134,6 +134,8 @@ func (q *Queries) ListFolderMedia(ctx context.Context, arg ListFolderMediaParams
 			&i.Node.SubtreeBytes,
 			&i.Node.SubtreeCount,
 			&i.Node.StatsStale,
+			&i.Node.StarredAt,
+			&i.Node.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
@@ -192,7 +194,7 @@ func (q *Queries) ListFolderSubtitles(ctx context.Context, arg ListFolderSubtitl
 }
 
 const listRecentPlays = `-- name: ListRecentPlays :many
-SELECT p.owner_id, p.node_id, p.position, p.duration, p.finished, p.updated_at, n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT p.owner_id, p.node_id, p.position, p.duration, p.finished, p.updated_at, n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
 FROM play_progress p
 JOIN nodes n ON n.id = p.node_id AND n.deleted_at IS NULL
 LEFT JOIN blobs b ON b.id = n.blob_id
@@ -243,6 +245,8 @@ func (q *Queries) ListRecentPlays(ctx context.Context, arg ListRecentPlaysParams
 			&i.Node.SubtreeBytes,
 			&i.Node.SubtreeCount,
 			&i.Node.StatsStale,
+			&i.Node.StarredAt,
+			&i.Node.OpenedAt,
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,

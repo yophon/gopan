@@ -116,7 +116,8 @@ type actDetail struct {
 	Bytes   int64      `json:"bytes,omitempty"`
 	Source  *uuid.UUID `json:"source,omitempty"` // 复制的源节点
 	UndoOf  int64      `json:"undo_of,omitempty"`
-	Note    string     `json:"note,omitempty"` // 补充说明:任务标题、解压的是哪个包
+	Note    string     `json:"note,omitempty"`    // 补充说明:任务标题、解压的是哪个包
+	Version *uuid.UUID `json:"version,omitempty"` // 覆盖:换下来的旧内容留成的版本,撤回就是恢复它(doc/24)
 }
 
 // actItem 一条要记的改动。Parent 是节点现在所在的文件夹(nil = 根),用来算 parent_path。

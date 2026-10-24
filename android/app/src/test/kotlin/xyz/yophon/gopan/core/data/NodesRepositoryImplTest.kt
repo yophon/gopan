@@ -332,7 +332,7 @@ class NodesRepositoryImplTest {
         statsStale: Boolean? = null,
     ): String = """{"__typename":"Node","id":"$id","parentId":${parentId.q()},"name":"$name","kind":"$kind","size":${size ?: "null"},""" +
         """"mime":${mime.q()},"createdAt":"2026-10-13T00:00:00Z","updatedAt":"2026-10-14T00:00:00Z","deletedAt":${deletedAt.q()},"purgeAt":${purgeAt.q()},""" +
-        """"subtreeBytes":${subtreeBytes ?: "null"},"subtreeCount":${subtreeCount ?: "null"},"statsStale":${statsStale ?: "null"},""" +
+        """"subtreeBytes":${subtreeBytes ?: "null"},"subtreeCount":${subtreeCount ?: "null"},"statsStale":${statsStale ?: "null"},"starred":false,""" +
         """"preview":{"__typename":"PreviewInfo","kind":"$previewKind","thumbUrl":${thumbUrl.q()}}}"""
 
     private fun String?.q(): String = if (this == null) "null" else "\"$this\""

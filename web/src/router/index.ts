@@ -61,6 +61,17 @@ const router = createRouter({
           component: () => import('@/views/DriveView.vue'),
         },
         {
+          // 收藏与最近(doc/24)共用一个页面
+          path: 'starred',
+          name: 'starred',
+          component: () => import('@/views/QuickView.vue'),
+        },
+        {
+          path: 'recent',
+          name: 'recent',
+          component: () => import('@/views/QuickView.vue'),
+        },
+        {
           path: 'trash',
           name: 'trash',
           component: () => import('@/views/TrashView.vue'),

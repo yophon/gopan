@@ -44,6 +44,8 @@ type Pool struct {
 	// 动态清理、订阅检查(doc/23)
 	activities *service.Activities
 	feeds      *service.Feeds
+	// 历史版本到期清理(doc/24)
+	versions *service.Versions
 }
 
 func New(pool *pgxpool.Pool, obj *objstore.Store, nodes *service.Nodes, trashTTL time.Duration, ffmpeg, ffprobe, gotenberg string) *Pool {
@@ -67,6 +69,11 @@ func (w *Pool) SetArchives(archives *service.Archives) {
 // SetV35 动态的每日清理、订阅的定时检查(doc/23)。
 func (w *Pool) SetV35(a *service.Activities, f *service.Feeds) {
 	w.activities, w.feeds = a, f
+}
+
+// SetVersions 历史版本的到期清理(doc/24)。
+func (w *Pool) SetVersions(v *service.Versions) {
+	w.versions = v
 }
 
 func (w *Pool) SetNotify(n *service.Notifier, m *service.Media) {
@@ -126,6 +133,9 @@ func (w *Pool) Run(ctx context.Context, n int) {
 	}
 	if w.feeds != nil {
 		go w.periodic(ctx, 5*time.Minute, "feed-check", w.feeds.CheckDue)
+	}
+	if w.versions != nil {
+		go w.periodic(ctx, time.Hour, "version-cleanup", w.cleanupVersions)
 	}
 	<-ctx.Done()
 }
@@ -251,8 +261,17 @@ func (w *Pool) verifyHash(ctx context.Context, blobID uuid.UUID) error {
 	}
 	defer tx.Rollback(ctx)
 	qtx := w.q.WithTx(tx)
+	// 持有这份内容的历史版本作废;被清掉的节点自己的其它版本也一起退账(doc/24)
+	if err := w.releaseVersions(ctx, qtx, func() ([]store.NodeVersion, error) { return qtx.DeleteVersionsByBlob(ctx, blobID) }); err != nil {
+		return err
+	}
 	for _, n := range nodes {
 		if err := qtx.MarkAncestorsStale(ctx, n.ID); err != nil {
+			return err
+		}
+		if err := w.releaseVersions(ctx, qtx, func() ([]store.NodeVersion, error) {
+			return qtx.PurgeSubtreeVersions(ctx, store.PurgeSubtreeVersionsParams{ID: n.ID, OwnerID: n.OwnerID})
+		}); err != nil {
 			return err
 		}
 		if _, err := qtx.PurgeSubtree(ctx, store.PurgeSubtreeParams{ID: n.ID, OwnerID: n.OwnerID}); err != nil {
@@ -280,6 +299,15 @@ func (w *Pool) verifyHash(ctx context.Context, blobID uuid.UUID) error {
 		return err
 	}
 	return w.obj.Remove(ctx, key)
+}
+
+// releaseVersions 删一批版本(del 在同一事务里执行)并退引用退配额。
+func (w *Pool) releaseVersions(ctx context.Context, q *store.Queries, del func() ([]store.NodeVersion, error)) error {
+	gone, err := del()
+	if err != nil {
+		return err
+	}
+	return service.ReleaseVersions(ctx, q, gone)
 }
 
 func (w *Pool) finalizeAgentTransfers(ctx context.Context) error {
@@ -338,6 +366,16 @@ func (w *Pool) cleanupTrash(ctx context.Context) error {
 	if n > 0 {
 		slog.Info("trash cleanup", "purged_roots", n, "ttl", w.trashTTL)
 		metrics.Cleanup.WithLabelValues("trash").Add(float64(n))
+	}
+	return err
+}
+
+// cleanupVersions 清掉换下来超过保留期的历史版本(退配额、减引用,blob 由 GC 接手)。
+func (w *Pool) cleanupVersions(ctx context.Context) error {
+	n, err := w.versions.CleanupExpired(ctx)
+	if n > 0 {
+		slog.Info("version cleanup", "deleted", n)
+		metrics.Cleanup.WithLabelValues("versions").Add(float64(n))
 	}
 	return err
 }

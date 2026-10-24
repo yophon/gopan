@@ -341,6 +341,18 @@ type Node struct {
 	SubtreeBytes int64
 	SubtreeCount int64
 	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
+}
+
+type NodeVersion struct {
+	ID         uuid.UUID
+	NodeID     uuid.UUID
+	OwnerID    uuid.UUID
+	BlobID     uuid.UUID
+	Size       int64
+	SavedAt    pgtype.Timestamptz
+	ReplacedAt pgtype.Timestamptz
 }
 
 type Notification struct {
@@ -519,24 +531,25 @@ type TransferSession struct {
 }
 
 type UploadSession struct {
-	ID            uuid.UUID
-	OwnerID       uuid.UUID
-	Sha256        *string
-	Size          int64
-	TargetParent  *uuid.UUID
-	TargetName    string
-	MinioUploadID string
-	PartSize      int32
-	Status        string
-	FailReason    *string
-	CreatedAt     pgtype.Timestamptz
-	ExpiresAt     pgtype.Timestamptz
-	ObjectKey     *string
-	NodeID        *uuid.UUID
-	FailCode      *string
-	RequestID     *uuid.UUID
-	VisitorID     *uuid.UUID
-	Actor         []byte
+	ID              uuid.UUID
+	OwnerID         uuid.UUID
+	Sha256          *string
+	Size            int64
+	TargetParent    *uuid.UUID
+	TargetName      string
+	MinioUploadID   string
+	PartSize        int32
+	Status          string
+	FailReason      *string
+	CreatedAt       pgtype.Timestamptz
+	ExpiresAt       pgtype.Timestamptz
+	ObjectKey       *string
+	NodeID          *uuid.UUID
+	FailCode        *string
+	RequestID       *uuid.UUID
+	VisitorID       *uuid.UUID
+	Actor           []byte
+	ReplaceExisting bool
 }
 
 type User struct {

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 收藏、最近打开与历史版本(doc/24) -->
+    <string name="quick_starred_title">收藏</string>
+    <string name="quick_recent_title">最近</string>
+    <string name="quick_starred_empty">还没有收藏</string>
+    <string name="quick_starred_empty_desc">在文件或文件夹的 ⋮ 菜单里选「收藏」,常用的就能从这里一下打开</string>
+    <string name="quick_recent_empty">还没有打开过文件</string>
+    <string name="quick_recent_empty_desc">预览或下载过的文件会出现在这里</string>
+    <string name="quick_opened_at">打开于 %1$s</string>
+    <string name="quick_action_forget">从最近中移除</string>
+    <string name="quick_msg_forgotten">已从最近中移除</string>
+    <string name="quick_clear">清空</string>
+    <string name="quick_clear_title">清空最近</string>
+    <string name="quick_clear_text">「最近」里的记录会全部清掉,文件本身不受影响。</string>
+
+    <string name="versions_title">历史版本</string>
+    <string name="versions_policy">同名覆盖时留下原来的内容,最多 %1$d 个,%2$d 天后自动清理;占用空间。</string>
+    <string name="versions_policy_off">本站没有开启历史版本。</string>
+    <string name="versions_empty">还没有被覆盖过</string>
+    <string name="versions_row_meta">%1$s · %2$s被替换</string>
+    <string name="versions_download">下载这个版本</string>
+    <string name="versions_no_browser">没有能打开链接的浏览器</string>
+    <string name="versions_restore">恢复</string>
+    <string name="versions_restore_title">恢复这个版本</string>
+    <string name="versions_restore_text">文件会换回 %1$s 的内容,现在的内容留成一个历史版本。</string>
+    <string name="versions_delete_title">删除这个版本</string>
+    <string name="versions_delete_text">删了找不回来。</string>
+    <string name="versions_purge">清空</string>
+    <string name="versions_purge_title">清空历史版本</string>
+    <string name="versions_purge_text">这个文件的历史版本会全部删掉,删了找不回来。</string>
+    <string name="versions_msg_restored">已恢复</string>
+    <string name="versions_msg_deleted">已删除这个版本</string>
+    <string name="versions_msg_purged">已清空历史版本</string>
+</resources>

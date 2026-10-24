@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.automirrored.outlined.TextSnippet
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.AudioFile
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Folder
@@ -220,13 +221,16 @@ fun NodeRow(
             Text(node.name, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
         },
         supportingContent = {
-            Text(
-                secondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodySmall,
-                color = secondaryColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (node.starred) StarMark(Modifier.padding(end = 4.dp))
+                Text(
+                    secondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = secondaryColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         },
         trailingContent = when {
             selectionMode -> {
@@ -277,6 +281,7 @@ fun NodeCard(
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         ) {
             NodeVisual(node, modifier = Modifier.fillMaxSize(), iconSize = 48.dp, shape = RectangleShape, onThumbError = onThumbError)
+            if (node.starred) StarMark(Modifier.align(Alignment.BottomStart).padding(8.dp), size = 18.dp)
             if (selectionMode) {
                 Checkbox(
                     checked = selected,
@@ -314,6 +319,19 @@ fun NodeCard(
             )
         }
     }
+}
+
+/** 收藏的星标(doc/24):琥珀色,深浅色底上都看得清 */
+val StarTint = Color(0xFFE0A030)
+
+@Composable
+fun StarMark(modifier: Modifier = Modifier, size: Dp = 14.dp) {
+    Icon(
+        Icons.Filled.Star,
+        contentDescription = stringResource(R.string.drive_starred),
+        tint = StarTint,
+        modifier = modifier.size(size),
+    )
 }
 
 /** 列表末尾:加载中转圈,失败给重试;放在 LazyColumn 最后一项 */

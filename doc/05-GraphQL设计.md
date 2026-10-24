@@ -464,6 +464,33 @@ extend type Mutation {
   - `GET /md/{nodeId}?token=<access>[&theme=light|dark]`:Markdown 渲染成一页 HTML(CSP sandbox、`X-Frame-Options: SAMEORIGIN`);错误也是一页 HTML(401 / 404 / 413 超过 2 MB / 415 不是 Markdown)。
   - `GET /md/{nodeId}/f?p=<相对路径>&token=<access>`:那篇里的相对路径,按 .md 所在文件夹解析;图片与文件 302 到签名地址(大图给 2048 缩略图),`.md` 302 到它自己的渲染页。分享访客出不了分享范围。
 
+## 收藏、最近打开与历史版本(v3.10)
+
+```graphql
+type Node { …, starred: Boolean!, openedAt: Time }       # 分享访客看到的一律 false / null
+type FileVersion { id, size, sha256, mime, savedAt, replacedAt, downloadUrl }
+type FileVersionList { items: [FileVersion!]!, keep: Int!, keepDays: Int! }   # keep = 0:本站覆盖时不留旧版本
+type SpaceOverview { …, versionFiles: Int64!, versionBytes: Int64! }
+
+extend type Query {
+  starredNodes: [Node!]!                              # 最近收藏在前,最多 500;回收站里的不列
+  recentFiles(limit: Int = 100): [Node!]!             # 最近打开在前,只有文件
+  fileVersions(nodeId: ID!): FileVersionList!         # 最近换下来的在前
+}
+extend type Mutation {
+  setStarred(ids: [ID!]!, starred: Boolean!): [Node!]!
+  markOpened(nodeId: ID!): Boolean!                   # 网页 / App 预览、播放、下载时上报
+  clearRecent(ids: [ID!]): Boolean!                   # 不给 ids = 全部清掉
+  restoreFileVersion(id: ID!): Node!                  # 现在的内容留成新版本
+  deleteFileVersions(ids: [ID!]!): Boolean!
+  purgeFileVersions(nodeId: ID): Int64!               # 不给 nodeId = 自己所有文件的;返回释放的字节
+  initUpload(…, replace: Boolean = false): UploadInit!  # 同名文件就覆盖,旧内容进历史版本
+}
+```
+
+- 覆盖类动态(`OVERWRITE`)留了版本时 `undoable = true`,撤回 = 恢复那个版本;恢复版本本身也记一条 `OVERWRITE`(`note` 是「恢复到 … 的版本」)。
+- `restoreFileVersion`:版本已被清理 `NOT_FOUND`,文件在回收站里 `NODE_DELETED`;`fileVersions` 对文件夹 `NOT_A_FILE`。
+
 ## 版本策略
 
 v1 不做 schema 版本化;字段只加不删,废弃用 `@deprecated`。前端 codegen 在 CI 里跑,schema 不兼容改动直接编译失败暴露。

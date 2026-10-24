@@ -29,6 +29,8 @@ type SpaceOverview struct {
 	ByType                 []store.SpaceByTypeRow
 	DuplicateGroups        int64
 	DuplicateReclaimable   int64
+	// 历史版本(doc/24):计入已用空间
+	VersionFiles, VersionBytes int64
 }
 
 func (s *Space) Overview(ctx context.Context, owner uuid.UUID) (*SpaceOverview, error) {
@@ -48,9 +50,14 @@ func (s *Space) Overview(ctx context.Context, owner uuid.UUID) (*SpaceOverview, 
 	if err != nil {
 		return nil, err
 	}
+	ver, err := s.q.SpaceVersions(ctx, owner)
+	if err != nil {
+		return nil, err
+	}
 	return &SpaceOverview{
 		UsedBytes: u.UsedBytes, QuotaBytes: u.QuotaBytes, TrashFiles: trash.Files, TrashBytes: trash.Bytes,
 		ByType: byType, DuplicateGroups: dup.Groups, DuplicateReclaimable: dup.Reclaimable,
+		VersionFiles: ver.Files, VersionBytes: ver.Bytes,
 	}, nil
 }
 

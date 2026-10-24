@@ -286,9 +286,20 @@ describe('上传主流程', () => {
       name: 'f.bin',
       sha256: 'hash-f.bin',
       size: 8,
+      replace: false,
     })
     // 无缺片,不该有任何 PUT
     expect(FakeXHR.instances).toHaveLength(0)
+  })
+
+  it('选了「替换」:init 带上 replace,服务端覆盖同名文件', async () => {
+    requestMock.mockResolvedValue({ initUpload: { instant: true, session: null } })
+    const store = useUploadsStore()
+
+    enqueueFiles([makeFile()], 'folder1', { replace: true })
+    const t = store.tasks[0]!
+    await vi.waitFor(() => expect(t.status).toBe('done'))
+    expect(callsFor(InitUploadDocument)[0]![1]).toMatchObject({ name: 'f.bin', replace: true })
   })
 
   it('普通上传:分片 PUT → complete → done,断点记录先存后清', async () => {

@@ -25,6 +25,10 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DriveFolderUpload
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.FolderZip
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
+import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Link
@@ -81,6 +85,8 @@ enum class NodeAction(@StringRes val label: Int, val icon: ImageVector, val dest
     PACK(R.string.drive_action_pack, Icons.Outlined.FolderZip),
     SEND_TO_CHAT(R.string.drive_action_send_to_chat, Icons.AutoMirrored.Outlined.Send),
     SHARE(R.string.drive_action_share, Icons.Outlined.Share),
+    /** 收藏(doc/24):已收藏的显示「取消收藏」,见 [labelFor] */
+    STAR(R.string.drive_action_star, Icons.Outlined.StarOutline),
     /** 直链(doc/22 四):只对文件,本站关了直链时不出现 */
     COPY_LINK(R.string.drive_action_copy_link, Icons.Outlined.Link),
     COLLECT(R.string.drive_action_collect, Icons.Outlined.DriveFolderUpload),
@@ -91,6 +97,10 @@ enum class NodeAction(@StringRes val label: Int, val icon: ImageVector, val dest
     COPY(R.string.drive_action_copy, Icons.Outlined.ContentCopy),
     DELETE(R.string.drive_action_delete, Icons.Outlined.Delete, destructive = true),
     DETAILS(R.string.drive_action_details, Icons.Outlined.Info),
+    /** 历史版本(doc/24):只对文件 */
+    VERSIONS(R.string.drive_action_versions, Icons.Outlined.History),
+    /** 「最近」页:从最近里拿掉(文件本身不动) */
+    FORGET(R.string.quick_action_forget, Icons.Outlined.RemoveCircleOutline),
     RESTORE(R.string.trash_action_restore, Icons.Outlined.RestoreFromTrash),
     PURGE(R.string.trash_action_purge, Icons.Outlined.DeleteForever, destructive = true),
     LOCATE(R.string.search_action_locate, Icons.Outlined.FolderOpen),
@@ -101,6 +111,7 @@ val DRIVE_ACTIONS = listOf(
     NodeAction.DOWNLOAD,
     NodeAction.PACK,
     NodeAction.SHARE,
+    NodeAction.STAR,
     NodeAction.COPY_LINK,
     NodeAction.COLLECT,
     NodeAction.EXTRACT_HERE,
@@ -109,13 +120,19 @@ val DRIVE_ACTIONS = listOf(
     NodeAction.RENAME,
     NodeAction.MOVE,
     NodeAction.COPY,
+    NodeAction.VERSIONS,
     NodeAction.DELETE,
     NodeAction.DETAILS,
 )
 
+/** 收藏 / 取消收藏随节点变 */
+fun NodeAction.labelFor(node: Node): Int = if (this == NodeAction.STAR && node.starred) R.string.drive_action_unstar else label
+
+fun NodeAction.iconFor(node: Node): ImageVector = if (this == NodeAction.STAR && node.starred) Icons.Outlined.Star else icon
+
 /** 这个操作对这个节点有没有意义:打开、复制直链只对文件,打包、收集文件只对文件夹,解压只对压缩包 */
 fun NodeAction.appliesTo(node: Node): Boolean = when (this) {
-    NodeAction.OPEN, NodeAction.COPY_LINK -> !node.isFolder
+    NodeAction.OPEN, NodeAction.COPY_LINK, NodeAction.VERSIONS -> !node.isFolder
     NodeAction.PACK, NodeAction.COLLECT -> node.isFolder
     NodeAction.EXTRACT_HERE, NodeAction.EXTRACT_TO -> isArchiveNode(node)
     else -> true
@@ -162,8 +179,8 @@ fun NodeActionSheet(
                 val tint = if (action.destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                 ListItem(
                     modifier = Modifier.clickable { pick(action) },
-                    leadingContent = { Icon(action.icon, contentDescription = null, tint = tint) },
-                    headlineContent = { Text(stringResource(action.label), color = tint) },
+                    leadingContent = { Icon(action.iconFor(node), contentDescription = null, tint = tint) },
+                    headlineContent = { Text(stringResource(action.labelFor(node)), color = tint) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 )
             }
@@ -296,6 +313,7 @@ fun NodeDialogHost(
     viewModel: NodeActionsViewModel,
     actions: List<NodeAction> = DRIVE_ACTIONS,
     onLocate: ((Node) -> Unit)? = null,
+    onForget: ((Node) -> Unit)? = null,
 ) {
     val rootName = stringResource(R.string.drive_title_root)
     // 「解压到这里」「解压到…」:提交结果借页面的 Snackbar 提示(进度在「传输」的后台任务里)
@@ -327,6 +345,9 @@ fun NodeDialogHost(
                     NodeAction.PACK -> viewModel.pack(listOf(node))
                     NodeAction.SEND_TO_CHAT -> viewModel.sendToChat(node)
                     NodeAction.SHARE -> viewModel.requestShare(node)
+                    NodeAction.STAR -> viewModel.toggleStar(listOf(node))
+                    NodeAction.VERSIONS -> viewModel.showVersions(node)
+                    NodeAction.FORGET -> onForget?.invoke(node)
                     NodeAction.COPY_LINK -> links.copy(listOf(node))
                     NodeAction.COLLECT -> viewModel.requestCollect(node)
                     // 解到压缩包所在的文件夹(搜索结果也是压缩包旁边,不是当前页面)
@@ -395,6 +416,13 @@ fun NodeDialogHost(
                     PickerMode.EXTRACT -> Unit
                 }
             },
+            onDismiss = viewModel::dismissDialog,
+        )
+        is NodeDialog.Versions -> xyz.yophon.gopan.feature.quick.VersionsSheet(
+            node = dialog.node,
+            token = dialog.token,
+            onChanged = viewModel::onVersionsChanged,
+            onMessage = viewModel::message,
             onDismiss = viewModel::dismissDialog,
         )
         else -> Unit

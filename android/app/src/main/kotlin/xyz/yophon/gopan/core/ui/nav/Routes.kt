@@ -54,6 +54,10 @@ object Routes {
     @Serializable
     data class Preview(val nodeId: String)
 
+    /** 收藏(recent = false)与最近打开(recent = true),doc/24:网盘首页顶上的两个入口进来 */
+    @Serializable
+    data class Quick(val recent: Boolean)
+
     /** 最近播放(doc/22 二.3):文件页菜单进来 */
     @Serializable
     data object RecentPlays

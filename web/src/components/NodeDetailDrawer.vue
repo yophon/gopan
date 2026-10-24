@@ -1,21 +1,32 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useInfiniteQuery, useQuery } from '@tanstack/vue-query'
+import { computed, ref } from 'vue'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete, Download, RefreshLeft, Star, StarFilled } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
-import { ActivitiesDocument, NodeDetailDocument } from '@/api/gen/graphql'
+import {
+  ActivitiesDocument,
+  DeleteFileVersionsDocument,
+  FileVersionsDocument,
+  NodeDetailDocument,
+  PurgeFileVersionsDocument,
+  RestoreFileVersionDocument,
+} from '@/api/gen/graphql'
 import type { ActivityFieldsFragment } from '@/api/gen/graphql'
+import { useStars } from '@/composables/quick'
 import { useBreakpoints } from '@/composables/breakpoints'
 import { useUndo } from '@/composables/undo'
-import { formatBytes, formatTime } from '@/utils/format'
+import { formatBytes, formatRelative, formatTime } from '@/utils/format'
 import { folderSizeText } from '@/components/nodes/nodeDisplay'
 import NodeIcon from '@/components/nodes/NodeIcon.vue'
 import ActivityItem from '@/components/activity/ActivityItem.vue'
 
 /**
- * 文件详情(doc/23 二.4):基本信息 + 「历史」—— 这个文件 / 文件夹自己的动态(改名、移动、删除、还原……),
- * 每条能撤回。子树里别的文件的改动不在这里,去动态页看。
+ * 文件详情(doc/23 二.4):基本信息 + 「历史版本」(doc/24,文件被同名覆盖时留下的旧内容,能下载、恢复)
+ * + 「历史」—— 这个文件 / 文件夹自己的动态(改名、移动、删除、还原……),每条能撤回。
+ * 子树里别的文件的改动不在这里,去动态页看。
  */
 
 const visible = defineModel<boolean>({ required: true })
@@ -46,6 +57,88 @@ const items = computed<ActivityFieldsFragment[]>(
   () => history.data.value?.pages.flatMap((p) => p.activities.items) ?? [],
 )
 
+// ---------- 收藏 ----------
+
+const stars = useStars()
+
+// ---------- 历史版本(只有文件有) ----------
+
+const queryClient = useQueryClient()
+const versions = useQuery({
+  queryKey: computed(() => ['fileVersions', props.nodeId]),
+  queryFn: () => request(FileVersionsDocument, { nodeId: props.nodeId! }),
+  enabled: computed(() => open.value && node.value?.kind === 'FILE'),
+  staleTime: 0,
+})
+const versionItems = computed(() => versions.data.value?.fileVersions.items ?? [])
+const policy = computed(() => versions.data.value?.fileVersions ?? null)
+const versionBusy = ref<string | null>(null)
+
+function afterVersionChange() {
+  void versions.refetch()
+  void queryClient.invalidateQueries({ queryKey: ['nodeDetail'] })
+  void queryClient.invalidateQueries({ queryKey: ['children'] })
+  void queryClient.invalidateQueries({ queryKey: ['activities'] })
+  void queryClient.invalidateQueries({ queryKey: ['me'] })
+}
+
+async function runVersion(id: string, fn: () => Promise<unknown>, ok: string) {
+  versionBusy.value = id
+  try {
+    await fn()
+    ElMessage.success(ok)
+    afterVersionChange()
+  } catch (err) {
+    if (err !== 'cancel' && err !== 'close') ElMessage.error(errorText(err))
+  } finally {
+    versionBusy.value = null
+  }
+}
+
+function restoreVersion(id: string, savedAt: string) {
+  void runVersion(
+    id,
+    async () => {
+      await ElMessageBox.confirm(`文件会换回 ${formatTime(savedAt)} 的内容,现在的内容留成一个历史版本。`, '恢复这个版本', {
+        confirmButtonText: '恢复',
+        cancelButtonText: '取消',
+      })
+      await request(RestoreFileVersionDocument, { id })
+    },
+    '已恢复',
+  )
+}
+
+function deleteVersion(id: string) {
+  void runVersion(
+    `del:${id}`,
+    async () => {
+      await ElMessageBox.confirm('删了找不回来。', '删除这个版本?', {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+      await request(DeleteFileVersionsDocument, { ids: [id] })
+    },
+    '已删除这个版本',
+  )
+}
+
+function purgeVersions() {
+  void runVersion(
+    'all',
+    async () => {
+      await ElMessageBox.confirm('这个文件的历史版本会全部删掉,删了找不回来。', '清空历史版本', {
+        confirmButtonText: '清空',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+      await request(PurgeFileVersionsDocument, { nodeId: props.nodeId })
+    },
+    '已清空历史版本',
+  )
+}
+
 const sizeLine = computed(() => {
   const n = node.value
   if (!n) return ''
@@ -71,6 +164,15 @@ const sizeLine = computed(() => {
       <template v-else-if="node">
         <section class="nd-head">
           <NodeIcon :node="node" :size="44" />
+          <el-button
+            class="nd-star"
+            :icon="node.starred ? StarFilled : Star"
+            :class="{ on: node.starred }"
+            :title="node.starred ? '取消收藏' : '收藏'"
+            :aria-label="node.starred ? '取消收藏' : '收藏'"
+            circle
+            @click="stars.setStarred([node], !node.starred)"
+          />
           <dl class="nd-info">
             <dt>大小</dt>
             <dd>{{ sizeLine }}<span v-if="node.kind === 'FOLDER' && node.statsStale" class="muted">(统计更新中)</span></dd>
@@ -87,6 +189,31 @@ const sizeLine = computed(() => {
               <dd class="mono" :title="node.sha256">{{ node.sha256.slice(0, 16) }}…</dd>
             </template>
           </dl>
+        </section>
+
+        <section v-if="node.kind === 'FILE'" class="nd-versions">
+          <h4>
+            历史版本
+            <el-button v-if="versionItems.length" link class="nd-purge" :loading="versionBusy === 'all'" @click="purgeVersions">清空</el-button>
+          </h4>
+          <p v-if="policy" class="muted">
+            <template v-if="policy.keep > 0">同名覆盖时留下原来的内容,最多 {{ policy.keep }} 个,{{ policy.keepDays }} 天后自动清理;占用空间。</template>
+            <template v-else>本站没有开启历史版本。</template>
+          </p>
+          <div v-loading="versions.isFetching.value && !versions.data.value" class="nd-list">
+            <p v-if="!versionItems.length && !versions.isFetching.value" class="muted empty">还没有被覆盖过</p>
+            <div v-for="v in versionItems" :key="v.id" class="ver">
+              <div class="ver-info">
+                <span class="ver-time">{{ formatTime(v.savedAt) }}</span>
+                <span class="muted">{{ formatBytes(v.size) }} · {{ formatRelative(v.replacedAt) }}被替换</span>
+              </div>
+              <div class="ver-actions">
+                <el-button link :icon="Download" title="下载这个版本" aria-label="下载这个版本" tag="a" :href="v.downloadUrl" />
+                <el-button link :icon="RefreshLeft" :loading="versionBusy === v.id" @click="restoreVersion(v.id, v.savedAt)">恢复</el-button>
+                <el-button link :icon="Delete" :loading="versionBusy === `del:${v.id}`" title="删除这个版本" aria-label="删除这个版本" @click="deleteVersion(v.id)" />
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="nd-history">
@@ -148,12 +275,53 @@ const sizeLine = computed(() => {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
 }
+.nd-star {
+  flex: none;
+  order: 3;
+}
+.nd-star.on {
+  color: var(--gp-star);
+}
+.nd-versions,
 .nd-history {
   margin-top: 20px;
 }
+.nd-versions h4,
 .nd-history h4 {
+  display: flex;
+  align-items: center;
   margin: 0 0 4px;
   font-size: 14px;
+}
+.nd-purge {
+  margin-left: auto;
+  font-weight: 400;
+}
+.ver {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.ver:last-child {
+  border-bottom: none;
+}
+.ver-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+.ver-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ver-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 .nd-list {
   min-height: 60px;

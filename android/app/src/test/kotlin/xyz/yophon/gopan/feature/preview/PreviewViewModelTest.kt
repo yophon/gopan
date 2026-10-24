@@ -2,6 +2,7 @@ package xyz.yophon.gopan.feature.preview
 
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import xyz.yophon.gopan.core.data.quick.FakeQuickRepository
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -56,7 +57,7 @@ class PreviewViewModelTest {
             put(PreviewViewModel.NODE_ID_ARG, start)
             if (current != null) put("preview.current", current)
         }
-        return PreviewViewModel(SavedStateHandle(args), sessions, repo, transfers, OkHttpClient(), archives, navRequests, media, reporter, mediaUrls, nowPlaying)
+        return PreviewViewModel(SavedStateHandle(args), sessions, repo, transfers, OkHttpClient(), archives, navRequests, media, reporter, mediaUrls, nowPlaying, FakeQuickRepository())
     }
 
     @Test
@@ -102,7 +103,7 @@ class PreviewViewModelTest {
     fun `the settled page is remembered for recreation`() {
         sessions.open(listOf(file("a"), file("b")))
         val handle = SavedStateHandle(mapOf(PreviewViewModel.NODE_ID_ARG to "a"))
-        val vm = PreviewViewModel(handle, sessions, repo, transfers, OkHttpClient(), archives, navRequests, media, reporter, mediaUrls, nowPlaying)
+        val vm = PreviewViewModel(handle, sessions, repo, transfers, OkHttpClient(), archives, navRequests, media, reporter, mediaUrls, nowPlaying, FakeQuickRepository())
         vm.onPageSettled(1)
         assertThat(vm.current.value).isEqualTo(1)
         assertThat(handle.get<String>("preview.current")).isEqualTo("b")

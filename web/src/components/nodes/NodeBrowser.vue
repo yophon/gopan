@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { CaretBottom, CaretTop, Check, Download, MoreFilled, Share } from '@element-plus/icons-vue'
+import { CaretBottom, CaretTop, Check, Download, MoreFilled, Share, StarFilled } from '@element-plus/icons-vue'
 
 import { formatTime } from '@/utils/format'
 import NodeIcon from './NodeIcon.vue'
@@ -244,6 +244,7 @@ const columns: { key: SortKey; label: () => string; cls: string }[] = [
             <NodeIcon :node="node" :size="28" />
             <a v-if="openable" class="name" :title="node.name" @click.stop="emit('open', node)">{{ node.name }}</a>
             <span v-else class="name plain" :title="node.name">{{ node.name }}</span>
+            <el-icon v-if="node.starred" class="star" title="已收藏"><StarFilled /></el-icon>
           </span>
           <span class="c-size" :class="{ stale: node.statsStale }">{{ sizeText(node) }}</span>
           <span class="c-time" :title="timeText(node)">
@@ -282,6 +283,7 @@ const columns: { key: SortKey; label: () => string; cls: string }[] = [
         </span>
         <div class="tile-visual">
           <NodeIcon :node="node" :size="node.kind === 'FOLDER' ? 72 : 120" class="tile-icon" />
+          <el-icon v-if="node.starred" class="star tile-star" title="已收藏"><StarFilled /></el-icon>
         </div>
         <a class="tile-name" :title="node.name" @click.stop="openable ? emit('open', node) : onRowClick(node, $event)">{{ node.name }}</a>
         <span class="tile-meta">{{ sizeText(node) }}</span>
@@ -373,6 +375,11 @@ const columns: { key: SortKey; label: () => string; cls: string }[] = [
 }
 .name.plain:hover {
   text-decoration: none;
+}
+.star {
+  flex: none;
+  color: var(--gp-star);
+  font-size: 14px;
 }
 .c-size,
 .c-time {
@@ -500,6 +507,7 @@ const columns: { key: SortKey; label: () => string; cls: string }[] = [
   background: var(--el-color-primary);
 }
 .tile-visual {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -518,6 +526,12 @@ const columns: { key: SortKey; label: () => string; cls: string }[] = [
   width: 44px !important;
   height: 44px !important;
   font-size: 36px !important;
+}
+.tile-star {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.25));
 }
 .tile-name {
   display: -webkit-box;
