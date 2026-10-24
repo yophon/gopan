@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 发布页 /app:公开、不用登录。给安卓安装包与网页版入口,讲功能,展示更新日志。
- * 安装包信息读本站 /api/app/android/latest(没发包时回 404,只留网页版入口);
+ * 安装包信息读本站 /api/app/android/latest(没发包时回 404,只留网页版入口);Windows 桌面端读 /api/app/desktop/info(doc/29);
  * 更新日志是构建时打进来的仓库根目录 CHANGELOG.md,所以第一条就是这个站点正在跑的版本。
  * 配色与文件夹记号在 styles/theme.css;页面上的手机画面是 components/release/ReleasePhone.vue。
  */
@@ -14,7 +14,14 @@ import BrandLogo from '@/components/BrandLogo.vue'
 import ReleasePhone, { type PhoneScreen } from '@/components/release/ReleasePhone.vue'
 import { useAuthStore } from '@/stores/auth'
 import { parseChangelog, type ChangelogEntry, type Inline } from '@/utils/changelog'
-import { ANDROID_APK_URL, dayLabel, detectVisitor, fetchAndroidRelease } from '@/utils/appRelease'
+import {
+  ANDROID_APK_URL,
+  DESKTOP_EXE_URL,
+  dayLabel,
+  detectVisitor,
+  fetchAndroidRelease,
+  fetchDesktopRelease,
+} from '@/utils/appRelease'
 import { formatBytes } from '@/utils/format'
 
 const auth = useAuthStore()
@@ -31,6 +38,21 @@ const noRelease = computed(() => release.isSuccess.value && release.data.value =
 const canDownload = computed(() => !noRelease.value && !visitor.ios && !visitor.harmonyNext)
 const blockedInApp = computed(() => visitor.inAppBrowser !== null && canDownload.value)
 const webEntry = computed(() => (auth.accessToken ? '进入网盘' : '打开网页版'))
+
+// Windows 桌面端:手机上不显示;Windows 电脑上首屏换成下它
+const desktopRelease = useQuery({
+  queryKey: ['desktop-release'],
+  queryFn: () => fetchDesktopRelease(),
+  staleTime: 60_000,
+  enabled: visitor.desktop,
+})
+const desk = computed(() => desktopRelease.data.value ?? null)
+const showDesktop = computed(() => visitor.desktop && desk.value !== null)
+const heroDesktop = computed(() => showDesktop.value && visitor.windows)
+const exeSize = computed(() => {
+  const [num = '', unit = ''] = formatBytes(desk.value?.size).split(' ')
+  return { num, unit }
+})
 
 /** 「5.4 MB」拆成数字和单位,数字放大 */
 const apkSize = computed(() => {
@@ -104,6 +126,13 @@ const steps: { screen: PhoneScreen; n: string; title: string; items: [string, st
   },
 ]
 const activeScreen = ref<PhoneScreen>('preview')
+
+const desktopExtras: [string, string][] = [
+  ['整个文件夹下到电脑', '按原来的目录结构存好，断了接着下，下完逐个校验'],
+  ['传输助手常驻', '托盘里点一下就是小窗，手机发来消息弹通知'],
+  ['截图上传', '快捷键框选，传完链接已经在剪贴板里'],
+  ['右键上传', '资源管理器里右键文件或文件夹，上传或发到传输助手'],
+]
 
 const appExtras: [string, string][] = [
   ['后台传输', '锁屏、断网、划掉 App 之后接着传'],
@@ -198,6 +227,7 @@ onBeforeUnmount(() => {
       <nav class="pill">
         <a href="#top" class="pill-logo" @click.prevent="scrollTo('top')"><BrandLogo /></a>
         <a href="#features" class="hide-m" @click.prevent="scrollTo('features')">功能</a>
+        <a v-if="showDesktop" href="#windows" class="hide-m" @click.prevent="scrollTo('windows')">Windows</a>
         <a v-if="canDownload" href="#android" class="hide-m" @click.prevent="scrollTo('android')">安卓 App</a>
         <a href="#changelog" @click.prevent="scrollTo('changelog')">更新日志</a>
         <router-link to="/drive" class="pill-cta">{{ webEntry }}</router-link>
@@ -213,7 +243,16 @@ onBeforeUnmount(() => {
           <h1 class="rv">gopan 云盘</h1>
           <div class="hero-left">
             <div class="actions rv">
-              <template v-if="canDownload">
+              <template v-if="heroDesktop">
+                <a class="btn" :href="DESKTOP_EXE_URL">
+                  <svg class="i" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14" /></svg>
+                  下载 Windows 版
+                </a>
+                <router-link to="/drive" class="link">
+                  {{ webEntry }}<svg class="i" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5" /></svg>
+                </router-link>
+              </template>
+              <template v-else-if="canDownload">
                 <span v-if="blockedInApp" class="btn is-disabled" aria-disabled="true">在浏览器打开后下载</span>
                 <a v-else class="btn" :href="ANDROID_APK_URL">
                   <svg class="i" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14" /></svg>
@@ -273,6 +312,36 @@ onBeforeUnmount(() => {
                 <li v-for="[t, d] in s.items" :key="t"><b>{{ t }}</b><span>{{ d }}</span></li>
               </ul>
             </article>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="showDesktop && desk" id="windows" class="sec">
+        <div class="rule and">
+          <div class="rv">
+            <h2>装上桌面端，<br />电脑上也顺手。</h2>
+            <ul class="plain">
+              <li v-for="[t, d] in desktopExtras" :key="t"><b>{{ t }}</b><span>{{ d }}</span></li>
+            </ul>
+          </div>
+          <div class="gp-folder file rv">
+            <span class="gp-folder-tab file-tab">
+              <svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /></svg>
+              gopan-setup.exe
+            </span>
+            <div class="file-body">
+              <div class="size"><b>{{ exeSize.num }}</b><span>{{ exeSize.unit }}</span></div>
+              <dl class="mini">
+                <div><dt>版本</dt><dd>{{ desk.version }}</dd></div>
+                <div><dt>系统</dt><dd>Windows 10+</dd></div>
+                <div><dt>发布</dt><dd>{{ dayLabel(desk.publishedAt) || '—' }}</dd></div>
+              </dl>
+              <a class="btn btn-inv" :href="DESKTOP_EXE_URL" data-test="download-exe">
+                <svg class="i" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14" /></svg>
+                下载安装包
+              </a>
+              <p class="file-note">安装包还没有代码签名：Windows 提示「已保护你的电脑」时，点「更多信息」→「仍要运行」。</p>
+            </div>
           </div>
         </div>
       </section>
@@ -732,7 +801,7 @@ h2 {
   font-weight: 650;
 }
 
-/* 安卓:黑色的安装包文件 */
+/* 安卓 / Windows:黑色的安装包文件 */
 .and {
   display: grid;
   grid-template-columns: 1fr 470px;
@@ -819,6 +888,12 @@ h2 {
 .btn-inv.is-disabled {
   background: rgba(255, 255, 255, 0.14);
   color: rgba(255, 255, 255, 0.6);
+}
+.file-note {
+  margin-top: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 /* 更新日志 */

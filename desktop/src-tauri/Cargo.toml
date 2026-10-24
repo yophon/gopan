@@ -1,0 +1,58 @@
+[package]
+name = "gopan-desktop"
+version = "3.14.0"
+description = "gopan 桌面端(Windows,doc/29)"
+edition = "2021"
+publish = false
+
+[lib]
+name = "gopan_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+tauri = { version = "2.12.5", features = ["tray-icon", "image-png"] }
+tauri-plugin-single-instance = "2.5.4"
+tauri-plugin-updater = "2.14.0"
+tauri-plugin-global-shortcut = "2.4.1"
+tauri-plugin-autostart = "2.7.0"
+tauri-plugin-dialog = "2.8.3"
+tauri-plugin-opener = "2.7.2"
+tauri-plugin-window-state = "2.5.0"
+tauri-plugin-process = "2.4.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["sync", "time", "fs", "io-util", "macros", "rt-multi-thread"] }
+# 与 updater 插件同一个 reqwest / rustls(ring),不多编一套 TLS
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "http2", "rustls-no-provider", "system-proxy", "multipart"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+futures-util = "0.3"
+url = "2"
+sha2 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+rusqlite = { version = "0.40", features = ["bundled"] }
+log = "0.4"
+thiserror = "2"
+winreg = "0.55"
+arboard = { version = "3.6", default-features = false, features = ["image-data"] }
+png = "0.17"
+tauri-winrt-notification = "0.8"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_System_DataExchange",
+    "Win32_System_Com",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Variant",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

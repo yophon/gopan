@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "local-pages",
+  "description": "打包在程序里的本地页面:连接页(主窗口打开网页前)、设置窗口。远程网页的权限在运行时按服务器地址另外加(bridge.rs)",
+  "windows": ["main", "settings"],
+  "local": true,
+  "permissions": [
+    "core:default",
+    "allow-app-status",
+    "allow-server-connect",
+    "allow-settings-get",
+    "allow-settings-save",
+    "allow-pick-directory",
+    "allow-update-check",
+    "allow-open-main"
+  ]
+}

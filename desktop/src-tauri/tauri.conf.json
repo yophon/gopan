@@ -1,0 +1,44 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "gopan",
+  "mainBinaryName": "gopan",
+  "version": "3.14.0",
+  "identifier": "xyz.yophon.gopan.desktop",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
+    "publisher": "yophon",
+    "copyright": "yophon",
+    "shortDescription": "gopan 云盘桌面端",
+    "longDescription": "gopan 云盘的 Windows 桌面端:网页版的全部功能,加上托盘后台传输、传输助手常驻、截图上传与右键菜单。",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper" },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["SimpChinese"],
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "./windows/hooks.nsh"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVFN0ZCQTkxNDcyNDdCQ0MKUldUTWV5UkhrYnAvWGoxWU5KczduUm1EWHlFYWpEcm9QRnF6enJ4U1B1aFExak54QkJIR2kvRHIK",
+      "endpoints": ["https://drive.979687.xyz/api/app/desktop/latest"],
+      "windows": { "installMode": "passive" }
+    }
+  }
+}

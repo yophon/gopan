@@ -20,7 +20,7 @@ const UA = {
 
 describe('detectVisitor', () => {
   it('安卓浏览器', () => {
-    expect(detectVisitor(UA.androidChrome)).toEqual({ android: true, ios: false, inAppBrowser: null, harmonyNext: false, desktop: false })
+    expect(detectVisitor(UA.androidChrome)).toEqual({ android: true, ios: false, inAppBrowser: null, harmonyNext: false, desktop: false, windows: false })
   })
   it('微信与 QQ 内置浏览器', () => {
     expect(detectVisitor(UA.wechat).inAppBrowser).toBe('wechat')
@@ -34,7 +34,8 @@ describe('detectVisitor', () => {
     expect(detectVisitor(UA.ipadDesktop, 0)).toMatchObject({ ios: false, desktop: true })
   })
   it('电脑给扫码;纯血鸿蒙不算电脑、也装不了安装包', () => {
-    expect(detectVisitor(UA.windows)).toMatchObject({ desktop: true, harmonyNext: false })
+    expect(detectVisitor(UA.windows)).toMatchObject({ desktop: true, harmonyNext: false, windows: true })
+    expect(detectVisitor(UA.ipadDesktop, 0)).toMatchObject({ windows: false })
     expect(detectVisitor(UA.harmony)).toMatchObject({ android: false, harmonyNext: true, desktop: false })
     // 兼容安卓的鸿蒙 4 报 Android,照常给安装包
     expect(detectVisitor(UA.androidChrome + ' HarmonyOS')).toMatchObject({ android: true, harmonyNext: false })

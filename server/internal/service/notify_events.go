@@ -140,6 +140,8 @@ func (n *Notifier) noteCredential(ctx context.Context, owner uuid.UUID, kind, na
 
 var (
 	reAndroidApp = regexp.MustCompile(`gopan-android/[\d.]+ \(Android [\d.]+; ([^)]+)\)`)
+	// 桌面端(doc/29):窗口里的网页与程序自己的请求都在 UA 末尾带 gopan-desktop/<版本>
+	reDesktopApp = regexp.MustCompile(`gopan-desktop/[\d.]+`)
 	reBrowsers   = []struct {
 		re   *regexp.Regexp
 		name string
@@ -157,6 +159,9 @@ var (
 func DeviceLabel(ua string) string {
 	if m := reAndroidApp.FindStringSubmatch(ua); m != nil {
 		return "安卓 App · " + strings.TrimSpace(m[1])
+	}
+	if reDesktopApp.MatchString(ua) {
+		return "Windows 桌面端"
 	}
 	if ua == "" {
 		return "未知设备"

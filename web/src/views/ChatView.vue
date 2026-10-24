@@ -74,6 +74,8 @@ import {
 } from '@/utils/chat'
 import { formatBytes } from '@/utils/format'
 import { randomId } from '@/utils/id'
+import { downloadToComputer } from '@/composables/nodeDownload'
+import { nativeDownloads } from '@/desktop/transfers'
 
 // ---------- 会话指针(模块级,upload 完成回调与组件共享) ----------
 
@@ -629,6 +631,7 @@ function openChatFile(m: ChatMsg) {
 async function onDownload(m: ChatMsg) {
   const n = m.node
   if (!n) return
+  if (nativeDownloads()) return void downloadToComputer([n])
   try {
     const res = await request(NodeDownloadUrlDocument, { id: n.id })
     const url = res.node.downloadUrl

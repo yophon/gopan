@@ -204,16 +204,33 @@ func recordActs(ctx context.Context, q *store.Queries, owner uuid.UUID, items ..
 	})
 }
 
+// sessionActor 上传会话里存的来源:活动记录的发起者,加上传输助手消息的来源(桌面端等,doc/29)。
+// 定稿常在 worker 里做,拿不到发起上传的那个请求,两样都得从这里取回。
+type sessionActor struct {
+	Actor
+	ChatSource string `json:"s,omitempty"`
+}
+
 // actorJSON / actorFromJSON 上传会话里存的来源(worker 定稿时取回)。
 func actorJSON(ctx context.Context) []byte {
-	b, _ := json.Marshal(ActorFrom(ctx))
+	sa := sessionActor{Actor: ActorFrom(ctx)}
+	if s, ok := ctx.Value(chatSourceKey{}).(string); ok {
+		sa.ChatSource = s
+	}
+	b, _ := json.Marshal(sa)
 	return b
 }
 
 func actorFromJSON(ctx context.Context, raw []byte) context.Context {
-	var a Actor
-	if len(raw) > 0 && json.Unmarshal(raw, &a) == nil && a.Kind != "" {
-		return WithActor(ctx, a)
+	var a sessionActor
+	if len(raw) == 0 || json.Unmarshal(raw, &a) != nil {
+		return ctx
+	}
+	if a.Kind != "" {
+		ctx = WithActor(ctx, a.Actor)
+	}
+	if a.ChatSource != "" {
+		ctx = WithChatSource(ctx, a.ChatSource)
 	}
 	return ctx
 }

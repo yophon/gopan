@@ -58,7 +58,8 @@ import { linkFormatLabels } from '@/utils/links'
 import type { LinkFormat } from '@/utils/links'
 import { withoutQuery } from '@/utils/notifications'
 import { actionToast } from '@/utils/toast'
-import { useNodeDownload } from '@/composables/nodeDownload'
+import { downloadLabel, downloadToComputer, useNodeDownload } from '@/composables/nodeDownload'
+import { nativeDownloads } from '@/desktop/transfers'
 import { useStars } from '@/composables/quick'
 import { NEW_TEXT_NAME } from '@/utils/textEdit'
 import NodeBrowser from '@/components/nodes/NodeBrowser.vue'
@@ -780,7 +781,8 @@ const menuItems = computed<MenuEntry[]>(() => {
   const files = fileTargets(sel)
   const entries: MenuEntry[] = []
   if (one) entries.push({ key: 'open', label: one.kind === 'FOLDER' ? '打开' : '预览', icon: one.kind === 'FOLDER' ? FolderOpened : View, hint: 'Enter' })
-  entries.push({ key: 'download', label: one && one.kind === 'FILE' ? '下载' : '打包下载', icon: Download })
+  entries.push({ key: 'download', label: downloadLabel(sel), icon: Download })
+  if (nativeDownloads()) entries.push({ key: 'downloadTo', label: '下载到…', icon: Download })
   if (one) entries.push({ key: 'share', label: '分享', icon: Share })
   const starred = stars.allStarred(sel)
   entries.push({ key: 'star', label: starred ? '取消收藏' : '收藏', icon: starred ? Star : StarFilled })
@@ -834,6 +836,8 @@ function onMenuSelect(key: string) {
       return
     case 'download':
       return void onDownload(sel)
+    case 'downloadTo':
+      return void downloadToComputer(sel, true)
     case 'share':
       if (one) openShare(one)
       return
@@ -945,7 +949,7 @@ const sheetItems = computed<SheetItem[]>(() => {
   if (!node) return []
   return [
     { key: 'open', label: node.kind === 'FOLDER' ? '打开' : '预览' },
-    { key: 'download', label: node.kind === 'FOLDER' ? '打包下载' : '下载', icon: Download },
+    { key: 'download', label: downloadLabel([node]), icon: Download },
     { key: 'share', label: '分享', icon: Share },
     { key: 'star', label: node.starred ? '取消收藏' : '收藏', icon: node.starred ? Star : StarFilled },
     ...(node.kind === 'FILE' && linksEnabled.value ? [{ key: 'link', label: '复制直链', icon: Paperclip }] : []),

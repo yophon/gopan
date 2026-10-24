@@ -26,6 +26,26 @@ export async function fetchAndroidRelease(fetchFn: typeof fetch = fetch): Promis
   return (await r.json()) as AndroidRelease
 }
 
+export const DESKTOP_RELEASE_URL = '/api/app/desktop/info'
+/** 固定链接,总是 302 到当前的 Windows 安装包 */
+export const DESKTOP_EXE_URL = '/api/app/desktop/latest.exe'
+
+export type DesktopRelease = {
+  version: string
+  size: number
+  notes: string
+  publishedAt: string
+  url: string
+}
+
+/** Windows 桌面端(doc/29):404 = 本站没发桌面端,返回 null;其它失败抛错 */
+export async function fetchDesktopRelease(fetchFn: typeof fetch = fetch): Promise<DesktopRelease | null> {
+  const r = await fetchFn(DESKTOP_RELEASE_URL, { cache: 'no-cache' })
+  if (r.status === 404) return null
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return (await r.json()) as DesktopRelease
+}
+
 export type Visitor = {
   android: boolean
   ios: boolean
@@ -35,6 +55,8 @@ export type Visitor = {
   harmonyNext: boolean
   /** 不是手机也不是平板:给扫码 */
   desktop: boolean
+  /** Windows 电脑:给桌面端安装包 */
+  windows: boolean
 }
 
 export function detectVisitor(ua: string, maxTouchPoints = 0): Visitor {
@@ -46,7 +68,7 @@ export function detectVisitor(ua: string, maxTouchPoints = 0): Visitor {
   else if (/\bQQ\/\d/i.test(ua)) inAppBrowser = 'qq'
   const harmonyNext = !android && /OpenHarmony/i.test(ua)
   const mobile = android || ios || harmonyNext || /Mobile/i.test(ua)
-  return { android, ios, inAppBrowser, harmonyNext, desktop: !mobile }
+  return { android, ios, inAppBrowser, harmonyNext, desktop: !mobile, windows: !mobile && /Windows NT/i.test(ua) }
 }
 
 /**

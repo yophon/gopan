@@ -181,6 +181,10 @@ func WithAuth(next http.Handler, auth *service.Auth, trustedProxies []*net.IPNet
 		ctx := context.WithValue(r.Context(), keyHTTP, &httpCarrier{w: w, r: r, ip: ip})
 		// UA 经 context 往 service 层带,省得为它给一串方法签名加参数。
 		ctx = service.WithClientMeta(ctx, service.ClientMeta{IP: ip, UA: r.UserAgent()})
+		// 桌面端发进传输助手的消息记成 desktop(doc/29)
+		if service.IsDesktopUA(r.UserAgent()) {
+			ctx = service.WithChatSource(ctx, service.ChatSourceDesktop)
+		}
 		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 			if id, err := auth.ParseAccessContext(ctx, strings.TrimPrefix(h, "Bearer ")); err == nil {
 				ctx = context.WithValue(ctx, keyIdentity, id)

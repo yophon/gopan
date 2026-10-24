@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>gopan</title>
+    <link rel="stylesheet" href="app.css" />
+    <style>
+      main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        height: 100%;
+        padding: 24px;
+        text-align: center;
+      }
+      .logo {
+        width: 64px;
+        height: 64px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .form {
+        display: flex;
+        gap: 8px;
+        width: min(460px, 100%);
+      }
+      .spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid var(--line);
+        border-top-color: var(--fg);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img class="logo" src="logo.png" alt="" />
+      <h1>gopan</h1>
+      <div id="connecting" class="muted"><div class="spinner" style="margin: 0 auto 8px"></div><span id="target">正在连接…</span></div>
+      <div id="failed" hidden>
+        <p id="error" class="error"></p>
+        <div class="form">
+          <input id="server" type="text" spellcheck="false" aria-label="服务器地址" />
+          <button id="retry" class="btn primary">连接</button>
+        </div>
+      </div>
+    </main>
+    <script>
+      const { invoke } = window.__TAURI__.core
+      const $ = (id) => document.getElementById(id)
+
+      async function connect(server) {
+        $('failed').hidden = true
+        $('connecting').hidden = false
+        try {
+          const status = await invoke('app_status')
+          $('target').textContent = '正在连接 ' + (server || status.serverUrl).replace(/^https?:\/\//, '') + '…'
+          const url = await invoke('server_connect', { server: server ?? null })
+          location.replace(url)
+        } catch (e) {
+          const status = await invoke('app_status').catch(() => ({ serverUrl: '' }))
+          $('error').textContent = String(e)
+          $('server').value = server || status.serverUrl
+          $('connecting').hidden = true
+          $('failed').hidden = false
+          $('server').focus()
+        }
+      }
+
+      $('retry').addEventListener('click', () => connect($('server').value))
+      $('server').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') connect($('server').value)
+      })
+      connect(null)
+    </script>
+  </body>
+</html>

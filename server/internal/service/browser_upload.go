@@ -273,10 +273,10 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 	if err := q.MarkAncestorsStale(ctx, n.ID); err != nil {
 		return nil, err
 	}
-	if err := attachChatMessage(ctx, q, sess.OwnerID, parent, n.ID); err != nil {
+	actx := actorFromJSON(ctx, sess.Actor)
+	if err := attachChatMessage(actx, q, sess.OwnerID, parent, n.ID); err != nil {
 		return nil, err
 	}
-	actx := actorFromJSON(ctx, sess.Actor)
 	if collect != nil {
 		if err := collect.record(ctx, q, sess, n, size, sum); err != nil {
 			return nil, err

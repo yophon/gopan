@@ -28,5 +28,8 @@ app.use(VueQueryPlugin, {
 
 app.mount('#app')
 
+// 桌面端(doc/29):在 gopan 桌面端的窗口里时接上外壳(浏览器里什么都不做)
+void import('./desktop/bridge').then((m) => m.startDesktopBridge(router))
+
 // PWA:只在生产环境注册 service worker(见 src/pwa/register.ts)
 void import('./pwa/register').then((m) => m.registerPwa())

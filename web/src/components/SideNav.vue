@@ -33,6 +33,7 @@ import { useAuthStore } from '@/stores/auth'
 import { formatBytes } from '@/utils/format'
 import { useThemeMode, type ThemeMode } from '@/composables/themeMode'
 import { searchKeyword } from '@/utils/search'
+import { desktopWindow, invokeDesktop } from '@/desktop/bridge'
 
 /**
  * 侧栏内容。桌面直接放进 el-aside,手机放进 el-drawer ——
@@ -262,6 +263,14 @@ const quotaStatus = computed(() => {
         </button>
         <button type="button" class="account-item" @click="accountAction(() => emit('open-pwd'))">
           <el-icon><Lock /></el-icon>修改密码
+        </button>
+        <button
+          v-if="desktopWindow()"
+          type="button"
+          class="account-item"
+          @click="accountAction(() => void invokeDesktop('desktop_open_settings').catch(() => {}))"
+        >
+          <el-icon><Setting /></el-icon>桌面端设置
         </button>
         <button type="button" class="account-item danger" @click="accountAction(() => emit('logout'))">
           <el-icon><SwitchButton /></el-icon>退出登录

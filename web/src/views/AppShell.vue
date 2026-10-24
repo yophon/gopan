@@ -15,6 +15,7 @@ import SideNav from '@/components/SideNav.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import MiniPlayer from '@/components/player/MiniPlayer.vue'
 import { previewState } from '@/composables/preview'
+import { desktopWindow } from '@/desktop/bridge'
 
 // 弹窗 / 抽屉第一次打开时才加载(连同它们用到的表格、表单、标签页这些组件),之后一直挂着,关的动画照常。
 // 上传抽屉要轮询后台任务、迷你播放条持有全站唯一的 <audio>,这两个照旧常驻
@@ -24,6 +25,7 @@ const AppPasswordsDialog = defineAsyncComponent(() => import('@/components/AppPa
 const MCPAccessDialog = defineAsyncComponent(() => import('@/components/MCPAccessDialog.vue'))
 const NotificationDrawer = defineAsyncComponent(() => import('@/components/notify/NotificationDrawer.vue'))
 const RecentPlaysDialog = defineAsyncComponent(() => import('@/components/RecentPlaysDialog.vue'))
+const DesktopUploadPicker = defineAsyncComponent(() => import('@/desktop/DesktopUploadPicker.vue'))
 
 const route = useRoute()
 const router = useRouter()
@@ -31,6 +33,9 @@ const auth = useAuthStore()
 const queryClient = useQueryClient()
 
 const { isMobile } = useBreakpoints()
+
+// 桌面端的传输助手小窗(doc/29 D3):只要会话本身,导航、上传抽屉、播放条都不要
+const embed = computed(() => route.query.embed === '1' || desktopWindow() === 'mini')
 
 // ---------- 移动端导航抽屉 ----------
 
@@ -99,7 +104,7 @@ async function onLogout() {
 
 <template>
   <el-container class="shell">
-    <el-aside v-if="!isMobile" width="220px" class="aside">
+    <el-aside v-if="!isMobile && !embed" width="220px" class="aside">
       <SideNav
         @open-dav="davDialogVisible = true"
         @open-mcp="mcpDialogVisible = true"
@@ -111,7 +116,7 @@ async function onLogout() {
     </el-aside>
 
     <el-container class="body" direction="vertical">
-      <header v-if="isMobile" class="topbar">
+      <header v-if="isMobile && !embed" class="topbar">
         <el-button text class="topbar-btn" title="打开导航" aria-label="打开导航" @click="navOpen = true">
           <!-- 三道杠;Element 的 Menu 图标是四个方块,像「应用」不像「菜单」 -->
           <svg class="menu-glyph" viewBox="0 0 20 20" aria-hidden="true">
@@ -130,10 +135,10 @@ async function onLogout() {
           />
         </el-badge>
       </header>
-      <el-main class="main">
+      <el-main class="main" :class="{ embed }">
         <router-view />
       </el-main>
-      <MiniPlayer />
+      <MiniPlayer v-if="!embed" />
     </el-container>
 
     <el-drawer
@@ -154,7 +159,8 @@ async function onLogout() {
       />
     </el-drawer>
 
-    <UploadDrawer />
+    <UploadDrawer v-if="!embed" />
+    <DesktopUploadPicker v-if="desktopWindow() === 'main'" />
     <PreviewModal v-if="opened.preview" />
     <ChangePasswordDialog v-if="opened.pwd" v-model="pwdDialogVisible" />
     <AppPasswordsDialog v-if="opened.dav" v-model="davDialogVisible" />
@@ -219,6 +225,9 @@ async function onLogout() {
     padding: 12px 12px calc(12px + var(--sab));
     overflow-x: hidden;
   }
+}
+.main.embed {
+  padding: 8px 10px;
 }
 </style>
 

@@ -1,0 +1,14 @@
+{
+  "name": "gopan-desktop",
+  "private": true,
+  "version": "3.14.0",
+  "description": "gopan 桌面端(Windows,doc/29)",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.4"
+  }
+}

@@ -11,7 +11,8 @@ import { ClearRecentDocument, RecentFilesDocument, StarredNodesDocument } from '
 import type { QuickNodeFragment } from '@/api/gen/graphql'
 import { openPreview } from '@/composables/preview'
 import { useBreakpoints } from '@/composables/breakpoints'
-import { useNodeDownload } from '@/composables/nodeDownload'
+import { downloadLabel, downloadToComputer, useNodeDownload } from '@/composables/nodeDownload'
+import { nativeDownloads } from '@/desktop/transfers'
 import { useStars } from '@/composables/quick'
 import { formatRelative } from '@/utils/format'
 import NodeBrowser from '@/components/nodes/NodeBrowser.vue'
@@ -122,7 +123,8 @@ const menuItems = computed<MenuEntry[]>(() => {
       { key: 'd1', divider: true },
     )
   }
-  entries.push({ key: 'download', label: one && one.kind === 'FILE' ? '下载' : '打包下载', icon: Download })
+  entries.push({ key: 'download', label: downloadLabel(sel), icon: Download })
+  if (nativeDownloads()) entries.push({ key: 'downloadTo', label: '下载到…', icon: Download })
   if (one) entries.push({ key: 'share', label: '分享', icon: Share })
   entries.push({ key: 'star', label: starred ? '取消收藏' : '收藏', icon: starred ? Star : StarFilled })
   if (isRecent.value) entries.push({ key: 'forget', label: '从最近中移除', icon: Close })
@@ -140,6 +142,8 @@ function onAction(key: string, nodes: NodeListItem[]) {
       return
     case 'download':
       return void download(nodes)
+    case 'downloadTo':
+      return void downloadToComputer(nodes, true)
     case 'share':
       if (one) openShare(one)
       return
@@ -160,7 +164,7 @@ const sheetItems = computed<SheetItem[]>(() => {
   return [
     { key: 'open', label: n.kind === 'FOLDER' ? '打开' : '预览' },
     { key: 'locate', label: '所在文件夹', icon: FolderOpened },
-    { key: 'download', label: n.kind === 'FOLDER' ? '打包下载' : '下载', icon: Download },
+    { key: 'download', label: downloadLabel([n]), icon: Download },
     { key: 'share', label: '分享', icon: Share },
     { key: 'star', label: n.starred ? '取消收藏' : '收藏', icon: n.starred ? Star : StarFilled },
     ...(isRecent.value ? [{ key: 'forget', label: '从最近中移除', icon: Close }] : []),

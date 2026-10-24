@@ -10,6 +10,8 @@ import {
   Close,
   CircleCheck,
   Delete,
+  Document,
+  Download,
   FolderOpened,
   RefreshRight,
   Upload,
@@ -37,10 +39,20 @@ import {
   setUploadInvalidator,
 } from '@/uploader/manager'
 import { formatBytes } from '@/utils/format'
+import {
+  desktopPercent,
+  desktopSpeeds,
+  desktopStatusText,
+  desktopTaskAction,
+  desktopTasks,
+  isActiveDesktopTask,
+} from '@/desktop/transfers'
+import type { DesktopTask, DesktopTaskAction } from '@/desktop/transfers'
 
 /**
  * 全局上传抽屉:右下角浮动面板,AppShell 挂载。
  * 任务列表 + 可恢复的上传(localStorage 断点记录)+ 服务端的后台任务(离线下载、解压,doc/21;剪藏,doc/23)。
+ * 在桌面端里还有本机传输(下到电脑上、右键菜单上传,doc/29 D2),由外壳的传输引擎做,这里只显示与转发操作。
  */
 
 const uploads = useUploadsStore()
@@ -100,16 +112,21 @@ const visible = computed(
     (jobsPinned.value ||
       uploads.tasks.length > 0 ||
       uploads.orphanRecords.length > 0 ||
-      jobs.items.value.length > 0),
+      jobs.items.value.length > 0 ||
+      desktopTasks.value.length > 0),
 )
 const finishedJobs = computed(() => jobItems.value.filter((j) => !isActiveJob(j)).length)
+const finishedDesktop = computed(() => desktopTasks.value.filter((t) => t.state === 'done' || t.state === 'failed').length)
 const finishedCount = computed(
-  () => uploads.tasks.filter((t) => TERMINAL_STATUSES.includes(t.status)).length + finishedJobs.value,
+  () => uploads.tasks.filter((t) => TERMINAL_STATUSES.includes(t.status)).length + finishedJobs.value + finishedDesktop.value,
 )
-const activeCount = computed(() => uploads.activeCount + jobs.activeCount.value)
+const activeCount = computed(
+  () => uploads.activeCount + jobs.activeCount.value + desktopTasks.value.filter(isActiveDesktopTask).length,
+)
 
 async function clearFinished() {
   uploads.clearFinished()
+  if (finishedDesktop.value > 0) void desktopAction(null, 'clear')
   if (finishedJobs.value === 0) return
   try {
     await request(ClearFinishedJobsDocument)
@@ -117,6 +134,29 @@ async function clearFinished() {
     ElMessage.error(errorText(err, '清除失败'))
   }
   void queryClient.invalidateQueries({ queryKey: ['jobs'] })
+}
+
+// ---------- 本机传输(桌面端) ----------
+
+async function desktopAction(id: number | null, action: DesktopTaskAction) {
+  try {
+    await desktopTaskAction(id, action)
+  } catch (err) {
+    ElMessage.error(typeof err === 'string' ? err : '操作失败')
+  }
+}
+
+function desktopProgressStatus(t: DesktopTask): 'success' | 'exception' | undefined {
+  if (t.state === 'done') return 'success'
+  if (t.state === 'failed') return 'exception'
+  return undefined
+}
+
+/** 上传完的:去云端看它所在的文件夹 */
+function openDesktopUpload(t: DesktopTask) {
+  if (t.toChat) return void router.push('/chat')
+  const folder = t.isFolder ? t.nodeId : t.parentId
+  void router.push(folder ? `/drive/${folder}` : '/drive')
 }
 
 // ---------- 后台任务 ----------
@@ -364,9 +404,106 @@ function onResumeFileChosen(e: Event) {
           </div>
         </div>
 
+        <!-- 本机传输(桌面端):下到电脑上、右键菜单上传 -->
+        <template v-if="desktopTasks.length > 0">
+          <el-divider v-if="uploads.tasks.length > 0 || uploads.orphanRecords.length > 0" class="divider" />
+          <div class="section-title">本机</div>
+          <div v-for="t in desktopTasks" :key="'d' + t.id" class="task">
+            <el-icon class="dir-icon"><Download v-if="t.kind === 'download'" /><Upload v-else /></el-icon>
+            <div class="task-main">
+              <div class="task-name" :title="t.localPath || t.name">
+                {{ t.name }}<span v-if="t.isFolder && t.files > 0" class="task-files">{{ t.filesDone }}/{{ t.files }} 个文件</span>
+              </div>
+              <el-progress
+                :percentage="desktopPercent(t)"
+                :status="desktopProgressStatus(t)"
+                :stroke-width="6"
+                :show-text="false"
+              />
+              <div class="task-status" :class="{ error: t.state === 'failed' }">
+                <span class="job-text" :title="desktopStatusText(t, desktopSpeeds[t.id])">{{ desktopStatusText(t, desktopSpeeds[t.id]) }}</span>
+                <span v-if="t.state === 'running' && t.phase === 'transferring'">
+                  {{ formatBytes(t.done) }} / {{ formatBytes(t.size) }}
+                </span>
+                <span v-else-if="t.state !== 'done' && t.state !== 'failed' && t.size > 0">{{ formatBytes(t.size) }}</span>
+              </div>
+            </div>
+            <div class="task-ops">
+              <el-button
+                v-if="isActiveDesktopTask(t)"
+                link
+                size="small"
+                :icon="VideoPause"
+                title="暂停"
+                @click="desktopAction(t.id, 'pause')"
+              />
+              <el-button
+                v-if="t.state === 'paused'"
+                link
+                size="small"
+                :icon="VideoPlay"
+                title="继续"
+                @click="desktopAction(t.id, 'resume')"
+              />
+              <el-button
+                v-if="t.state === 'failed'"
+                link
+                size="small"
+                :icon="RefreshRight"
+                title="重试"
+                @click="desktopAction(t.id, 'retry')"
+              />
+              <el-button
+                v-if="t.state !== 'done' && t.state !== 'failed'"
+                link
+                size="small"
+                :icon="Close"
+                title="取消"
+                @click="desktopAction(t.id, 'cancel')"
+              />
+              <template v-if="t.state === 'done' && t.kind === 'download'">
+                <el-button
+                  v-if="!t.isFolder"
+                  link
+                  size="small"
+                  :icon="Document"
+                  title="打开"
+                  @click="desktopAction(t.id, 'open')"
+                />
+                <el-button
+                  link
+                  size="small"
+                  :icon="FolderOpened"
+                  :title="t.isFolder ? '打开文件夹' : '在文件夹中显示'"
+                  @click="desktopAction(t.id, 'reveal')"
+                />
+              </template>
+              <el-button
+                v-if="t.state === 'done' && t.kind === 'upload'"
+                link
+                size="small"
+                :icon="FolderOpened"
+                :title="t.toChat ? '打开传输助手' : '打开所在位置'"
+                @click="openDesktopUpload(t)"
+              />
+              <el-button
+                v-if="t.state === 'done' || t.state === 'failed'"
+                link
+                size="small"
+                :icon="Delete"
+                title="移除"
+                @click="desktopAction(t.id, 'remove')"
+              />
+            </div>
+          </div>
+        </template>
+
         <!-- 后台任务:离线下载、解压(服务端执行,关掉页面也继续) -->
         <template v-if="jobItems.length > 0 || jobsPinned">
-          <el-divider v-if="uploads.tasks.length > 0 || uploads.orphanRecords.length > 0" class="divider" />
+          <el-divider
+            v-if="uploads.tasks.length > 0 || uploads.orphanRecords.length > 0 || desktopTasks.length > 0"
+            class="divider"
+          />
           <div ref="jobsSection" class="section-title">后台任务</div>
           <div v-if="jobItems.length === 0" class="task-status empty-jobs">没有后台任务</div>
           <div v-for="job in jobItems" :key="job.id" class="task job">
@@ -557,6 +694,15 @@ function onResumeFileChosen(e: Event) {
 }
 .done-icon {
   color: var(--el-color-success);
+}
+.dir-icon {
+  flex-shrink: 0;
+  color: var(--el-text-color-secondary);
+}
+.task-files {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 .hidden-input {
   display: none;

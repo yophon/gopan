@@ -1,0 +1,73 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1d1d1f;
+  --muted: #6e6e73;
+  --line: #e5e5ea;
+  --accent: #111111;
+  --accent-fg: #ffffff;
+  --danger: #c4314b;
+  --field: #f5f5f7;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1b1a;
+    --fg: #f2f1ef;
+    --muted: #a3a09c;
+    --line: #34322f;
+    --accent: #f2f1ef;
+    --accent-fg: #1c1b1a;
+    --danger: #ff7b8a;
+    --field: #262523;
+    color-scheme: dark;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.6 'Segoe UI', 'Microsoft YaHei UI', system-ui, sans-serif;
+}
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+.btn {
+  padding: 8px 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.btn.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+input[type='text'] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--field);
+  outline: none;
+}
+input[type='text']:focus {
+  border-color: var(--fg);
+}
+.muted {
+  color: var(--muted);
+}
+.error {
+  color: var(--danger);
+}

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-tasks"
+description = "Enables the desktop_tasks command without any pre-configured scope."
+commands.allow = ["desktop_tasks"]
+
+[[permission]]
+identifier = "deny-desktop-tasks"
+description = "Denies the desktop_tasks command without any pre-configured scope."
+commands.deny = ["desktop_tasks"]

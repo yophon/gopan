@@ -56,6 +56,8 @@ export function sourceLabel(source: string): string {
       return 'Agent'
     case 'webdav':
       return 'WebDAV'
+    case 'desktop':
+      return '电脑'
     case 'fetch':
       return '离线下载'
     default:

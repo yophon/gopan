@@ -20,16 +20,18 @@ import NodeIcon from '@/components/nodes/NodeIcon.vue'
 const props = defineProps<{
   /** 被移动/复制的节点 id,列表里排除 */
   excludeIds: string[]
-  /** 复制 / 解压 / 选文件夹(订阅存到哪)模式只改文案,选择逻辑一致 */
-  mode?: 'move' | 'copy' | 'extract' | 'pick'
+  /** 复制 / 解压 / 选文件夹(订阅存到哪)/ 上传(桌面端右键菜单)模式只改文案,选择逻辑一致 */
+  mode?: 'move' | 'copy' | 'extract' | 'pick' | 'upload'
+  /** 换掉默认标题(比如写上要上传的是哪些文件) */
+  title?: string
   /** 能不能选根目录「我的文件」;订阅这类必须落在某个文件夹里的不能 */
   allowRoot?: boolean
   /** 打开时停在哪个文件夹(一般是当前所在的);不传就从根开始 */
   startId?: string | null
 }>()
 
-const TITLES = { move: '移动到', copy: '复制到', extract: '解压到', pick: '选择文件夹' } as const
-const VERBS = { move: '移动到', copy: '复制到', extract: '解压到', pick: '存到' } as const
+const TITLES = { move: '移动到', copy: '复制到', extract: '解压到', pick: '选择文件夹', upload: '上传到' } as const
+const VERBS = { move: '移动到', copy: '复制到', extract: '解压到', pick: '存到', upload: '上传到' } as const
 
 const { isMobile } = useBreakpoints()
 const queryClient = useQueryClient()
@@ -134,7 +136,7 @@ function onConfirm() {
 <template>
   <el-dialog
     v-model="visible"
-    :title="TITLES[props.mode ?? 'move']"
+    :title="props.title ?? TITLES[props.mode ?? 'move']"
     width="min(460px, 94vw)"
     :fullscreen="isMobile"
     append-to-body

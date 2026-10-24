@@ -7,6 +7,7 @@ import NodeIcon from './NodeIcon.vue'
 import { sizeText } from './nodeDisplay'
 import { applySelectClick, DRAG_MIME, type SortKey } from './browser'
 import type { NodeListItem } from './types'
+import { downloadLabel } from '@/composables/nodeDownload'
 
 /**
  * 桌面的文件列表(列表 / 网格两种形态),照着桌面文件管理器的习惯:
@@ -252,7 +253,7 @@ const columns: { key: SortKey; label: () => string; cls: string }[] = [
             <template v-else>{{ timeText(node) }}</template>
           </span>
           <span v-if="rowActions" class="c-actions" @dblclick.stop>
-            <el-button link :icon="Download" :title="node.kind === 'FOLDER' ? '打包下载' : '下载'" @click.stop="emit('download', node)" />
+            <el-button link :icon="Download" :title="downloadLabel([node])" @click.stop="emit('download', node)" />
             <el-button v-if="rowShare" link :icon="Share" title="分享" @click.stop="emit('share', node)" />
             <el-button link :icon="MoreFilled" title="更多" @click.stop="onMoreClick(node, $event)" />
           </span>

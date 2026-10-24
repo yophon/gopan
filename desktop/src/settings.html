@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>gopan 设置</title>
+    <link rel="stylesheet" href="app.css" />
+    <style>
+      main {
+        max-width: 560px;
+        margin: 0 auto;
+        padding: 20px 24px 28px;
+      }
+      h1 {
+        margin: 0 0 16px;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      section {
+        padding: 14px 0;
+        border-top: 1px solid var(--line);
+      }
+      section:first-of-type {
+        border-top: none;
+        padding-top: 0;
+      }
+      label.title {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .row > input[type='text'] {
+        flex: 1;
+      }
+      .hint {
+        margin: 6px 0 0;
+        font-size: 12px;
+      }
+      .choices {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+      .check {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 8px 12px;
+        align-items: center;
+      }
+      footer {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 8px;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+      }
+      #status {
+        min-height: 1.6em;
+        margin: 10px 0 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>设置</h1>
+      <section>
+        <label class="title" for="serverUrl">服务器地址</label>
+        <input id="serverUrl" type="text" spellcheck="false" />
+        <p class="hint muted">自己部署的 gopan 填自己的地址;改了会重新连接</p>
+      </section>
+      <section>
+        <label class="title" for="downloadDir">下载到</label>
+        <div class="row">
+          <input id="downloadDir" type="text" spellcheck="false" />
+          <button id="pickDir" class="btn">选择…</button>
+        </div>
+        <p class="hint muted">留空就是系统「下载」里的 gopan 文件夹</p>
+      </section>
+      <section>
+        <label class="title">截图上传</label>
+        <div class="grid">
+          <span>框选截图并上传</span><input id="hotkeyCapture" type="text" spellcheck="false" placeholder="如 Ctrl+Alt+Q,留空不用" />
+          <span>上传剪贴板里的图片</span><input id="hotkeyClipboard" type="text" spellcheck="false" placeholder="如 Ctrl+Alt+W,留空不用" />
+        </div>
+        <div class="choices" style="margin-top: 10px">
+          <span class="muted">传完复制</span>
+          <label class="check"><input type="radio" name="copyFormat" value="markdown" />Markdown</label>
+          <label class="check"><input type="radio" name="copyFormat" value="url" />直链</label>
+          <label class="check"><input type="radio" name="copyFormat" value="html" />HTML</label>
+        </div>
+      </section>
+      <section>
+        <label class="check"><input id="notifyChat" type="checkbox" />传输助手有新消息时弹通知</label>
+        <label class="check" style="margin-top: 8px"><input id="shellMenu" type="checkbox" />资源管理器的右键菜单和「发送到」里加上 gopan</label>
+        <label class="check" style="margin-top: 8px"><input id="autostart" type="checkbox" />开机时启动(只进托盘)</label>
+      </section>
+      <footer>
+        <span class="muted"><span id="version"></span> <button id="checkUpdate" class="btn" style="margin-left: 8px">检查更新</button></span>
+        <button id="save" class="btn primary">保存</button>
+      </footer>
+      <p id="status" class="muted" role="status"></p>
+    </main>
+    <script>
+      const { invoke } = window.__TAURI__.core
+      const $ = (id) => document.getElementById(id)
+      let current = null
+
+      function fill(view) {
+        current = view.settings
+        $('version').textContent = 'gopan 桌面端 ' + view.version
+        $('serverUrl').value = current.serverUrl
+        $('downloadDir').value = current.downloadDir
+        $('downloadDir').placeholder = view.downloadDirEffective
+        $('hotkeyCapture').value = current.hotkeyCapture
+        $('hotkeyClipboard').value = current.hotkeyClipboard
+        for (const r of document.querySelectorAll('input[name=copyFormat]')) r.checked = r.value === current.copyFormat
+        $('notifyChat').checked = current.notifyChat
+        $('shellMenu').checked = current.shellMenu
+        $('autostart').checked = view.autostart
+      }
+
+      function say(text, error = false) {
+        $('status').textContent = text
+        $('status').className = error ? 'error' : 'muted'
+      }
+
+      $('pickDir').addEventListener('click', async () => {
+        const dir = await invoke('pick_directory')
+        if (dir) $('downloadDir').value = dir
+      })
+
+      $('save').addEventListener('click', async () => {
+        const settings = {
+          ...current,
+          serverUrl: $('serverUrl').value,
+          downloadDir: $('downloadDir').value.trim(),
+          hotkeyCapture: $('hotkeyCapture').value.trim(),
+          hotkeyClipboard: $('hotkeyClipboard').value.trim(),
+          copyFormat: document.querySelector('input[name=copyFormat]:checked')?.value ?? 'markdown',
+          notifyChat: $('notifyChat').checked,
+          shellMenu: $('shellMenu').checked,
+        }
+        $('save').disabled = true
+        try {
+          fill(await invoke('settings_save', { settings, autostart: $('autostart').checked }))
+          say('已保存')
+        } catch (e) {
+          say(String(e), true)
+        } finally {
+          $('save').disabled = false
+        }
+      })
+
+      $('checkUpdate').addEventListener('click', async () => {
+        $('checkUpdate').disabled = true
+        say('正在检查更新…')
+        try {
+          say(await invoke('update_check'))
+        } finally {
+          $('checkUpdate').disabled = false
+        }
+      })
+
+      invoke('settings_get').then(fill)
+    </script>
+  </body>
+</html>

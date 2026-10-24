@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -281,6 +282,12 @@ func run() error {
 	mux.Handle("/dav/", davHandler)
 	// 安卓 App 的检查更新与安装包(未配置时也挂上,回 404 JSON,别让 SPA 拿 index.html 顶替)
 	mux.Handle(httpx.AndroidReleasePath, httpx.AndroidRelease(cfg.AppReleaseDir))
+	// 桌面端(Windows,doc/29)的更新清单与安装包:放在发布目录的 desktop/ 子目录
+	desktopReleaseDir := ""
+	if cfg.AppReleaseDir != "" {
+		desktopReleaseDir = filepath.Join(cfg.AppReleaseDir, "desktop")
+	}
+	mux.Handle(httpx.DesktopReleasePath, httpx.DesktopRelease(desktopReleaseDir))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := pool.Ping(r.Context()); err != nil {
 			http.Error(w, "db: "+err.Error(), http.StatusServiceUnavailable)

@@ -15,7 +15,8 @@ import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
 import NodeBrowser from '@/components/nodes/NodeBrowser.vue'
 import ContextMenu, { type MenuEntry } from '@/components/ContextMenu.vue'
 import ShareDialog from '@/components/ShareDialog.vue'
-import { useNodeDownload } from '@/composables/nodeDownload'
+import { downloadLabel, downloadToComputer, useNodeDownload } from '@/composables/nodeDownload'
+import { nativeDownloads } from '@/desktop/transfers'
 import { searchKeyword } from '@/utils/search'
 import ContentResults from '@/components/ContentResults.vue'
 import type { NodeListItem, SheetItem } from '@/components/nodes/types'
@@ -132,7 +133,8 @@ const menuItems = computed<MenuEntry[]>(() => {
     { key: 'open', label: n.kind === 'FOLDER' ? '打开' : '预览', icon: n.kind === 'FOLDER' ? FolderOpened : View },
     { key: 'locate', label: '打开所在文件夹', icon: FolderOpened },
     { key: 'd', divider: true },
-    { key: 'download', label: n.kind === 'FOLDER' ? '打包下载' : '下载', icon: Download },
+    { key: 'download', label: downloadLabel([n]), icon: Download },
+    ...(nativeDownloads() ? [{ key: 'downloadTo', label: '下载到…', icon: Download }] : []),
     { key: 'share', label: '分享', icon: Share },
   ]
 })
@@ -143,6 +145,7 @@ function onMenuSelect(key: string) {
   if (key === 'open') onOpen(n)
   else if (key === 'locate') onLocate(n)
   else if (key === 'download') void download([n])
+  else if (key === 'downloadTo') void downloadToComputer([n], true)
   else if (key === 'share') openShare(n)
 }
 

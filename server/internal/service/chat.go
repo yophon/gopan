@@ -45,7 +45,12 @@ const (
 	ChatSourceMCP    = "mcp"
 	ChatSourceWebDAV = "webdav"
 	ChatSourceFetch  = "fetch" // 离线下载进传输助手文件夹的文件
+	// 桌面端(doc/29)发的:桌面端据此不给自己发的消息弹通知
+	ChatSourceDesktop = "desktop"
 )
+
+// IsDesktopUA 是桌面端的请求(窗口里的网页或程序自己)。
+func IsDesktopUA(ua string) bool { return reDesktopApp.MatchString(ua) }
 
 type chatSourceKey struct{}
 

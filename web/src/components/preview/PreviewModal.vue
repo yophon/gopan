@@ -54,6 +54,8 @@ import ArchiveViewer from './ArchiveViewer.vue'
 import VideoPlayer from './VideoPlayer.vue'
 import MarkdownFrame from './MarkdownFrame.vue'
 import AudioPanel from '@/components/player/AudioPanel.vue'
+import { downloadToComputer } from '@/composables/nodeDownload'
+import { nativeDownloads } from '@/desktop/transfers'
 
 /** 访客模式(分享页):带访客 token 请求;访客是只读白名单,不能触发文档转换 */
 const props = defineProps<{ guestToken?: string }>()
@@ -377,6 +379,7 @@ const downloading = ref(false)
 async function onDownload() {
   const n = node.value
   if (!n || downloading.value) return
+  if (nativeDownloads()) return void downloadToComputer([{ id: n.id, name: n.name, kind: 'FILE', size: n.size }])
   downloading.value = true
   try {
     const res = await req(NodeDownloadUrlDocument, { id: n.id })
