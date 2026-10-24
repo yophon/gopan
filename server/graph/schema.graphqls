@@ -778,6 +778,12 @@ input ActivityFilter {
 }
 
 # 三选一:ids(最多 1000)、batchId、filter(至少给来源、时间或文件;最多撤最近的 1000 条)
+# 批量改名的一项
+input RenameItem {
+  id: ID!
+  name: String!
+}
+
 input UndoSelection {
   ids: [ID!]
   batchId: ID
@@ -1231,6 +1237,8 @@ type Mutation {
 
   createFolder(parentId: ID, name: String!): Node!
   renameNode(id: ID!, name: String!): Node!
+  # 批量改名(doc/27):要么全改、要么都不改;批内互换名字可以;和这批之外的同名、批内重名 NAME_CONFLICT。整批一组动态,能一起撤回
+  renameNodes(items: [RenameItem!]!): [Node!]!
   moveNodes(ids: [ID!]!, targetParentId: ID): [Node!]!
   copyNodes(ids: [ID!]!, targetParentId: ID): [Node!]!
   deleteNodes(ids: [ID!]!): Boolean!

@@ -242,15 +242,65 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun `shared text goes to the draft and files are sent to the chat folder`() = chatTest { vm ->
+    fun `shared text goes to the draft, shared files wait for the chat or a chosen folder`() = chatTest { vm ->
         runCurrent()
         vm.setDraft("已有草稿  ")
         val f = File.createTempFile("share", ".txt").apply { writeText("x") }
         inbox.post(SharePayload("分享的链接", listOf(f), failed = 0))
         runCurrent()
         assertThat(vm.draft.value).isEqualTo("已有草稿\n分享的链接")
-        assertThat(transfers.uploadedFiles.single().first).containsExactly(f)
-        assertThat(transfers.uploadedFiles.single().second).isEqualTo(repo.folder)
+        assertThat(vm.state.value.sharedFiles).containsExactly(f)
+        assertThat(transfers.uploadedFiles).isEmpty()
+
+        vm.shareToChat()
+        runCurrent()
+        assertThat(transfers.uploadedFiles.single()).isEqualTo(Triple(listOf(f), repo.folder, true))
+        assertThat(vm.state.value.sharedFiles).isNull()
+
+        // 存到文件夹:先开选择器,选好就传进那个文件夹,不进传输助手
+        val g = File.createTempFile("share", ".jpg").apply { writeText("y") }
+        inbox.post(SharePayload(null, listOf(g), failed = 0))
+        runCurrent()
+        vm.pickShareFolder()
+        assertThat(vm.state.value.sharePicker).isNotNull()
+        vm.dismissSharePicker()
+        assertThat(vm.state.value.sharedFiles).containsExactly(g)
+        vm.pickShareFolder()
+        vm.shareToFolder("dir-1", "照片")
+        runCurrent()
+        assertThat(transfers.uploadedFiles.last()).isEqualTo(Triple(listOf(g), "dir-1", false))
+        assertThat(vm.state.value.sharedFiles).isNull()
+        assertThat(vm.state.value.sharePicker).isNull()
+
+        // 取消:不传
+        inbox.post(SharePayload(null, listOf(File.createTempFile("share", ".bin")), failed = 0))
+        runCurrent()
+        vm.cancelShare()
+        runCurrent()
+        assertThat(vm.state.value.sharedFiles).isNull()
+        assertThat(transfers.uploadedFiles).hasSize(2)
+        f.delete()
+        g.delete()
+    }
+
+    @Test
+    fun `shared files wait in the inbox, so a replaced chat screen still offers them`() = chatTest { old ->
+        runCurrent()
+        val f = File.createTempFile("share", ".txt").apply { writeText("x") }
+        inbox.post(SharePayload(null, listOf(f), failed = 0))
+        runCurrent()
+        assertThat(old.state.value.sharedFiles).containsExactly(f)
+
+        // 分享进来时传输助手页的 ViewModel 被换掉:新的那个照样看到、也能处理
+        val fresh = ChatViewModel(repo, transfers, prefs, inbox, net, PreviewSessionStore(), cache)
+        runCurrent()
+        assertThat(fresh.state.value.sharedFiles).containsExactly(f)
+        fresh.shareToFolder(null, "我的文件")
+        runCurrent()
+        assertThat(transfers.uploadedFiles.single()).isEqualTo(Triple(listOf(f), null, false))
+        assertThat(old.state.value.sharedFiles).isNull()
+        assertThat(fresh.state.value.sharedFiles).isNull()
+        fresh.setVisible(false)
         f.delete()
     }
 
@@ -356,9 +406,16 @@ class FakeShareInbox : ShareInbox {
         pending.value = p
     }
 
-    override fun take(): SharePayload? {
-        val p = pending.value
-        pending.value = null
-        return p
+    override fun takeNotes(): SharePayload? {
+        val p = pending.value ?: return null
+        if (p.text == null && p.failed == 0) return null
+        pending.value = p.copy(text = null, failed = 0).takeUnless { it.isEmpty }
+        return SharePayload(p.text, emptyList(), p.failed)
+    }
+
+    override fun takeFiles(): List<File> {
+        val p = pending.value ?: return emptyList()
+        pending.value = p.copy(files = emptyList()).takeUnless { it.isEmpty }
+        return p.files
     }
 }

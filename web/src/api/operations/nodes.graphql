@@ -119,6 +119,18 @@ mutation RenameNode($id: ID!, $name: String!) {
   }
 }
 
+# 批量改名(doc/27)
+mutation RenameNodes($items: [RenameItem!]!) {
+  renameNodes(items: $items) {
+    id
+    parentId
+    name
+    kind
+    size
+    updatedAt
+  }
+}
+
 mutation MoveNodes($ids: [ID!]!, $targetParentId: ID) {
   moveNodes(ids: $ids, targetParentId: $targetParentId) {
     id

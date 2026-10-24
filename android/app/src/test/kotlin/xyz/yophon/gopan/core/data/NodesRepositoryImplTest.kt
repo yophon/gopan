@@ -301,6 +301,27 @@ class NodesRepositoryImplTest {
         assertThat(repo.version.value).isEqualTo(0)
     }
 
+    @Test
+    fun `cacheTree stores every page of every folder in the subtree`() = runBlocking {
+        handlers["Children"] = { vars ->
+            when (vars["parentId"]?.jsonPrimitive?.content to vars["cursor"]?.jsonPrimitive?.contentOrNull) {
+                "root" to null -> page(nodeJson("s1", "子目录", kind = "FOLDER"), nodeJson("a", "a.txt"), nextCursor = "c2", total = 3)
+                "root" to "c2" -> page(nodeJson("b", "b.txt"), total = 3)
+                else -> page(nodeJson("c", "c.txt"))
+            }
+        }
+
+        assertThat(repo.cacheTree("root")).isEqualTo(2)
+
+        assertThat(cache.get("u1", "root")!!.items.map { it.id }).containsExactly("s1", "a", "b").inOrder()
+        assertThat(cache.get("u1", "root")!!.total).isEqualTo(3)
+        assertThat(cache.get("u1", "s1")!!.items.map { it.id }).containsExactly("c")
+        // 上限:只存第一个目录
+        cache.clear()
+        assertThat(repo.cacheTree("root", maxFolders = 1)).isEqualTo(1)
+        assertThat(cache.get("u1", "s1")).isNull()
+    }
+
     // ---- helpers ----
 
     private fun node(id: String, name: String, kind: String = "FILE", size: Long? = 10, parentId: String? = null) =

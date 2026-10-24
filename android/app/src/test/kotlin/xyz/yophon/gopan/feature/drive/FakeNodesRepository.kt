@@ -148,6 +148,11 @@ class FakeNodesRepository : NodesRepository {
         return folder(id = id, name = name)
     }
 
+    override suspend fun renameMany(items: List<Pair<String, String>>): List<Node> {
+        mutate("renameMany(" + items.joinToString { "${it.first}=${it.second}" } + ")")
+        return items.map { file(it.first, it.second) }
+    }
+
     override suspend fun move(ids: List<String>, targetParentId: String?) = mutate("move($ids,$targetParentId)")
 
     override suspend fun copy(ids: List<String>, targetParentId: String?) = mutate("copy($ids,$targetParentId)")

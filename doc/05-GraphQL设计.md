@@ -491,6 +491,20 @@ extend type Mutation {
 - 覆盖类动态(`OVERWRITE`)留了版本时 `undoable = true`,撤回 = 恢复那个版本;恢复版本本身也记一条 `OVERWRITE`(`note` 是「恢复到 … 的版本」)。
 - `restoreFileVersion`:版本已被清理 `NOT_FOUND`,文件在回收站里 `NODE_DELETED`;`fileVersions` 对文件夹 `NOT_A_FILE`。
 
+## 批量重命名(v3.13)
+
+```graphql
+input RenameItem { id: ID!, name: String! }
+
+extend type Mutation {
+  renameNodes(items: [RenameItem!]!): [Node!]!   # 顺序同 items;名字没变的原样返回
+}
+```
+
+- 改名规则(序号、替换、扩展名)在客户端算,这里只收结果;一次最多 1000 项。
+- 要么全改、要么都不改:批内两项同名、和这批之外的同名 `NAME_CONFLICT`(消息里带名字),名字不合法或同一项出现两次 `INVALID_INPUT`,有一项不存在 `NOT_FOUND`。批内互换名字可以。
+- 整批记成同一个 batch 的若干条 `RENAME` 动态,按 batch 撤回就是一起改回去。
+
 ## 在线编辑文本(v3.11)
 
 ```graphql

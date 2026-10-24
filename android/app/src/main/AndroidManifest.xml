@@ -46,7 +46,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- 系统分享直达传输助手:文本进草稿,文件直接发 -->
+            <!-- 系统分享「存到 gopan」:文本进传输助手草稿,文件问去处(发到传输助手 / 存到文件夹) -->
             <intent-filter android:label="@string/share_target_label">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />

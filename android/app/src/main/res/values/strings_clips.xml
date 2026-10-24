@@ -25,7 +25,7 @@
     <!-- 系统分享 -->
     <string name="clip_share_label">剪藏到 gopan</string>
     <string name="clip_share_no_url">分享的内容里没有网址</string>
-    <string name="clip_share_no_url_hint">从浏览器分享网页时选「剪藏到 gopan」;要存文字或文件请用「发到传输助手」</string>
+    <string name="clip_share_no_url_hint">从浏览器分享网页时选「剪藏到 gopan」;要存文字或文件请用「存到 gopan」</string>
     <string name="clip_share_need_login">还没登录 gopan</string>
     <string name="clip_share_need_login_hint">登录后再分享一次</string>
     <string name="clip_share_open_app">打开 gopan</string>

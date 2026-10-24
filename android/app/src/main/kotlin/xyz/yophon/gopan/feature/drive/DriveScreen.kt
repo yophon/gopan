@@ -382,6 +382,14 @@ fun DriveScreen(
             onConfirm = viewModel::createFolder,
             onDismiss = viewModel::dismissDialog,
         )
+        is DriveDialog.BatchRename -> BatchRenameDialog(
+            nodes = d.nodes,
+            siblings = state.items.map { it.name },
+            busy = busy,
+            error = inputError?.takeIf { it.name == DriveViewModel.BATCH_RENAME }?.message?.resolve(),
+            onApply = viewModel::applyBatchRename,
+            onDismiss = viewModel::dismissDialog,
+        )
         else -> NodeDialogHost(dialog = d, busy = busy, inputError = inputError, viewModel = viewModel)
     }
     if (fetch.dialogOpen) {
@@ -507,12 +515,13 @@ private fun SelectionMoreMenu(state: DriveUiState, viewModel: DriveViewModel, on
             Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.drive_action_more))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            // 选了一项是重命名,选了多项是批量重命名(doc/27)
+            val many = state.selection.size > 1
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.drive_action_rename)) },
-                enabled = state.selection.size == 1,
+                text = { Text(stringResource(if (many) R.string.drive_batch_rename else R.string.drive_action_rename)) },
                 onClick = {
                     expanded = false
-                    viewModel.renameSelected()
+                    if (many) viewModel.batchRenameSelected() else viewModel.renameSelected()
                 },
                 leadingIcon = { Icon(Icons.Outlined.DriveFileRenameOutline, contentDescription = null) },
             )

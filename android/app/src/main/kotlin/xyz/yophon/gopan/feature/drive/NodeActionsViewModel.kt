@@ -38,7 +38,8 @@ sealed interface ListStatus {
 }
 
 /** 目标选择器的用途:移动、复制,或压缩包「解压到…」(feature.archive) */
-enum class PickerMode { MOVE, COPY, EXTRACT }
+/** 选择器的用途:移动、复制、解压到、(分享进来的文件)存到 */
+enum class PickerMode { MOVE, COPY, EXTRACT, UPLOAD }
 
 /** 文件页 / 搜索页共用的弹层;ViewModel 持有,旋转屏幕不丢 */
 sealed interface NodeDialog {

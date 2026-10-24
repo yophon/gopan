@@ -19,11 +19,13 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import xyz.yophon.gopan.core.auth.AuthState
 import xyz.yophon.gopan.core.auth.SessionStore
 import xyz.yophon.gopan.core.auth.SignOutHook
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodeKind
+import xyz.yophon.gopan.core.data.NodesRepository
 import xyz.yophon.gopan.core.data.db.GopanDatabase
 import xyz.yophon.gopan.core.transfer.DownloadDest
 import xyz.yophon.gopan.core.transfer.LiveProgress
@@ -97,6 +99,7 @@ class OfflineRepository @Inject constructor(
     private val store: OfflineStore,
     private val engine: TransferEngine,
     private val session: SessionStore,
+    private val nodes: NodesRepository,
     @ApplicationScope private val appScope: CoroutineScope,
 ) {
     private val dao = db.offlineDao()
@@ -200,6 +203,12 @@ class OfflineRepository @Inject constructor(
     private suspend fun startRound(uid: String, node: Node) {
         val taskId = if (node.isFolder) engine.enqueueFolder(node, DownloadDest.OFFLINE) else engine.enqueueFile(node, DownloadDest.OFFLINE)
         dao.setTask(uid, node.id, taskId)
+        // 文件夹:顺手把每一层的目录列表存进缓存,没网时文件页也能一层层点进去
+        if (node.isFolder) {
+            appScope.launch {
+                runCatching { nodes.cacheTree(node.id) }.onFailure { Timber.w(it, "缓存离线文件夹的目录失败") }
+            }
+        }
     }
 
     /** 上一轮的任务:还在跑的停掉,跑完的也从传输列表里拿掉(落点是离线副本,留着没意义) */

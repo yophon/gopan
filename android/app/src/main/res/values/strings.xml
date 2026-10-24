@@ -17,5 +17,5 @@
     <string name="state_error">出错了</string>
 
     <!-- 系统分享面板里的名字 -->
-    <string name="share_target_label">发到传输助手</string>
+    <string name="share_target_label">存到 gopan</string>
 </resources>

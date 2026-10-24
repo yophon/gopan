@@ -131,6 +131,31 @@ class DriveViewModelTest {
     }
 
     @Test
+    fun `batch rename opens with the selection in list order and submits only the changed names`() = runTest {
+        val a = file("a", "1.txt")
+        val b = file("b", "2.txt")
+        val c = file("c", "3.txt")
+        repo.listings[null] = listOf(page(a, b, c))
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.onItemLongClick(c)
+        vm.onItemClick(a)
+        vm.batchRenameSelected()
+        val dialog = vm.dialog.value as DriveDialog.BatchRename
+        assertThat(dialog.nodes.map { it.id }).containsExactly("a", "c").inOrder()
+
+        val plan = BatchRename.plan(dialog.nodes.map { NodeLike(it.id, it.name, it.isFolder) }, RenameRule.Template("#", 1), vm.state.value.items.map { it.name })
+        // a 已经叫 1.txt:不变;c 改成 2.txt 会和这批之外的 b 撞名
+        assertThat(plan.map { it.problem }).containsExactly(null, RenameProblem.EXISTS).inOrder()
+        val ok = BatchRename.plan(dialog.nodes.map { NodeLike(it.id, it.name, it.isFolder) }, RenameRule.Template("第#集", 1))
+        vm.applyBatchRename(ok)
+        advanceUntilIdle()
+        assertThat(repo.calls).contains("renameMany(a=第1集.txt, c=第2集.txt)")
+        assertThat(vm.dialog.value).isNull()
+        assertThat(vm.state.value.selection).isEmpty()
+    }
+
+    @Test
     fun `loads the first page with the stored sort and pages until the cursor runs out`() = runTest {
         repo.listings[null] = listOf(
             page(folder("d"), file("a"), nextCursor = "1", total = 4),

@@ -37,14 +37,20 @@ interface ShareInbox {
     val pending: StateFlow<SharePayload?>
     val receiving: StateFlow<ShareReceiving?>
 
-    /** 取走全部待处理内容 */
-    fun take(): SharePayload?
+    /** 取走文本与读取失败数(文件留着,等用户选去处);没有就 null */
+    fun takeNotes(): SharePayload?
+
+    /**
+     * 取走等去处的文件。文件一直放在这里(应用级单例)直到用户选了「发到传输助手 / 存到文件夹 / 取消」:
+     * 传输助手页的 ViewModel 可能在分享进来时被换掉,放在 ViewModel 里会丢
+     */
+    fun takeFiles(): List<File>
 }
 
 /**
  * 系统分享(SEND / SEND_MULTIPLE)的接收与暂存。分享授予的 URI 读权限只在接收页所在任务存活期间有效,
  * 所以一收到就在应用作用域里把文件拷进 filesDir/transfers/incoming,之后由传输助手页取走:
- * 文本接到草稿后面(不自动发),文件入上传队列。未登录时先存着,登录后传输助手再处理,不丢
+ * 文本接到草稿后面(不自动发),文件留在这里等用户选去处(发到传输助手或存到某个文件夹)。未登录时先存着,登录后传输助手再处理,不丢
  * (所以不挂登出钩子;拷贝放在 transfers 目录之外,冷启动时的"无 cookie → 清本地数据"不会误删正在拷的文件)。
  * 多次分享在被取走前合并。
  */
@@ -103,10 +109,26 @@ class IncomingShareStore @Inject constructor(
         return true
     }
 
-    override fun take(): SharePayload? {
-        val p = _pending.value ?: return null
-        _pending.value = null
-        return p.takeUnless { it.isEmpty }
+    override fun takeNotes(): SharePayload? {
+        var taken: SharePayload? = null
+        _pending.update { p ->
+            if (p == null || (p.text == null && p.failed == 0)) {
+                p
+            } else {
+                taken = SharePayload(p.text, emptyList(), p.failed)
+                p.copy(text = null, failed = 0).takeUnless { it.isEmpty }
+            }
+        }
+        return taken
+    }
+
+    override fun takeFiles(): List<File> {
+        var taken: List<File> = emptyList()
+        _pending.update { p ->
+            taken = p?.files.orEmpty()
+            p?.copy(files = emptyList())?.takeUnless { it.isEmpty }
+        }
+        return taken
     }
 
     /** 还在等处理的文件(启动时清理孤儿副本要避开它们) */

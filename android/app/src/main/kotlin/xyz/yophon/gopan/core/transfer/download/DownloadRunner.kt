@@ -126,6 +126,12 @@ class DownloadRun(
         val inPlace = task.dest == DownloadDest.OPEN_WITH || task.dest == DownloadDest.OFFLINE
         val needSpace = (size - part.length()).coerceAtLeast(0) + (if (inPlace) 0 else size) + SPACE_MARGIN
         if (usableSpace(partsDir) < needSpace) throw DownloadFailure(TransferErrors.noSpace())
+        // 下到「下载」目录或选的文件夹:手机上有同内容的离线副本就从它拷,不走网络(随后照常校验、发布)
+        if (!inPlace && cacheKey != null && part.length() == 0L) {
+            offlineCopy?.invoke(requireNotNull(task.nodeId), cacheKey, size)?.let { path ->
+                withContext(Dispatchers.IO) { File(path).copyTo(part, overwrite = true) }
+            }
+        }
 
         var checksumFailures = 0
         while (true) {

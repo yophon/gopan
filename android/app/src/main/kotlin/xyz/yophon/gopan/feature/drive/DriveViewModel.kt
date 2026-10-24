@@ -48,6 +48,9 @@ sealed interface DriveDialog : NodeDialog {
     data class ReplaceUploads(val uris: List<Uri>, val names: List<String>) : DriveDialog
 
     data object FabMenu : DriveDialog
+
+    /** 批量重命名(doc/27):多选的条目,按列表顺序 */
+    data class BatchRename(val nodes: List<Node>) : DriveDialog
 }
 
 @Immutable
@@ -385,6 +388,23 @@ class DriveViewModel @Inject constructor(
             UiText.Res(R.string.drive_msg_created, created.name)
         }
 
+    /** 多选了不止一项:批量重命名(doc/27) */
+    fun batchRenameSelected() {
+        val nodes = _state.value.selectedNodes
+        if (nodes.size < 2) return
+        showDialog(DriveDialog.BatchRename(nodes))
+    }
+
+    /** 把计划里变了的提交上去;同名冲突(列表里没加载到的条目)显示在对话框里 */
+    fun applyBatchRename(plan: List<RenamePlanItem>) {
+        val items = plan.filter { it.changed }.map { it.id to it.newName }
+        if (items.isEmpty()) return
+        runMutationFor(inputName = BATCH_RENAME, block = { repo.renameMany(items) }) {
+            clearSelection()
+            UiText.Res(R.string.drive_msg_batch_renamed, items.size)
+        }
+    }
+
     /** 多选里恰好选了一项时可以直接重命名(与网页端一致) */
     fun renameSelected() {
         val node = _state.value.selectedNodes.singleOrNull() ?: return
@@ -461,6 +481,9 @@ class DriveViewModel @Inject constructor(
     companion object {
         /** 与 Routes.Folder 的属性名一致 */
         const val FOLDER_ID_ARG = "folderId"
+
+        /** 批量重命名对话框的输入错误键 */
+        const val BATCH_RENAME = "batch-rename"
 
         /** 预签名缩略图 15 分钟过期;列表超过 10 分钟就视为"旧了" */
         const val STALE_AFTER_MS = 10 * 60 * 1000L

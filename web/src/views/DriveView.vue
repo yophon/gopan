@@ -75,6 +75,7 @@ const ShareDialog = defineAsyncComponent(() => import('@/components/ShareDialog.
 const FileRequestDialog = defineAsyncComponent(() => import('@/components/FileRequestDialog.vue'))
 const FetchDialog = defineAsyncComponent(() => import('@/components/FetchDialog.vue'))
 const NodeDetailDrawer = defineAsyncComponent(() => import('@/components/NodeDetailDrawer.vue'))
+const BatchRenameDialog = defineAsyncComponent(() => import('@/components/BatchRenameDialog.vue'))
 
 const route = useRoute()
 const router = useRouter()
@@ -203,6 +204,21 @@ const createFolderMutation = useMutation({
   },
   onError: (err) => ElMessage.error(errorText(err)),
 })
+
+/** 批量重命名(doc/27):多选时用;打开时记下选中项(按列表顺序,序号照这个编) */
+const batchRenameVisible = ref(false)
+const batchRenameItems = ref<{ id: string; name: string; isFolder: boolean }[]>([])
+
+function openBatchRename() {
+  if (selection.value.length < 2) return
+  batchRenameItems.value = selection.value.map((n) => ({ id: n.id, name: n.name, isFolder: n.kind === 'FOLDER' }))
+  batchRenameVisible.value = true
+}
+
+function onBatchRenamed() {
+  clearSelection()
+  invalidate()
+}
 
 const renameMutation = useMutation({
   mutationFn: (vars: { id: string; name: string }) => request(RenameNodeDocument, vars),
@@ -677,8 +693,9 @@ function openDetail(node: { id: string }) {
   detail.value = { visible: true, id: node.id }
 }
 
-const opened = reactive({ move: false, copy: false, extract: false, share: false, collect: false, fetch: false, detail: false })
+const opened = reactive({ move: false, copy: false, extract: false, share: false, collect: false, fetch: false, detail: false, batchRename: false })
 watchEffect(() => {
+  if (batchRenameVisible.value) opened.batchRename = true
   if (moveDialogVisible.value) opened.move = true
   if (copyDialogVisible.value) opened.copy = true
   if (extractPickVisible.value) opened.extract = true
@@ -781,6 +798,7 @@ const menuItems = computed<MenuEntry[]>(() => {
   }
   entries.push({ key: 'd1', divider: true })
   if (one) entries.push({ key: 'rename', label: '重命名', icon: EditPen, hint: 'F2' })
+  else if (sel.length > 1) entries.push({ key: 'batchRename', label: '批量重命名', icon: EditPen, hint: 'F2' })
   entries.push({ key: 'move', label: '移动到…', icon: Rank }, { key: 'copy', label: '复制到…', icon: CopyDocument })
   if (one) entries.push({ key: 'detail', label: '详情与历史', icon: InfoFilled })
   entries.push({ key: 'd2', divider: true }, { key: 'delete', label: sel.length > 1 ? `删除 ${sel.length} 项` : '删除', icon: Delete, danger: true, hint: 'Del' })
@@ -833,6 +851,8 @@ function onMenuSelect(key: string) {
     case 'rename':
       if (one) void onRename(one)
       return
+    case 'batchRename':
+      return openBatchRename()
     case 'move':
       return openMove(selectedIds.value)
     case 'copy':
@@ -872,6 +892,9 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   } else if (e.key === 'F2' && single.value) {
     e.preventDefault()
     void onRename(single.value)
+  } else if (e.key === 'F2' && selection.value.length > 1) {
+    e.preventDefault()
+    openBatchRename()
   } else if (e.key === 'Enter' && single.value) {
     e.preventDefault()
     onOpen(single.value)
@@ -1046,6 +1069,7 @@ function onSheetSelect(key: string) {
         <el-button :icon="Rank" @click="openMove(selectedIds)">移动</el-button>
         <el-button :icon="CopyDocument" @click="openCopy(selectedIds)">复制</el-button>
         <el-button v-if="single" :icon="EditPen" @click="onRename(single)">重命名</el-button>
+        <el-button v-else-if="selection.length > 1" :icon="EditPen" @click="openBatchRename">批量重命名</el-button>
         <el-button :icon="Delete" class="danger-btn" @click="onDelete(selectedIds)">删除</el-button>
       </template>
       <span class="toolbar-spacer" />
@@ -1130,7 +1154,7 @@ function onSheetSelect(key: string) {
     <div v-if="showSelectionBar" class="selection-bar">
       <span class="selection-count">已选 {{ selection.length }}</span>
       <div class="selection-actions">
-        <el-button size="small" :icon="EditPen" :disabled="!single" @click="single && onRename(single)">重命名</el-button>
+        <el-button size="small" :icon="EditPen" :disabled="!selection.length" @click="single ? onRename(single) : openBatchRename()">重命名</el-button>
         <el-button size="small" :icon="Rank" :disabled="!selection.length" @click="openMove(selectedIds)">移动</el-button>
         <el-button size="small" :icon="CopyDocument" :disabled="!selection.length" @click="openCopy(selectedIds)">复制</el-button>
         <el-button size="small" :icon="Share" :disabled="!single" @click="single && openShare(single)">分享</el-button>
@@ -1154,6 +1178,13 @@ function onSheetSelect(key: string) {
 
     <ContextMenu v-model:visible="menu.visible" :x="menu.x" :y="menu.y" :items="menuItems" @select="onMenuSelect" />
 
+    <BatchRenameDialog
+      v-if="opened.batchRename"
+      v-model="batchRenameVisible"
+      :items="batchRenameItems"
+      :siblings="items.map((n) => n.name)"
+      @done="onBatchRenamed"
+    />
     <MoveDialog v-if="opened.move" v-model="moveDialogVisible" :exclude-ids="pendingIds" :start-id="folderId" @confirm="onMoveConfirm" />
     <MoveDialog v-if="opened.copy" v-model="copyDialogVisible" mode="copy" :exclude-ids="pendingIds" :start-id="folderId" @confirm="onCopyConfirm" />
 

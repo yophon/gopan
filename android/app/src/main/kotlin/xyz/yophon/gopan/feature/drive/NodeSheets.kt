@@ -433,8 +433,8 @@ fun NodeDialogHost(
                 when (dialog.mode) {
                     PickerMode.MOVE -> viewModel.moveTo(dialog.ids, target, rootName)
                     PickerMode.COPY -> viewModel.copyTo(dialog.ids, target, rootName)
-                    // 解压的选择器由 ExtractPickerHost 画,不走这里
-                    PickerMode.EXTRACT -> Unit
+                    // 解压的选择器由 ExtractPickerHost 画、存分享的由传输助手画,不走这里
+                    PickerMode.EXTRACT, PickerMode.UPLOAD -> Unit
                 }
             },
             onDismiss = viewModel::dismissDialog,

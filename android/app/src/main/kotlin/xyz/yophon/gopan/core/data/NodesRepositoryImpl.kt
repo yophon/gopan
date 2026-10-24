@@ -22,12 +22,14 @@ import xyz.yophon.gopan.graphql.NodeQuery
 import xyz.yophon.gopan.graphql.PurgeNodesMutation
 import xyz.yophon.gopan.graphql.PurgeTrashMutation
 import xyz.yophon.gopan.graphql.RenameNodeMutation
+import xyz.yophon.gopan.graphql.RenameNodesMutation
 import xyz.yophon.gopan.graphql.RestoreNodesMutation
 import xyz.yophon.gopan.graphql.SearchContentQuery
 import xyz.yophon.gopan.graphql.SearchNodesQuery
 import xyz.yophon.gopan.graphql.SetStarredMutation
 import xyz.yophon.gopan.graphql.TrashQuery
 import xyz.yophon.gopan.graphql.type.NodeOrder
+import xyz.yophon.gopan.graphql.type.RenameItem
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -100,6 +102,29 @@ class NodesRepositoryImpl @Inject constructor(
         return NodePage(items = p.items.map { it.nodeItem.toNode().also(::remember) }, nextCursor = p.nextCursor, total = p.total)
     }
 
+    override suspend fun cacheTree(folderId: String, maxFolders: Int): Int {
+        val uid = userId ?: return 0
+        val queue = ArrayDeque(listOf(folderId))
+        var cached = 0
+        while (queue.isNotEmpty() && cached < maxFolders) {
+            val id = queue.removeFirst()
+            val items = mutableListOf<Node>()
+            var cursor: String? = null
+            var total = 0
+            do {
+                val page = children(id, cursor, DriveSortOrder.NAME, false)
+                items += page.items
+                total = page.total
+                cursor = page.nextCursor
+            } while (cursor != null)
+            // 整个目录一次存下(不止首页):离线时列表是全的;联网再进来时首页会照常覆盖
+            cache.put(uid, id, CachedListing(items, total, DriveSortOrder.NAME, false, System.currentTimeMillis()))
+            cached++
+            items.filter { it.isFolder }.forEach { queue.addLast(it.id) }
+        }
+        return cached
+    }
+
     override suspend fun search(q: String, cursor: String?): NodePage {
         val data = apollo.query(SearchNodesQuery(q = q, cursor = Optional.present(cursor))).execute().requireData()
         val p = data.searchNodes
@@ -155,6 +180,12 @@ class NodesRepositoryImpl @Inject constructor(
     override suspend fun rename(id: String, name: String): Node {
         val data = apollo.mutation(RenameNodeMutation(id = id, name = name)).execute().requireData()
         return data.renameNode.nodeItem.toNode().also(::remember).also { bump() }
+    }
+
+    override suspend fun renameMany(items: List<Pair<String, String>>): List<Node> {
+        val input = items.map { (id, name) -> RenameItem(id = id, name = name) }
+        val data = apollo.mutation(RenameNodesMutation(items = input)).execute().requireData()
+        return data.renameNodes.map { it.nodeItem.toNode().also(::remember) }.also { bump() }
     }
 
     override suspend fun move(ids: List<String>, targetParentId: String?) {

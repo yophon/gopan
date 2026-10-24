@@ -108,6 +108,26 @@
 
     <string name="drive_picker_move_title">移动到</string>
     <string name="drive_picker_copy_title">复制到</string>
+    <string name="drive_picker_upload_title">存到</string>
+    <!-- 批量重命名(doc/27) -->
+    <string name="drive_batch_rename">批量重命名</string>
+    <string name="drive_batch_rename_title">批量重命名 %1$d 项</string>
+    <string name="drive_batch_rename_apply_n">重命名 %1$d 项</string>
+    <string name="drive_batch_rename_mode_template">按规则</string>
+    <string name="drive_batch_rename_mode_replace">替换文字</string>
+    <string name="drive_batch_rename_mode_ext">扩展名</string>
+    <string name="drive_batch_rename_template">新名字</string>
+    <string name="drive_batch_rename_template_hint">例如 第##集、*-##</string>
+    <string name="drive_batch_rename_start">起始</string>
+    <string name="drive_batch_rename_template_tip">* 是原来的名字,# 是序号(## 是 01、02…),扩展名保持不变</string>
+    <string name="drive_batch_rename_find">查找</string>
+    <string name="drive_batch_rename_replace">替换为(留空就是删掉)</string>
+    <string name="drive_batch_rename_ext">新扩展名(留空去掉扩展名)</string>
+    <string name="drive_batch_rename_ext_tip">文件夹不受影响</string>
+    <string name="drive_batch_rename_invalid">名字不合法</string>
+    <string name="drive_batch_rename_duplicate">和这批里的另一项重名</string>
+    <string name="drive_batch_rename_exists">这里已经有同名的了</string>
+    <string name="drive_msg_batch_renamed">已重命名 %1$d 项</string>
     <string name="drive_picker_choose">选择此文件夹</string>
     <string name="drive_picker_empty">没有子文件夹</string>
     <string name="drive_picker_up">上一级</string>

@@ -772,6 +772,7 @@ export type Mutation = {
   refreshFeed: Feed;
   register: AuthPayload;
   renameNode: Node;
+  renameNodes: Array<Node>;
   requestPreview: PreviewInfo;
   restoreFileVersion: Node;
   restoreNodes: Array<Node>;
@@ -1085,6 +1086,11 @@ export type MutationRegisterArgs = {
 export type MutationRenameNodeArgs = {
   id: Scalars['ID']['input'];
   name: Scalars['String']['input'];
+};
+
+
+export type MutationRenameNodesArgs = {
+  items: Array<RenameItem>;
 };
 
 
@@ -1758,6 +1764,11 @@ export type RecentPlay = {
   __typename?: 'RecentPlay';
   node: Node;
   progress: PlayProgress;
+};
+
+export type RenameItem = {
+  id: Scalars['ID']['input'];
+  name: Scalars['String']['input'];
 };
 
 export type Session = {
@@ -2699,6 +2710,13 @@ export type RenameNodeMutationVariables = Exact<{
 
 
 export type RenameNodeMutation = { __typename?: 'Mutation', renameNode: { __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, updatedAt: string } };
+
+export type RenameNodesMutationVariables = Exact<{
+  items: Array<RenameItem> | RenameItem;
+}>;
+
+
+export type RenameNodesMutation = { __typename?: 'Mutation', renameNodes: Array<{ __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, updatedAt: string }> };
 
 export type MoveNodesMutationVariables = Exact<{
   ids: Array<Scalars['ID']['input']> | Scalars['ID']['input'];
@@ -5294,6 +5312,18 @@ export const RenameNodeDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<RenameNodeMutation, RenameNodeMutationVariables>;
+export const RenameNodesDocument = new TypedDocumentString(`
+    mutation RenameNodes($items: [RenameItem!]!) {
+  renameNodes(items: $items) {
+    id
+    parentId
+    name
+    kind
+    size
+    updatedAt
+  }
+}
+    `) as unknown as TypedDocumentString<RenameNodesMutation, RenameNodesMutationVariables>;
 export const MoveNodesDocument = new TypedDocumentString(`
     mutation MoveNodes($ids: [ID!]!, $targetParentId: ID) {
   moveNodes(ids: $ids, targetParentId: $targetParentId) {

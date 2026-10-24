@@ -200,6 +200,31 @@ func (r *mutationResolver) RenameNode(ctx context.Context, id string, name strin
 	return gqlNode(n), nil
 }
 
+// RenameNodes is the resolver for the renameNodes field.
+func (r *mutationResolver) RenameNodes(ctx context.Context, items []*RenameItem) ([]*Node, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	in := make([]service.RenameItem, 0, len(items))
+	for _, it := range items {
+		nid, err := parseID(it.ID)
+		if err != nil {
+			return nil, err
+		}
+		in = append(in, service.RenameItem{ID: nid, Name: it.Name})
+	}
+	nodes, err := r.Nodes.RenameMany(ctx, ident.UserID, in)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*Node, 0, len(nodes))
+	for _, n := range nodes {
+		out = append(out, gqlNode(n))
+	}
+	return out, nil
+}
+
 // MoveNodes is the resolver for the moveNodes field.
 func (r *mutationResolver) MoveNodes(ctx context.Context, ids []string, targetParentID *string) ([]*Node, error) {
 	id, err := httpx.UserFrom(ctx)

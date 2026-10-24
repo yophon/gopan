@@ -93,6 +93,7 @@ fun FolderPickerDialog(
                                     PickerMode.MOVE -> R.string.drive_picker_move_title
                                     PickerMode.COPY -> R.string.drive_picker_copy_title
                                     PickerMode.EXTRACT -> R.string.archive_picker_title
+                                    PickerMode.UPLOAD -> R.string.drive_picker_upload_title
                                 },
                             ),
                         )
@@ -168,7 +169,7 @@ fun FolderPickerDialog(
  * 浅色主题下状态栏图标会是白字配浅色背景。按当前配色给它设一遍。
  */
 @Composable
-private fun DialogSystemBarsAppearance() {
+internal fun DialogSystemBarsAppearance() {
     val view = LocalView.current
     val light = MaterialTheme.colorScheme.surface.luminance() > 0.5f
     SideEffect {

@@ -164,6 +164,9 @@ import xyz.yophon.gopan.feature.fetch.FetchViewModel
 import xyz.yophon.gopan.feature.fetch.chatFetchOffer
 import java.time.LocalDate
 import java.time.ZoneId
+import xyz.yophon.gopan.feature.drive.FolderPickerDialog
+import xyz.yophon.gopan.feature.drive.PickerMode
+import java.io.File
 
 /**
  * 传输助手:单会话消息流。列表用 reverseLayout,最新在底部;滚到顶附近往前翻历史。
@@ -466,6 +469,51 @@ fun ChatScreen(
             dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.action_cancel)) } },
         )
     }
+    // 系统分享进来的文件:发到传输助手,或者存到某个文件夹
+    val shared = state.sharedFiles
+    val pickerToken = state.sharePicker
+    if (shared != null && pickerToken == null) {
+        SharedFilesDialog(
+            files = shared,
+            onToChat = viewModel::shareToChat,
+            onToFolder = viewModel::pickShareFolder,
+            onCancel = viewModel::cancelShare,
+        )
+    }
+    if (shared != null && pickerToken != null) {
+        val rootName = stringResource(R.string.drive_title_root)
+        FolderPickerDialog(
+            mode = PickerMode.UPLOAD,
+            token = pickerToken,
+            excludeIds = emptyList(),
+            busy = false,
+            error = null,
+            onPick = { target -> viewModel.shareToFolder(target.id, if (target.isRoot) rootName else target.name) },
+            onDismiss = viewModel::dismissSharePicker,
+        )
+    }
+}
+
+/** 收到分享的文件:列出前几个名字,问去处 */
+@Composable
+private fun SharedFilesDialog(files: List<File>, onToChat: () -> Unit, onToFolder: () -> Unit, onCancel: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(stringResource(R.string.chat_share_title, files.size)) },
+        text = {
+            val names = files.take(3).joinToString("\n") { it.name }
+            Text(if (files.size > 3) names + "\n" + stringResource(R.string.chat_share_more, files.size - 3) else names)
+        },
+        confirmButton = {
+            TextButton(onClick = onToChat, modifier = Modifier.testTag("share_to_chat")) { Text(stringResource(R.string.chat_share_to_chat)) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onCancel) { Text(stringResource(R.string.action_cancel)) }
+                TextButton(onClick = onToFolder, modifier = Modifier.testTag("share_to_folder")) { Text(stringResource(R.string.chat_share_to_folder)) }
+            }
+        },
+    )
 }
 
 @Composable

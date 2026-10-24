@@ -83,8 +83,35 @@ class DownloadRunTest {
         assertThat(storage.requests).isEmpty()
         assertThat(publisher.published).isEmpty()
 
-        // 其它落点照常下(副本在 App 私有目录里,不能当成用户要的那份)
-        run(fileTask(dest = DownloadDest.DOWNLOADS)).execute()
+    }
+
+    @Test
+    fun `downloads to the device copy bytes from a matching offline copy instead of the network`() = runTest {
+        val bytes = randomBytes(4_000)
+        api.file("n1", "a.bin", bytes)
+        val copy = tmp.newFile("copy.bin").apply { writeBytes(bytes) }
+        offlineCopy = { _, s, _ -> copy.path.takeIf { s == sha256Hex(bytes) } }
+
+        val outcome = run(fileTask(dest = DownloadDest.DOWNLOADS)).execute()
+
+        assertThat(outcome).isEqualTo(DownloadOutcome.Done("content://published/a.bin"))
+        assertThat(storage.requests).isEmpty()
+        assertThat(publisher.published.single().second).isEqualTo(bytes)
+        // 副本本身留着
+        assertThat(copy.readBytes()).isEqualTo(bytes)
+    }
+
+    @Test
+    fun `a corrupt offline copy fails verification and is downloaded again`() = runTest {
+        val bytes = randomBytes(4_000)
+        api.file("n1", "a.bin", bytes)
+        val bad = tmp.newFile("bad.bin").apply { writeBytes(bytes.copyOf().also { it[0] = (it[0] + 1).toByte() }) }
+        offlineCopy = { _, _, _ -> bad.path }
+
+        val outcome = run(fileTask(dest = DownloadDest.TREE)).execute()
+
+        assertThat(outcome).isInstanceOf(DownloadOutcome.Done::class.java)
+        assertThat(storage.requests).isNotEmpty()
         assertThat(publisher.published.single().second).isEqualTo(bytes)
     }
 

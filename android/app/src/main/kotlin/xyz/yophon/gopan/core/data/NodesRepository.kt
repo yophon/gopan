@@ -37,6 +37,12 @@ interface NodesRepository {
      */
     suspend fun cachedFirstPage(parentId: String?, order: DriveSortOrder, desc: Boolean): Listing? = null
 
+    /**
+     * 离线可用(doc/26/27):把 [folderId] 整棵子树每个目录的完整列表写进缓存(最多 [maxFolders] 个目录),
+     * 没网时文件页能一层层点进去。返回缓存了几个目录;联网失败就停下抛出。
+     */
+    suspend fun cacheTree(folderId: String, maxFolders: Int = 500): Int = 0
+
     /** 目录分页(任意游标),不碰缓存 */
     suspend fun children(parentId: String?, cursor: String?, order: DriveSortOrder, desc: Boolean): NodePage
 
@@ -61,6 +67,9 @@ interface NodesRepository {
     suspend fun createFolder(parentId: String?, name: String): Node
 
     suspend fun rename(id: String, name: String): Node
+
+    /** 批量改名(doc/27):[items] 是 id → 新名字,要么全改、要么都不改;返回改后的节点 */
+    suspend fun renameMany(items: List<Pair<String, String>>): List<Node>
 
     suspend fun move(ids: List<String>, targetParentId: String?)
 

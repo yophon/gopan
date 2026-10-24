@@ -768,6 +768,11 @@ type RecentPlay struct {
 	Progress *PlayProgress `json:"progress"`
 }
 
+type RenameItem struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 type Session struct {
 	FamilyID   string     `json:"familyId"`
 	UserAgent  string     `json:"userAgent"`

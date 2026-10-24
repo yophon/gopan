@@ -24,7 +24,6 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -73,6 +72,10 @@ data class ChatUiState(
     val offline: Boolean = false,
     val unread: Int = 0,
     val receiving: ShareReceiving? = null,
+    /** 系统分享进来的文件,在等选去处(发到传输助手 / 存到文件夹) */
+    val sharedFiles: List<File>? = null,
+    /** 存到文件夹:选择器开着(值区分两次打开) */
+    val sharePicker: Long? = null,
     /** 最新一条纯文本(全局最新页里的),"复制最新文本"用 */
     val latestText: String? = null,
 )
@@ -187,7 +190,13 @@ class ChatViewModel @Inject constructor(
             }
         }
         viewModelScope.launch { shareInbox.receiving.collect { r -> _state.update { it.copy(receiving = r) } } }
-        viewModelScope.launch { shareInbox.pending.filterNotNull().collect { consumeShare() } }
+        // 分享进来的:文本与读取失败数这里接走;文件留在分享暂存里,显示「发到哪」等用户选
+        viewModelScope.launch {
+            shareInbox.pending.collect { p ->
+                _state.update { it.copy(sharedFiles = p?.files?.takeIf { f -> f.isNotEmpty() }) }
+                if (p != null && (p.text != null || p.failed > 0)) consumeShare()
+            }
+        }
     }
 
     private fun showCached(latest: List<ChatMessage>) {
@@ -497,15 +506,49 @@ class ChatViewModel @Inject constructor(
         if (s.anchored) backToLatest()
     }
 
-    /** 系统分享:文本接到草稿后面(不自动发),文件直接发 */
+    /** 系统分享:文本接到草稿后面(不自动发);文件先问去处 —— 发到传输助手,或者存到某个文件夹 */
     private fun consumeShare() {
-        val payload = shareInbox.take() ?: return
+        val payload = shareInbox.takeNotes() ?: return
         payload.text?.let { text ->
             val current = _draft.value
             replaceDraft(if (current.isBlank()) text else current.trimEnd() + "\n" + text)
         }
-        if (payload.files.isNotEmpty()) sendFiles(payload.files)
         if (payload.failed > 0) _effects.trySend(ChatEffect.Message("${payload.failed} 个分享的文件读取失败"))
+    }
+
+    /** 分享进来的文件:发到传输助手 */
+    fun shareToChat() {
+        sendFiles(takeShared() ?: return)
+    }
+
+    /** 分享进来的文件:先选存到哪个文件夹 */
+    fun pickShareFolder() = _state.update { it.copy(sharePicker = System.nanoTime()) }
+
+    /** 关掉文件夹选择器,回到「发到哪」 */
+    fun dismissSharePicker() = _state.update { it.copy(sharePicker = null) }
+
+    /** 分享进来的文件传进选好的文件夹([folderId] 为 null 是根目录),不进传输助手 */
+    fun shareToFolder(folderId: String?, folderName: String) {
+        val files = takeShared() ?: return
+        viewModelScope.launch {
+            val r = transfers.uploadOwnedFiles(files, folderId)
+            if (r.queued > 0) {
+                _effects.trySend(ChatEffect.Message("开始上传到「$folderName」"))
+                _effects.trySend(ChatEffect.TransferQueued)
+            }
+            if (r.emptySkipped > 0) _effects.trySend(ChatEffect.Message("已跳过 ${r.emptySkipped} 个空文件"))
+        }
+    }
+
+    /** 不传了:拷进来的副本删掉 */
+    fun cancelShare() {
+        val files = takeShared() ?: return
+        viewModelScope.launch(Dispatchers.IO) { files.forEach { it.delete() } }
+    }
+
+    private fun takeShared(): List<File>? {
+        _state.update { it.copy(sharePicker = null) }
+        return shareInbox.takeFiles().ifEmpty { null }
     }
 
     // ---- 消息操作 ----

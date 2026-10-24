@@ -612,6 +612,7 @@ type ComplexityRoot struct {
 		RefreshFeed              func(childComplexity int, id string) int
 		Register                 func(childComplexity int, username string, password string) int
 		RenameNode               func(childComplexity int, id string, name string) int
+		RenameNodes              func(childComplexity int, items []*RenameItem) int
 		RequestPreview           func(childComplexity int, nodeID string) int
 		RestoreFileVersion       func(childComplexity int, id string) int
 		RestoreNodes             func(childComplexity int, ids []string) int
@@ -1028,6 +1029,7 @@ type MutationResolver interface {
 	RevokeSession(ctx context.Context, familyID string) (bool, error)
 	CreateFolder(ctx context.Context, parentID *string, name string) (*Node, error)
 	RenameNode(ctx context.Context, id string, name string) (*Node, error)
+	RenameNodes(ctx context.Context, items []*RenameItem) ([]*Node, error)
 	MoveNodes(ctx context.Context, ids []string, targetParentID *string) ([]*Node, error)
 	CopyNodes(ctx context.Context, ids []string, targetParentID *string) ([]*Node, error)
 	DeleteNodes(ctx context.Context, ids []string) (bool, error)
@@ -3923,6 +3925,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RenameNode(childComplexity, args["id"].(string), args["name"].(string)), true
+	case "Mutation.renameNodes":
+		if e.ComplexityRoot.Mutation.RenameNodes == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_renameNodes_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RenameNodes(childComplexity, args["items"].([]*RenameItem)), true
 	case "Mutation.requestPreview":
 		if e.ComplexityRoot.Mutation.RequestPreview == nil {
 			break
@@ -5927,6 +5940,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputNotifyChannelInput,
 		ec.unmarshalInputOAuthAuthorizationInput,
 		ec.unmarshalInputPartEtag,
+		ec.unmarshalInputRenameItem,
 		ec.unmarshalInputUndoSelection,
 	)
 	first := true
@@ -6783,6 +6797,12 @@ input ActivityFilter {
 }
 
 # 三选一:ids(最多 1000)、batchId、filter(至少给来源、时间或文件;最多撤最近的 1000 条)
+# 批量改名的一项
+input RenameItem {
+  id: ID!
+  name: String!
+}
+
 input UndoSelection {
   ids: [ID!]
   batchId: ID
@@ -7236,6 +7256,8 @@ type Mutation {
 
   createFolder(parentId: ID, name: String!): Node!
   renameNode(id: ID!, name: String!): Node!
+  # 批量改名(doc/27):要么全改、要么都不改;批内互换名字可以;和这批之外的同名、批内重名 NAME_CONFLICT。整批一组动态,能一起撤回
+  renameNodes(items: [RenameItem!]!): [Node!]!
   moveNodes(ids: [ID!]!, targetParentId: ID): [Node!]!
   copyNodes(ids: [ID!]!, targetParentId: ID): [Node!]!
   deleteNodes(ids: [ID!]!): Boolean!
@@ -10073,6 +10095,20 @@ func (ec *executionContext) field_Mutation_renameNode_args(ctx context.Context, 
 		return nil, err
 	}
 	args["name"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_renameNodes_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "items",
+		func(ctx context.Context, v any) ([]*RenameItem, error) {
+			return ec.unmarshalNRenameItem2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRenameItemᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["items"] = arg0
 	return args, nil
 }
 
@@ -20045,6 +20081,50 @@ func (ec *executionContext) fieldContext_Mutation_renameNode(ctx context.Context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_renameNode_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_renameNodes(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_renameNodes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RenameNodes(ctx, fc.Args["items"].([]*RenameItem))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Node) graphql.Marshaler {
+			return ec.marshalNNode2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNodeᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_renameNodes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Node(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_renameNodes_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -31802,6 +31882,43 @@ func (ec *executionContext) unmarshalInputPartEtag(ctx context.Context, obj any)
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputRenameItem(ctx context.Context, obj any) (RenameItem, error) {
+	var it RenameItem
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"id", "name"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "id":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ID = data
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputUndoSelection(ctx context.Context, obj any) (UndoSelection, error) {
 	var it UndoSelection
 	if obj == nil {
@@ -35737,6 +35854,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "renameNode":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_renameNode(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "renameNodes":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_renameNodes(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -42353,6 +42477,25 @@ func (ec *executionContext) marshalNRecentPlay2ᚖgithubᚗcomᚋyophonᚋgopan�
 		return graphql.Null
 	}
 	return ec._RecentPlay(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNRenameItem2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRenameItemᚄ(ctx context.Context, v any) ([]*RenameItem, error) {
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]*RenameItem, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNRenameItem2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRenameItem(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNRenameItem2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRenameItem(ctx context.Context, v any) (*RenameItem, error) {
+	res, err := ec.unmarshalInputRenameItem(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalNSession2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSessionᚄ(ctx context.Context, sel ast.SelectionSet, v []*Session) graphql.Marshaler {
