@@ -27,7 +27,7 @@ fun NavGraphBuilder.driveGraph(navController: NavController, onOpenPreview: (nod
             DriveScreen(
                 onOpenFolder = { id -> entry.ifResumed { navController.navigate(Routes.Folder(id)) } },
                 onCrumbClick = { crumb -> entry.ifResumed { navController.navigateToCrumb(crumb) } },
-                onOpenSearch = { entry.ifResumed { navController.navigate(Routes.Search) } },
+                onOpenSearch = { entry.ifResumed { navController.navigate(Routes.Search()) } },
                 onOpenTrash = { entry.ifResumed { navController.navigate(Routes.Trash) } },
                 onOpenTransfers = { entry.ifResumed { navController.navigate(Routes.Transfers) } },
                 onOpenPreview = { id -> entry.ifResumed { onOpenPreview(id) } },
@@ -48,7 +48,7 @@ fun NavGraphBuilder.driveGraph(navController: NavController, onOpenPreview: (nod
             DriveScreen(
                 onOpenFolder = { id -> entry.ifResumed { navController.navigate(Routes.Folder(id)) } },
                 onCrumbClick = { crumb -> entry.ifResumed { navController.navigateToCrumb(crumb) } },
-                onOpenSearch = { entry.ifResumed { navController.navigate(Routes.Search) } },
+                onOpenSearch = { scope -> entry.ifResumed { navController.navigate(Routes.Search(scope?.id, scope?.name)) } },
                 onOpenTrash = { entry.ifResumed { navController.navigate(Routes.Trash) } },
                 onOpenTransfers = { entry.ifResumed { navController.navigate(Routes.Transfers) } },
                 onOpenPreview = { id -> entry.ifResumed { onOpenPreview(id) } },

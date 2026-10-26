@@ -88,6 +88,10 @@ pub struct Task {
     /// 上传源文件的修改时间(毫秒):变了就重新算哈希
     pub src_mtime: i64,
     pub to_chat: bool,
+    /// 上传:同名文件直接替换(旧内容进历史版本)
+    pub replace: bool,
+    /// 空 = 普通传输;open = 下载后用本地程序打开(local_path 是确切位置,覆盖);edit = 本地改完传回(见 edits.rs)
+    pub purpose: String,
     pub error: Option<String>,
     pub attempts: i64,
     /// 排队重试:这个时刻之前不跑(毫秒)
@@ -107,6 +111,29 @@ pub struct NewTask {
     pub local_path: String,
     pub size: i64,
     pub to_chat: bool,
+    pub replace: bool,
+    pub purpose: String,
+}
+
+/// 用本地程序打开的文件(edits.rs):缓存里的副本与云端节点的对应,存盘后传回
+#[derive(Debug, Clone)]
+pub struct EditRow {
+    pub node_id: String,
+    pub name: String,
+    pub parent_id: Option<String>,
+    pub local_path: String,
+    /// 云端现在的内容(下载或传回之后)
+    pub base_sha: String,
+    /// 本地副本上一次与云端一致时的内容
+    pub synced_sha: String,
+    /// 上一次看过的本地文件修改时间(毫秒)与大小
+    pub mtime: i64,
+    pub size: i64,
+    pub uploads: i64,
+    /// downloading / watching / uploading / conflict / stopped
+    pub state: String,
+    pub note: Option<String>,
+    pub updated_at: i64,
 }
 
 pub struct Db {
@@ -131,6 +158,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   session_id TEXT,
   src_mtime INTEGER NOT NULL DEFAULT 0,
   to_chat INTEGER NOT NULL DEFAULT 0,
+  replace_existing INTEGER NOT NULL DEFAULT 0,
+  purpose TEXT NOT NULL DEFAULT '',
   error TEXT,
   attempts INTEGER NOT NULL DEFAULT 0,
   next_at INTEGER NOT NULL DEFAULT 0,
@@ -139,9 +168,45 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_state ON tasks(state);
 CREATE INDEX IF NOT EXISTS idx_tasks_batch ON tasks(batch_id);
+CREATE TABLE IF NOT EXISTS edits (
+  node_id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  parent_id TEXT,
+  local_path TEXT NOT NULL,
+  base_sha TEXT NOT NULL DEFAULT '',
+  synced_sha TEXT NOT NULL DEFAULT '',
+  mtime INTEGER NOT NULL DEFAULT 0,
+  size INTEGER NOT NULL DEFAULT 0,
+  uploads INTEGER NOT NULL DEFAULT 0,
+  state TEXT NOT NULL,
+  note TEXT,
+  updated_at INTEGER NOT NULL
+);
 ";
 
-const COLUMNS: &str = "id, kind, batch_id, is_batch, expanded, state, name, node_id, parent_id, local_path, size, done_bytes, sha256, session_id, src_mtime, to_chat, error, attempts, next_at, created_at, updated_at";
+/// 3.14.0 建的库没有这些列:补上(SQLite 只能一列一列加)
+const ADDED_COLUMNS: &[(&str, &str)] = &[("replace_existing", "INTEGER NOT NULL DEFAULT 0"), ("purpose", "TEXT NOT NULL DEFAULT ''")];
+
+const EDIT_COLUMNS: &str = "node_id, name, parent_id, local_path, base_sha, synced_sha, mtime, size, uploads, state, note, updated_at";
+
+fn row_to_edit(r: &Row<'_>) -> rusqlite::Result<EditRow> {
+    Ok(EditRow {
+        node_id: r.get(0)?,
+        name: r.get(1)?,
+        parent_id: r.get(2)?,
+        local_path: r.get(3)?,
+        base_sha: r.get(4)?,
+        synced_sha: r.get(5)?,
+        mtime: r.get(6)?,
+        size: r.get(7)?,
+        uploads: r.get(8)?,
+        state: r.get(9)?,
+        note: r.get(10)?,
+        updated_at: r.get(11)?,
+    })
+}
+
+const COLUMNS: &str = "id, kind, batch_id, is_batch, expanded, state, name, node_id, parent_id, local_path, size, done_bytes, sha256, session_id, src_mtime, to_chat, error, attempts, next_at, created_at, updated_at, replace_existing, purpose";
 
 fn row_to_task(r: &Row<'_>) -> rusqlite::Result<Task> {
     Ok(Task {
@@ -166,6 +231,8 @@ fn row_to_task(r: &Row<'_>) -> rusqlite::Result<Task> {
         next_at: r.get(18)?,
         created_at: r.get(19)?,
         updated_at: r.get(20)?,
+        replace: r.get::<_, i64>(21)? != 0,
+        purpose: r.get(22)?,
     })
 }
 
@@ -187,6 +254,13 @@ impl Db {
     fn init(conn: Connection) -> rusqlite::Result<Db> {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.execute_batch(SCHEMA)?;
+        for (name, decl) in ADDED_COLUMNS {
+            let has: bool =
+                conn.query_row("SELECT count(*) FROM pragma_table_info('tasks') WHERE name = ?1", [name], |r| r.get::<_, i64>(0))? > 0;
+            if !has {
+                conn.execute_batch(&format!("ALTER TABLE tasks ADD COLUMN {name} {decl}"))?;
+            }
+        }
         // 上次没跑完的(进程被杀、断电):回到排队
         conn.execute("UPDATE tasks SET state = 'queued' WHERE state = 'running'", [])?;
         Ok(Db { conn: Mutex::new(conn) })
@@ -196,8 +270,8 @@ impl Db {
         let c = self.conn.lock().unwrap();
         let now = now_ms();
         c.execute(
-            "INSERT INTO tasks (kind, batch_id, is_batch, state, name, node_id, parent_id, local_path, size, to_chat, created_at, updated_at)
-             VALUES (?1, ?2, ?3, 'queued', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
+            "INSERT INTO tasks (kind, batch_id, is_batch, state, name, node_id, parent_id, local_path, size, to_chat, replace_existing, purpose, created_at, updated_at)
+             VALUES (?1, ?2, ?3, 'queued', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)",
             params![
                 t.kind.unwrap_or(Kind::Download).as_str(),
                 t.batch_id,
@@ -208,6 +282,8 @@ impl Db {
                 t.local_path,
                 t.size,
                 t.to_chat as i64,
+                t.replace as i64,
+                t.purpose,
                 now
             ],
         )?;
@@ -221,9 +297,21 @@ impl Db {
         let now = now_ms();
         for t in list {
             tx.execute(
-                "INSERT INTO tasks (kind, batch_id, is_batch, state, name, node_id, parent_id, local_path, size, to_chat, created_at, updated_at)
-                 VALUES (?1, ?2, 0, 'queued', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
-                params![t.kind.unwrap_or(Kind::Download).as_str(), t.batch_id, t.name, t.node_id, t.parent_id, t.local_path, t.size, t.to_chat as i64, now],
+                "INSERT INTO tasks (kind, batch_id, is_batch, state, name, node_id, parent_id, local_path, size, to_chat, replace_existing, purpose, created_at, updated_at)
+                 VALUES (?1, ?2, 0, 'queued', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)",
+                params![
+                    t.kind.unwrap_or(Kind::Download).as_str(),
+                    t.batch_id,
+                    t.name,
+                    t.node_id,
+                    t.parent_id,
+                    t.local_path,
+                    t.size,
+                    t.to_chat as i64,
+                    t.replace as i64,
+                    t.purpose,
+                    now
+                ],
             )?;
         }
         tx.commit()
@@ -357,6 +445,64 @@ impl Db {
     pub fn delete_all(&self) {
         let c = self.conn.lock().unwrap();
         let _ = c.execute("DELETE FROM tasks", []);
+        let _ = c.execute("DELETE FROM edits", []);
+    }
+
+    pub fn delete_one(&self, id: i64) {
+        let c = self.conn.lock().unwrap();
+        let _ = c.execute("DELETE FROM tasks WHERE id = ?1", [id]);
+    }
+
+    /// 某个节点还没结束的「打开 / 传回」任务
+    pub fn active_purpose(&self, node_id: &str, purpose: &str) -> Option<Task> {
+        let c = self.conn.lock().unwrap();
+        c.query_row(
+            &format!("SELECT {COLUMNS} FROM tasks WHERE node_id = ?1 AND purpose = ?2 AND state IN ('queued', 'running', 'paused') ORDER BY id DESC LIMIT 1"),
+            params![node_id, purpose],
+            row_to_task,
+        )
+        .optional()
+        .ok()
+        .flatten()
+    }
+
+    // ---- 用本地程序打开的文件 ----
+
+    pub fn edits(&self) -> Vec<EditRow> {
+        let c = self.conn.lock().unwrap();
+        let mut st = c.prepare(&format!("SELECT {EDIT_COLUMNS} FROM edits ORDER BY updated_at DESC")).unwrap();
+        st.query_map([], row_to_edit).map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
+
+    pub fn edit(&self, node_id: &str) -> Option<EditRow> {
+        let c = self.conn.lock().unwrap();
+        c.query_row(&format!("SELECT {EDIT_COLUMNS} FROM edits WHERE node_id = ?1"), [node_id], row_to_edit).optional().ok().flatten()
+    }
+
+    pub fn put_edit(&self, e: &EditRow) {
+        let c = self.conn.lock().unwrap();
+        let _ = c.execute(
+            &format!("INSERT OR REPLACE INTO edits ({EDIT_COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"),
+            params![
+                e.node_id,
+                e.name,
+                e.parent_id,
+                e.local_path,
+                e.base_sha,
+                e.synced_sha,
+                e.mtime,
+                e.size,
+                e.uploads,
+                e.state,
+                e.note,
+                now_ms()
+            ],
+        );
+    }
+
+    pub fn delete_edit(&self, node_id: &str) {
+        let c = self.conn.lock().unwrap();
+        let _ = c.execute("DELETE FROM edits WHERE node_id = ?1", [node_id]);
     }
 }
 
@@ -366,6 +512,66 @@ mod tests {
 
     fn file(kind: Kind, name: &str) -> NewTask {
         NewTask { kind: Some(kind), name: name.into(), local_path: format!("C:/x/{name}"), size: 10, ..Default::default() }
+    }
+
+    #[test]
+    fn databases_from_3_14_get_the_new_columns() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, batch_id INTEGER, is_batch INTEGER NOT NULL DEFAULT 0,
+               expanded INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL, name TEXT NOT NULL, node_id TEXT, parent_id TEXT, local_path TEXT NOT NULL,
+               size INTEGER NOT NULL DEFAULT 0, done_bytes INTEGER NOT NULL DEFAULT 0, sha256 TEXT, session_id TEXT, src_mtime INTEGER NOT NULL DEFAULT 0,
+               to_chat INTEGER NOT NULL DEFAULT 0, error TEXT, attempts INTEGER NOT NULL DEFAULT 0, next_at INTEGER NOT NULL DEFAULT 0,
+               created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+             INSERT INTO tasks (kind, state, name, local_path, created_at, updated_at) VALUES ('download', 'running', 'a', 'C:/a', 1, 1);",
+        )
+        .unwrap();
+        let db = Db::init(conn).unwrap();
+        let old = db.all().pop().unwrap();
+        assert_eq!(old.state, State::Queued);
+        assert!(!old.replace);
+        assert_eq!(old.purpose, "");
+        let id = db
+            .insert(&NewTask {
+                kind: Some(Kind::Upload),
+                name: "b".into(),
+                local_path: "C:/b".into(),
+                replace: true,
+                purpose: "edit".into(),
+                ..Default::default()
+            })
+            .unwrap();
+        let b = db.get(id).unwrap();
+        assert!(b.replace);
+        assert_eq!(b.purpose, "edit");
+    }
+
+    #[test]
+    fn edit_sessions_round_trip() {
+        let db = Db::open_in_memory().unwrap();
+        let mut e = EditRow {
+            node_id: "n1".into(),
+            name: "报告.docx".into(),
+            parent_id: Some("p".into()),
+            local_path: "C:/cache/n1/报告.docx".into(),
+            base_sha: "aa".into(),
+            synced_sha: "aa".into(),
+            mtime: 5,
+            size: 9,
+            uploads: 0,
+            state: "watching".into(),
+            note: None,
+            updated_at: 0,
+        };
+        db.put_edit(&e);
+        e.uploads = 2;
+        e.state = "uploading".into();
+        db.put_edit(&e);
+        let got = db.edit("n1").unwrap();
+        assert_eq!((got.uploads, got.state.as_str(), got.name.as_str()), (2, "uploading", "报告.docx"));
+        assert_eq!(db.edits().len(), 1);
+        db.delete_edit("n1");
+        assert!(db.edit("n1").is_none());
     }
 
     #[test]

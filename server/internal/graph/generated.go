@@ -822,8 +822,8 @@ type ComplexityRoot struct {
 		PreviewFeed               func(childComplexity int, url string, assetPattern *string, prerelease *bool) int
 		RecentFiles               func(childComplexity int, limit *int) int
 		RecentPlays               func(childComplexity int, limit *int) int
-		SearchContent             func(childComplexity int, q string, cursor *string) int
-		SearchNodes               func(childComplexity int, q string, cursor *string) int
+		SearchContent             func(childComplexity int, q string, cursor *string, filter *SearchFilter) int
+		SearchNodes               func(childComplexity int, q string, cursor *string, filter *SearchFilter) int
 		Sessions                  func(childComplexity int) int
 		ShareInfo                 func(childComplexity int, token string) int
 		ShareRoot                 func(childComplexity int) int
@@ -1120,8 +1120,8 @@ type QueryResolver interface {
 	Sessions(ctx context.Context) ([]*Session, error)
 	Node(ctx context.Context, id string) (*Node, error)
 	Children(ctx context.Context, parentID *string, cursor *string, order *NodeOrder, desc *bool) (*NodePage, error)
-	SearchNodes(ctx context.Context, q string, cursor *string) (*NodePage, error)
-	SearchContent(ctx context.Context, q string, cursor *string) (*ContentHitPage, error)
+	SearchNodes(ctx context.Context, q string, cursor *string, filter *SearchFilter) (*NodePage, error)
+	SearchContent(ctx context.Context, q string, cursor *string, filter *SearchFilter) (*ContentHitPage, error)
 	Trash(ctx context.Context, cursor *string) (*NodePage, error)
 	MyShares(ctx context.Context) ([]*Share, error)
 	ShareVisits(ctx context.Context, shareID string, limit *int) ([]*ShareVisit, error)
@@ -5204,7 +5204,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.SearchContent(childComplexity, args["q"].(string), args["cursor"].(*string)), true
+		return e.ComplexityRoot.Query.SearchContent(childComplexity, args["q"].(string), args["cursor"].(*string), args["filter"].(*SearchFilter)), true
 	case "Query.searchNodes":
 		if e.ComplexityRoot.Query.SearchNodes == nil {
 			break
@@ -5215,7 +5215,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.SearchNodes(childComplexity, args["q"].(string), args["cursor"].(*string)), true
+		return e.ComplexityRoot.Query.SearchNodes(childComplexity, args["q"].(string), args["cursor"].(*string), args["filter"].(*SearchFilter)), true
 	case "Query.sessions":
 		if e.ComplexityRoot.Query.Sessions == nil {
 			break
@@ -5941,6 +5941,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputOAuthAuthorizationInput,
 		ec.unmarshalInputPartEtag,
 		ec.unmarshalInputRenameItem,
+		ec.unmarshalInputSearchFilter,
 		ec.unmarshalInputUndoSelection,
 	)
 	first := true
@@ -6827,6 +6828,25 @@ type UndoResult {
 
 enum FileCategory { IMAGE, VIDEO, AUDIO, DOCUMENT, ARCHIVE, TEXT, OTHER }
 
+# 搜索筛选(doc/30)。类型的划分与空间分析相同(FileCategory),FOLDER 是文件夹
+enum SearchType { FOLDER, IMAGE, VIDEO, AUDIO, DOCUMENT, ARCHIVE, TEXT, OTHER }
+enum SearchOrder { UPDATED, NAME, SIZE }
+
+input SearchFilter {
+  # 多选,空 = 不限
+  types: [SearchType!]
+  # 修改时间在 [modifiedAfter, modifiedBefore) 之间
+  modifiedAfter: Time
+  modifiedBefore: Time
+  # 大小(字节,含两端);设了就只剩文件
+  minSize: Int64
+  maxSize: Int64
+  # 只搜这个文件夹里的(含子文件夹)
+  folderId: ID
+  # 默认 UPDATED(最近修改的在前);NAME 按名字自然顺序;SIZE 大的在前。内容搜索只按修改时间
+  order: SearchOrder
+}
+
 type SpaceCategory {
   category: FileCategory!
   files: Int64!
@@ -7109,9 +7129,10 @@ type Query {
   sessions: [Session!]!
   node(id: ID!): Node!
   children(parentId: ID, cursor: String, order: NodeOrder = NAME, desc: Boolean = false): NodePage!
-  searchNodes(q: String!, cursor: String): NodePage!
+  # 按名字搜索。带 filter 时关键词可以为空(只按筛选找);分享访客的搜索忽略 filter
+  searchNodes(q: String!, cursor: String, filter: SearchFilter): NodePage!
   # 按内容搜索:关键词至少两个汉字或三个字母(QUERY_TOO_SHORT);本站关了内容索引则 CONTENT_SEARCH_DISABLED
-  searchContent(q: String!, cursor: String): ContentHitPage!
+  searchContent(q: String!, cursor: String, filter: SearchFilter): ContentHitPage!
   trash(cursor: String): NodePage!
   myShares: [Share!]!
   # 某个分享最近的访问明细,只允许属主看
@@ -11195,6 +11216,14 @@ func (ec *executionContext) field_Query_searchContent_args(ctx context.Context, 
 		return nil, err
 	}
 	args["cursor"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "filter",
+		func(ctx context.Context, v any) (*SearchFilter, error) {
+			return ec.unmarshalOSearchFilter2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSearchFilter(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["filter"] = arg2
 	return args, nil
 }
 
@@ -11217,6 +11246,14 @@ func (ec *executionContext) field_Query_searchNodes_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["cursor"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "filter",
+		func(ctx context.Context, v any) (*SearchFilter, error) {
+			return ec.unmarshalOSearchFilter2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSearchFilter(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["filter"] = arg2
 	return args, nil
 }
 
@@ -25457,7 +25494,7 @@ func (ec *executionContext) _Query_searchNodes(ctx context.Context, field graphq
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().SearchNodes(ctx, fc.Args["q"].(string), fc.Args["cursor"].(*string))
+			return ec.Resolvers.Query().SearchNodes(ctx, fc.Args["q"].(string), fc.Args["cursor"].(*string), fc.Args["filter"].(*SearchFilter))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *NodePage) graphql.Marshaler {
@@ -25501,7 +25538,7 @@ func (ec *executionContext) _Query_searchContent(ctx context.Context, field grap
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().SearchContent(ctx, fc.Args["q"].(string), fc.Args["cursor"].(*string))
+			return ec.Resolvers.Query().SearchContent(ctx, fc.Args["q"].(string), fc.Args["cursor"].(*string), fc.Args["filter"].(*SearchFilter))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *ContentHitPage) graphql.Marshaler {
@@ -31914,6 +31951,78 @@ func (ec *executionContext) unmarshalInputRenameItem(ctx context.Context, obj an
 				return it, err
 			}
 			it.Name = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputSearchFilter(ctx context.Context, obj any) (SearchFilter, error) {
+	var it SearchFilter
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"types", "modifiedAfter", "modifiedBefore", "minSize", "maxSize", "folderId", "order"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "types":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("types"))
+			data, err := ec.unmarshalOSearchType2ᚕgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSearchTypeᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Types = data
+		case "modifiedAfter":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("modifiedAfter"))
+			data, err := ec.unmarshalOTime2ᚖtimeᚐTime(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ModifiedAfter = data
+		case "modifiedBefore":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("modifiedBefore"))
+			data, err := ec.unmarshalOTime2ᚖtimeᚐTime(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ModifiedBefore = data
+		case "minSize":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("minSize"))
+			data, err := ec.unmarshalOInt642ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MinSize = data
+		case "maxSize":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("maxSize"))
+			data, err := ec.unmarshalOInt642ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MaxSize = data
+		case "folderId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("folderId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.FolderID = data
+		case "order":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("order"))
+			data, err := ec.unmarshalOSearchOrder2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSearchOrder(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Order = data
 		}
 	}
 	return it, nil
@@ -42498,6 +42607,16 @@ func (ec *executionContext) unmarshalNRenameItem2ᚖgithubᚗcomᚋyophonᚋgopa
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNSearchType2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSearchType(ctx context.Context, v any) (SearchType, error) {
+	var res SearchType
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNSearchType2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSearchType(ctx context.Context, sel ast.SelectionSet, v SearchType) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) marshalNSession2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSessionᚄ(ctx context.Context, sel ast.SelectionSet, v []*Session) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -43375,6 +43494,66 @@ func (ec *executionContext) marshalOPlayProgress2ᚖgithubᚗcomᚋyophonᚋgopa
 		return graphql.Null
 	}
 	return ec._PlayProgress(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOSearchFilter2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSearchFilter(ctx context.Context, v any) (*SearchFilter, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputSearchFilter(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOSearchOrder2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSearchOrder(ctx context.Context, v any) (*SearchOrder, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(SearchOrder)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOSearchOrder2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSearchOrder(ctx context.Context, sel ast.SelectionSet, v *SearchOrder) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
+func (ec *executionContext) unmarshalOSearchType2ᚕgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSearchTypeᚄ(ctx context.Context, v any) ([]SearchType, error) {
+	if v == nil {
+		return nil, nil
+	}
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]SearchType, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNSearchType2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSearchType(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOSearchType2ᚕgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSearchTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []SearchType) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNSearchType2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSearchType(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) unmarshalOString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {

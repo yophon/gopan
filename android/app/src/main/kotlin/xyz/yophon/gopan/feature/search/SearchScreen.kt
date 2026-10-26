@@ -178,6 +178,7 @@ fun SearchScreen(
                     },
                 )
                 SearchTabs(selected = SearchTab.entries[pager.currentPage], onSelect = viewModel::onTabSelected)
+                SearchFilterBar(filters = state.filters, tab = state.tab, onChange = viewModel::onFiltersChange)
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -247,7 +248,7 @@ private fun NameTab(state: SearchUiState, viewModel: SearchViewModel, modifier: 
             onRetry = viewModel::retry,
         )
         state.isEmpty -> EmptyState(
-            title = stringResource(R.string.search_empty, state.query),
+            title = if (state.query.isEmpty()) stringResource(R.string.search_empty_filtered) else stringResource(R.string.search_empty, state.query),
             icon = Icons.Outlined.SearchOff,
             modifier = modifier,
         )
@@ -261,7 +262,7 @@ private fun ContentTab(state: SearchUiState, viewModel: SearchViewModel, onLocat
     val content = state.content
     val formats = stringResource(R.string.search_content_formats)
     when {
-        state.isIdle -> EmptyState(
+        state.isContentIdle -> EmptyState(
             title = stringResource(R.string.search_content_idle),
             description = formats,
             icon = Icons.Filled.Search,

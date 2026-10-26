@@ -1453,7 +1453,7 @@ func (r *queryResolver) Children(ctx context.Context, parentID *string, cursor *
 }
 
 // SearchNodes is the resolver for the searchNodes field.
-func (r *queryResolver) SearchNodes(ctx context.Context, q string, cursor *string) (*NodePage, error) {
+func (r *queryResolver) SearchNodes(ctx context.Context, q string, cursor *string, filter *SearchFilter) (*NodePage, error) {
 	id, err := httpx.IdentityFrom(ctx)
 	if err != nil {
 		return nil, err
@@ -1478,7 +1478,16 @@ func (r *queryResolver) SearchNodes(ctx context.Context, q string, cursor *strin
 			}, BlobSize: row.BlobSize, BlobMime: row.BlobMime, BlobSha256: row.BlobSha256})
 		}), nil
 	}
-	page, err := r.Nodes.Search(ctx, id.UserID, q, cursor)
+	sf, err := searchFilter(filter)
+	if err != nil {
+		return nil, err
+	}
+	var page *service.Page[store.SearchNodesRow]
+	if sf.Used() {
+		page, err = r.Nodes.SearchFiltered(ctx, id.UserID, q, *sf, cursor)
+	} else {
+		page, err = r.Nodes.Search(ctx, id.UserID, q, cursor)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -1494,12 +1503,16 @@ func (r *queryResolver) SearchNodes(ctx context.Context, q string, cursor *strin
 }
 
 // SearchContent is the resolver for the searchContent field.
-func (r *queryResolver) SearchContent(ctx context.Context, q string, cursor *string) (*ContentHitPage, error) {
+func (r *queryResolver) SearchContent(ctx context.Context, q string, cursor *string, filter *SearchFilter) (*ContentHitPage, error) {
 	ident, err := httpx.UserFrom(ctx)
 	if err != nil {
 		return nil, err
 	}
-	page, err := r.Content.Search(ctx, ident.UserID, nil, q, cursor)
+	sf, err := searchFilter(filter)
+	if err != nil {
+		return nil, err
+	}
+	page, err := r.Content.Search(ctx, ident.UserID, nil, q, cursor, sf)
 	if err != nil {
 		return nil, err
 	}

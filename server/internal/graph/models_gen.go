@@ -773,6 +773,16 @@ type RenameItem struct {
 	Name string `json:"name"`
 }
 
+type SearchFilter struct {
+	Types          []SearchType `json:"types,omitempty"`
+	ModifiedAfter  *time.Time   `json:"modifiedAfter,omitempty"`
+	ModifiedBefore *time.Time   `json:"modifiedBefore,omitempty"`
+	MinSize        *int64       `json:"minSize,omitempty"`
+	MaxSize        *int64       `json:"maxSize,omitempty"`
+	FolderID       *string      `json:"folderId,omitempty"`
+	Order          *SearchOrder `json:"order,omitempty"`
+}
+
 type Session struct {
 	FamilyID   string     `json:"familyId"`
 	UserAgent  string     `json:"userAgent"`
@@ -1905,6 +1915,130 @@ func (e *PreviewKind) UnmarshalJSON(b []byte) error {
 }
 
 func (e PreviewKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type SearchOrder string
+
+const (
+	SearchOrderUpdated SearchOrder = "UPDATED"
+	SearchOrderName    SearchOrder = "NAME"
+	SearchOrderSize    SearchOrder = "SIZE"
+)
+
+var AllSearchOrder = []SearchOrder{
+	SearchOrderUpdated,
+	SearchOrderName,
+	SearchOrderSize,
+}
+
+func (e SearchOrder) IsValid() bool {
+	switch e {
+	case SearchOrderUpdated, SearchOrderName, SearchOrderSize:
+		return true
+	}
+	return false
+}
+
+func (e SearchOrder) String() string {
+	return string(e)
+}
+
+func (e *SearchOrder) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = SearchOrder(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid SearchOrder", str)
+	}
+	return nil
+}
+
+func (e SearchOrder) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *SearchOrder) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e SearchOrder) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type SearchType string
+
+const (
+	SearchTypeFolder   SearchType = "FOLDER"
+	SearchTypeImage    SearchType = "IMAGE"
+	SearchTypeVideo    SearchType = "VIDEO"
+	SearchTypeAudio    SearchType = "AUDIO"
+	SearchTypeDocument SearchType = "DOCUMENT"
+	SearchTypeArchive  SearchType = "ARCHIVE"
+	SearchTypeText     SearchType = "TEXT"
+	SearchTypeOther    SearchType = "OTHER"
+)
+
+var AllSearchType = []SearchType{
+	SearchTypeFolder,
+	SearchTypeImage,
+	SearchTypeVideo,
+	SearchTypeAudio,
+	SearchTypeDocument,
+	SearchTypeArchive,
+	SearchTypeText,
+	SearchTypeOther,
+}
+
+func (e SearchType) IsValid() bool {
+	switch e {
+	case SearchTypeFolder, SearchTypeImage, SearchTypeVideo, SearchTypeAudio, SearchTypeDocument, SearchTypeArchive, SearchTypeText, SearchTypeOther:
+		return true
+	}
+	return false
+}
+
+func (e SearchType) String() string {
+	return string(e)
+}
+
+func (e *SearchType) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = SearchType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid SearchType", str)
+	}
+	return nil
+}
+
+func (e SearchType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *SearchType) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e SearchType) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

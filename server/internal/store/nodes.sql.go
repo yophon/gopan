@@ -66,6 +66,55 @@ func (q *Queries) CountSearchNodes(ctx context.Context, arg CountSearchNodesPara
 	return count, err
 }
 
+const countSearchNodesFiltered = `-- name: CountSearchNodesFiltered :one
+WITH RECURSIVE sub AS (
+    SELECT r.id FROM nodes r
+    WHERE r.id = $3::uuid AND r.owner_id = $1 AND r.deleted_at IS NULL
+    UNION ALL
+    SELECT c.id FROM nodes c JOIN sub s ON c.parent_id = s.id
+    WHERE c.deleted_at IS NULL
+)
+SELECT count(*) FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1 AND n.deleted_at IS NULL
+  AND n.name ILIKE '%' || $2::text || '%'
+  AND ($3::uuid IS NULL OR (n.id <> $3::uuid AND n.id IN (SELECT s.id FROM sub s)))
+  AND ($4::text[] IS NULL
+       OR (n.kind = 'folder' AND 'folder' = ANY($4::text[]))
+       OR (n.kind = 'file' AND gopan_file_category(n.name, b.mime) = ANY($4::text[])))
+  AND ($5::timestamptz IS NULL OR n.updated_at >= $5::timestamptz)
+  AND ($6::timestamptz IS NULL OR n.updated_at < $6::timestamptz)
+  AND ($7::bigint IS NULL OR b.size >= $7::bigint)
+  AND ($8::bigint IS NULL OR b.size <= $8::bigint)
+`
+
+type CountSearchNodesFilteredParams struct {
+	OwnerID uuid.UUID
+	Q       string
+	Root    *uuid.UUID
+	Types   []string
+	After   pgtype.Timestamptz
+	Before  pgtype.Timestamptz
+	MinSize *int64
+	MaxSize *int64
+}
+
+func (q *Queries) CountSearchNodesFiltered(ctx context.Context, arg CountSearchNodesFilteredParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchNodesFiltered,
+		arg.OwnerID,
+		arg.Q,
+		arg.Root,
+		arg.Types,
+		arg.After,
+		arg.Before,
+		arg.MinSize,
+		arg.MaxSize,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSearchNodesInSubtree = `-- name: CountSearchNodesInSubtree :one
 WITH RECURSIVE sub AS (
     SELECT r.id FROM nodes r WHERE r.id = $1 AND r.deleted_at IS NULL
@@ -1830,6 +1879,120 @@ func (q *Queries) SearchNodesAfter(ctx context.Context, arg SearchNodesAfterPara
 	var items []SearchNodesAfterRow
 	for rows.Next() {
 		var i SearchNodesAfterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.ParentID,
+			&i.Name,
+			&i.Kind,
+			&i.BlobID,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SubtreeBytes,
+			&i.SubtreeCount,
+			&i.StatsStale,
+			&i.StarredAt,
+			&i.OpenedAt,
+			&i.BlobSize,
+			&i.BlobMime,
+			&i.BlobSha256,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchNodesFiltered = `-- name: SearchNodesFiltered :many
+WITH RECURSIVE sub AS (
+    SELECT r.id FROM nodes r
+    WHERE r.id = $3::uuid AND r.owner_id = $1 AND r.deleted_at IS NULL
+    UNION ALL
+    SELECT c.id FROM nodes c JOIN sub s ON c.parent_id = s.id
+    WHERE c.deleted_at IS NULL
+)
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1 AND n.deleted_at IS NULL
+  AND n.name ILIKE '%' || $2::text || '%'
+  AND ($3::uuid IS NULL OR (n.id <> $3::uuid AND n.id IN (SELECT s.id FROM sub s)))
+  AND ($4::text[] IS NULL
+       OR (n.kind = 'folder' AND 'folder' = ANY($4::text[]))
+       OR (n.kind = 'file' AND gopan_file_category(n.name, b.mime) = ANY($4::text[])))
+  AND ($5::timestamptz IS NULL OR n.updated_at >= $5::timestamptz)
+  AND ($6::timestamptz IS NULL OR n.updated_at < $6::timestamptz)
+  AND ($7::bigint IS NULL OR b.size >= $7::bigint)
+  AND ($8::bigint IS NULL OR b.size <= $8::bigint)
+ORDER BY
+  CASE WHEN $9::text = 'NAME' THEN n.name COLLATE natural_sort END ASC,
+  CASE WHEN $9::text = 'SIZE' THEN b.size END DESC NULLS LAST,
+  n.updated_at DESC, n.id
+LIMIT $11 OFFSET $10
+`
+
+type SearchNodesFilteredParams struct {
+	OwnerID uuid.UUID
+	Q       string
+	Root    *uuid.UUID
+	Types   []string
+	After   pgtype.Timestamptz
+	Before  pgtype.Timestamptz
+	MinSize *int64
+	MaxSize *int64
+	Sort    string
+	Off     int32
+	Lim     int32
+}
+
+type SearchNodesFilteredRow struct {
+	ID           uuid.UUID
+	OwnerID      uuid.UUID
+	ParentID     *uuid.UUID
+	Name         string
+	Kind         string
+	BlobID       *uuid.UUID
+	DeletedAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	SubtreeBytes int64
+	SubtreeCount int64
+	StatsStale   bool
+	StarredAt    pgtype.Timestamptz
+	OpenedAt     pgtype.Timestamptz
+	BlobSize     *int64
+	BlobMime     *string
+	BlobSha256   *string
+}
+
+// 带筛选的文件名搜索(doc/30):类型(gopan_file_category,folder = 文件夹)、修改时间、大小、只搜某个文件夹的子树、排序。
+// 关键词可以为空(只按筛选找,比如「所有大于 1 GB 的视频」);排序方式多,翻页用偏移。
+func (q *Queries) SearchNodesFiltered(ctx context.Context, arg SearchNodesFilteredParams) ([]SearchNodesFilteredRow, error) {
+	rows, err := q.db.Query(ctx, searchNodesFiltered,
+		arg.OwnerID,
+		arg.Q,
+		arg.Root,
+		arg.Types,
+		arg.After,
+		arg.Before,
+		arg.MinSize,
+		arg.MaxSize,
+		arg.Sort,
+		arg.Off,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchNodesFilteredRow
+	for rows.Next() {
+		var i SearchNodesFilteredRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.OwnerID,

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-edits"
+description = "Enables the desktop_edits command without any pre-configured scope."
+commands.allow = ["desktop_edits"]
+
+[[permission]]
+identifier = "deny-desktop-edits"
+description = "Denies the desktop_edits command without any pre-configured scope."
+commands.deny = ["desktop_edits"]

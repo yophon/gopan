@@ -1691,12 +1691,14 @@ export type QueryRecentPlaysArgs = {
 
 export type QuerySearchContentArgs = {
   cursor?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<SearchFilter>;
   q: Scalars['String']['input'];
 };
 
 
 export type QuerySearchNodesArgs = {
   cursor?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<SearchFilter>;
   q: Scalars['String']['input'];
 };
 
@@ -1770,6 +1772,31 @@ export type RenameItem = {
   id: Scalars['ID']['input'];
   name: Scalars['String']['input'];
 };
+
+export type SearchFilter = {
+  folderId?: InputMaybe<Scalars['ID']['input']>;
+  maxSize?: InputMaybe<Scalars['Int64']['input']>;
+  minSize?: InputMaybe<Scalars['Int64']['input']>;
+  modifiedAfter?: InputMaybe<Scalars['Time']['input']>;
+  modifiedBefore?: InputMaybe<Scalars['Time']['input']>;
+  order?: InputMaybe<SearchOrder>;
+  types?: InputMaybe<Array<SearchType>>;
+};
+
+export type SearchOrder =
+  | 'NAME'
+  | 'SIZE'
+  | 'UPDATED';
+
+export type SearchType =
+  | 'ARCHIVE'
+  | 'AUDIO'
+  | 'DOCUMENT'
+  | 'FOLDER'
+  | 'IMAGE'
+  | 'OTHER'
+  | 'TEXT'
+  | 'VIDEO';
 
 export type Session = {
   __typename?: 'Session';
@@ -2744,6 +2771,7 @@ export type CopyNodesMutation = { __typename?: 'Mutation', copyNodes: Array<{ __
 export type SearchNodesQueryVariables = Exact<{
   q: Scalars['String']['input'];
   cursor?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<SearchFilter>;
 }>;
 
 
@@ -2752,6 +2780,7 @@ export type SearchNodesQuery = { __typename?: 'Query', searchNodes: { __typename
 export type SearchContentQueryVariables = Exact<{
   q: Scalars['String']['input'];
   cursor?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<SearchFilter>;
 }>;
 
 
@@ -5348,8 +5377,8 @@ export const CopyNodesDocument = new TypedDocumentString(`
 }
     `) as unknown as TypedDocumentString<CopyNodesMutation, CopyNodesMutationVariables>;
 export const SearchNodesDocument = new TypedDocumentString(`
-    query SearchNodes($q: String!, $cursor: String) {
-  searchNodes(q: $q, cursor: $cursor) {
+    query SearchNodes($q: String!, $cursor: String, $filter: SearchFilter) {
+  searchNodes(q: $q, cursor: $cursor, filter: $filter) {
     items {
       id
       parentId
@@ -5369,8 +5398,8 @@ export const SearchNodesDocument = new TypedDocumentString(`
 }
     `) as unknown as TypedDocumentString<SearchNodesQuery, SearchNodesQueryVariables>;
 export const SearchContentDocument = new TypedDocumentString(`
-    query SearchContent($q: String!, $cursor: String) {
-  searchContent(q: $q, cursor: $cursor) {
+    query SearchContent($q: String!, $cursor: String, $filter: SearchFilter) {
+  searchContent(q: $q, cursor: $cursor, filter: $filter) {
     items {
       node {
         id

@@ -55,9 +55,19 @@ type ContentPage struct {
 }
 
 // Search 搜 owner 的未删除文件;root 非空时只搜那棵子树(MCP 凭据的访问目录)。
-func (s *ContentSearch) Search(ctx context.Context, owner uuid.UUID, root *uuid.UUID, q string, cursor *string) (*ContentPage, error) {
+// f 可选(doc/30):类型、修改时间、大小;f.Root 在 root 为空时当作要搜的文件夹。内容搜索只按修改时间排序。
+func (s *ContentSearch) Search(ctx context.Context, owner uuid.UUID, root *uuid.UUID, q string, cursor *string, f *SearchFilter) (*ContentPage, error) {
 	if !s.enabled {
 		return nil, errContentDisabled
+	}
+	if f == nil {
+		f = &SearchFilter{}
+	}
+	if err := f.validate(); err != nil {
+		return nil, err
+	}
+	if root == nil {
+		root = f.Root
 	}
 	qn := fulltext.Normalize(strings.TrimSpace(q))
 	if utf8.RuneCountInString(qn) > maxQueryRunes {
@@ -78,11 +88,13 @@ func (s *ContentSearch) Search(ctx context.Context, owner uuid.UUID, root *uuid.
 		var sub []store.SearchContentInSubtreeRow
 		sub, err = s.q.SearchContentInSubtree(ctx, store.SearchContentInSubtreeParams{
 			Q: qn, Terms: terms, OwnerID: owner, CUpdated: cUpdated, CID: cID, Lim: contentPageSize + 1, Root: *root,
+			Types: optTypes(f.Types), After: optTime(f.After), Before: optTime(f.Before), MinSize: f.MinSize, MaxSize: f.MaxSize,
 		})
 		rows = mapSlice(sub, func(r store.SearchContentInSubtreeRow) store.SearchContentRow { return store.SearchContentRow(r) })
 	} else {
 		rows, err = s.q.SearchContent(ctx, store.SearchContentParams{
 			Q: qn, Terms: terms, OwnerID: owner, CUpdated: cUpdated, CID: cID, Lim: contentPageSize + 1,
+			Types: optTypes(f.Types), After: optTime(f.After), Before: optTime(f.Before), MinSize: f.MinSize, MaxSize: f.MaxSize,
 		})
 	}
 	if err != nil {

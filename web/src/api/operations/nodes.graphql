@@ -151,8 +151,8 @@ mutation CopyNodes($ids: [ID!]!, $targetParentId: ID) {
   }
 }
 
-query SearchNodes($q: String!, $cursor: String) {
-  searchNodes(q: $q, cursor: $cursor) {
+query SearchNodes($q: String!, $cursor: String, $filter: SearchFilter) {
+  searchNodes(q: $q, cursor: $cursor, filter: $filter) {
     items {
       id
       parentId
@@ -172,8 +172,8 @@ query SearchNodes($q: String!, $cursor: String) {
 }
 
 # 按内容搜索(doc/20):命中片段 + 高亮区间 + PDF 页码
-query SearchContent($q: String!, $cursor: String) {
-  searchContent(q: $q, cursor: $cursor) {
+query SearchContent($q: String!, $cursor: String, $filter: SearchFilter) {
+  searchContent(q: $q, cursor: $cursor, filter: $filter) {
     items {
       node {
         id

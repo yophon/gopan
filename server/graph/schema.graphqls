@@ -808,6 +808,25 @@ type UndoResult {
 
 enum FileCategory { IMAGE, VIDEO, AUDIO, DOCUMENT, ARCHIVE, TEXT, OTHER }
 
+# 搜索筛选(doc/30)。类型的划分与空间分析相同(FileCategory),FOLDER 是文件夹
+enum SearchType { FOLDER, IMAGE, VIDEO, AUDIO, DOCUMENT, ARCHIVE, TEXT, OTHER }
+enum SearchOrder { UPDATED, NAME, SIZE }
+
+input SearchFilter {
+  # 多选,空 = 不限
+  types: [SearchType!]
+  # 修改时间在 [modifiedAfter, modifiedBefore) 之间
+  modifiedAfter: Time
+  modifiedBefore: Time
+  # 大小(字节,含两端);设了就只剩文件
+  minSize: Int64
+  maxSize: Int64
+  # 只搜这个文件夹里的(含子文件夹)
+  folderId: ID
+  # 默认 UPDATED(最近修改的在前);NAME 按名字自然顺序;SIZE 大的在前。内容搜索只按修改时间
+  order: SearchOrder
+}
+
 type SpaceCategory {
   category: FileCategory!
   files: Int64!
@@ -1090,9 +1109,10 @@ type Query {
   sessions: [Session!]!
   node(id: ID!): Node!
   children(parentId: ID, cursor: String, order: NodeOrder = NAME, desc: Boolean = false): NodePage!
-  searchNodes(q: String!, cursor: String): NodePage!
+  # 按名字搜索。带 filter 时关键词可以为空(只按筛选找);分享访客的搜索忽略 filter
+  searchNodes(q: String!, cursor: String, filter: SearchFilter): NodePage!
   # 按内容搜索:关键词至少两个汉字或三个字母(QUERY_TOO_SHORT);本站关了内容索引则 CONTENT_SEARCH_DISABLED
-  searchContent(q: String!, cursor: String): ContentHitPage!
+  searchContent(q: String!, cursor: String, filter: SearchFilter): ContentHitPage!
   trash(cursor: String): NodePage!
   myShares: [Share!]!
   # 某个分享最近的访问明细,只允许属主看

@@ -6,6 +6,7 @@ import { FolderOpened } from '@element-plus/icons-vue'
 import { getErrorCode, request } from '@/api/client'
 import { errorText } from '@/api/errors'
 import { SearchContentDocument } from '@/api/gen/graphql'
+import type { SearchFilter } from '@/api/gen/graphql'
 import type { SearchContentQuery } from '@/api/gen/graphql'
 import { formatTime } from '@/utils/format'
 import { splitHighlights } from '@/utils/highlight'
@@ -16,7 +17,7 @@ import NodeIcon from '@/components/nodes/NodeIcon.vue'
 
 type Hit = SearchContentQuery['searchContent']['items'][number]
 
-const props = defineProps<{ q: string }>()
+const props = defineProps<{ q: string; filter?: SearchFilter | null }>()
 const router = useRouter()
 
 const hits = ref<Hit[]>([])
@@ -33,7 +34,7 @@ async function fetchPage(cursor: string | null) {
   loading.value = true
   notice.value = null
   try {
-    const res = await request(SearchContentDocument, { q: props.q, cursor })
+    const res = await request(SearchContentDocument, { q: props.q, cursor, filter: props.filter ?? null })
     hits.value = cursor ? [...hits.value, ...res.searchContent.items] : [...res.searchContent.items]
     nextCursor.value = res.searchContent.nextCursor ?? null
   } catch (err) {
@@ -51,7 +52,7 @@ async function fetchPage(cursor: string | null) {
   }
 }
 
-watch(() => props.q, () => void fetchPage(null), { immediate: true })
+watch([() => props.q, () => JSON.stringify(props.filter ?? null)], () => void fetchPage(null), { immediate: true })
 
 function open(i: number) {
   const pages: Record<string, number> = {}

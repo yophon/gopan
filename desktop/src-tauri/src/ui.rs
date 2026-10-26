@@ -92,6 +92,8 @@ pub fn ensure_main(app: &AppHandle, visible: bool) -> tauri::Result<WebviewWindo
         .min_inner_size(820.0, 560.0)
         .visible(visible)
         .user_agent(&webview_user_agent(app))
+        // 拖放交给网页自己(HTML5):文件拖进文件夹「移动」、拖进来上传都照网页的来;要上传时网页把文件交给外壳(handoff.rs)
+        .disable_drag_drop_handler()
         .on_navigation(guard_navigation(app))
         .on_new_window(move |url, _features| {
             let _ = opener.opener().open_url(url.as_str(), None::<&str>);
@@ -99,6 +101,7 @@ pub fn ensure_main(app: &AppHandle, visible: bool) -> tauri::Result<WebviewWindo
         })
         .build()?;
     hide_on_close(&w);
+    crate::handoff::attach(&w);
     Ok(w)
 }
 
@@ -129,7 +132,7 @@ pub fn open_settings(app: &AppHandle) {
 }
 
 /// 传输助手小窗(doc/29 D3):网页版的传输助手,精简模式;贴着屏幕右下角。
-/// 关掉拖放处理器,让网页自己接住拖进来的文件(HTML5 drop)
+/// 关掉拖放处理器,让网页自己接住拖进来的文件(HTML5 drop),再交给外壳上传(handoff.rs)
 pub fn open_mini(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(MINI) {
         show(&w);
@@ -153,6 +156,7 @@ pub fn open_mini(app: &AppHandle) {
     if let Ok(w) = builder.build() {
         place_bottom_right(&w);
         hide_on_close(&w);
+        crate::handoff::attach(&w);
         show(&w);
     }
 }

@@ -185,9 +185,9 @@ async fn attempt(
             Err(e) => return Err(e.into()),
         },
         None => {
-            let vars = json!({ "parentId": parent, "name": task.name, "sha256": sha, "size": size });
+            let vars = json!({ "parentId": parent, "name": task.name, "sha256": sha, "size": size, "replace": task.replace });
             let q = format!(
-                "mutation DesktopInitUpload($parentId: ID, $name: String!, $sha256: String!, $size: Int64!) {{ initUpload(parentId: $parentId, name: $name, sha256: $sha256, size: $size) {{ instant node {{ id }} session {{ {SESSION_FIELDS} }} }} }}"
+                "mutation DesktopInitUpload($parentId: ID, $name: String!, $sha256: String!, $size: Int64!, $replace: Boolean) {{ initUpload(parentId: $parentId, name: $name, sha256: $sha256, size: $size, replace: $replace) {{ instant node {{ id }} session {{ {SESSION_FIELDS} }} }} }}"
             );
             let init = match api.gql::<InitData>(app, &q, vars).await {
                 Ok(d) => d.init_upload,
@@ -528,14 +528,53 @@ async fn create_folder(app: &AppHandle, parent: Option<&str>, name: &str) -> Res
     Ok(d.create_folder.id)
 }
 
-/// 本地文件夹:在云端建同名文件夹(重名服务端自动加后缀),子目录先建好,文件成子任务
+/// [parent] 下名叫 [name] 的文件夹;没有就建一个(与网页上传文件夹一样:同名文件夹合并进去)
+async fn find_or_create_folder(app: &AppHandle, parent: Option<&str>, name: &str) -> Result<String, RunError> {
+    #[derive(Deserialize)]
+    struct D {
+        children: Page,
+    }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Page {
+        items: Vec<Item>,
+        next_cursor: Option<String>,
+    }
+    #[derive(Deserialize)]
+    struct Item {
+        id: String,
+        name: String,
+        kind: String,
+    }
+    let api = app.state::<Api>();
+    let mut cursor: Option<String> = None;
+    loop {
+        let d: D = api
+            .gql(
+                app,
+                "query DesktopFolderChildren($parentId: ID, $cursor: String) { children(parentId: $parentId, cursor: $cursor) { items { id name kind } nextCursor } }",
+                json!({ "parentId": parent, "cursor": cursor }),
+            )
+            .await?;
+        if let Some(hit) = d.children.items.into_iter().find(|i| i.kind == "FOLDER" && i.name == name) {
+            return Ok(hit.id);
+        }
+        match d.children.next_cursor {
+            Some(c) if !c.is_empty() => cursor = Some(c),
+            _ => break,
+        }
+    }
+    create_folder(app, parent, name).await
+}
+
+/// 本地文件夹:云端有同名文件夹就合并进去,没有就建;子目录同样处理,文件成子任务(和已有文件撞名时服务端自动改名)
 pub async fn expand(app: &AppHandle, batch: &Task) -> Result<(Vec<NewTask>, Option<String>, Option<String>), RunError> {
     let root_local = PathBuf::from(&batch.local_path);
     if !tokio::fs::metadata(&root_local).await.map(|m| m.is_dir()).unwrap_or(false) {
         return Err(RunError::Fail("本地文件夹不见了".into()));
     }
     let parent = if batch.to_chat { Some(chat_folder(app).await?) } else { batch.parent_id.clone() };
-    let root_id = create_folder(app, parent.as_deref(), &batch.name).await?;
+    let root_id = find_or_create_folder(app, parent.as_deref(), &batch.name).await?;
     let mut kids = Vec::new();
     let mut stack = vec![(root_local, root_id.clone())];
     while let Some((dir, cloud)) = stack.pop() {
@@ -553,7 +592,7 @@ pub async fn expand(app: &AppHandle, batch: &Task) -> Result<(Vec<NewTask>, Opti
             }
             let name = e.file_name().to_string_lossy().into_owned();
             if ft.is_dir() {
-                let id = create_folder(app, Some(&cloud), &name).await?;
+                let id = find_or_create_folder(app, Some(&cloud), &name).await?;
                 stack.push((e.path(), id));
             } else if ft.is_file() {
                 let size = e.metadata().await.map(|m| m.len() as i64).unwrap_or(0);

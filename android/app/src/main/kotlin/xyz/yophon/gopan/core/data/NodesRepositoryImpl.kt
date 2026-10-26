@@ -29,6 +29,9 @@ import xyz.yophon.gopan.graphql.SearchNodesQuery
 import xyz.yophon.gopan.graphql.SetStarredMutation
 import xyz.yophon.gopan.graphql.TrashQuery
 import xyz.yophon.gopan.graphql.type.NodeOrder
+import xyz.yophon.gopan.graphql.type.SearchFilter
+import xyz.yophon.gopan.graphql.type.SearchOrder
+import xyz.yophon.gopan.graphql.type.SearchType
 import xyz.yophon.gopan.graphql.type.RenameItem
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -125,14 +128,14 @@ class NodesRepositoryImpl @Inject constructor(
         return cached
     }
 
-    override suspend fun search(q: String, cursor: String?): NodePage {
-        val data = apollo.query(SearchNodesQuery(q = q, cursor = Optional.present(cursor))).execute().requireData()
+    override suspend fun search(q: String, cursor: String?, filters: SearchFilters): NodePage {
+        val data = apollo.query(SearchNodesQuery(q = q, cursor = Optional.present(cursor), filter = filters.toInput())).execute().requireData()
         val p = data.searchNodes
         return NodePage(items = p.items.map { it.nodeItem.toNode().also(::remember) }, nextCursor = p.nextCursor, total = p.total)
     }
 
-    override suspend fun searchContent(q: String, cursor: String?): ContentHitPage {
-        val data = apollo.query(SearchContentQuery(q = q, cursor = Optional.present(cursor))).execute().requireData()
+    override suspend fun searchContent(q: String, cursor: String?, filters: SearchFilters): ContentHitPage {
+        val data = apollo.query(SearchContentQuery(q = q, cursor = Optional.present(cursor), filter = filters.forContent().toInput())).execute().requireData()
         val p = data.searchContent
         // 命中的都是文件,不进 knownFolders
         return ContentHitPage(items = p.items.map { it.toContentHit() }, nextCursor = p.nextCursor)
@@ -260,6 +263,27 @@ class NodesRepositoryImpl @Inject constructor(
         DriveSortOrder.NAME -> NodeOrder.NAME
         DriveSortOrder.SIZE -> NodeOrder.SIZE
         DriveSortOrder.UPDATED_AT -> NodeOrder.UPDATED_AT
+    }
+
+    /** 搜索筛选 → GraphQL 输入;默认值(什么都没设)不传,走原来的搜索 */
+    private fun SearchFilters.toInput(): Optional<SearchFilter?> {
+        if (isDefault) return Optional.absent()
+        val (after, before) = timeRange()
+        return Optional.present(
+            SearchFilter(
+                types = Optional.presentIfNotNull(kinds.takeIf { it.isNotEmpty() }?.map { SearchType.safeValueOf(it.name) }),
+                modifiedAfter = Optional.presentIfNotNull(after?.toString()),
+                modifiedBefore = Optional.presentIfNotNull(before?.toString()),
+                minSize = Optional.presentIfNotNull(size.min),
+                maxSize = Optional.presentIfNotNull(size.max),
+                folderId = Optional.presentIfNotNull(scope?.folderId),
+                order = when (sort) {
+                    SearchSort.UPDATED -> Optional.absent()
+                    SearchSort.NAME -> Optional.present(SearchOrder.NAME)
+                    SearchSort.SIZE -> Optional.present(SearchOrder.SIZE)
+                },
+            ),
+        )
     }
 
     /** 哪些错误值得回退缓存:网络/服务端暂时不可用。登录失效、对象不存在、输入无效都不是 */

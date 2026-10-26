@@ -52,6 +52,11 @@ JOIN blobs b ON b.id = bt.blob_id
 CROSS JOIN LATERAL (SELECT strpos(lower(bt.content), lower(sqlc.arg(q)::text)) AS pos) h
 WHERE bt.terms @> sqlc.arg(terms)::text[]
   AND n.owner_id = sqlc.arg(owner_id) AND n.deleted_at IS NULL AND h.pos > 0
+  AND (sqlc.narg(types)::text[] IS NULL OR gopan_file_category(n.name, b.mime) = ANY(sqlc.narg(types)::text[]))
+  AND (sqlc.narg(after)::timestamptz IS NULL OR n.updated_at >= sqlc.narg(after)::timestamptz)
+  AND (sqlc.narg(before)::timestamptz IS NULL OR n.updated_at < sqlc.narg(before)::timestamptz)
+  AND (sqlc.narg(min_size)::bigint IS NULL OR b.size >= sqlc.narg(min_size)::bigint)
+  AND (sqlc.narg(max_size)::bigint IS NULL OR b.size <= sqlc.narg(max_size)::bigint)
   AND (sqlc.narg(c_updated)::timestamptz IS NULL
        OR n.updated_at < sqlc.narg(c_updated)::timestamptz
        OR (n.updated_at = sqlc.narg(c_updated)::timestamptz AND n.id > sqlc.narg(c_id)::uuid))
@@ -79,6 +84,11 @@ JOIN blobs b ON b.id = bt.blob_id
 CROSS JOIN LATERAL (SELECT strpos(lower(bt.content), lower(sqlc.arg(q)::text)) AS pos) h
 WHERE bt.terms @> sqlc.arg(terms)::text[]
   AND n.id IN (SELECT s.id FROM sub s) AND n.owner_id = sqlc.arg(owner_id) AND h.pos > 0
+  AND (sqlc.narg(types)::text[] IS NULL OR gopan_file_category(n.name, b.mime) = ANY(sqlc.narg(types)::text[]))
+  AND (sqlc.narg(after)::timestamptz IS NULL OR n.updated_at >= sqlc.narg(after)::timestamptz)
+  AND (sqlc.narg(before)::timestamptz IS NULL OR n.updated_at < sqlc.narg(before)::timestamptz)
+  AND (sqlc.narg(min_size)::bigint IS NULL OR b.size >= sqlc.narg(min_size)::bigint)
+  AND (sqlc.narg(max_size)::bigint IS NULL OR b.size <= sqlc.narg(max_size)::bigint)
   AND (sqlc.narg(c_updated)::timestamptz IS NULL
        OR n.updated_at < sqlc.narg(c_updated)::timestamptz
        OR (n.updated_at = sqlc.narg(c_updated)::timestamptz AND n.id > sqlc.narg(c_id)::uuid))

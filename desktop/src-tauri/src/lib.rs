@@ -5,6 +5,8 @@ mod auth;
 mod bridge;
 mod capture;
 mod chat;
+mod edits;
+mod handoff;
 mod notify;
 mod prefs;
 mod settings;
@@ -46,6 +48,7 @@ pub fn run() {
         .manage(ui::Origins::default())
         .manage(bridge::Granted::default())
         .manage(shell::Shell::default())
+        .manage(handoff::Handoffs::default())
         .invoke_handler(tauri::generate_handler![
             bridge::app_status,
             bridge::server_connect,
@@ -63,6 +66,10 @@ pub fn run() {
             transfer::desktop_tasks,
             transfer::desktop_task_action,
             shell::desktop_pick_folder_done,
+            handoff::desktop_upload_files,
+            edits::desktop_open_local,
+            edits::desktop_edits,
+            edits::desktop_edit_action,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -70,6 +77,7 @@ pub fn run() {
             app.manage(api::Api::new(&handle));
             tray::create(&handle)?;
             transfer::init(&handle)?;
+            edits::init(&handle);
             let main = ui::ensure_main(&handle, false)?;
             let _ = main.restore_state(StateFlags::all() - StateFlags::VISIBLE);
             if !background {

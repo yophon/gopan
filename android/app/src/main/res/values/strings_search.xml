@@ -19,4 +19,35 @@
     <string name="search_content_disabled">本站没有开启内容搜索</string>
     <string name="search_content_page">第 %1$d 页</string>
     <string name="search_hit_more">更多操作</string>
+    <!-- 搜索筛选(doc/30) -->
+    <string name="search_filter_type">类型</string>
+    <string name="search_filter_types_many">%1$s 等 %2$d 类</string>
+    <string name="search_kind_folder">文件夹</string>
+    <string name="search_kind_image">图片</string>
+    <string name="search_kind_video">视频</string>
+    <string name="search_kind_audio">音频</string>
+    <string name="search_kind_document">文档</string>
+    <string name="search_kind_text">文本与代码</string>
+    <string name="search_kind_archive">压缩包与安装包</string>
+    <string name="search_kind_other">其他</string>
+    <string name="search_filter_time">时间</string>
+    <string name="search_time_any">不限时间</string>
+    <string name="search_time_today">今天</string>
+    <string name="search_time_week">最近 7 天</string>
+    <string name="search_time_month">最近 30 天</string>
+    <string name="search_time_year">今年</string>
+    <string name="search_time_older">一年以前</string>
+    <string name="search_filter_size">大小</string>
+    <string name="search_size_any">不限大小</string>
+    <string name="search_size_under_1m">小于 1 MB</string>
+    <string name="search_size_1m_100m">1 ~ 100 MB</string>
+    <string name="search_size_100m_1g">100 MB ~ 1 GB</string>
+    <string name="search_size_over_1g">大于 1 GB</string>
+    <string name="search_sort_updated">按最近修改</string>
+    <string name="search_sort_name">按名称</string>
+    <string name="search_sort_size">按大小</string>
+    <string name="search_scope">只在「%1$s」里</string>
+    <string name="search_scope_clear">搜全部</string>
+    <string name="search_filter_clear">清除筛选</string>
+    <string name="search_empty_filtered">没有符合条件的文件</string>
 </resources>

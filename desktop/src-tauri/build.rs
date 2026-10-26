@@ -19,6 +19,10 @@ const COMMANDS: &[&str] = &[
     "desktop_open_settings",
     "desktop_open_mini",
     "desktop_open_main",
+    "desktop_upload_files",
+    "desktop_open_local",
+    "desktop_edits",
+    "desktop_edit_action",
 ];
 
 fn main() {

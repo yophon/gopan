@@ -9,8 +9,9 @@ mod download;
 mod names;
 mod upload;
 
-pub use db::Kind;
-use db::{now_ms, Db, NewTask, State, Task};
+pub use db::{now_ms, EditRow, Kind, Task};
+use db::{Db, NewTask, State};
+pub use names::safe_name;
 
 use crate::api::ApiError;
 use crate::auth::{Auth, AuthError};
@@ -94,7 +95,7 @@ struct Running {
 }
 
 pub struct Engine {
-    db: Db,
+    pub(crate) db: Db,
     wake: Notify,
     running: Mutex<HashMap<i64, Running>>,
     dirty: AtomicBool,
@@ -122,7 +123,7 @@ pub fn init(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn engine(app: &AppHandle) -> tauri::State<'_, Engine> {
+pub(crate) fn engine(app: &AppHandle) -> tauri::State<'_, Engine> {
     app.state::<Engine>()
 }
 
@@ -196,14 +197,22 @@ async fn run_task(app: AppHandle, task: Task, live: Arc<Live>) {
         }
         Ok(out) => {
             if eng.db.finish(task.id, out.node_id.as_deref(), out.local_path.as_deref(), out.size) {
-                finished(&app, task.id);
+                if task.purpose.is_empty() {
+                    finished(&app, task.id);
+                } else if let Some(mut done) = eng.db.get(task.id) {
+                    // 「打开」「传回」的任务做完就从列表里拿掉,结果由 edits.rs 接着处理。
+                    // 做完后库里的 node_id 是传出来的节点(冲突时另存的是个新文件),edits.rs 要的是原来那个
+                    done.node_id = task.node_id.clone();
+                    eng.db.delete_one(task.id);
+                    crate::edits::task_done(&app, &done);
+                }
             }
         }
         Err(RunError::Retry(msg)) => {
             let attempts = task.attempts + 1;
             if attempts >= MAX_ATTEMPTS {
                 if eng.db.transition(task.id, State::Running, State::Failed, Some(&msg)) {
-                    finished(&app, task.id);
+                    failed(&app, &task, &msg);
                 }
             } else {
                 eng.db.retry_later(task.id, attempts, now_ms() + backoff_ms(attempts), &msg);
@@ -212,12 +221,21 @@ async fn run_task(app: AppHandle, task: Task, live: Arc<Live>) {
         Err(RunError::Fail(msg)) => {
             log::warn!("传输任务 {} 失败:{msg}", task.id);
             if eng.db.transition(task.id, State::Running, State::Failed, Some(&msg)) {
-                finished(&app, task.id);
+                failed(&app, &task, &msg);
             }
         }
     }
     eng.dirty.store(true, Ordering::Relaxed);
     eng.wake.notify_one();
+}
+
+/// 不再重试了:普通任务排进通知,「打开」「传回」的交给 edits.rs(任务行留着,能在列表里重试)
+fn failed(app: &AppHandle, task: &Task, msg: &str) {
+    if task.purpose.is_empty() {
+        finished(app, task.id);
+    } else {
+        crate::edits::task_failed(app, task, msg);
+    }
 }
 
 /// 第 n 次失败后等多久:5 秒起,翻倍,封顶 5 分钟
@@ -313,6 +331,8 @@ pub struct TaskView {
     node_id: Option<String>,
     parent_id: Option<String>,
     to_chat: bool,
+    /// 空 / open(下载完用本地程序打开)/ edit(本地改完传回)
+    purpose: String,
     size: i64,
     done: i64,
     files: usize,
@@ -353,6 +373,7 @@ pub fn views(app: &AppHandle) -> Vec<TaskView> {
                 node_id: t.node_id.clone(),
                 parent_id: t.parent_id.clone(),
                 to_chat: t.to_chat,
+                purpose: t.purpose.clone(),
                 size: running.get(&t.id).map(|r| r.live.total.load(Ordering::Relaxed)).filter(|n| *n > 0).unwrap_or(t.size),
                 done: live_done(t),
                 files: 1,
@@ -533,7 +554,14 @@ pub fn enqueue_downloads(app: &AppHandle, dir: &std::path::Path, items: &[Downlo
 }
 
 /// 上传本地文件 / 文件夹到云端文件夹(None = 根目录);[to_chat] 发到传输助手
-pub fn enqueue_uploads(app: &AppHandle, paths: &[PathBuf], parent_id: Option<String>, to_chat: bool) -> Result<usize, String> {
+/// [replace]:这些名字的文件(只看顶层的文件)遇到同名直接替换,旧内容进历史版本
+pub fn enqueue_uploads(
+    app: &AppHandle,
+    paths: &[PathBuf],
+    parent_id: Option<String>,
+    to_chat: bool,
+    replace: &[String],
+) -> Result<usize, String> {
     let eng = engine(app);
     let mut n = 0;
     for p in paths {
@@ -542,6 +570,7 @@ pub fn enqueue_uploads(app: &AppHandle, paths: &[PathBuf], parent_id: Option<Str
         let t = NewTask {
             kind: Some(Kind::Upload),
             is_batch: meta.is_dir(),
+            replace: !meta.is_dir() && replace.contains(&name),
             name,
             parent_id: parent_id.clone(),
             local_path: p.to_string_lossy().into_owned(),
@@ -555,6 +584,44 @@ pub fn enqueue_uploads(app: &AppHandle, paths: &[PathBuf], parent_id: Option<Str
     eng.dirty.store(true, Ordering::Relaxed);
     eng.wake.notify_one();
     Ok(n)
+}
+
+/// 下载一个云端文件到确切的位置(覆盖),做完由 edits.rs 用本地程序打开
+pub fn enqueue_open(app: &AppHandle, node_id: &str, name: &str, size: i64, path: &std::path::Path) -> Result<(), String> {
+    let eng = engine(app);
+    let t = NewTask {
+        kind: Some(Kind::Download),
+        name: name.to_string(),
+        node_id: Some(node_id.to_string()),
+        local_path: path.to_string_lossy().into_owned(),
+        size,
+        purpose: "open".into(),
+        ..Default::default()
+    };
+    eng.db.insert(&t).map_err(|e| format!("写传输队列失败:{e}"))?;
+    eng.dirty.store(true, Ordering::Relaxed);
+    eng.wake.notify_one();
+    Ok(())
+}
+
+/// 把本地改过的副本传回云端:[name] 是云端的名字;[replace] 为 false 时是另存一份(冲突时)
+pub fn enqueue_save_back(app: &AppHandle, e: &EditRow, name: &str, replace: bool) -> Result<(), String> {
+    let eng = engine(app);
+    let t = NewTask {
+        kind: Some(Kind::Upload),
+        name: name.to_string(),
+        node_id: Some(e.node_id.clone()),
+        parent_id: e.parent_id.clone(),
+        local_path: e.local_path.clone(),
+        size: e.size,
+        replace,
+        purpose: "edit".into(),
+        ..Default::default()
+    };
+    eng.db.insert(&t).map_err(|e| format!("写传输队列失败:{e}"))?;
+    eng.dirty.store(true, Ordering::Relaxed);
+    eng.wake.notify_one();
+    Ok(())
 }
 
 fn stop_running(eng: &Engine, ids: &[i64]) {
@@ -646,6 +713,7 @@ pub fn clear_all(app: &AppHandle) {
     stop_running(&eng, &ids);
     let tasks = eng.db.all();
     eng.db.delete_all();
+    crate::edits::clear_cache(app);
     // 登出了没法再调接口关会话(服务端过期会自己清),只删本地的 .part
     for t in tasks {
         if t.kind == Kind::Download && !t.is_batch && t.state != State::Done {
@@ -734,6 +802,8 @@ mod tests {
             session_id: None,
             src_mtime: 0,
             to_chat: false,
+            replace: false,
+            purpose: String::new(),
             error: None,
             attempts: 0,
             next_at: 0,

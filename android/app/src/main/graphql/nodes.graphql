@@ -124,8 +124,9 @@ mutation CopyNodes($ids: [ID!]!, $targetParentId: ID) {
   }
 }
 
-query SearchNodes($q: String!, $cursor: String) {
-  searchNodes(q: $q, cursor: $cursor) {
+# filter(doc/30):类型、修改时间、大小、只搜某个文件夹、排序;带了 filter 关键词可以为空
+query SearchNodes($q: String!, $cursor: String, $filter: SearchFilter) {
+  searchNodes(q: $q, cursor: $cursor, filter: $filter) {
     items {
       ...NodeItem
     }
@@ -136,8 +137,8 @@ query SearchNodes($q: String!, $cursor: String) {
 
 # 按内容搜索(doc/20):命中片段 + 高亮区间(片段内按码点计)+ PDF 页码;不返回 total。
 # node 用 NodeItem 片段,与文件名结果同一个 toNode():长按操作、所在目录、预览都照常复用。
-query SearchContent($q: String!, $cursor: String) {
-  searchContent(q: $q, cursor: $cursor) {
+query SearchContent($q: String!, $cursor: String, $filter: SearchFilter) {
+  searchContent(q: $q, cursor: $cursor, filter: $filter) {
     items {
       node {
         ...NodeItem

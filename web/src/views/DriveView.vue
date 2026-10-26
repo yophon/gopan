@@ -20,6 +20,7 @@ import {
   InfoFilled,
   Link,
   List,
+  Monitor,
   Paperclip,
   Rank,
   Refresh,
@@ -58,8 +59,10 @@ import { linkFormatLabels } from '@/utils/links'
 import type { LinkFormat } from '@/utils/links'
 import { withoutQuery } from '@/utils/notifications'
 import { actionToast } from '@/utils/toast'
-import { downloadLabel, downloadToComputer, useNodeDownload } from '@/composables/nodeDownload'
+import { downloadLabel, downloadToComputer, openWithLocalApp, useNodeDownload } from '@/composables/nodeDownload'
 import { nativeDownloads } from '@/desktop/transfers'
+import { collectDropped, nativeUploads, topLevelFiles, uploadViaDesktop, type Handoff } from '@/desktop/handoff'
+import { useUploadsStore } from '@/stores/uploads'
 import { useStars } from '@/composables/quick'
 import { NEW_TEXT_NAME } from '@/utils/textEdit'
 import NodeBrowser from '@/components/nodes/NodeBrowser.vue'
@@ -411,7 +414,7 @@ function onFilesChosen(e: Event) {
  * 传进 target 的文件里有和已有文件同名的:问一次「替换」还是「保留两者」(doc/24)。
  * 返回要替换的文件名(保留两者 / 没有同名时为空);关掉对话框 = 这次不传了,返回 null。
  */
-async function askReplace(files: File[], target: string | null): Promise<Set<string> | null> {
+async function askReplace(files: { name: string }[], target: string | null): Promise<Set<string> | null> {
   let existing: { name: string; kind: string }[]
   try {
     existing = target === folderId.value ? items.value : await allChildren(target)
@@ -434,8 +437,26 @@ async function askReplace(files: File[], target: string | null): Promise<Set<str
   }
 }
 
+const uploadsStore = useUploadsStore()
+
+/**
+ * 桌面端:交给外壳的传输引擎上传(doc/29),缩到托盘照常跑、退出再打开接着传;同名的先问替换。
+ * [rootDepth] 见 uploadViaDesktop(选文件夹时)。
+ */
+async function handToDesktop(objects: Handoff[], target: string | null, rootDepth?: number) {
+  const replace = rootDepth ? new Set<string>() : await askReplace(topLevelFiles(objects), target)
+  if (!replace) return
+  try {
+    const n = await uploadViaDesktop(objects, { parentId: target, replace: [...replace], rootDepth })
+    if (n > 0) uploadsStore.collapsed = false
+  } catch (err) {
+    ElMessage.error(typeof err === 'string' ? err : errorText(err, '上传失败'))
+  }
+}
+
 /** 文件传进 target:先处理同名,同名的带上「替换」,其余照常 */
 async function enqueueInto(files: File[], target: string | null) {
+  if (nativeUploads()) return handToDesktop(files, target)
   const replace = await askReplace(files, target)
   if (!replace) return
   const rest = files.filter((f) => !replace.has(f.name))
@@ -450,6 +471,11 @@ function onDirChosen(e: Event) {
   const files = Array.from(input.files ?? [])
   input.value = ''
   if (!files.length) return
+  if (nativeUploads()) {
+    const first = files[0]!
+    void handToDesktop([first], folderId.value, (first.webkitRelativePath || first.name).split('/').length)
+    return
+  }
   const collected = files.map((file) => {
     const parts = (file.webkitRelativePath || file.name).split('/')
     return { dirs: parts.slice(0, -1), file }
@@ -578,6 +604,8 @@ async function uploadCollected(collected: Collected[], base: string | null, empt
 
 /** 电脑里拖进来的东西(文件、文件夹混着)传到 target */
 async function uploadDataTransfer(dt: DataTransfer, target: string | null) {
+  // 桌面端:趁 drop 事件还没结束把拖进来的取出来(文件夹要 FileSystemHandle 才有路径),交给外壳
+  if (nativeUploads()) return collectDropped(dt).then((objects) => handToDesktop(objects, target))
   const entries: FileSystemEntry[] = []
   const plainFiles: File[] = []
   for (const item of Array.from(dt.items ?? [])) {
@@ -781,6 +809,7 @@ const menuItems = computed<MenuEntry[]>(() => {
   const files = fileTargets(sel)
   const entries: MenuEntry[] = []
   if (one) entries.push({ key: 'open', label: one.kind === 'FOLDER' ? '打开' : '预览', icon: one.kind === 'FOLDER' ? FolderOpened : View, hint: 'Enter' })
+  if (one?.kind === 'FILE' && nativeDownloads()) entries.push({ key: 'openLocal', label: '用本地程序打开', icon: Monitor })
   entries.push({ key: 'download', label: downloadLabel(sel), icon: Download })
   if (nativeDownloads()) entries.push({ key: 'downloadTo', label: '下载到…', icon: Download })
   if (one) entries.push({ key: 'share', label: '分享', icon: Share })
@@ -833,6 +862,9 @@ function onMenuSelect(key: string) {
       return invalidate()
     case 'open':
       if (one) onOpen(one)
+      return
+    case 'openLocal':
+      if (one) void openWithLocalApp(one)
       return
     case 'download':
       return void onDownload(sel)

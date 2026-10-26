@@ -83,10 +83,15 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
 function onSearch() {
   const q = searchInput.value.trim()
   if (!q) return
-  // 正在看「内容」标签时换关键词,留在内容标签
-  const inContent = route.path === '/search' && route.query.in === 'content'
   // 关键词放在 k 里而不是 q:有的浏览器插件(比如 ChatGPT 的)会把任何 /search?q= 当成搜索引擎结果页劫持走
-  void router.push({ path: '/search', query: inContent ? { k: q, in: 'content' } : { k: q } })
+  if (route.path === '/search') {
+    // 在搜索页换关键词:标签和筛选条件都留着
+    void router.push({ path: '/search', query: { ...route.query, k: q, q: undefined } })
+  } else {
+    // 在某个文件夹里搜:默认只搜这个文件夹(搜索页上能去掉,doc/30)
+    const folder = route.name === 'drive' && typeof route.params.id === 'string' && route.params.id ? route.params.id : undefined
+    void router.push({ path: '/search', query: { k: q, folder } })
+  }
   emit('navigate')
 }
 

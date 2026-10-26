@@ -48,8 +48,9 @@ object Routes {
     @Serializable
     data object Trash
 
+    /** 从某个文件夹点进来的带上它:默认只搜那个文件夹(doc/30) */
     @Serializable
-    data object Search
+    data class Search(val folderId: String? = null, val folderName: String? = null)
 
     @Serializable
     data class Preview(val nodeId: String)

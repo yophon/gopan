@@ -30,7 +30,7 @@ func (s *Server) searchFileContents(ctx context.Context, _ *mcp.CallToolRequest,
 	if err != nil {
 		return nil, SearchContentsOutput{}, err
 	}
-	page, err := s.content.Search(ctx, p.UserID, p.RootID, in.Query, in.Cursor)
+	page, err := s.content.Search(ctx, p.UserID, p.RootID, in.Query, in.Cursor, nil)
 	if err != nil {
 		return nil, SearchContentsOutput{}, err
 	}

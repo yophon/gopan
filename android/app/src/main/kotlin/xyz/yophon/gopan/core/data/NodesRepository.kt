@@ -46,13 +46,14 @@ interface NodesRepository {
     /** 目录分页(任意游标),不碰缓存 */
     suspend fun children(parentId: String?, cursor: String?, order: DriveSortOrder, desc: Boolean): NodePage
 
-    suspend fun search(q: String, cursor: String?): NodePage
+    /** [filters] 有条件时 [q] 可以为空(只按条件找),见 [SearchFilters] */
+    suspend fun search(q: String, cursor: String?, filters: SearchFilters = SearchFilters()): NodePage
 
     /**
      * 按文件内容搜索(doc/20)。关键词太短抛 QUERY_TOO_SHORT,本站关了内容索引抛 CONTENT_SEARCH_DISABLED;
      * 游标与文件名搜索一样不绑定关键词,换关键词必须从头搜。
      */
-    suspend fun searchContent(q: String, cursor: String?): ContentHitPage
+    suspend fun searchContent(q: String, cursor: String?, filters: SearchFilters = SearchFilters()): ContentHitPage
 
     suspend fun trash(cursor: String?): NodePage
 

@@ -192,7 +192,7 @@ fn flush(app: &AppHandle, upload: Vec<PathBuf>, send: Vec<PathBuf>) {
     let send: Vec<PathBuf> = send.into_iter().filter(|p| p.exists()).collect();
     let upload: Vec<PathBuf> = upload.into_iter().filter(|p| p.exists()).collect();
     if !send.is_empty() {
-        match transfer::enqueue_uploads(app, &send, None, true) {
+        match transfer::enqueue_uploads(app, &send, None, true, &[]) {
             Ok(n) => {
                 let body = if app.state::<crate::auth::Auth>().ready() {
                     "传完会出现在传输助手里"
@@ -248,7 +248,7 @@ pub fn desktop_pick_folder_done(
     if cancelled {
         return Ok(0);
     }
-    transfer::enqueue_uploads(&app, &paths, folder_id, false)
+    transfer::enqueue_uploads(&app, &paths, folder_id, false, &[])
 }
 
 #[cfg(test)]

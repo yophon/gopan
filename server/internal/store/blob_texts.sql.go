@@ -191,17 +191,27 @@ JOIN blobs b ON b.id = bt.blob_id
 CROSS JOIN LATERAL (SELECT strpos(lower(bt.content), lower($1::text)) AS pos) h
 WHERE bt.terms @> $2::text[]
   AND n.owner_id = $3 AND n.deleted_at IS NULL AND h.pos > 0
-  AND ($4::timestamptz IS NULL
-       OR n.updated_at < $4::timestamptz
-       OR (n.updated_at = $4::timestamptz AND n.id > $5::uuid))
+  AND ($4::text[] IS NULL OR gopan_file_category(n.name, b.mime) = ANY($4::text[]))
+  AND ($5::timestamptz IS NULL OR n.updated_at >= $5::timestamptz)
+  AND ($6::timestamptz IS NULL OR n.updated_at < $6::timestamptz)
+  AND ($7::bigint IS NULL OR b.size >= $7::bigint)
+  AND ($8::bigint IS NULL OR b.size <= $8::bigint)
+  AND ($9::timestamptz IS NULL
+       OR n.updated_at < $9::timestamptz
+       OR (n.updated_at = $9::timestamptz AND n.id > $10::uuid))
 ORDER BY n.updated_at DESC, n.id
-LIMIT $6
+LIMIT $11
 `
 
 type SearchContentParams struct {
 	Q        string
 	Terms    []string
 	OwnerID  uuid.UUID
+	Types    []string
+	After    pgtype.Timestamptz
+	Before   pgtype.Timestamptz
+	MinSize  *int64
+	MaxSize  *int64
 	CUpdated pgtype.Timestamptz
 	CID      *uuid.UUID
 	Lim      int32
@@ -230,6 +240,11 @@ func (q *Queries) SearchContent(ctx context.Context, arg SearchContentParams) ([
 		arg.Q,
 		arg.Terms,
 		arg.OwnerID,
+		arg.Types,
+		arg.After,
+		arg.Before,
+		arg.MinSize,
+		arg.MaxSize,
 		arg.CUpdated,
 		arg.CID,
 		arg.Lim,
@@ -268,7 +283,7 @@ func (q *Queries) SearchContent(ctx context.Context, arg SearchContentParams) ([
 
 const searchContentInSubtree = `-- name: SearchContentInSubtree :many
 WITH RECURSIVE sub AS (
-    SELECT r.id FROM nodes r WHERE r.id = $7 AND r.deleted_at IS NULL
+    SELECT r.id FROM nodes r WHERE r.id = $12 AND r.deleted_at IS NULL
     UNION ALL
     SELECT c.id FROM nodes c JOIN sub s ON c.parent_id = s.id
     WHERE c.deleted_at IS NULL
@@ -286,17 +301,27 @@ JOIN blobs b ON b.id = bt.blob_id
 CROSS JOIN LATERAL (SELECT strpos(lower(bt.content), lower($1::text)) AS pos) h
 WHERE bt.terms @> $2::text[]
   AND n.id IN (SELECT s.id FROM sub s) AND n.owner_id = $3 AND h.pos > 0
-  AND ($4::timestamptz IS NULL
-       OR n.updated_at < $4::timestamptz
-       OR (n.updated_at = $4::timestamptz AND n.id > $5::uuid))
+  AND ($4::text[] IS NULL OR gopan_file_category(n.name, b.mime) = ANY($4::text[]))
+  AND ($5::timestamptz IS NULL OR n.updated_at >= $5::timestamptz)
+  AND ($6::timestamptz IS NULL OR n.updated_at < $6::timestamptz)
+  AND ($7::bigint IS NULL OR b.size >= $7::bigint)
+  AND ($8::bigint IS NULL OR b.size <= $8::bigint)
+  AND ($9::timestamptz IS NULL
+       OR n.updated_at < $9::timestamptz
+       OR (n.updated_at = $9::timestamptz AND n.id > $10::uuid))
 ORDER BY n.updated_at DESC, n.id
-LIMIT $6
+LIMIT $11
 `
 
 type SearchContentInSubtreeParams struct {
 	Q        string
 	Terms    []string
 	OwnerID  uuid.UUID
+	Types    []string
+	After    pgtype.Timestamptz
+	Before   pgtype.Timestamptz
+	MinSize  *int64
+	MaxSize  *int64
 	CUpdated pgtype.Timestamptz
 	CID      *uuid.UUID
 	Lim      int32
@@ -325,6 +350,11 @@ func (q *Queries) SearchContentInSubtree(ctx context.Context, arg SearchContentI
 		arg.Q,
 		arg.Terms,
 		arg.OwnerID,
+		arg.Types,
+		arg.After,
+		arg.Before,
+		arg.MinSize,
+		arg.MaxSize,
 		arg.CUpdated,
 		arg.CID,
 		arg.Lim,

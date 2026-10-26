@@ -13,6 +13,7 @@ import {
   Document,
   Download,
   FolderOpened,
+  Monitor,
   RefreshRight,
   Upload,
   VideoPause,
@@ -48,6 +49,7 @@ import {
   isActiveDesktopTask,
 } from '@/desktop/transfers'
 import type { DesktopTask, DesktopTaskAction } from '@/desktop/transfers'
+import { desktopEdits, editAction, editStatusText } from '@/desktop/edits'
 
 /**
  * 全局上传抽屉:右下角浮动面板,AppShell 挂载。
@@ -66,6 +68,18 @@ setUploadInvalidator((parentId) => {
   void queryClient.invalidateQueries({ queryKey: ['children', parentId] })
   void queryClient.invalidateQueries({ queryKey: ['breadcrumb'] })
   void queryClient.invalidateQueries({ queryKey: ['me'] }) // 用量条跟进
+})
+
+// 桌面端外壳那边传完的(doc/29):同样刷新目录列表。不刷的话,接着往同一个文件夹传同名文件时问不出「替换」
+const desktopDoneSeen = new Set<number>()
+watch(desktopTasks, (list) => {
+  for (const t of list) {
+    if (t.kind !== 'upload' || t.state !== 'done' || desktopDoneSeen.has(t.id)) continue
+    desktopDoneSeen.add(t.id)
+    void queryClient.invalidateQueries({ queryKey: ['children', t.parentId] })
+    void queryClient.invalidateQueries({ queryKey: ['breadcrumb'] })
+    void queryClient.invalidateQueries({ queryKey: ['me'] })
+  }
 })
 
 // 有进行中任务时,关闭页面前提示
@@ -113,7 +127,8 @@ const visible = computed(
       uploads.tasks.length > 0 ||
       uploads.orphanRecords.length > 0 ||
       jobs.items.value.length > 0 ||
-      desktopTasks.value.length > 0),
+      desktopTasks.value.length > 0 ||
+      desktopEdits.value.length > 0),
 )
 const finishedJobs = computed(() => jobItems.value.filter((j) => !isActiveJob(j)).length)
 const finishedDesktop = computed(() => desktopTasks.value.filter((t) => t.state === 'done' || t.state === 'failed').length)
@@ -150,6 +165,15 @@ function desktopProgressStatus(t: DesktopTask): 'success' | 'exception' | undefi
   if (t.state === 'done') return 'success'
   if (t.state === 'failed') return 'exception'
   return undefined
+}
+
+async function onEditAction(nodeId: string, action: 'open' | 'reveal' | 'stop') {
+  try {
+    const kept = await editAction(nodeId, action)
+    if (kept) ElMessage.info(`本地还有没传回的修改,副本留在 ${kept}`)
+  } catch (err) {
+    ElMessage.error(typeof err === 'string' ? err : '操作失败')
+  }
 }
 
 /** 上传完的:去云端看它所在的文件夹 */
@@ -498,10 +522,47 @@ function onResumeFileChosen(e: Event) {
           </div>
         </template>
 
+        <!-- 用本地程序打开的文件(桌面端):存盘后自动传回新版本 -->
+        <template v-if="desktopEdits.length > 0">
+          <el-divider
+            v-if="uploads.tasks.length > 0 || uploads.orphanRecords.length > 0 || desktopTasks.length > 0"
+            class="divider"
+          />
+          <div class="section-title">本地编辑</div>
+          <div v-for="e in desktopEdits" :key="'e' + e.nodeId" class="task">
+            <el-icon class="dir-icon"><Monitor /></el-icon>
+            <div class="task-main">
+              <div class="task-name" :title="e.localPath">{{ e.name }}</div>
+              <div class="task-status" :class="{ error: e.state === 'conflict' || !!e.note }">
+                <span class="job-text" :title="editStatusText(e)">{{ editStatusText(e) }}</span>
+              </div>
+            </div>
+            <div class="task-ops">
+              <el-button
+                v-if="e.state !== 'downloading'"
+                link
+                size="small"
+                :icon="Document"
+                title="打开"
+                @click="onEditAction(e.nodeId, 'open')"
+              />
+              <el-button
+                v-if="e.state !== 'downloading'"
+                link
+                size="small"
+                :icon="FolderOpened"
+                title="在文件夹中显示"
+                @click="onEditAction(e.nodeId, 'reveal')"
+              />
+              <el-button link size="small" :icon="Close" title="不再跟踪" @click="onEditAction(e.nodeId, 'stop')" />
+            </div>
+          </div>
+        </template>
+
         <!-- 后台任务:离线下载、解压(服务端执行,关掉页面也继续) -->
         <template v-if="jobItems.length > 0 || jobsPinned">
           <el-divider
-            v-if="uploads.tasks.length > 0 || uploads.orphanRecords.length > 0 || desktopTasks.length > 0"
+            v-if="uploads.tasks.length > 0 || uploads.orphanRecords.length > 0 || desktopTasks.length > 0 || desktopEdits.length > 0"
             class="divider"
           />
           <div ref="jobsSection" class="section-title">后台任务</div>

@@ -10,6 +10,7 @@ import {
   Document,
   Download,
   EditPen,
+  Monitor,
   Headset,
   Reading,
   View,
@@ -54,7 +55,7 @@ import ArchiveViewer from './ArchiveViewer.vue'
 import VideoPlayer from './VideoPlayer.vue'
 import MarkdownFrame from './MarkdownFrame.vue'
 import AudioPanel from '@/components/player/AudioPanel.vue'
-import { downloadToComputer } from '@/composables/nodeDownload'
+import { downloadToComputer, openWithLocalApp } from '@/composables/nodeDownload'
 import { nativeDownloads } from '@/desktop/transfers'
 
 /** 访客模式(分享页):带访客 token 请求;访客是只读白名单,不能触发文档转换 */
@@ -505,6 +506,16 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
               {{ mdSource ? '渲染' : '源文件' }}
             </el-button>
             <el-button
+              v-if="nativeDownloads() && node && !isMobile"
+              :icon="Monitor"
+              text
+              class="header-btn"
+              title="用电脑上的程序打开,存盘后自动传回新版本"
+              @click="openWithLocalApp(node)"
+            >
+              本地打开
+            </el-button>
+            <el-button
               :icon="Download"
               text
               class="header-btn"
@@ -659,7 +670,10 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
           <!-- NONE / 兜底 -->
           <div v-else class="preview-placeholder">
             <el-empty description="该类型暂不支持预览">
-              <el-button type="primary" :icon="Download" :loading="downloading" @click="onDownload">
+              <el-button v-if="nativeDownloads() && node" type="primary" :icon="Monitor" @click="openWithLocalApp(node)">
+                用本地程序打开
+              </el-button>
+              <el-button :type="nativeDownloads() ? 'default' : 'primary'" :icon="Download" :loading="downloading" @click="onDownload">
                 下载文件
               </el-button>
             </el-empty>

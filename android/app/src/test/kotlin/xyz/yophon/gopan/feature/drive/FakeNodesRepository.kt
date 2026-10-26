@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import xyz.yophon.gopan.core.data.ContentHit
 import xyz.yophon.gopan.core.data.ContentHitPage
+import xyz.yophon.gopan.core.data.SearchFilters
 import xyz.yophon.gopan.core.data.Listing
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodeKind
@@ -92,8 +93,8 @@ class FakeNodesRepository : NodesRepository {
         return pages.getOrNull(index) ?: NodePage.EMPTY
     }
 
-    override suspend fun search(q: String, cursor: String?): NodePage {
-        calls += "search($q,$cursor)"
+    override suspend fun search(q: String, cursor: String?, filters: SearchFilters): NodePage {
+        calls += if (filters.isDefault) "search($q,$cursor)" else "search($q,$cursor,$filters)"
         if (networkDown) throw GopanException(GopanErrors.NETWORK, "网络连接失败,请检查网络后重试")
         val pages = searchResults[q] ?: return NodePage.EMPTY
         return pages.getOrNull(cursor?.toInt() ?: 0) ?: NodePage.EMPTY
@@ -108,8 +109,8 @@ class FakeNodesRepository : NodesRepository {
     /** 内容搜索每次请求的耗时(虚拟时钟):测"换关键词取消在途请求、丢弃旧页" */
     var contentDelayMs = 0L
 
-    override suspend fun searchContent(q: String, cursor: String?): ContentHitPage {
-        calls += "searchContent($q,$cursor)"
+    override suspend fun searchContent(q: String, cursor: String?, filters: SearchFilters): ContentHitPage {
+        calls += if (filters.isDefault) "searchContent($q,$cursor)" else "searchContent($q,$cursor,$filters)"
         if (contentDelayMs > 0) delay(contentDelayMs)
         if (networkDown) throw GopanException(GopanErrors.NETWORK, "网络连接失败,请检查网络后重试")
         contentErrors[q]?.let { throw it }

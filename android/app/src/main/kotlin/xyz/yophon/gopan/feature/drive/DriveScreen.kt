@@ -154,7 +154,8 @@ import androidx.compose.material3.AlertDialog
 fun DriveScreen(
     onOpenFolder: (folderId: String) -> Unit,
     onCrumbClick: (Crumb) -> Unit,
-    onOpenSearch: () -> Unit,
+    /** 当前在某个文件夹里时带上它(根目录为 null):搜索默认只搜这个文件夹 */
+    onOpenSearch: (Crumb?) -> Unit,
     onOpenTrash: () -> Unit,
     onOpenTransfers: () -> Unit,
     onOpenPreview: (nodeId: String) -> Unit,
@@ -419,7 +420,7 @@ private fun DriveTopBar(
     viewModel: DriveViewModel,
     onBack: (() -> Unit)?,
     onCrumbClick: (Crumb) -> Unit,
-    onOpenSearch: () -> Unit,
+    onOpenSearch: (Crumb?) -> Unit,
     onOpenTrash: () -> Unit,
     onOpenTransfers: () -> Unit,
     onOpenRecentPlays: () -> Unit,
@@ -451,7 +452,7 @@ private fun DriveTopBar(
                 }
             },
             actions = {
-                IconButton(onClick = onOpenSearch) {
+                IconButton(onClick = { onOpenSearch(state.crumbs.lastOrNull()) }) {
                     Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.drive_action_search))
                 }
                 IconButton(onClick = viewModel::toggleViewMode) {

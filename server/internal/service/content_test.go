@@ -78,7 +78,7 @@ func TestContentSearch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	page, err := cs.Search(ctx, alice, nil, "租房合同", nil)
+	page, err := cs.Search(ctx, alice, nil, "租房合同", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestContentSearch(t *testing.T) {
 	// 不分大小写、全角也能搜到;关键词中间的空格与断行不影响(归一化后一致)
 	seedText(t, pool, alice, nil, "invoice.txt", "Total amount due: INVOICE 2024-118")
 	for _, q := range []string{"invoice 2024", "ＩＮＶＯＩＣＥ", "amount due"} {
-		p, err := cs.Search(ctx, alice, nil, q, nil)
+		p, err := cs.Search(ctx, alice, nil, q, nil, nil)
 		if err != nil || len(p.Items) != 1 || p.Items[0].Row.Name != "invoice.txt" {
 			t.Fatalf("%q: %v %v", q, hitNames(p), err)
 		}
@@ -111,12 +111,12 @@ func TestContentSearch(t *testing.T) {
 
 	// 太短
 	for _, q := range []string{"合", "ab", "   "} {
-		if _, err := cs.Search(ctx, alice, nil, q, nil); err == nil || !strings.Contains(err.Error(), "QUERY_TOO_SHORT") {
+		if _, err := cs.Search(ctx, alice, nil, q, nil, nil); err == nil || !strings.Contains(err.Error(), "QUERY_TOO_SHORT") {
 			t.Fatalf("%q 应 QUERY_TOO_SHORT,got %v", q, err)
 		}
 	}
 	// 关掉内容索引
-	if _, err := service.NewContentSearch(pool, false).Search(ctx, alice, nil, "租房合同", nil); err == nil || !strings.Contains(err.Error(), "CONTENT_SEARCH_DISABLED") {
+	if _, err := service.NewContentSearch(pool, false).Search(ctx, alice, nil, "租房合同", nil, nil); err == nil || !strings.Contains(err.Error(), "CONTENT_SEARCH_DISABLED") {
 		t.Fatalf("disabled: %v", err)
 	}
 
@@ -163,7 +163,7 @@ func TestContentSearchPagingAndSubtree(t *testing.T) {
 	var cursor *string
 	pages := 0
 	for {
-		page, err := cs.Search(ctx, owner, nil, "项目进展", cursor)
+		page, err := cs.Search(ctx, owner, nil, "项目进展", cursor, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -182,7 +182,7 @@ func TestContentSearchPagingAndSubtree(t *testing.T) {
 	if len(seen) != 60 || pages != 2 {
 		t.Fatalf("应 2 页共 60 条,got %d 页 %d 条", pages, len(seen))
 	}
-	sub, err := cs.Search(ctx, owner, &dir.ID, "项目进展", nil)
+	sub, err := cs.Search(ctx, owner, &dir.ID, "项目进展", nil, nil)
 	if err != nil || len(sub.Items) != 20 {
 		t.Fatalf("子树内应 20 条,got %d %v", len(sub.Items), err)
 	}

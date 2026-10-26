@@ -15,6 +15,8 @@ export interface DesktopTask {
   nodeId: string | null
   parentId: string | null
   toChat: boolean
+  /** 空 = 普通传输;open = 下载完用本地程序打开;edit = 本地改完传回新版本 */
+  purpose: '' | 'open' | 'edit'
   size: number
   done: number
   files: number
@@ -33,6 +35,37 @@ export interface PickRequest {
   names: string[]
 }
 
+/** 用本地程序打开的文件(外壳盯着它,存盘后传回新版本) */
+export interface DesktopEdit {
+  nodeId: string
+  name: string
+  parentId: string | null
+  localPath: string
+  state: 'downloading' | 'watching' | 'uploading' | 'conflict' | 'stopped'
+  note: string | null
+  uploads: number
+  /** 本地有还没传回的改动 */
+  unsynced: boolean
+  updatedAt: number
+}
+
+export function editStatusText(e: DesktopEdit): string {
+  switch (e.state) {
+    case 'downloading':
+      return '正在下载,下完自动打开'
+    case 'uploading':
+      return '正在传回新版本'
+    case 'conflict':
+      return e.note ?? '有冲突,没有覆盖云端'
+    case 'stopped':
+      return e.note ?? '已停止'
+    case 'watching':
+      if (e.note) return e.note
+      if (e.unsynced) return '有改动,存完就传回'
+      return e.uploads > 0 ? `存盘后自动传回 · 已传回 ${e.uploads} 次` : '已打开,存盘后自动传回'
+  }
+}
+
 export function isActiveDesktopTask(t: DesktopTask): boolean {
   return t.state === 'queued' || t.state === 'running'
 }
@@ -49,6 +82,7 @@ export function desktopStatusText(t: DesktopTask, speed?: number): string {
       if (t.retryAt && t.error) return `等会儿重试:${t.error}`
       return '排队中'
     case 'running':
+      if (t.purpose === 'edit' && t.phase !== 'hashing') return '传回新版本'
       switch (t.phase) {
         case 'listing':
           return '正在列出文件'
@@ -59,6 +93,7 @@ export function desktopStatusText(t: DesktopTask, speed?: number): string {
         case 'verifying':
           return '校验中'
         default:
+          if (t.purpose === 'open') return speed ? `下载后打开 · ${formatBytes(speed)}/s` : '下载后打开'
           return speed ? `${formatBytes(speed)}/s` : t.kind === 'download' ? '下载中' : '上传中'
       }
     case 'paused':

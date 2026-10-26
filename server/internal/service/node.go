@@ -954,6 +954,7 @@ type cursorPayload struct {
 	Name string    `json:"n,omitempty"` // NAME 键
 	Size *int64    `json:"s,omitempty"` // SIZE 键,nil = 该行无 blob(文件夹)
 	T    int64     `json:"t,omitempty"` // 时间键 unixnano(UPDATED_AT / SEARCH / TRASH)
+	Off  int       `json:"off,omitempty"` // 偏移翻页(SEARCH_FILTERED)
 	ID   uuid.UUID `json:"id"`          // 平局决胜
 }
 

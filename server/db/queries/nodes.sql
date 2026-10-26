@@ -182,6 +182,56 @@ LIMIT $3;
 SELECT count(*) FROM nodes
 WHERE owner_id = $1 AND deleted_at IS NULL AND name ILIKE '%' || $2 || '%';
 
+-- name: SearchNodesFiltered :many
+-- 带筛选的文件名搜索(doc/30):类型(gopan_file_category,folder = 文件夹)、修改时间、大小、只搜某个文件夹的子树、排序。
+-- 关键词可以为空(只按筛选找,比如「所有大于 1 GB 的视频」);排序方式多,翻页用偏移。
+WITH RECURSIVE sub AS (
+    SELECT r.id FROM nodes r
+    WHERE r.id = sqlc.narg(root)::uuid AND r.owner_id = sqlc.arg(owner_id) AND r.deleted_at IS NULL
+    UNION ALL
+    SELECT c.id FROM nodes c JOIN sub s ON c.parent_id = s.id
+    WHERE c.deleted_at IS NULL
+)
+SELECT n.*, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = sqlc.arg(owner_id) AND n.deleted_at IS NULL
+  AND n.name ILIKE '%' || sqlc.arg(q)::text || '%'
+  AND (sqlc.narg(root)::uuid IS NULL OR (n.id <> sqlc.narg(root)::uuid AND n.id IN (SELECT s.id FROM sub s)))
+  AND (sqlc.narg(types)::text[] IS NULL
+       OR (n.kind = 'folder' AND 'folder' = ANY(sqlc.narg(types)::text[]))
+       OR (n.kind = 'file' AND gopan_file_category(n.name, b.mime) = ANY(sqlc.narg(types)::text[])))
+  AND (sqlc.narg(after)::timestamptz IS NULL OR n.updated_at >= sqlc.narg(after)::timestamptz)
+  AND (sqlc.narg(before)::timestamptz IS NULL OR n.updated_at < sqlc.narg(before)::timestamptz)
+  AND (sqlc.narg(min_size)::bigint IS NULL OR b.size >= sqlc.narg(min_size)::bigint)
+  AND (sqlc.narg(max_size)::bigint IS NULL OR b.size <= sqlc.narg(max_size)::bigint)
+ORDER BY
+  CASE WHEN sqlc.arg(sort)::text = 'NAME' THEN n.name COLLATE natural_sort END ASC,
+  CASE WHEN sqlc.arg(sort)::text = 'SIZE' THEN b.size END DESC NULLS LAST,
+  n.updated_at DESC, n.id
+LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
+
+-- name: CountSearchNodesFiltered :one
+WITH RECURSIVE sub AS (
+    SELECT r.id FROM nodes r
+    WHERE r.id = sqlc.narg(root)::uuid AND r.owner_id = sqlc.arg(owner_id) AND r.deleted_at IS NULL
+    UNION ALL
+    SELECT c.id FROM nodes c JOIN sub s ON c.parent_id = s.id
+    WHERE c.deleted_at IS NULL
+)
+SELECT count(*) FROM nodes n
+LEFT JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = sqlc.arg(owner_id) AND n.deleted_at IS NULL
+  AND n.name ILIKE '%' || sqlc.arg(q)::text || '%'
+  AND (sqlc.narg(root)::uuid IS NULL OR (n.id <> sqlc.narg(root)::uuid AND n.id IN (SELECT s.id FROM sub s)))
+  AND (sqlc.narg(types)::text[] IS NULL
+       OR (n.kind = 'folder' AND 'folder' = ANY(sqlc.narg(types)::text[]))
+       OR (n.kind = 'file' AND gopan_file_category(n.name, b.mime) = ANY(sqlc.narg(types)::text[])))
+  AND (sqlc.narg(after)::timestamptz IS NULL OR n.updated_at >= sqlc.narg(after)::timestamptz)
+  AND (sqlc.narg(before)::timestamptz IS NULL OR n.updated_at < sqlc.narg(before)::timestamptz)
+  AND (sqlc.narg(min_size)::bigint IS NULL OR b.size >= sqlc.narg(min_size)::bigint)
+  AND (sqlc.narg(max_size)::bigint IS NULL OR b.size <= sqlc.narg(max_size)::bigint);
+
 -- name: SearchNodesInSubtree :many
 -- 访客搜索:范围限定在分享根($1)的子树内
 WITH RECURSIVE sub AS (

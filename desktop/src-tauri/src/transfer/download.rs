@@ -142,7 +142,11 @@ pub async fn run(app: &AppHandle, task: &Task, live: &Live) -> Result<Outcome, R
     let name = intended.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| safe_name(&task.name));
     let final_path = {
         let _g = FINALIZE.lock().unwrap();
-        let p = unique_path(&dir, &name, exists);
+        // 「打开」用的缓存副本:就放在给定的位置,旧的(云端已经更新了)覆盖掉
+        let p = if task.purpose == "open" { intended.clone() } else { unique_path(&dir, &name, exists) };
+        if task.purpose == "open" && exists(&p) {
+            std::fs::remove_file(&p).map_err(|e| RunError::Fail(format!("旧的副本删不掉(还开着?):{e}")))?;
+        }
         std::fs::rename(&part, &p).map_err(io_fail)?;
         p
     };

@@ -75,7 +75,8 @@ import {
 import { formatBytes } from '@/utils/format'
 import { randomId } from '@/utils/id'
 import { downloadToComputer } from '@/composables/nodeDownload'
-import { nativeDownloads } from '@/desktop/transfers'
+import { desktopPercent, desktopStatusText, desktopTaskAction, desktopTasks, nativeDownloads } from '@/desktop/transfers'
+import { collectDropped, nativeUploads, uploadViaDesktop, type Handoff } from '@/desktop/handoff'
 
 // ---------- 会话指针(模块级,upload 完成回调与组件共享) ----------
 
@@ -231,6 +232,18 @@ const uploadingTasks = computed(() =>
         (t) => t.parentId === chatFolderRef.value && t.status !== 'done' && t.status !== 'canceled',
       )
     : [],
+)
+
+/** 桌面端交给外壳发的文件(doc/29):同样先放占位卡片,传完由服务端消息接替 */
+const desktopUploading = computed(() =>
+  desktopTasks.value.filter((t) => t.kind === 'upload' && t.toChat && t.state !== 'done'),
+)
+// 外壳那边传完一个:马上刷一次会话,不等下一轮轮询
+watch(
+  () => desktopUploading.value.length,
+  (n, old) => {
+    if (old !== undefined && n < old) invalidateChat()
+  },
 )
 
 /** 展开的长文本消息 id */
@@ -503,9 +516,21 @@ function pickFile() {
   input.onchange = () => {
     const files = Array.from(input.files ?? [])
     if (!files.length) return
-    void sendFiles(files)
+    if (nativeUploads()) void sendViaDesktop(files)
+    else void sendFiles(files)
   }
   input.click()
+}
+
+/** 桌面端:交给外壳发(缩到托盘照常传,退出再打开接着传) */
+async function sendViaDesktop(objects: Handoff[]) {
+  if (objects.length === 0) return
+  try {
+    await uploadViaDesktop(objects, { parentId: null, toChat: true })
+    void scrollToBottom(true)
+  } catch (err) {
+    ElMessage.error(typeof err === 'string' ? err : errorText(err, '发送失败'))
+  }
 }
 
 async function sendFiles(files: File[]) {
@@ -559,6 +584,11 @@ function onDrop(e: DragEvent) {
   if (!hasFiles(e)) return
   e.preventDefault()
   dragDepth.value = 0
+  if (nativeUploads() && e.dataTransfer) {
+    // 趁 drop 事件还没结束取出来(文件夹也能发)
+    void collectDropped(e.dataTransfer).then(sendViaDesktop)
+    return
+  }
   const files = Array.from(e.dataTransfer?.files ?? [])
   void sendFiles(files)
 }
@@ -944,6 +974,26 @@ function timeOf(iso: string): string {
             <el-icon v-if="task.status === 'failed'" title="重试" @click="retryTask(task.id)"><RefreshRight /></el-icon>
             <el-icon v-if="task.status === 'failed'" title="移除" @click="removeFinishedTask(task.id)"><Close /></el-icon>
             <el-icon v-else title="取消" @click="cancelTask(task.id)"><Close /></el-icon>
+          </div>
+        </div>
+      </div>
+      <div v-for="t in desktopUploading" :key="'d' + t.id" class="message-row">
+        <div class="file-card uploading" :class="{ failed: t.state === 'failed' }">
+          <el-icon class="file-icon"><Upload /></el-icon>
+          <div class="file-meta">
+            <div class="file-name">{{ t.name }}</div>
+            <el-progress
+              :percentage="desktopPercent(t)"
+              :show-text="false"
+              :stroke-width="4"
+              :status="t.state === 'failed' ? 'exception' : undefined"
+            />
+            <div class="file-size">{{ formatBytes(t.size) }} · {{ desktopStatusText(t) }}</div>
+          </div>
+          <div class="task-actions">
+            <el-icon v-if="t.state === 'failed'" title="重试" @click="desktopTaskAction(t.id, 'retry')"><RefreshRight /></el-icon>
+            <el-icon v-if="t.state === 'failed'" title="移除" @click="desktopTaskAction(t.id, 'remove')"><Close /></el-icon>
+            <el-icon v-else title="取消" @click="desktopTaskAction(t.id, 'cancel')"><Close /></el-icon>
           </div>
         </div>
       </div>

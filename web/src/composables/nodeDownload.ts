@@ -10,6 +10,7 @@ import { useUploadsStore } from '@/stores/uploads'
 import { markOpened } from '@/composables/quick'
 import type { NodeListItem } from '@/components/nodes/types'
 import { desktopDownload, nativeDownloads } from '@/desktop/transfers'
+import { openLocal } from '@/desktop/edits'
 
 function clickA(href: string, download?: string) {
   const a = document.createElement('a')
@@ -40,6 +41,18 @@ export async function downloadToComputer(nodes: { id: string; name: string; kind
     useUploadsStore().collapsed = false
   } catch (err) {
     ElMessage.error(typeof err === 'string' ? err : errorText(err, '下载失败'))
+  }
+}
+
+/**
+ * 桌面端「用本地程序打开」:外壳下到缓存、用系统默认程序打开,存盘后自动传回新版本(doc/29)
+ */
+export async function openWithLocalApp(node: { id: string; name: string }) {
+  try {
+    const opened = await openLocal(node.id)
+    if (!opened) ElMessage.info(`正在下载「${node.name}」,下完自动用本地程序打开`)
+  } catch (err) {
+    ElMessage.error(typeof err === 'string' ? err : errorText(err, '打不开'))
   }
 }
 

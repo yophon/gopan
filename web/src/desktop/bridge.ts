@@ -13,6 +13,7 @@ import { singleFlightRefresh } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useUploadsStore } from '@/stores/uploads'
 import { tokenExpiring } from './token'
+import { startDesktopEdits } from './edits'
 import { addPick, type PickRequest } from './pick'
 import { startDesktopTransfers } from './transfers'
 
@@ -98,4 +99,5 @@ export async function startDesktopBridge(router: Router): Promise<void> {
   void startDesktopTransfers(() => {
     uploads.collapsed = false
   })
+  void startDesktopEdits()
 }

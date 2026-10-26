@@ -10,6 +10,10 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
+import xyz.yophon.gopan.core.data.SearchFilters
+import xyz.yophon.gopan.core.data.SearchKind
+import xyz.yophon.gopan.core.data.SearchScope
+import xyz.yophon.gopan.core.data.SearchSort
 import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.feature.drive.FakeNodesRepository
@@ -58,6 +62,43 @@ class SearchViewModelTest {
         advanceUntilIdle()
         assertThat(vm.state.value.items.map { it.id }).containsExactly("r1", "r2").inOrder()
         assertThat(vm.state.value.nextCursor).isNull()
+    }
+
+    @Test
+    fun `filters alone search names but content still needs a keyword`() = runTest {
+        val vm = viewModel()
+        advanceUntilIdle()
+        assertThat(repo.calls).isEmpty()
+
+        vm.onFiltersChange(SearchFilters(kinds = setOf(SearchKind.VIDEO)))
+        advanceUntilIdle()
+        assertThat(vm.state.value.isIdle).isFalse()
+        assertThat(repo.calls).hasSize(1)
+        assertThat(repo.calls.single()).startsWith("search(,null,SearchFilters(kinds=[VIDEO]")
+
+        vm.onTabSelected(SearchTab.CONTENT)
+        advanceUntilIdle()
+        assertThat(vm.state.value.isContentIdle).isTrue()
+        assertThat(repo.calls.none { it.startsWith("searchContent") }).isTrue()
+
+        vm.clearFilters()
+        advanceUntilIdle()
+        assertThat(vm.state.value.isIdle).isTrue()
+    }
+
+    @Test
+    fun `opened from a folder searches only that folder until the scope is removed`() = runTest {
+        val vm = viewModel(SavedStateHandle(mapOf(SearchViewModel.FOLDER_ID_KEY to "f1", SearchViewModel.FOLDER_NAME_KEY to "工作")))
+        assertThat(vm.state.value.filters.scope).isEqualTo(SearchScope("f1", "工作"))
+        vm.onQueryChange("报告")
+        advanceUntilIdle()
+        assertThat(repo.calls.last()).contains("scope=SearchScope(folderId=f1")
+
+        vm.onFiltersChange(vm.state.value.filters.copy(scope = null, sort = SearchSort.NAME))
+        advanceUntilIdle()
+        assertThat(repo.calls.last()).startsWith("search(报告,null,SearchFilters(")
+        assertThat(repo.calls.last()).contains("sort=NAME")
+        assertThat(repo.calls.last()).contains("scope=null")
     }
 
     @Test
