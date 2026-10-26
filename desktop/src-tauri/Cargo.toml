@@ -1,6 +1,6 @@
 [package]
 name = "gopan-desktop"
-version = "3.14.0"
+version = "3.15.0"
 description = "gopan 桌面端(Windows,doc/29)"
 edition = "2021"
 publish = false
@@ -40,6 +40,8 @@ winreg = "0.55"
 arboard = { version = "3.6", default-features = false, features = ["image-data"] }
 png = "0.17"
 tauri-winrt-notification = "0.8"
+# 与 wry 同一个版本:网页交来的文件(postMessageWithAdditionalObjects)要从 WebView2 里读路径
+webview2-com = "0.39"
 windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_System_DataExchange",
