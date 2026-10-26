@@ -44,6 +44,11 @@ class MainScaffoldViewModel @Inject constructor(
 
     fun consume(request: NavRequest) = navRequests.consume(request)
 
+    /** 桌面上的文件夹快捷方式要打开的文件夹 */
+    val folderRequest: StateFlow<String?> = navRequests.folder
+
+    fun consumeFolder(id: String) = navRequests.consumeFolder(id)
+
     /** 下次打开传输列表停在「后台任务」栏(解压、离线下载提交后点「查看」) */
     fun requestJobsTab() = tabRequest.requestJobs()
 

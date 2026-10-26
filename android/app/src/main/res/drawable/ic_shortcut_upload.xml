@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 长按图标的快捷方式 / 桌面快捷方式:上传文件。墨黑圆底 + 白色图形,与 App 图标一致 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#FF121212"
+        android:pathData="M24,0A24,24 0,1 1,24 48A24,24 0,1 1,24 0z" />
+    <group
+        android:translateX="12"
+        android:translateY="12">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M9,16h6v-6h4l-7,-7 -7,7h4zM5,18h14v2H5z" />
+    </group>
+</vector>

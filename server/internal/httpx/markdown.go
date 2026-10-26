@@ -3,6 +3,7 @@ package httpx
 import (
 	"errors"
 	"html"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -25,6 +26,8 @@ const markdownCSP = "sandbox allow-popups allow-popups-to-escape-sandbox; defaul
 //	GET /md/{node}?token=<access>[&theme=light|dark][&pt=<px>][&pb=<px>]  渲染成一页 HTML;pt / pb:正文前后多留的空白
 //	                                                       (App 的阅读页铺满整屏,顶栏浮在上面、底部导航浮在下面,要让出它们)
 //	GET /md/{node}/f?p=<相对路径>&token=<access>           那篇里的相对路径:图片 / 文件 302 到签名地址,.md 跳到它的渲染页
+//	POST /md/{node}/preview[?theme=…]                      编辑时边写边看(doc/25):请求体是编辑框里还没保存的文字,渲染方式与
+//	                                                       上面一样,相对路径照样按这篇所在的文件夹解析;只给登录用户(访客不能编辑)
 //
 // 相对路径放在查询参数里而不是路径里:路径里的 ../ 会被浏览器和路由先规范化掉。
 //
@@ -66,6 +69,29 @@ func MarkdownHandler(auth *service.Auth, md *service.Markdown, shares *service.S
 			suffix += "&pb=" + strconv.Itoa(padBottom)
 		}
 
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/preview") {
+			if ident.Scope != service.ScopeUser {
+				mdError(w, http.StatusForbidden, "只有自己的文件能编辑")
+				return
+			}
+			row, err := md.Node(r.Context(), ident.UserID, nodeID)
+			if err != nil {
+				mdServiceErr(w, err)
+				return
+			}
+			src, err := io.ReadAll(io.LimitReader(r.Body, mdrender.MaxSize+1))
+			if err != nil {
+				mdError(w, http.StatusBadRequest, "读不到内容")
+				return
+			}
+			if len(src) > mdrender.MaxSize {
+				mdError(w, http.StatusRequestEntityTooLarge, "太长了,预览不了")
+				return
+			}
+			writeMarkdown(w, nodeID, row.Name, src, theme, padTop, padBottom, suffix)
+			return
+		}
+
 		if strings.HasSuffix(r.URL.Path, "/f") {
 			rel := q.Get("p")
 			if rel == "" {
@@ -104,24 +130,29 @@ func MarkdownHandler(auth *service.Auth, md *service.Markdown, shares *service.S
 			mdServiceErr(w, err)
 			return
 		}
-		base := "/md/" + nodeID.String() + "/f?p="
-		tail := "&" + strings.TrimPrefix(suffix, "?")
-		out, err := mdrender.Render(src, mdrender.Options{Theme: theme, PadTop: padTop, PadBottom: padBottom, Title: row.Name, Resolve: func(rel string, _ bool) string {
-			return base + url.QueryEscape(strings.TrimPrefix(rel, "./")) + tail
-		}})
-		if err != nil {
-			slog.Warn("render markdown", "node", nodeID, "err", err)
-			mdError(w, http.StatusUnprocessableEntity, "渲染失败,请看源文件")
-			return
-		}
-		h := w.Header()
-		h.Set("Content-Type", "text/html; charset=utf-8")
-		h.Set("Content-Security-Policy", markdownCSP)
-		h.Set("X-Frame-Options", "SAMEORIGIN")
-		h.Set("Referrer-Policy", "no-referrer")
-		h.Set("Cache-Control", "private, no-store")
-		_, _ = w.Write(out)
+		writeMarkdown(w, nodeID, row.Name, src, theme, padTop, padBottom, suffix)
 	})
+}
+
+// writeMarkdown 渲染一篇并写回(相对路径改写到 /md/{node}/f,带上同样的 token 与主题)
+func writeMarkdown(w http.ResponseWriter, nodeID uuid.UUID, name string, src []byte, theme string, padTop, padBottom int, suffix string) {
+	base := "/md/" + nodeID.String() + "/f?p="
+	tail := "&" + strings.TrimPrefix(suffix, "?")
+	out, err := mdrender.Render(src, mdrender.Options{Theme: theme, PadTop: padTop, PadBottom: padBottom, Title: name, Resolve: func(rel string, _ bool) string {
+		return base + url.QueryEscape(strings.TrimPrefix(rel, "./")) + tail
+	}})
+	if err != nil {
+		slog.Warn("render markdown", "node", nodeID, "err", err)
+		mdError(w, http.StatusUnprocessableEntity, "渲染失败,请看源文件")
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", "text/html; charset=utf-8")
+	h.Set("Content-Security-Policy", markdownCSP)
+	h.Set("X-Frame-Options", "SAMEORIGIN")
+	h.Set("Referrer-Policy", "no-referrer")
+	h.Set("Cache-Control", "private, no-store")
+	_, _ = w.Write(out)
 }
 
 func mdServiceErr(w http.ResponseWriter, err error) {

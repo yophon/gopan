@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 桌面入口:长按图标的快捷方式、文件夹「添加到桌面」、传输助手小组件 -->
+<resources>
+    <string name="shortcut_upload">上传文件</string>
+    <string name="shortcut_upload_long">上传文件到「我的文件」</string>
+    <string name="shortcut_chat">传输助手</string>
+    <string name="shortcut_search">搜索</string>
+
+    <string name="quick_action_uploading">正在上传 %1$d 个文件到「我的文件」</string>
+    <string name="quick_action_sent_to_chat">正在发 %1$d 个文件到传输助手</string>
+    <string name="quick_action_failed">没能加入上传,打开 gopan 看看</string>
+
+    <string name="drive_action_pin_home">添加到桌面</string>
+    <string name="drive_msg_pin_unsupported">这个桌面不支持添加快捷方式</string>
+
+    <string name="widget_chat_title">传输助手</string>
+    <string name="widget_chat_open">打开传输助手</string>
+    <string name="widget_chat_photo">发照片到传输助手</string>
+    <string name="widget_chat_file">发文件到传输助手</string>
+    <string name="widget_chat_description">一点就把照片、文件发到传输助手</string>
+</resources>

@@ -175,15 +175,19 @@ class IncomingShareStore @Inject constructor(
 }
 
 /**
- * 应用内导航请求(通知点按、系统分享):主界面收集后跳转并清空。OPEN_JOBS = 传输列表并停在「后台任务」栏;
- * OPEN_NOTIFICATIONS = 站内通知列表(系统通知栏里的站内通知点按)
+ * 应用内导航请求(通知点按、系统分享、桌面快捷方式与小组件):主界面收集后跳转并清空。OPEN_JOBS = 传输列表并停在「后台任务」栏;
+ * OPEN_NOTIFICATIONS = 站内通知列表(系统通知栏里的站内通知点按);OPEN_SEARCH = 搜索页(长按图标的快捷方式)
  */
-enum class NavRequest { OPEN_CHAT, OPEN_TRANSFERS, OPEN_JOBS, OPEN_NOTIFICATIONS }
+enum class NavRequest { OPEN_CHAT, OPEN_TRANSFERS, OPEN_JOBS, OPEN_NOTIFICATIONS, OPEN_SEARCH }
 
 @Singleton
 class AppNavRequests @Inject constructor() {
     private val _request = MutableStateFlow<NavRequest?>(null)
     val request: StateFlow<NavRequest?> = _request.asStateFlow()
+
+    /** 桌面上的文件夹快捷方式:要打开的文件夹 id */
+    private val _folder = MutableStateFlow<String?>(null)
+    val folder: StateFlow<String?> = _folder.asStateFlow()
 
     fun post(request: NavRequest) {
         _request.value = request
@@ -191,5 +195,13 @@ class AppNavRequests @Inject constructor() {
 
     fun consume(request: NavRequest) {
         _request.compareAndSet(request, null)
+    }
+
+    fun postFolder(id: String) {
+        _folder.value = id
+    }
+
+    fun consumeFolder(id: String) {
+        _folder.compareAndSet(id, null)
     }
 }

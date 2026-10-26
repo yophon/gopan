@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 传输助手小组件:3×1,能横向拉宽;没有要定时刷新的内容 -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_chat_description"
+    android:initialLayout="@layout/widget_chat"
+    android:minWidth="180dp"
+    android:minHeight="48dp"
+    android:minResizeWidth="140dp"
+    android:previewLayout="@layout/widget_chat"
+    android:resizeMode="horizontal"
+    android:targetCellWidth="3"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

@@ -83,6 +83,28 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- 长按图标的「上传文件」、小组件的「发照片」「发文件」:透明的一页,只弹系统选择器,选好入队就关。
+             taskAffinity 为空、不进最近任务:选完回到原来的桌面 -->
+        <activity
+            android:name=".feature.shortcut.QuickActionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Gopan.Sheet" />
+
+        <!-- 桌面小组件「传输助手」 -->
+        <receiver
+            android:name=".feature.shortcut.ChatWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_chat_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_chat_info" />
+        </receiver>
+
         <!-- 拍照落点与「用其他应用打开」交给其它应用时用的 content:// -->
         <provider
             android:name="androidx.core.content.FileProvider"

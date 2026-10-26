@@ -203,8 +203,20 @@ fun MainScaffold(onOpenPreview: (nodeId: String) -> Unit, viewModel: MainScaffol
                 navController.navigate(Routes.Notifications) { launchSingleTop = true }
                 viewModel.consume(r)
             }
+            NavRequest.OPEN_SEARCH -> {
+                navController.navigate(Routes.Search()) { launchSingleTop = true }
+                viewModel.consume(r)
+            }
             null -> Unit
         }
+    }
+
+    // 桌面上的文件夹快捷方式:直接进那个文件夹
+    val folderRequest by viewModel.folderRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(folderRequest) {
+        val id = folderRequest ?: return@LaunchedEffect
+        navController.navigate(Routes.Folder(id)) { launchSingleTop = true }
+        viewModel.consumeFolder(id)
     }
 
     // 系统分享「剪藏到 gopan」后点了「打开」:进阅读页(doc/23 五.3)

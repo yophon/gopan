@@ -297,6 +297,9 @@ fn finished(app: &AppHandle, id: i64) {
 
 async fn reporter(app: AppHandle) {
     let mut was_active = false;
+    // 任务栏进度、托盘「最近传输」:变了才去改
+    let mut last_progress: Option<Option<u64>> = None;
+    let mut last_recent: Option<Vec<i64>> = None;
     loop {
         tokio::time::sleep(Duration::from_millis(500)).await;
         let eng = engine(&app);
@@ -305,6 +308,18 @@ async fn reporter(app: AppHandle) {
             let list = views(&app);
             let _ = app.emit(TASKS_EVENT, &list);
             tray::set_tooltip(&app, &tooltip(&list));
+            let progress = overall_progress(&list);
+            if last_progress != Some(progress) {
+                set_taskbar_progress(&app, progress);
+                last_progress = Some(progress);
+            }
+            let recent: Vec<i64> = recent_of(&list, RECENT_N).iter().map(|(id, _)| *id).collect();
+            if last_recent.as_ref() != Some(&recent) {
+                if last_recent.is_some() {
+                    tray::refresh(&app);
+                }
+                last_recent = Some(recent);
+            }
         }
         was_active = active;
         if now_ms() - eng.last_finish.load(Ordering::Relaxed) >= TOAST_GATHER_MS {
@@ -314,6 +329,64 @@ async fn reporter(app: AppHandle) {
             }
         }
     }
+}
+
+/// 在传的总进度(百分比);没有在传的为 None
+fn overall_progress(list: &[TaskView]) -> Option<u64> {
+    let active: Vec<&TaskView> = list.iter().filter(|v| matches!(v.state, State::Running | State::Queued)).collect();
+    if active.is_empty() {
+        return None;
+    }
+    let size: i64 = active.iter().map(|v| v.size.max(0)).sum();
+    let done: i64 = active.iter().map(|v| v.done.clamp(0, v.size.max(0))).sum();
+    Some(if size > 0 { (done * 100 / size) as u64 } else { 0 })
+}
+
+/// 任务栏上 gopan 图标的进度条(主窗口隐藏在托盘时任务栏里没有它,也就看不到)
+fn set_taskbar_progress(app: &AppHandle, progress: Option<u64>) {
+    use tauri::window::{ProgressBarState, ProgressBarStatus};
+    if let Some(w) = app.get_webview_window(ui::MAIN) {
+        let state = match progress {
+            Some(p) => ProgressBarState { status: Some(ProgressBarStatus::Normal), progress: Some(p.min(100)) },
+            None => ProgressBarState { status: Some(ProgressBarStatus::None), progress: None },
+        };
+        let _ = w.set_progress_bar(state);
+    }
+}
+
+const RECENT_N: usize = 6;
+
+fn recent_of(list: &[TaskView], n: usize) -> Vec<(i64, String)> {
+    list.iter()
+        .filter(|v| v.state == State::Done && v.purpose.is_empty())
+        .take(n)
+        .map(|v| (v.id, format!("{} {}", if v.kind == Kind::Download { "↓" } else { "↑" }, v.name)))
+        .collect()
+}
+
+/// 托盘「最近传输」:最近传完的几项(新的在前);引擎还没起来时为空
+pub fn recent(app: &AppHandle, n: usize) -> Vec<(i64, String)> {
+    if app.try_state::<Engine>().is_none() {
+        return Vec::new();
+    }
+    recent_of(&views(app), n)
+}
+
+/// 点托盘里最近传输的一项:下载的在文件夹中显示;上传的去云端看它(发到传输助手的打开小窗)
+pub fn open_recent(app: &AppHandle, id: i64) {
+    let Some(t) = engine(app).db.get(id) else { return };
+    if t.kind == Kind::Download {
+        reveal(app, &PathBuf::from(&t.local_path), t.is_batch);
+        return;
+    }
+    if t.to_chat {
+        ui::open_mini(app);
+        return;
+    }
+    let folder = if t.is_batch { t.node_id.clone() } else { t.parent_id.clone() };
+    let path = folder.map(|f| format!("/drive/{f}")).unwrap_or_else(|| "/drive".into());
+    ui::show_main(app);
+    crate::navigate_main(app, &path);
 }
 
 /// 网页传输抽屉里的一行(顶层任务;文件夹汇总子任务)

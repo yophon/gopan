@@ -64,6 +64,7 @@ func TestMarkdownHTTP(t *testing.T) {
 	h := httpx.MarkdownHandler(auth, md, shares)
 	mux.Handle("GET /md/{node}", h)
 	mux.Handle("GET /md/{node}/f", h)
+	mux.Handle("POST /md/{node}/preview", h)
 	srv := httptest.NewServer(httpx.WithSecurityHeaders(mux, false))
 	defer srv.Close()
 	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
@@ -138,5 +139,28 @@ func TestMarkdownHTTP(t *testing.T) {
 	}
 	if resp, _ = get("/md/" + outside.ID.String() + "?token=" + visitor); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("visitor outside = %d", resp.StatusCode)
+	}
+
+	// 编辑时边写边看:渲染请求体里还没保存的文字,相对路径照样改写;访客不行
+	preview := func(tok, src string) (*http.Response, string) {
+		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/md/"+doc.ID.String()+"/preview?theme=light", strings.NewReader(src))
+		req.Header.Set("Authorization", "Bearer "+tok)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return resp, string(b)
+	}
+	resp, body = preview(token, "# 还没保存\n\n![图](图片/a.png)\n")
+	if resp.StatusCode != 200 || !strings.Contains(body, "还没保存") || !strings.Contains(body, "/md/"+doc.ID.String()+"/f?p=%E5%9B%BE%E7%89%87%2Fa.png") {
+		t.Fatalf("preview = %d %s", resp.StatusCode, body)
+	}
+	if !strings.HasPrefix(resp.Header.Get("Content-Security-Policy"), "sandbox allow-popups") {
+		t.Fatalf("preview csp = %q", resp.Header.Get("Content-Security-Policy"))
+	}
+	if resp, _ = preview(visitor, "# x"); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("visitor preview = %d", resp.StatusCode)
 	}
 }

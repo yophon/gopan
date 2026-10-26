@@ -88,13 +88,14 @@
         <p class="hint muted">留空就是系统「下载」里的 gopan 文件夹</p>
       </section>
       <section>
-        <label class="title">截图上传</label>
+        <label class="title">快捷键</label>
         <div class="grid">
           <span>框选截图并上传</span><input id="hotkeyCapture" type="text" spellcheck="false" placeholder="如 Ctrl+Alt+Q,留空不用" />
           <span>上传剪贴板里的图片</span><input id="hotkeyClipboard" type="text" spellcheck="false" placeholder="如 Ctrl+Alt+W,留空不用" />
+          <span>剪贴板发到传输助手</span><input id="hotkeySend" type="text" spellcheck="false" placeholder="如 Ctrl+Alt+E,留空不用" />
         </div>
         <div class="choices" style="margin-top: 10px">
-          <span class="muted">传完复制</span>
+          <span class="muted">截图传完复制</span>
           <label class="check"><input type="radio" name="copyFormat" value="markdown" />Markdown</label>
           <label class="check"><input type="radio" name="copyFormat" value="url" />直链</label>
           <label class="check"><input type="radio" name="copyFormat" value="html" />HTML</label>
@@ -124,6 +125,7 @@
         $('downloadDir').placeholder = view.downloadDirEffective
         $('hotkeyCapture').value = current.hotkeyCapture
         $('hotkeyClipboard').value = current.hotkeyClipboard
+        $('hotkeySend').value = current.hotkeySend
         for (const r of document.querySelectorAll('input[name=copyFormat]')) r.checked = r.value === current.copyFormat
         $('notifyChat').checked = current.notifyChat
         $('shellMenu').checked = current.shellMenu
@@ -147,6 +149,7 @@
           downloadDir: $('downloadDir').value.trim(),
           hotkeyCapture: $('hotkeyCapture').value.trim(),
           hotkeyClipboard: $('hotkeyClipboard').value.trim(),
+          hotkeySend: $('hotkeySend').value.trim(),
           copyFormat: document.querySelector('input[name=copyFormat]:checked')?.value ?? 'markdown',
           notifyChat: $('notifyChat').checked,
           shellMenu: $('shellMenu').checked,

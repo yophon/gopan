@@ -24,7 +24,8 @@ import javax.inject.Inject
 
 /**
  * 唯一的 Activity:主题 + 按登录态切换的根导航。
- * 还负责接住外部入口:系统分享(SEND / SEND_MULTIPLE → 传输助手)、通知点按(→ 传输列表)与剪藏分享页的「打开」。
+ * 还负责接住外部入口:系统分享(SEND / SEND_MULTIPLE → 传输助手)、通知点按(→ 传输列表)、剪藏分享页的「打开」,
+ * 以及长按图标的快捷方式、桌面上的文件夹快捷方式与小组件(→ 传输助手 / 搜索 / 某个文件夹)。
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -97,6 +98,9 @@ class MainActivity : ComponentActivity() {
             OPEN_NOTIFICATIONS -> navRequests.post(NavRequest.OPEN_NOTIFICATIONS)
             // 系统分享「剪藏到 gopan」剪好后点「打开」:进那篇的阅读页
             OPEN_CLIP -> intent.getStringExtra(EXTRA_NODE_ID)?.let(clipOpens::post)
+            OPEN_CHAT -> navRequests.post(NavRequest.OPEN_CHAT)
+            OPEN_SEARCH -> navRequests.post(NavRequest.OPEN_SEARCH)
+            OPEN_FOLDER -> intent.getStringExtra(EXTRA_NODE_ID)?.let(navRequests::postFolder)
         }
     }
 
@@ -107,7 +111,12 @@ class MainActivity : ComponentActivity() {
         const val OPEN_NOTIFICATIONS = "notifications"
         const val OPEN_CLIP = "clip"
 
-        /** OPEN_CLIP 带的那篇剪藏(.md 的节点 id) */
+        /** 快捷方式 / 小组件:传输助手、搜索、桌面上的文件夹(带 EXTRA_NODE_ID) */
+        const val OPEN_CHAT = "chat"
+        const val OPEN_SEARCH = "search"
+        const val OPEN_FOLDER = "folder"
+
+        /** OPEN_CLIP 带的那篇剪藏(.md 的节点 id);OPEN_FOLDER 带的文件夹 id */
         const val EXTRA_NODE_ID = "xyz.yophon.gopan.NODE_ID"
 
         // 与 androidx.activity 默认值一致

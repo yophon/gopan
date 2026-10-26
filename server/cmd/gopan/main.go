@@ -272,6 +272,7 @@ func run() error {
 	mdHandler := httpx.MarkdownHandler(auth, markdown, shares)
 	mux.Handle("GET /md/{node}", mdHandler)
 	mux.Handle("GET /md/{node}/f", mdHandler)
+	mux.Handle("POST /md/{node}/preview", mdHandler)
 	linkHandler := httpx.LinkHandler(links, obj, cfg.TrustedProxies)
 	mux.Handle("GET /x/{token}", linkHandler)
 	mux.Handle("GET /x/{token}/{name...}", linkHandler)

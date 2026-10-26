@@ -49,6 +49,8 @@ class GopanApp : Application(), SingletonImageLoader.Factory {
         documentsRoots.start()
         // 系统通知栏提醒(doc/22 决策 6):登录且开着开关时排每 15 分钟一次的检查,登出 / 关掉时撤掉
         inboxScheduler.start()
+        // 长按图标的「上传文件」「传输助手」「搜索」
+        xyz.yophon.gopan.feature.shortcut.AppShortcuts.publish(this)
     }
 
     /**

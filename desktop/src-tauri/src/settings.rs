@@ -19,6 +19,8 @@ pub struct Settings {
     pub hotkey_capture: String,
     /// 上传剪贴板里的图片
     pub hotkey_clipboard: String,
+    /// 把剪贴板里的东西(文字、图片、复制的文件)发到传输助手
+    pub hotkey_send: String,
     /// 截图传完复制什么:markdown / url / html
     pub copy_format: String,
     /// 传输助手的新消息弹通知
@@ -36,6 +38,7 @@ impl Default for Settings {
             download_dir: String::new(),
             hotkey_capture: "Ctrl+Alt+Q".into(),
             hotkey_clipboard: "Ctrl+Alt+W".into(),
+            hotkey_send: "Ctrl+Alt+E".into(),
             copy_format: "markdown".into(),
             notify_chat: true,
             shell_menu: true,

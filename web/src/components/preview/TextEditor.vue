@@ -1,21 +1,26 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useEventListener } from '@vueuse/core'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useDebounceFn, useEventListener } from '@vueuse/core'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Check, Close } from '@element-plus/icons-vue'
 
-import { request } from '@/api/client'
+import { request, singleFlightRefresh } from '@/api/client'
 import { getErrorCode } from '@/api/client'
 import { errorText } from '@/api/errors'
 import { SaveTextFileDocument, TextFileDocument } from '@/api/gen/graphql'
 import { insertIndent } from '@/utils/textEdit'
+import { useAppTheme } from '@/composables/theme'
+import { useBreakpoints } from '@/composables/breakpoints'
+import { useAuthStore } from '@/stores/auth'
+import { MD_SANDBOX } from '@/utils/markdown'
 
 /**
  * 在线编辑一个文本文件(doc/25):整份读进来改,Ctrl+S 保存。保存时带上打开时的 sha256,
  * 在别处被改过了会问要不要仍然保存(被盖掉的那份留在历史版本里)。有没保存的修改时离开要确认,由外面问 [confirmLeave]。
+ * Markdown 可以边写边看:右边是服务端按同样方式渲染的预览(POST /md/{node}/preview),停手 0.4 秒刷新一次;手机上切换着看。
  */
 
-const props = defineProps<{ nodeId: string }>()
+const props = defineProps<{ nodeId: string; markdown?: boolean }>()
 const emit = defineEmits<{
   (e: 'saved'): void
   (e: 'close'): void
@@ -32,6 +37,60 @@ const textarea = ref<HTMLTextAreaElement | null>(null)
 
 const dirty = computed(() => !loading.value && content.value !== original.value)
 
+// ---------- Markdown 边写边看 ----------
+
+const { isMobile } = useBreakpoints()
+const theme = useAppTheme()
+const auth = useAuthStore()
+const previewOn = ref(!!props.markdown && !isMobile.value)
+const previewHtml = ref('')
+const frame = ref<HTMLIFrameElement | null>(null)
+/** 预览滚到的位置(比例):重新渲染后回到这里,跟着编辑框滚 */
+let scrollRatio = 0
+
+async function postPreview(token: string | null) {
+  return fetch(`/md/${encodeURIComponent(props.nodeId)}/preview?theme=${theme.value}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token ?? ''}`, 'Content-Type': 'text/markdown; charset=utf-8' },
+    body: content.value,
+  })
+}
+
+async function renderPreview() {
+  if (!previewOn.value || loading.value || loadError.value) return
+  try {
+    let res = await postPreview(auth.accessToken)
+    if (res.status === 401 && (await singleFlightRefresh(auth.accessToken))) res = await postPreview(auth.accessToken)
+    previewHtml.value = await res.text()
+  } catch {
+    // 网络断了:留着上一次的预览
+  }
+}
+
+const schedulePreview = useDebounceFn(renderPreview, 400)
+watch(content, () => void schedulePreview())
+watch([previewOn, theme], () => void renderPreview())
+
+function frameScroller(): HTMLElement | null {
+  try {
+    return frame.value?.contentDocument?.scrollingElement as HTMLElement | null
+  } catch {
+    return null
+  }
+}
+
+function onFrameLoad() {
+  const el = frameScroller()
+  if (el) el.scrollTop = scrollRatio * (el.scrollHeight - el.clientHeight)
+}
+
+function onEditorScroll() {
+  const t = textarea.value
+  if (!t || !previewOn.value) return
+  scrollRatio = t.scrollHeight > t.clientHeight ? t.scrollTop / (t.scrollHeight - t.clientHeight) : 0
+  onFrameLoad()
+}
+
 function syncDirty() {
   emit('dirty', dirty.value)
 }
@@ -46,6 +105,7 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  void renderPreview()
   await nextTick()
   textarea.value?.focus()
 })
@@ -155,31 +215,48 @@ defineExpose({ confirmLeave })
 </script>
 
 <template>
-  <div class="text-editor">
+  <div class="text-editor" :class="{ wide: previewOn && !isMobile }">
     <div class="te-bar">
       <span class="te-status" :class="{ dirty }">{{ loading ? '读取中…' : dirty ? '未保存' : '已保存' }}</span>
       <span class="te-hint">Ctrl+S 保存</span>
       <span class="te-spacer" />
+      <el-button v-if="markdown" size="small" :type="previewOn ? 'primary' : 'default'" plain @click="previewOn = !previewOn">
+        {{ isMobile ? (previewOn ? '回到编辑' : '看预览') : previewOn ? '收起预览' : '边写边看' }}
+      </el-button>
       <el-button size="small" :icon="Close" @click="onCancel">退出编辑</el-button>
       <el-button size="small" type="primary" :icon="Check" :loading="saving" :disabled="!dirty" @click="save()">保存</el-button>
     </div>
     <div v-if="loadError" class="te-error">
       <el-empty :description="loadError" />
     </div>
-    <textarea
-      v-else
-      ref="textarea"
-      v-model="content"
-      v-loading="loading"
-      class="te-area"
-      spellcheck="false"
-      autocapitalize="off"
-      autocomplete="off"
-      :disabled="loading"
-      aria-label="文件内容"
-      @input="onInput"
-      @keydown="onKeydown"
-    />
+    <div v-else class="te-main" :class="{ split: previewOn && !isMobile }">
+      <textarea
+        v-show="!(previewOn && isMobile)"
+        ref="textarea"
+        v-model="content"
+        v-loading="loading"
+        class="te-area"
+        spellcheck="false"
+        autocapitalize="off"
+        autocomplete="off"
+        :disabled="loading"
+        aria-label="文件内容"
+        @input="onInput"
+        @keydown="onKeydown"
+        @scroll="onEditorScroll"
+      />
+      <!-- 预览:沙箱里不许跑脚本;allow-same-origin 只为让外面跟着编辑框滚动 -->
+      <iframe
+        v-if="previewOn"
+        ref="frame"
+        class="te-preview"
+        :srcdoc="previewHtml"
+        :sandbox="`allow-same-origin ${MD_SANDBOX}`"
+        referrerpolicy="no-referrer"
+        title="预览"
+        @load="onFrameLoad"
+      />
+    </div>
   </div>
 </template>
 
@@ -218,6 +295,27 @@ defineExpose({ confirmLeave })
 }
 .te-spacer {
   flex: 1;
+}
+.text-editor.wide {
+  width: min(1480px, 100%);
+}
+.te-main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.te-main.split > * {
+  flex: 1 1 50%;
+  min-width: 0;
+}
+.te-preview {
+  display: block;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-left: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color);
 }
 .te-area {
   flex: 1;

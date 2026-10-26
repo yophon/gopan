@@ -29,6 +29,9 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.filled.OfflinePin
 import androidx.compose.material.icons.outlined.OfflinePin
+import xyz.yophon.gopan.feature.shortcut.AppShortcuts
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.outlined.AddToHomeScreen
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
@@ -91,6 +94,8 @@ enum class NodeAction(@StringRes val label: Int, val icon: ImageVector, val dest
     STAR(R.string.drive_action_star, Icons.Outlined.StarOutline),
     /** 离线可用(doc/26):已加过的显示「取消离线可用」 */
     OFFLINE(R.string.offline_action_pin, Icons.Outlined.OfflinePin),
+    /** 文件夹「添加到桌面」:桌面上多一个图标,点了直接进来 */
+    PIN_HOME(R.string.drive_action_pin_home, Icons.Outlined.AddToHomeScreen),
     /** 直链(doc/22 四):只对文件,本站关了直链时不出现 */
     COPY_LINK(R.string.drive_action_copy_link, Icons.Outlined.Link),
     COLLECT(R.string.drive_action_collect, Icons.Outlined.DriveFolderUpload),
@@ -117,6 +122,7 @@ val DRIVE_ACTIONS = listOf(
     NodeAction.SHARE,
     NodeAction.STAR,
     NodeAction.OFFLINE,
+    NodeAction.PIN_HOME,
     NodeAction.COPY_LINK,
     NodeAction.COLLECT,
     NodeAction.EXTRACT_HERE,
@@ -146,7 +152,7 @@ fun NodeAction.iconFor(node: Node, offline: Boolean = false): ImageVector = when
 /** 这个操作对这个节点有没有意义:打开、复制直链只对文件,打包、收集文件只对文件夹,解压只对压缩包 */
 fun NodeAction.appliesTo(node: Node): Boolean = when (this) {
     NodeAction.OPEN, NodeAction.COPY_LINK, NodeAction.VERSIONS -> !node.isFolder
-    NodeAction.PACK, NodeAction.COLLECT -> node.isFolder
+    NodeAction.PACK, NodeAction.COLLECT, NodeAction.PIN_HOME -> node.isFolder
     NodeAction.EXTRACT_HERE, NodeAction.EXTRACT_TO -> isArchiveNode(node)
     else -> true
 }
@@ -345,6 +351,7 @@ fun NodeDialogHost(
     val links: CopyLinkViewModel = hiltViewModel()
     val linkState by links.state.collectAsStateWithLifecycle()
     val offlinePinned = LocalOfflineMarks.current.pinned
+    val context = LocalContext.current
     CopyLinkHost(links, onMessage = viewModel::message)
     when (dialog) {
         null -> Unit
@@ -362,6 +369,9 @@ fun NodeDialogHost(
                     NodeAction.SHARE -> viewModel.requestShare(node)
                     NodeAction.STAR -> viewModel.toggleStar(listOf(node))
                     NodeAction.OFFLINE -> viewModel.toggleOffline(listOf(node), offlinePinned)
+                    NodeAction.PIN_HOME -> if (!AppShortcuts.pinFolder(context, node)) {
+                        viewModel.message(UiText.Res(R.string.drive_msg_pin_unsupported))
+                    }
                     NodeAction.VERSIONS -> viewModel.showVersions(node)
                     NodeAction.FORGET -> onForget?.invoke(node)
                     NodeAction.COPY_LINK -> links.copy(listOf(node))

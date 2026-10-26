@@ -5,6 +5,7 @@ mod auth;
 mod bridge;
 mod capture;
 mod chat;
+mod clipsend;
 mod edits;
 mod handoff;
 mod notify;

@@ -24,8 +24,18 @@ pub fn apply_shortcuts(app: &AppHandle, s: &Settings) -> Result<(), String> {
     let _ = gs.unregister_all();
     let capture = s.hotkey_capture.trim();
     let clipboard = s.hotkey_clipboard.trim();
-    if !capture.is_empty() && capture.eq_ignore_ascii_case(clipboard) {
-        return Err("两个快捷键不能一样".into());
+    let send = s.hotkey_send.trim();
+    let keys: Vec<String> = [capture, clipboard, send].iter().filter(|k| !k.is_empty()).map(|k| k.to_ascii_lowercase()).collect();
+    if keys.iter().enumerate().any(|(i, k)| keys[..i].contains(k)) {
+        return Err("几个快捷键不能一样".into());
+    }
+    if !send.is_empty() {
+        gs.on_shortcut(send, |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                crate::clipsend::send_clipboard(app);
+            }
+        })
+        .map_err(|e| format!("发到传输助手的快捷键 {send} 用不了(格式不对或被别的程序占了):{e}"))?;
     }
     if !capture.is_empty() {
         gs.on_shortcut(capture, |app, _shortcut, event| {

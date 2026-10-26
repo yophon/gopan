@@ -558,7 +558,13 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
 
           <!-- 在线编辑 -->
           <div v-else-if="editing && node" class="preview-editor">
-            <TextEditor ref="editorRef" :node-id="node.id" @saved="onEditorSaved" @close="editing = false" />
+            <TextEditor
+              ref="editorRef"
+              :node-id="node.id"
+              :markdown="/\.(md|markdown)$/i.test(node.name)"
+              @saved="onEditorSaved"
+              @close="editing = false"
+            />
           </div>
 
           <!-- IMAGE:滚轮缩放 / 拖拽平移 / 双击复位 -->

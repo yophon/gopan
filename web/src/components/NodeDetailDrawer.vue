@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Download, RefreshLeft, Star, StarFilled } from '@element-plus/icons-vue'
+import { Delete, Download, RefreshLeft, Star, StarFilled, Switch } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
@@ -22,6 +22,7 @@ import { formatBytes, formatRelative, formatTime } from '@/utils/format'
 import { folderSizeText } from '@/components/nodes/nodeDisplay'
 import NodeIcon from '@/components/nodes/NodeIcon.vue'
 import ActivityItem from '@/components/activity/ActivityItem.vue'
+import TextDiffDialog from '@/components/TextDiffDialog.vue'
 
 /**
  * 文件详情(doc/23 二.4):基本信息 + 「历史版本」(doc/24,文件被同名覆盖时留下的旧内容,能下载、恢复)
@@ -124,6 +125,24 @@ function deleteVersion(id: string) {
   )
 }
 
+// 文本文件:「比较」看这个版本到现在改了什么(两边都不超过 2 MB,与在线编辑同一个上限)
+const MAX_DIFF_BYTES = 2 * 1024 * 1024
+const comparable = computed(
+  () => node.value?.preview?.kind === 'TEXT' && (node.value.size ?? 0) <= MAX_DIFF_BYTES,
+)
+const diffVisible = ref(false)
+const diffVersion = ref<{ id: string; savedAt: string; downloadUrl: string } | null>(null)
+
+function compareVersion(v: { id: string; savedAt: string; downloadUrl: string }) {
+  diffVersion.value = v
+  diffVisible.value = true
+}
+
+function restoreFromDiff(id: string, savedAt: string) {
+  diffVisible.value = false
+  restoreVersion(id, savedAt)
+}
+
 function purgeVersions() {
   void runVersion(
     'all',
@@ -208,6 +227,14 @@ const sizeLine = computed(() => {
                 <span class="muted">{{ formatBytes(v.size) }} · {{ formatRelative(v.replacedAt) }}被替换</span>
               </div>
               <div class="ver-actions">
+                <el-button
+                  v-if="comparable && v.size <= MAX_DIFF_BYTES"
+                  link
+                  :icon="Switch"
+                  title="和现在比较"
+                  aria-label="和现在比较"
+                  @click="compareVersion(v)"
+                />
                 <el-button link :icon="Download" title="下载这个版本" aria-label="下载这个版本" tag="a" :href="v.downloadUrl" />
                 <el-button link :icon="RefreshLeft" :loading="versionBusy === v.id" @click="restoreVersion(v.id, v.savedAt)">恢复</el-button>
                 <el-button link :icon="Delete" :loading="versionBusy === `del:${v.id}`" title="删除这个版本" aria-label="删除这个版本" @click="deleteVersion(v.id)" />
@@ -238,6 +265,14 @@ const sizeLine = computed(() => {
         </section>
       </template>
     </div>
+    <TextDiffDialog
+      v-if="node && diffVersion"
+      v-model="diffVisible"
+      :node-id="node.id"
+      :name="node.name"
+      :version="diffVersion"
+      @restore="restoreFromDiff"
+    />
   </el-drawer>
 </template>
 
