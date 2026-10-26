@@ -21,14 +21,22 @@ use winreg::RegKey;
 
 pub const UPLOAD_ARG: &str = "--upload";
 pub const SEND_ARG: &str = "--send";
+pub const SHARE_ARG: &str = "--share";
 pub const PICK_EVENT: &str = "desktop://pick-folder";
 
 /// (注册表里的键名, 菜单上的字, 参数)
-const VERBS: &[(&str, &str, &str)] = &[("gopan.upload", "上传到 gopan…", UPLOAD_ARG), ("gopan.send", "发到传输助手", SEND_ARG)];
+const VERBS: &[(&str, &str, &str)] = &[
+    ("gopan.upload", "上传到 gopan…", UPLOAD_ARG),
+    ("gopan.send", "发到传输助手", SEND_ARG),
+    ("gopan.share", "上传并复制分享链接", SHARE_ARG),
+];
 const VERB_PARENTS: &[&str] = &[r"Software\Classes\*\shell", r"Software\Classes\Directory\shell"];
 /// (「发送到」里的文件名, 参数, 说明)
-const SEND_TO: &[(&str, &str, &str)] =
-    &[("gopan.lnk", UPLOAD_ARG, "上传到 gopan"), ("gopan 传输助手.lnk", SEND_ARG, "发到 gopan 传输助手")];
+const SEND_TO: &[(&str, &str, &str)] = &[
+    ("gopan.lnk", UPLOAD_ARG, "上传到 gopan"),
+    ("gopan 传输助手.lnk", SEND_ARG, "发到 gopan 传输助手"),
+    ("gopan 分享链接.lnk", SHARE_ARG, "上传到 gopan 并复制分享链接"),
+];
 /// 右键菜单多选时各进程陆续到达,攒这么久合成一批
 const GATHER: Duration = Duration::from_millis(700);
 
@@ -40,10 +48,12 @@ pub struct Shell {
     next_pick: AtomicU64,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, PartialEq)]
 struct Pending {
     upload: Vec<PathBuf>,
     send: Vec<PathBuf>,
+    /// 上传并复制分享链接(doc/31 四)
+    share: Vec<PathBuf>,
     generation: u64,
 }
 
@@ -134,39 +144,39 @@ fn create_shortcut(path: &Path, target: &Path, args: &str, desc: &str) -> window
 
 // ---- 参数 ----
 
-/// 从命令行里挑出要上传 / 发送的路径;不是右键菜单来的返回 None
-fn parse(argv: &[String]) -> Option<(Vec<PathBuf>, Vec<PathBuf>)> {
-    let mut upload = Vec::new();
-    let mut send = Vec::new();
+/// 从命令行里挑出要上传 / 发送 / 分享的路径;不是右键菜单来的返回 None
+fn parse(argv: &[String]) -> Option<Pending> {
+    let mut p = Pending::default();
     let mut mode: Option<&str> = None;
     for a in argv.iter().skip(1) {
         match a.as_str() {
-            UPLOAD_ARG | SEND_ARG => mode = Some(if a == UPLOAD_ARG { UPLOAD_ARG } else { SEND_ARG }),
+            UPLOAD_ARG => mode = Some(UPLOAD_ARG),
+            SEND_ARG => mode = Some(SEND_ARG),
+            SHARE_ARG => mode = Some(SHARE_ARG),
             s if s.starts_with("--") => {}
             path => match mode {
-                Some(UPLOAD_ARG) => upload.push(PathBuf::from(path)),
-                Some(_) => send.push(PathBuf::from(path)),
+                Some(UPLOAD_ARG) => p.upload.push(PathBuf::from(path)),
+                Some(SEND_ARG) => p.send.push(PathBuf::from(path)),
+                Some(_) => p.share.push(PathBuf::from(path)),
                 None => {}
             },
         }
     }
-    mode.map(|_| (upload, send))
+    mode.map(|_| p)
 }
 
 /// 启动或又被打开时的命令行;是右键菜单 / 发送到来的就收下并返回 true
 pub fn handle_args(app: &AppHandle, argv: &[String]) -> bool {
-    let Some((upload, send)) = parse(argv) else { return false };
+    let Some(got) = parse(argv) else { return false };
     let shell = app.state::<Shell>();
     let generation = {
-        let mut p = shell.pending.lock().unwrap();
-        for f in upload {
-            if !p.upload.contains(&f) {
-                p.upload.push(f);
-            }
-        }
-        for f in send {
-            if !p.send.contains(&f) {
-                p.send.push(f);
+        let mut guard = shell.pending.lock().unwrap();
+        let p = &mut *guard;
+        for (from, to) in [(got.upload, &mut p.upload), (got.send, &mut p.send), (got.share, &mut p.share)] {
+            for f in from {
+                if !to.contains(&f) {
+                    to.push(f);
+                }
             }
         }
         p.generation += 1;
@@ -176,14 +186,18 @@ pub fn handle_args(app: &AppHandle, argv: &[String]) -> bool {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(GATHER).await;
         let shell = app.state::<Shell>();
-        let (upload, send) = {
+        let (upload, send, share) = {
             let mut p = shell.pending.lock().unwrap();
             if p.generation != generation {
                 return; // 后面又来了,等最后一个
             }
-            (std::mem::take(&mut p.upload), std::mem::take(&mut p.send))
+            (std::mem::take(&mut p.upload), std::mem::take(&mut p.send), std::mem::take(&mut p.share))
         };
         flush(&app, upload, send);
+        let share: Vec<PathBuf> = share.into_iter().filter(|p| p.exists()).collect();
+        if !share.is_empty() {
+            crate::quickshare::start(&app, share);
+        }
     });
     true
 }
@@ -263,12 +277,13 @@ mod tests {
     fn shell_arguments_are_split_by_mode() {
         assert!(parse(&args(&["gopan.exe"])).is_none());
         assert!(parse(&args(&["gopan.exe", "--background"])).is_none());
-        let (up, send) = parse(&args(&["gopan.exe", "--upload", "C:/a.txt", "C:/b"])).unwrap();
-        assert_eq!(up, vec![PathBuf::from("C:/a.txt"), PathBuf::from("C:/b")]);
-        assert!(send.is_empty());
-        let (up, send) = parse(&args(&["gopan.exe", "--send", "C:/x.png", "--upload", "D:/y"])).unwrap();
-        assert_eq!(send, vec![PathBuf::from("C:/x.png")]);
-        assert_eq!(up, vec![PathBuf::from("D:/y")]);
+        let p = parse(&args(&["gopan.exe", "--upload", "C:/a.txt", "C:/b"])).unwrap();
+        assert_eq!(p.upload, vec![PathBuf::from("C:/a.txt"), PathBuf::from("C:/b")]);
+        assert!(p.send.is_empty());
+        let p = parse(&args(&["gopan.exe", "--send", "C:/x.png", "--upload", "D:/y", "--share", "E:/z.mp4"])).unwrap();
+        assert_eq!(p.send, vec![PathBuf::from("C:/x.png")]);
+        assert_eq!(p.upload, vec![PathBuf::from("D:/y")]);
+        assert_eq!(p.share, vec![PathBuf::from("E:/z.mp4")]);
     }
 
     #[test]

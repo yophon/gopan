@@ -168,7 +168,12 @@ func (s *Store) PresignGet(ctx context.Context, key, filename string) (string, e
 // PresignGetInline 预览用:不带 attachment,浏览器内联打开。mime 是对象内容的类型,
 // 响应类型由 InlineOverrides 按它改写。
 func (s *Store) PresignGetInline(ctx context.Context, key, mime string) (string, error) {
-	u, err := s.public.Presign(ctx, "GET", s.bucket, key, s.getTTL, InlineOverrides(mime))
+	return s.PresignGetInlineFor(ctx, key, mime, s.getTTL)
+}
+
+// PresignGetInlineFor 同上,自定有效期:交给外部播放器的地址要撑过一整部电影的暂停与拖动。
+func (s *Store) PresignGetInlineFor(ctx context.Context, key, mime string, ttl time.Duration) (string, error) {
+	u, err := s.public.Presign(ctx, "GET", s.bucket, key, ttl, InlineOverrides(mime))
 	if err != nil {
 		return "", err
 	}
@@ -288,7 +293,12 @@ func (s *Store) Promote(ctx context.Context, dstKey, srcKey string, size int64, 
 
 // PresignInternalGet 用内网地址签 GET,给 ffmpeg/ffprobe 这类需要 URL 输入的工具。
 func (s *Store) PresignInternalGet(ctx context.Context, key string) (string, error) {
-	u, err := s.internal.Presign(ctx, "GET", s.bucket, key, 10*time.Minute, nil)
+	return s.PresignInternalGetFor(ctx, key, 10*time.Minute)
+}
+
+// PresignInternalGetFor 同上,自定有效期:转封装这类一跑半小时、中途还会断线重连的。
+func (s *Store) PresignInternalGetFor(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	u, err := s.internal.Presign(ctx, "GET", s.bucket, key, ttl, nil)
 	if err != nil {
 		return "", err
 	}

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Close, Download, Folder, FolderOpened, Monitor, Share, View } from '@element-plus/icons-vue'
+import { Close, Download, Folder, FolderOpened, Monitor, Share, VideoPlay, View } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
@@ -15,7 +15,8 @@ import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
 import NodeBrowser from '@/components/nodes/NodeBrowser.vue'
 import ContextMenu, { type MenuEntry } from '@/components/ContextMenu.vue'
 import ShareDialog from '@/components/ShareDialog.vue'
-import { downloadLabel, downloadToComputer, openWithLocalApp, useNodeDownload } from '@/composables/nodeDownload'
+import { downloadLabel, downloadToComputer, openWithLocalApp, playWithLocalPlayer, useNodeDownload } from '@/composables/nodeDownload'
+import { canPlayExternal } from '@/desktop/play'
 import { nativeDownloads } from '@/desktop/transfers'
 import { searchKeyword } from '@/utils/search'
 import {
@@ -194,6 +195,9 @@ const menuItems = computed<MenuEntry[]>(() => {
   return [
     { key: 'open', label: n.kind === 'FOLDER' ? '打开' : '预览', icon: n.kind === 'FOLDER' ? FolderOpened : View },
     ...(n.kind === 'FILE' && nativeDownloads() ? [{ key: 'openLocal', label: '用本地程序打开', icon: Monitor }] : []),
+    ...(n.kind === 'FILE' && nativeDownloads() && canPlayExternal(n.preview?.kind)
+      ? [{ key: 'playLocal', label: '用播放器播放', icon: VideoPlay }]
+      : []),
     { key: 'locate', label: '打开所在文件夹', icon: FolderOpened },
     { key: 'd', divider: true },
     { key: 'download', label: downloadLabel([n]), icon: Download },
@@ -207,6 +211,7 @@ function onMenuSelect(key: string) {
   if (!n) return
   if (key === 'open') onOpen(n)
   else if (key === 'openLocal') void openWithLocalApp(n)
+  else if (key === 'playLocal') void playWithLocalPlayer(n)
   else if (key === 'locate') onLocate(n)
   else if (key === 'download') void download([n])
   else if (key === 'downloadTo') void downloadToComputer([n], true)

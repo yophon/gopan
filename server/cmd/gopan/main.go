@@ -169,6 +169,10 @@ func run() error {
 
 	previews := service.NewPreviews(pool, obj)
 	previews.SetOfficeEnabled(cfg.GotenbergURL != "") // 未配 Gotenberg = 本次部署不提供 Office 预览
+	remuxer := service.NewRemuxer(service.RemuxConfig{
+		Dir: cfg.RemuxDir, CacheSize: cfg.RemuxCache, TTL: cfg.RemuxTTL, FFmpeg: cfg.FFmpegPath, FFprobe: cfg.FFprobePath,
+	}, obj)
+	previews.SetRemuxer(remuxer)
 	shares := service.NewShares(q, auth)
 	collects := service.NewCollects(pool, auth, uploads)
 	content := service.NewContentSearch(pool, cfg.ContentIndex)
@@ -225,6 +229,9 @@ func run() error {
 	activities.SetVersions(versions)
 	wk.SetVersions(versions)
 	go wk.Run(ctx, cfg.Workers)
+	if remuxer != nil {
+		go remuxer.Run(ctx)
+	}
 	go jobs.Run(ctx, cfg.JobWorkers)
 	go notifier.Run(ctx)
 	linksDone := make(chan struct{})
@@ -269,6 +276,8 @@ func run() error {
 	mux.Handle("GET /pack", httpx.PackHandler(auth, packer, shares, cfg.TrustedProxies))
 	mux.Handle("GET /arc/{node}/{idx}", httpx.ArchiveEntryHandler(auth, archives, shares))
 	mux.Handle("GET /sub/{node}", httpx.SubtitleHandler(auth, media, shares))
+	mux.Handle("GET /remux/{sha}/{file}", httpx.RemuxHandler(remuxer))
+	mux.Handle("GET /lrc/{node}", httpx.LyricsHandler(auth, media, shares))
 	mdHandler := httpx.MarkdownHandler(auth, markdown, shares)
 	mux.Handle("GET /md/{node}", mdHandler)
 	mux.Handle("GET /md/{node}/f", mdHandler)

@@ -69,9 +69,10 @@ abstract class MediaModule {
         /** 登出:停播、清空队列与取过的地址 */
         @Provides
         @IntoSet
-        fun provideMediaSignOutHook(nowPlaying: NowPlayingStore, urls: MediaUrls): SignOutHook = SignOutHook {
+        fun provideMediaSignOutHook(nowPlaying: NowPlayingStore, urls: MediaUrls, lyrics: LyricsRepository): SignOutHook = SignOutHook {
             nowPlaying.requestStop()
             urls.clear()
+            lyrics.clear()
         }
     }
 }

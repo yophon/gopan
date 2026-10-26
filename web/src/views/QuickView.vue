@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Close, Download, FolderOpened, Monitor, Share, Star, StarFilled, View } from '@element-plus/icons-vue'
+import { Close, Download, FolderOpened, Monitor, Share, Star, StarFilled, VideoPlay, View } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
@@ -11,7 +11,8 @@ import { ClearRecentDocument, RecentFilesDocument, StarredNodesDocument } from '
 import type { QuickNodeFragment } from '@/api/gen/graphql'
 import { openPreview } from '@/composables/preview'
 import { useBreakpoints } from '@/composables/breakpoints'
-import { downloadLabel, downloadToComputer, openWithLocalApp, useNodeDownload } from '@/composables/nodeDownload'
+import { downloadLabel, downloadToComputer, openWithLocalApp, playWithLocalPlayer, useNodeDownload } from '@/composables/nodeDownload'
+import { canPlayExternal } from '@/desktop/play'
 import { nativeDownloads } from '@/desktop/transfers'
 import { useStars } from '@/composables/quick'
 import { formatRelative } from '@/utils/format'
@@ -120,6 +121,9 @@ const menuItems = computed<MenuEntry[]>(() => {
     entries.push(
       { key: 'open', label: one.kind === 'FOLDER' ? '打开' : '预览', icon: one.kind === 'FOLDER' ? FolderOpened : View },
       ...(one.kind === 'FILE' && nativeDownloads() ? [{ key: 'openLocal', label: '用本地程序打开', icon: Monitor }] : []),
+      ...(one.kind === 'FILE' && nativeDownloads() && canPlayExternal(one.preview?.kind)
+        ? [{ key: 'playLocal', label: '用播放器播放', icon: VideoPlay }]
+        : []),
       { key: 'locate', label: '打开所在文件夹', icon: FolderOpened },
       { key: 'd1', divider: true },
     )
@@ -140,6 +144,9 @@ function onAction(key: string, nodes: NodeListItem[]) {
       return
     case 'openLocal':
       if (one) void openWithLocalApp(one)
+      return
+    case 'playLocal':
+      if (one) void playWithLocalPlayer(one)
       return
     case 'locate':
       if (one) onLocate(one)

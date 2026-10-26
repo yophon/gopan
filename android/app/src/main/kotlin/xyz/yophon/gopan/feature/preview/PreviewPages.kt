@@ -130,11 +130,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import xyz.yophon.gopan.R
+import xyz.yophon.gopan.core.data.media.Lyrics
 import xyz.yophon.gopan.core.data.media.SubtitleTrack
 import xyz.yophon.gopan.feature.media.NEXT_EPISODE_COUNTDOWN
 import xyz.yophon.gopan.feature.media.PDF_REPORT_DELAY_MS
 import xyz.yophon.gopan.feature.media.ProgressTicker
 import xyz.yophon.gopan.feature.media.QueuePlan
+import xyz.yophon.gopan.feature.media.currentLyricIndex
 import xyz.yophon.gopan.feature.media.formatPlayTimeMs
 import xyz.yophon.gopan.feature.media.nextRepeatMode
 import xyz.yophon.gopan.feature.media.resumePositionMs
@@ -572,6 +574,7 @@ internal fun AudioPage(
     content: PreviewContent.Audio,
     isCurrent: Boolean,
     onLoadQueue: suspend () -> QueuePlan,
+    onLoadLyrics: suspend () -> Lyrics? = { null },
 ) {
     val context = LocalContext.current
     val snackbar = LocalPreviewSnackbar.current
@@ -588,6 +591,8 @@ internal fun AudioPage(
     var position by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf((content.durationSec ?: 0) * 1000L) }
     var dragging by remember { mutableStateOf<Float?>(null) }
+    // 同名 .lrc(doc/31 二):有就替掉耳机图标
+    val lyrics by produceState<Lyrics?>(null, nodeId) { value = onLoadLyrics() }
 
     DisposableEffect(controller) {
         val c = controller ?: return@DisposableEffect onDispose {}
@@ -640,7 +645,8 @@ internal fun AudioPage(
         while (isThis) {
             position = c.currentPosition
             if (c.duration > 0) duration = c.duration
-            delay(500)
+            // 跟歌词时刷得勤一点,行切换不拖沓
+            delay(if (lyrics?.synced == true) 200 else 500)
         }
     }
 
@@ -649,7 +655,23 @@ internal fun AudioPage(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(Icons.Outlined.Headphones, contentDescription = null, tint = OnPreviewDim, modifier = Modifier.size(96.dp))
+        val shownLyrics = lyrics
+        if (shownLyrics != null) {
+            val current = if (isThis && shownLyrics.synced) currentLyricIndex(shownLyrics.lines, position) else -1
+            LyricsBox(
+                lyrics = shownLyrics,
+                current = current,
+                onSeek = { ms ->
+                    val c = controller
+                    if (c != null && isThis) {
+                        position = ms
+                        c.seekTo(ms)
+                    }
+                },
+            )
+        } else {
+            Icon(Icons.Outlined.Headphones, contentDescription = null, tint = OnPreviewDim, modifier = Modifier.size(96.dp))
+        }
         Spacer(Modifier.height(24.dp))
         Text(title, color = OnPreview, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
         // 播放器在放别的(下一首不在这一屏的翻页列表里):告诉用户在放什么

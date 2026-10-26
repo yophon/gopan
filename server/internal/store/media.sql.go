@@ -66,6 +66,42 @@ func (q *Queries) DeletePlayProgress(ctx context.Context, arg DeletePlayProgress
 	return result.RowsAffected(), nil
 }
 
+const findFolderFileByName = `-- name: FindFolderFileByName :one
+SELECT n.id, n.name, b.size AS blob_size, b.sha256 AS blob_sha256
+FROM nodes n
+JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = $1 AND n.parent_id IS NOT DISTINCT FROM $2::uuid
+  AND n.deleted_at IS NULL AND n.kind = 'file' AND lower(n.name) = lower($3::text)
+ORDER BY n.name
+LIMIT 1
+`
+
+type FindFolderFileByNameParams struct {
+	OwnerID  uuid.UUID
+	ParentID *uuid.UUID
+	Name     string
+}
+
+type FindFolderFileByNameRow struct {
+	ID         uuid.UUID
+	Name       string
+	BlobSize   int64
+	BlobSha256 string
+}
+
+// 同文件夹里按名字(不分大小写)找一个文件:歌的同名 .lrc(doc/31 二)。
+func (q *Queries) FindFolderFileByName(ctx context.Context, arg FindFolderFileByNameParams) (FindFolderFileByNameRow, error) {
+	row := q.db.QueryRow(ctx, findFolderFileByName, arg.OwnerID, arg.ParentID, arg.Name)
+	var i FindFolderFileByNameRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.BlobSize,
+		&i.BlobSha256,
+	)
+	return i, err
+}
+
 const getPlayProgress = `-- name: GetPlayProgress :one
 SELECT owner_id, node_id, position, duration, finished, updated_at FROM play_progress WHERE owner_id = $1 AND node_id = $2
 `

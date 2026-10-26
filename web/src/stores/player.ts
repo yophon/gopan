@@ -1,9 +1,12 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
-import { request } from '@/api/client'
+import { request, singleFlightRefresh } from '@/api/client'
 import { NodePreviewDocument, PlaylistDocument } from '@/api/gen/graphql'
 import { reportProgress } from '@/composables/media'
+import { useAuthStore } from '@/stores/auth'
+import { currentLyricIndex, lyricsUrl } from '@/utils/lyrics'
+import type { Lyrics } from '@/utils/lyrics'
 import { mediaErrorAction, resumePosition } from '@/utils/media'
 import type { ProgressLike } from '@/utils/media'
 import { nextIndex, nextPlayMode, parsePlayMode, prevIndex, PREV_RESTART_SEC, shuffleOrder } from '@/utils/player'
@@ -62,6 +65,36 @@ export const usePlayerStore = defineStore('player', () => {
   const attached = ref(false)
 
   const current = computed<PlayerTrack | null>(() => queue.value[index.value] ?? null)
+
+  // ---------- 歌词(doc/31 二):同文件夹里同名的 .lrc ----------
+
+  const lyrics = ref<Lyrics | null>(null)
+  const lyricIndex = computed(() =>
+    lyrics.value?.synced ? currentLyricIndex(lyrics.value.lines, currentTime.value) : -1,
+  )
+  let lyricsSeq = 0
+
+  async function loadLyrics(id: string | null) {
+    const seq = ++lyricsSeq
+    lyrics.value = null
+    if (!id) return
+    const auth = useAuthStore()
+    const get = () => fetch(lyricsUrl(id), { headers: { Authorization: `Bearer ${auth.accessToken ?? ''}` } })
+    try {
+      let res = await get()
+      if (res.status === 401 && (await singleFlightRefresh(auth.accessToken))) res = await get()
+      if (!res.ok || seq !== lyricsSeq) return
+      const body = (await res.json()) as Lyrics
+      if (seq === lyricsSeq && body.lines?.length) lyrics.value = body
+    } catch {
+      // 没有歌词照常放
+    }
+  }
+
+  watch(
+    () => current.value?.id ?? null,
+    (id) => void loadLyrics(id),
+  )
 
   let el: HTMLAudioElement | null = null
   let loadSeq = 0
@@ -502,6 +535,8 @@ export const usePlayerStore = defineStore('player', () => {
     resumedFrom,
     attached,
     current,
+    lyrics,
+    lyricIndex,
     attach,
     detach,
     flush,

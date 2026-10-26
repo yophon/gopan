@@ -47,6 +47,13 @@ export default defineConfig({
       '/sub': {
         target: 'http://127.0.0.1:8080',
       },
+      // 转成 mp4 的视频、歌词(doc/31)
+      '/remux/': {
+        target: 'http://127.0.0.1:8080',
+      },
+      '/lrc/': {
+        target: 'http://127.0.0.1:8080',
+      },
       // Markdown 渲染(doc/23 五.2)
       '/md/': {
         target: 'http://127.0.0.1:8080',

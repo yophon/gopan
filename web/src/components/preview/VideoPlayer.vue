@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
-import { Download, RefreshRight, WarningFilled } from '@element-plus/icons-vue'
+import { Download, RefreshRight, VideoPlay, WarningFilled } from '@element-plus/icons-vue'
 
 import { reportProgress } from '@/composables/media'
 import { defaultSubtitleIndex, formatDuration, mediaErrorAction, resumePosition, subtitleUrl } from '@/utils/media'
@@ -15,6 +15,8 @@ interface Subtitle {
   label: string
   lang: string
   default: boolean
+  /** 转封装时从文件里取出的内嵌字幕直接给地址(doc/31 一);外挂字幕按 nodeId 拼 /sub */
+  url?: string
 }
 
 const props = defineProps<{
@@ -32,12 +34,17 @@ const props = defineProps<{
   refresh: () => Promise<string | null>
   /** 下一集的名字;没有为 null */
   nextName?: string | null
+  /** 桌面端:放不了时能交给电脑上的播放器(doc/31 三) */
+  external?: boolean
 }>()
 
 const emit = defineEmits<{
   playing: [boolean]
   next: []
   download: []
+  /** 浏览器放不了这个文件:有转封装可走时由外面接手 */
+  unsupported: []
+  playExternal: []
 }>()
 
 const videoEl = ref<HTMLVideoElement | null>(null)
@@ -53,7 +60,7 @@ let pending: { at: number; play: boolean } | null = null
 // ---------- 字幕 ----------
 
 const subIndex = ref(defaultSubtitleIndex(props.subtitles))
-const trackSrcs = computed(() => props.subtitles.map((t) => subtitleUrl(t.nodeId, props.token)))
+const trackSrcs = computed(() => props.subtitles.map((t) => t.url ?? subtitleUrl(t.nodeId, props.token)))
 
 function applySubtitle() {
   const tracks = videoEl.value?.textTracks
@@ -171,6 +178,7 @@ function onError() {
   }
   emit('playing', false)
   failure.value = action
+  if (action === 'unsupported') emit('unsupported')
 }
 
 function retry() {
@@ -250,13 +258,18 @@ onBeforeUnmount(() => {
     <!-- 放不了:给出原因与出路,不留黑框 -->
     <div v-if="failure" class="video-failure">
       <el-icon :size="40" class="failure-icon"><WarningFilled /></el-icon>
-      <p v-if="failure === 'unsupported'">浏览器放不了这个格式,下载或用安卓 App 看</p>
+      <p v-if="failure === 'unsupported'">
+        {{ external ? '浏览器放不了这个格式,用电脑上的播放器看' : '浏览器放不了这个格式,下载或用安卓 App 看' }}
+      </p>
       <p v-else>播放中断了,网络或地址失效</p>
       <div class="failure-actions">
         <el-button v-if="failure === 'failed'" size="small" :icon="RefreshRight" :loading="reloading" @click="retry">
           重试
         </el-button>
-        <el-button size="small" type="primary" :icon="Download" @click="emit('download')">下载</el-button>
+        <el-button v-if="external" size="small" type="primary" :icon="VideoPlay" @click="emit('playExternal')">
+          用播放器播放
+        </el-button>
+        <el-button size="small" :type="external ? 'default' : 'primary'" :icon="Download" @click="emit('download')">下载</el-button>
       </div>
     </div>
 

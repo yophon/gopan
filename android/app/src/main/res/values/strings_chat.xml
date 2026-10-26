@@ -55,6 +55,14 @@
     <string name="chat_share_more">还有 %1$d 个</string>
     <string name="chat_share_to_chat">发到传输助手</string>
     <string name="chat_share_to_folder">存到文件夹…</string>
+    <string name="chat_share_as_link">生成分享链接</string>
+    <!-- 生成分享链接(doc/31 四):传完的通知 -->
+    <string name="quick_share_done_title">分享链接已复制</string>
+    <string name="quick_share_done_title_plain">分享链接建好了</string>
+    <string name="quick_share_done_text">%1$s · %2$d 天有效,点这里发给别人</string>
+    <string name="quick_share_failed_title">没生成分享链接</string>
+    <string name="quick_share_failed_text">%1$s 有文件没传上去,在传输列表里重试</string>
+    <string name="quick_share_send">发送分享链接</string>
     <string name="chat_delete_file">只删除这条消息,文件仍保留在网盘里。</string>
     <string name="chat_delete_text">删除这条消息?</string>
     <string name="chat_copied">已复制</string>

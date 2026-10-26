@@ -107,3 +107,55 @@ export function mediaErrorAction(opts: {
   if (hadPlayed || urlAgeMs >= URL_STALE_MS) return 'refetch'
   return 'unsupported'
 }
+
+// ---------- 浏览器放不了的视频容器:服务器转成 mp4 再放(doc/31 一) ----------
+
+export type RemuxStatusLike = 'NONE' | 'QUEUED' | 'RUNNING' | 'DONE' | 'UNSUPPORTED' | 'FAILED' | 'UNAVAILABLE'
+
+export interface RemuxLike {
+  status: RemuxStatusLike
+  url?: string | null
+  direct: boolean
+}
+
+export type VideoSource =
+  | { kind: 'direct'; url: string }
+  | { kind: 'remux'; url: string }
+  | { kind: 'wait' } // 排队 / 正在转 / 还没开始
+  | { kind: 'problem' } // 编码放不了、转失败、太大
+
+/**
+ * 视频该放什么:不是这类容器(remux 为空)放原文件;转好了放 mp4;
+ * 服务器说原文件多半能放(direct)且还没放失败过,先放原文件;其余等转换或给出原因。
+ */
+export function pickVideoSource(contentUrl: string | null | undefined, remux: RemuxLike | null | undefined, directFailed: boolean): VideoSource | null {
+  if (!remux) return contentUrl ? { kind: 'direct', url: contentUrl } : null
+  if (remux.status === 'DONE' && remux.url) return { kind: 'remux', url: remux.url }
+  if (remux.direct && !directFailed && contentUrl) return { kind: 'direct', url: contentUrl }
+  if (remux.status === 'UNSUPPORTED' || remux.status === 'FAILED' || remux.status === 'UNAVAILABLE') return { kind: 'problem' }
+  return { kind: 'wait' }
+}
+
+export interface PlayerSubtitle extends SubtitleLike {
+  label: string
+  /** 内嵌字幕直接给地址;外挂字幕按 nodeId 拼 /sub */
+  url?: string
+}
+
+/** 外挂字幕在前(自己放的,默认选中以它为准),文件里内嵌的跟在后面;两边都有时内嵌的标一下 */
+export function mergeSubtitles(
+  external: { nodeId: string; label: string; lang: string; default: boolean }[],
+  embedded: { label: string; lang: string; url: string; default: boolean }[],
+): PlayerSubtitle[] {
+  const extDefault = external.some((t) => t.default)
+  return [
+    ...external.map((t) => ({ nodeId: t.nodeId, label: t.label, lang: t.lang, default: t.default })),
+    ...embedded.map((t, i) => ({
+      nodeId: `embedded:${i}`,
+      label: external.length > 0 ? `${t.label}(内嵌)` : t.label,
+      lang: t.lang,
+      default: !extDefault && t.default,
+      url: t.url,
+    })),
+  ]
+}

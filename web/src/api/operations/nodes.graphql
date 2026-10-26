@@ -45,6 +45,9 @@ query NodePreview($id: ID!) {
         lang
         default
       }
+      remux {
+        ...RemuxFields
+      }
     }
     playProgress {
       position
@@ -52,6 +55,26 @@ query NodePreview($id: ID!) {
       finished
       updatedAt
     }
+  }
+}
+
+fragment RemuxFields on RemuxInfo {
+  status
+  progress
+  url
+  direct
+  message
+  subtitles {
+    label
+    lang
+    url
+    default
+  }
+}
+
+mutation RequestRemux($nodeId: ID!) {
+  requestRemux(nodeId: $nodeId) {
+    ...RemuxFields
   }
 }
 

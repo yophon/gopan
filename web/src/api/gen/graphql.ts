@@ -350,6 +350,14 @@ export type DuplicatePage = {
   nextOffset?: Maybe<Scalars['Int']['output']>;
 };
 
+export type EmbeddedSubtitle = {
+  __typename?: 'EmbeddedSubtitle';
+  default: Scalars['Boolean']['output'];
+  label: Scalars['String']['output'];
+  lang: Scalars['String']['output'];
+  url: Scalars['String']['output'];
+};
+
 export type Feed = {
   __typename?: 'Feed';
   assetPattern: Scalars['String']['output'];
@@ -774,6 +782,7 @@ export type Mutation = {
   renameNode: Node;
   renameNodes: Array<Node>;
   requestPreview: PreviewInfo;
+  requestRemux: RemuxInfo;
   restoreFileVersion: Node;
   restoreNodes: Array<Node>;
   retryJob: Job;
@@ -1095,6 +1104,11 @@ export type MutationRenameNodesArgs = {
 
 
 export type MutationRequestPreviewArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+export type MutationRequestRemuxArgs = {
   nodeId: Scalars['ID']['input'];
 };
 
@@ -1425,6 +1439,7 @@ export type PreviewInfo = {
   kind: PreviewKind;
   largeUrl?: Maybe<Scalars['String']['output']>;
   markdown: Scalars['Boolean']['output'];
+  remux?: Maybe<RemuxInfo>;
   status?: Maybe<TaskStatus>;
   subtitles: Array<SubtitleTrack>;
   thumbUrl?: Maybe<Scalars['String']['output']>;
@@ -1767,6 +1782,25 @@ export type RecentPlay = {
   node: Node;
   progress: PlayProgress;
 };
+
+export type RemuxInfo = {
+  __typename?: 'RemuxInfo';
+  direct: Scalars['Boolean']['output'];
+  message?: Maybe<Scalars['String']['output']>;
+  progress?: Maybe<Scalars['Float']['output']>;
+  status: RemuxStatus;
+  subtitles: Array<EmbeddedSubtitle>;
+  url?: Maybe<Scalars['String']['output']>;
+};
+
+export type RemuxStatus =
+  | 'DONE'
+  | 'FAILED'
+  | 'NONE'
+  | 'QUEUED'
+  | 'RUNNING'
+  | 'UNAVAILABLE'
+  | 'UNSUPPORTED';
 
 export type RenameItem = {
   id: Scalars['ID']['input'];
@@ -2699,7 +2733,16 @@ export type NodePreviewQueryVariables = Exact<{
 }>;
 
 
-export type NodePreviewQuery = { __typename?: 'Query', node: { __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null, largeUrl?: string | null, contentUrl?: string | null, status?: TaskStatus | null, durationSec?: number | null, markdown: boolean, subtitles: Array<{ __typename?: 'SubtitleTrack', nodeId: string, name: string, label: string, lang: string, default: boolean }> }, playProgress?: { __typename?: 'PlayProgress', position: number, duration: number, finished: boolean, updatedAt: string } | null } };
+export type NodePreviewQuery = { __typename?: 'Query', node: { __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null, largeUrl?: string | null, contentUrl?: string | null, status?: TaskStatus | null, durationSec?: number | null, markdown: boolean, subtitles: Array<{ __typename?: 'SubtitleTrack', nodeId: string, name: string, label: string, lang: string, default: boolean }>, remux?: { __typename?: 'RemuxInfo', status: RemuxStatus, progress?: number | null, url?: string | null, direct: boolean, message?: string | null, subtitles: Array<{ __typename?: 'EmbeddedSubtitle', label: string, lang: string, url: string, default: boolean }> } | null }, playProgress?: { __typename?: 'PlayProgress', position: number, duration: number, finished: boolean, updatedAt: string } | null } };
+
+export type RemuxFieldsFragment = { __typename?: 'RemuxInfo', status: RemuxStatus, progress?: number | null, url?: string | null, direct: boolean, message?: string | null, subtitles: Array<{ __typename?: 'EmbeddedSubtitle', label: string, lang: string, url: string, default: boolean }> };
+
+export type RequestRemuxMutationVariables = Exact<{
+  nodeId: Scalars['ID']['input'];
+}>;
+
+
+export type RequestRemuxMutation = { __typename?: 'Mutation', requestRemux: { __typename?: 'RemuxInfo', status: RemuxStatus, progress?: number | null, url?: string | null, direct: boolean, message?: string | null, subtitles: Array<{ __typename?: 'EmbeddedSubtitle', label: string, lang: string, url: string, default: boolean }> } };
 
 export type RequestPreviewMutationVariables = Exact<{
   nodeId: Scalars['ID']['input'];
@@ -3417,6 +3460,21 @@ export const PlayProgressFieldsFragmentDoc = new TypedDocumentString(`
   updatedAt
 }
     `, {"fragmentName":"PlayProgressFields"}) as unknown as TypedDocumentString<PlayProgressFieldsFragment, unknown>;
+export const RemuxFieldsFragmentDoc = new TypedDocumentString(`
+    fragment RemuxFields on RemuxInfo {
+  status
+  progress
+  url
+  direct
+  message
+  subtitles {
+    label
+    lang
+    url
+    default
+  }
+}
+    `, {"fragmentName":"RemuxFields"}) as unknown as TypedDocumentString<RemuxFieldsFragment, unknown>;
 export const QuickNodeFragmentDoc = new TypedDocumentString(`
     fragment QuickNode on Node {
   id
@@ -5263,6 +5321,9 @@ export const NodePreviewDocument = new TypedDocumentString(`
         lang
         default
       }
+      remux {
+        ...RemuxFields
+      }
     }
     playProgress {
       position
@@ -5272,7 +5333,38 @@ export const NodePreviewDocument = new TypedDocumentString(`
     }
   }
 }
-    `) as unknown as TypedDocumentString<NodePreviewQuery, NodePreviewQueryVariables>;
+    fragment RemuxFields on RemuxInfo {
+  status
+  progress
+  url
+  direct
+  message
+  subtitles {
+    label
+    lang
+    url
+    default
+  }
+}`) as unknown as TypedDocumentString<NodePreviewQuery, NodePreviewQueryVariables>;
+export const RequestRemuxDocument = new TypedDocumentString(`
+    mutation RequestRemux($nodeId: ID!) {
+  requestRemux(nodeId: $nodeId) {
+    ...RemuxFields
+  }
+}
+    fragment RemuxFields on RemuxInfo {
+  status
+  progress
+  url
+  direct
+  message
+  subtitles {
+    label
+    lang
+    url
+    default
+  }
+}`) as unknown as TypedDocumentString<RequestRemuxMutation, RequestRemuxMutationVariables>;
 export const RequestPreviewDocument = new TypedDocumentString(`
     mutation RequestPreview($nodeId: ID!) {
   requestPreview(nodeId: $nodeId) {

@@ -26,6 +26,8 @@ import xyz.yophon.gopan.core.offline.OfflineLookup
 import xyz.yophon.gopan.core.share.AppNavRequests
 import xyz.yophon.gopan.core.share.NavRequest
 import xyz.yophon.gopan.core.transfer.TransferActions
+import xyz.yophon.gopan.core.data.media.Lyrics
+import xyz.yophon.gopan.core.data.media.LyricsRepository
 import xyz.yophon.gopan.core.data.media.MediaModule
 import xyz.yophon.gopan.core.data.media.MediaRepository
 import xyz.yophon.gopan.core.data.media.MediaUrls
@@ -79,6 +81,7 @@ class PreviewViewModel @Inject constructor(
     private val media: MediaRepository,
     private val reporter: PlayProgressReporter,
     private val mediaUrls: MediaUrls,
+    private val lyricsRepo: LyricsRepository,
     nowPlayingStore: NowPlayingStore,
     /** 打开过的文件进「最近」(doc/24) */
     private val quick: QuickRepository,
@@ -266,6 +269,9 @@ class PreviewViewModel @Inject constructor(
         val playlist = gopanResult { media.playlist(nodeId) }.getOrElse { emptyList() }
         return audioQueue(playlist, nodeId, title)
     }
+
+    /** 歌的同名 .lrc(doc/31 二);没有为 null */
+    suspend fun loadLyrics(nodeId: String): Lyrics? = lyricsRepo.lyrics(nodeId)
 
     /** 视频放完:同文件夹里的下一集(查不到、已是最后一集为 null) */
     suspend fun nextVideo(nodeId: String): UpNext? {

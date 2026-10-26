@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -50,6 +51,10 @@ type Config struct {
 	AppReleaseDir string
 	FFmpegPath    string
 	FFprobePath   string
+	// 网页放 mkv(doc/31 一):转成 mp4 的缓存目录、总量上限(0 = 不转换)、多久没放就删
+	RemuxDir   string
+	RemuxCache int64
+	RemuxTTL   time.Duration
 	Workers       int // 后台任务并发(hash 校验、缩略图、封面、转换),1–16
 	// 内容搜索:false 关掉文字提取,内容搜索返回不可用;pdftotext 找不到时 PDF 不提(doc/20)
 	ContentIndex  bool
@@ -110,6 +115,9 @@ func Load() (*Config, error) {
 		AppReleaseDir: env("APP_RELEASE_DIR", ""),
 		FFmpegPath:    env("FFMPEG_PATH", "ffmpeg"),
 		FFprobePath:   env("FFPROBE_PATH", "ffprobe"),
+		RemuxDir:      env("REMUX_DIR", filepath.Join(os.TempDir(), "gopan-remux")),
+		RemuxCache:    envInt64("REMUX_CACHE", 8<<30),
+		RemuxTTL:      envDuration("REMUX_TTL", 7*24*time.Hour),
 		Workers:       int(envInt64("WORKERS", 2)),
 		ContentIndex:  envBool("CONTENT_INDEX", true),
 		PdftotextPath: env("PDFTOTEXT_PATH", "pdftotext"),

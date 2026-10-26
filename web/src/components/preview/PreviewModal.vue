@@ -13,6 +13,7 @@ import {
   Monitor,
   Headset,
   Reading,
+  VideoPlay,
   View,
   WarningFilled,
 } from '@element-plus/icons-vue'
@@ -26,6 +27,7 @@ import {
   NodePreviewDocument,
   PlaylistDocument,
   RequestPreviewDocument,
+  RequestRemuxDocument,
 } from '@/api/gen/graphql'
 import type { Variables } from '@/api/transport'
 import type { DocumentTypeDecoration } from '@graphql-typed-document-node/core'
@@ -37,7 +39,7 @@ import { reportProgress } from '@/composables/media'
 import { markOpened } from '@/composables/quick'
 import { useAuthStore } from '@/stores/auth'
 import { usePlayerStore } from '@/stores/player'
-import { formatDuration, resumePage } from '@/utils/media'
+import { formatDuration, mergeSubtitles, pickVideoSource, resumePage } from '@/utils/media'
 import { siteOf } from '@/utils/clips'
 import { canEditText } from '@/utils/textEdit'
 import {
@@ -55,7 +57,8 @@ import ArchiveViewer from './ArchiveViewer.vue'
 import VideoPlayer from './VideoPlayer.vue'
 import MarkdownFrame from './MarkdownFrame.vue'
 import AudioPanel from '@/components/player/AudioPanel.vue'
-import { downloadToComputer, openWithLocalApp } from '@/composables/nodeDownload'
+import { downloadToComputer, openWithLocalApp, playWithLocalPlayer } from '@/composables/nodeDownload'
+import { canPlayExternal } from '@/desktop/play'
 import { nativeDownloads } from '@/desktop/transfers'
 
 /** 访客模式(分享页):带访客 token 请求;访客是只读白名单,不能触发文档转换 */
@@ -87,10 +90,11 @@ const { data, isFetching, isError, error, refetch } = useQuery({
   staleTime: 0,
   gcTime: 0,
   retry: 1,
-  // OFFICE 转换中每 2 秒轮询;模态关闭 → enabled=false 自动停
+  // OFFICE 转换中每 2 秒、视频转封装中每 1.5 秒轮询;模态关闭 → enabled=false 自动停
   refetchInterval: (query) => {
     const p = query.state.data?.node.preview
     if (p?.kind === 'OFFICE' && (p.status === 'PENDING' || p.status === 'RUNNING')) return 2000
+    if (p?.kind === 'VIDEO' && (p.remux?.status === 'QUEUED' || p.remux?.status === 'RUNNING')) return 1500
     return false
   },
 })
@@ -109,12 +113,65 @@ const player = usePlayerStore()
 /** /sub 用的 token;NodePreview 刚走过 request(),过期的已经刷新过了 */
 const mediaToken = computed(() => props.guestToken ?? auth.accessToken ?? '')
 
-/** 播放中签名过期:重新查一次当前节点,拿新的 contentUrl */
+/** 播放中签名过期:重新查一次当前节点,拿新的地址(原文件或转好的 mp4) */
 async function refreshContentUrl(): Promise<string | null> {
   const id = currentId.value
+  const kind = videoSource.value?.kind
   const res = await refetch()
   if (res.isError || currentId.value !== id) return null
-  return res.data?.node.preview.contentUrl ?? null
+  const p = res.data?.node.preview
+  if (kind === 'remux') return p?.remux?.url ?? null
+  return p?.contentUrl ?? null
+}
+
+// ---------- 浏览器放不了的视频容器:服务器转成 mp4 再放(doc/31 一) ----------
+
+/** 直接放原文件放不了的节点(本次打开期间记着,切回来不再试) */
+const directFailed = ref(new Set<string>())
+const requestedRemux = new Set<string>()
+
+const remux = computed(() => (preview.value?.kind === 'VIDEO' ? (preview.value.remux ?? null) : null))
+const videoSource = computed(() => {
+  const p = preview.value
+  if (p?.kind !== 'VIDEO') return null
+  return pickVideoSource(p.contentUrl, remux.value, !!currentId.value && directFailed.value.has(currentId.value))
+})
+const videoSubtitles = computed(() =>
+  mergeSubtitles(preview.value?.subtitles ?? [], videoSource.value?.kind === 'remux' ? (remux.value?.subtitles ?? []) : []),
+)
+const remuxPercent = computed(() =>
+  remux.value?.status === 'RUNNING' && remux.value.progress != null ? Math.round(remux.value.progress * 100) : null,
+)
+
+const requestRemuxMutation = useMutation({
+  mutationFn: (vars: { nodeId: string }) => req(RequestRemuxDocument, vars),
+  onSuccess: () => void refetch(),
+  onError: (err) => ElMessage.error(errorText(err, '没能开始转换')),
+})
+
+// 要等转换且还没开始:自动开始一次(失败后的重试要手点)
+watch(
+  [videoSource, currentId],
+  ([src, id]) => {
+    if (!id || src?.kind !== 'wait' || remux.value?.status !== 'NONE' || requestedRemux.has(id)) return
+    requestedRemux.add(id)
+    requestRemuxMutation.mutate({ nodeId: id })
+  },
+  { immediate: true },
+)
+
+/** 原文件放不了:能转封装就转,不能就让播放器自己提示 */
+function onVideoUnsupported() {
+  const id = currentId.value
+  if (!id || !remux.value || videoSource.value?.kind !== 'direct') return
+  directFailed.value.add(id)
+}
+
+function retryRemux() {
+  const id = currentId.value
+  if (!id) return
+  requestedRemux.add(id)
+  requestRemuxMutation.mutate({ nodeId: id })
 }
 
 /** 视频的同文件夹连播列表(访客在分享范围内也能查) */
@@ -506,7 +563,17 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
               {{ mdSource ? '渲染' : '源文件' }}
             </el-button>
             <el-button
-              v-if="nativeDownloads() && node && !isMobile"
+              v-if="nativeDownloads() && node && !isMobile && canPlayExternal(preview?.kind)"
+              :icon="VideoPlay"
+              text
+              class="header-btn"
+              title="用电脑上的播放器边下边放"
+              @click="playWithLocalPlayer(node)"
+            >
+              播放器
+            </el-button>
+            <el-button
+              v-else-if="nativeDownloads() && node && !isMobile"
               :icon="Monitor"
               text
               class="header-btn"
@@ -575,13 +642,14 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
             :alt="node?.name"
           />
 
-          <!-- VIDEO:外挂字幕、续播、下一集、签名过期重取 -->
+          <!-- VIDEO:外挂 / 内嵌字幕、续播、下一集、签名过期重取;mkv 等先转成 mp4(doc/31 一) -->
           <VideoPlayer
-            v-else-if="preview?.kind === 'VIDEO' && preview.contentUrl && node"
+            v-else-if="(videoSource?.kind === 'direct' || videoSource?.kind === 'remux') && node"
+            :key="`${node.id}:${videoSource.kind}`"
             :node-id="node.id"
-            :src="preview.contentUrl"
-            :poster="preview.largeUrl"
-            :subtitles="preview.subtitles"
+            :src="videoSource.url"
+            :poster="preview?.largeUrl"
+            :subtitles="videoSubtitles"
             :token="mediaToken"
             :progress="node.playProgress"
             :track-progress="!props.guestToken"
@@ -590,7 +658,47 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
             @playing="(v) => (videoPlaying = v)"
             @next="playNextVideo"
             @download="onDownload"
+            :external="nativeDownloads()"
+            @unsupported="onVideoUnsupported"
+            @play-external="playWithLocalPlayer(node)"
           />
+          <div v-else-if="videoSource?.kind === 'wait'" class="preview-placeholder video-remux">
+            <p class="remux-title">
+              {{ remux?.status === 'RUNNING' ? '正在转成浏览器能放的格式' : '排队等转换' }}
+            </p>
+            <el-progress
+              class="remux-bar"
+              :percentage="remuxPercent ?? 100"
+              :indeterminate="remuxPercent === null"
+              :show-text="remuxPercent !== null"
+              :stroke-width="6"
+            />
+            <div class="placeholder-actions">
+              <el-button v-if="nativeDownloads() && node" size="small" :icon="VideoPlay" @click="playWithLocalPlayer(node)">
+                用播放器播放
+              </el-button>
+              <el-button size="small" :icon="Download" :loading="downloading" @click="onDownload">下载</el-button>
+            </div>
+          </div>
+          <div v-else-if="videoSource?.kind === 'problem'" class="preview-placeholder video-remux">
+            <el-icon :size="40" class="failed-icon"><WarningFilled /></el-icon>
+            <p>{{ remux?.message || '浏览器放不了这个视频' }}</p>
+            <div class="placeholder-actions">
+              <el-button v-if="remux?.status === 'FAILED'" size="small" @click="retryRemux">重试</el-button>
+              <el-button
+                v-if="nativeDownloads() && node"
+                size="small"
+                type="primary"
+                :icon="VideoPlay"
+                @click="playWithLocalPlayer(node)"
+              >
+                用播放器播放
+              </el-button>
+              <el-button size="small" :type="nativeDownloads() ? 'default' : 'primary'" :icon="Download" :loading="downloading" @click="onDownload">
+                下载
+              </el-button>
+            </div>
+          </div>
 
           <!-- AUDIO:登录用户绑全站播放器 -->
           <AudioPanel
@@ -932,6 +1040,22 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   align-items: center;
   gap: 12px;
   font-size: 14px;
+}
+.video-remux {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+.video-remux p {
+  margin: 0;
+}
+.remux-bar {
+  width: min(280px, 70vw);
+}
+.remux-bar :deep(.el-progress__text) {
+  color: #d1d5db;
 }
 .failed-icon {
   color: var(--el-color-warning);

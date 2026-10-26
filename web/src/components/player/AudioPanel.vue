@@ -25,6 +25,45 @@ function onSliderChange(v: number | number[]) {
   player.seek(Array.isArray(v) ? v[0] : v)
 }
 
+// ---------- 歌词(doc/31 二):当前行滚到中间;手动滚过之后 4 秒内不抢 ----------
+
+const lyricsEl = ref<HTMLElement | null>(null)
+let userScrollAt = 0
+
+function onLyricsScrollIntent() {
+  userScrollAt = Date.now()
+}
+
+function centerLyric(smooth: boolean) {
+  const box = lyricsEl.value
+  const line = box?.querySelector<HTMLElement>('.lyric.on')
+  if (!box || !line || Date.now() - userScrollAt < 4000) return
+  box.scrollTo({ top: line.offsetTop - box.clientHeight / 2 + line.clientHeight / 2, behavior: smooth ? 'smooth' : 'auto' })
+}
+
+watch(
+  () => player.lyricIndex,
+  async () => {
+    await nextTick()
+    centerLyric(true)
+  },
+)
+watch(
+  () => player.lyrics,
+  async () => {
+    userScrollAt = 0
+    await nextTick()
+    if (lyricsEl.value) lyricsEl.value.scrollTop = 0
+    centerLyric(false)
+  },
+)
+
+function seekToLine(t: number) {
+  if (!player.lyrics?.synced || t < 0) return
+  userScrollAt = 0
+  player.seek(t)
+}
+
 const showQueue = ref(false)
 const queueEl = ref<HTMLElement | null>(null)
 watch(showQueue, async (v) => {
@@ -36,7 +75,25 @@ watch(showQueue, async (v) => {
 
 <template>
   <div class="audio-panel">
-    <el-icon :size="72" class="ap-icon"><Headset /></el-icon>
+    <div
+      v-if="player.lyrics && !showQueue"
+      ref="lyricsEl"
+      class="ap-lyrics"
+      :class="{ plain: !player.lyrics.synced }"
+      @wheel.passive="onLyricsScrollIntent"
+      @touchmove.passive="onLyricsScrollIntent"
+    >
+      <p
+        v-for="(l, i) in player.lyrics.lines"
+        :key="i"
+        class="lyric"
+        :class="{ on: i === player.lyricIndex, blank: !l.text }"
+        @click="seekToLine(l.t)"
+      >
+        {{ l.text || '\u00a0' }}
+      </p>
+    </div>
+    <el-icon v-else :size="72" class="ap-icon"><Headset /></el-icon>
     <div class="ap-title" :title="player.current?.name">{{ player.current?.name ?? '—' }}</div>
     <div class="ap-sub">
       <template v-if="player.queue.length > 1">第 {{ player.index + 1 }} / {{ player.queue.length }} 首 · </template>
@@ -120,6 +177,44 @@ watch(showQueue, async (v) => {
 }
 .ap-icon {
   color: #9ca3af;
+}
+.ap-lyrics {
+  width: 100%;
+  height: min(240px, 34vh);
+  padding: 96px 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  text-align: center;
+  mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent);
+}
+.ap-lyrics::-webkit-scrollbar {
+  display: none;
+}
+.lyric {
+  margin: 0;
+  padding: 5px 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #9ca3af;
+  cursor: pointer;
+  transition:
+    color 0.2s,
+    transform 0.2s;
+}
+.ap-lyrics.plain {
+  padding: 8px 0;
+  mask-image: none;
+}
+.ap-lyrics.plain .lyric {
+  cursor: default;
+}
+.lyric.blank {
+  padding: 2px 0;
+}
+.lyric.on {
+  color: #f9fafb;
+  font-weight: 500;
+  transform: scale(1.06);
 }
 .ap-title {
   max-width: 100%;

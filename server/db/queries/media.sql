@@ -51,6 +51,16 @@ WHERE n.owner_id = @owner_id AND n.parent_id IS NOT DISTINCT FROM sqlc.narg(pare
 ORDER BY n.name
 LIMIT 200;
 
+-- name: FindFolderFileByName :one
+-- 同文件夹里按名字(不分大小写)找一个文件:歌的同名 .lrc(doc/31 二)。
+SELECT n.id, n.name, b.size AS blob_size, b.sha256 AS blob_sha256
+FROM nodes n
+JOIN blobs b ON b.id = n.blob_id
+WHERE n.owner_id = @owner_id AND n.parent_id IS NOT DISTINCT FROM sqlc.narg(parent_id)::uuid
+  AND n.deleted_at IS NULL AND n.kind = 'file' AND lower(n.name) = lower(@name::text)
+ORDER BY n.name
+LIMIT 1;
+
 -- name: CountFolderVideos :one
 SELECT count(*) FROM (
     SELECT 1 FROM nodes n JOIN blobs b ON b.id = n.blob_id

@@ -9,8 +9,8 @@ mod download;
 mod names;
 mod upload;
 
-pub use db::{now_ms, EditRow, Kind, Task};
-use db::{Db, NewTask, State};
+pub use db::{now_ms, EditRow, Kind, State, Task};
+use db::{Db, NewTask};
 pub use names::safe_name;
 
 use crate::api::ApiError;
@@ -286,6 +286,10 @@ fn finished(app: &AppHandle, id: i64) {
             b
         }
     };
+    // 「上传并复制分享链接」的批次由 quickshare.rs 自己出通知
+    if crate::quickshare::task_finished(app, top) {
+        return;
+    }
     let mut q = eng.toasts.lock().unwrap();
     if !q.contains(&top) {
         q.push(top);
@@ -635,8 +639,19 @@ pub fn enqueue_uploads(
     to_chat: bool,
     replace: &[String],
 ) -> Result<usize, String> {
+    enqueue_uploads_ids(app, paths, parent_id, to_chat, replace).map(|ids| ids.len())
+}
+
+/// 同上,返回入队的顶层任务 id(读不到的路径跳过)
+pub fn enqueue_uploads_ids(
+    app: &AppHandle,
+    paths: &[PathBuf],
+    parent_id: Option<String>,
+    to_chat: bool,
+    replace: &[String],
+) -> Result<Vec<i64>, String> {
     let eng = engine(app);
-    let mut n = 0;
+    let mut ids = Vec::new();
     for p in paths {
         let Ok(meta) = std::fs::metadata(p) else { continue };
         let name = p.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| p.to_string_lossy().into_owned());
@@ -651,12 +666,16 @@ pub fn enqueue_uploads(
             to_chat,
             ..Default::default()
         };
-        eng.db.insert(&t).map_err(|e| format!("写传输队列失败:{e}"))?;
-        n += 1;
+        ids.push(eng.db.insert(&t).map_err(|e| format!("写传输队列失败:{e}"))?);
     }
     eng.dirty.store(true, Ordering::Relaxed);
     eng.wake.notify_one();
-    Ok(n)
+    Ok(ids)
+}
+
+/// 队列里的一个任务(quickshare.rs 看它做完的结果)
+pub fn task(app: &AppHandle, id: i64) -> Option<Task> {
+    engine(app).db.get(id)
 }
 
 /// 下载一个云端文件到确切的位置(覆盖),做完由 edits.rs 用本地程序打开

@@ -37,6 +37,8 @@ models:
         resolver: true
       downloadUrl:
         resolver: true
+      streamUrl:
+        resolver: true
       preview:
         resolver: true
       playProgress:

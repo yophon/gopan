@@ -8,6 +8,7 @@ import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
 import { CreateShareDocument } from '@/api/gen/graphql'
 import type { CreateShareMutation } from '@/api/gen/graphql'
+import { qrPath } from '@/utils/qr'
 
 const visible = defineModel<boolean>({ required: true })
 const props = defineProps<{ node: { id: string; name: string } | null }>()
@@ -42,6 +43,8 @@ watch(visible, (v) => {
 const shareUrl = computed(() =>
   created.value ? `${location.origin}/s/${created.value.token}` : '',
 )
+/** 当面分享:手机扫一下就打开(doc/31 四) */
+const qr = computed(() => (shareUrl.value ? qrPath(shareUrl.value) : null))
 
 // ---------- 提交 ----------
 
@@ -125,15 +128,28 @@ function onCopyAll() {
 
     <!-- 创建成功:展示链接 -->
     <div v-else class="share-result">
-      <el-input :model-value="shareUrl" readonly>
-        <template #prefix><el-icon><Link /></el-icon></template>
-      </el-input>
-      <p v-if="created.hasPassword" class="share-pwd">
-        密码:<code>{{ password }}</code>
-      </p>
-      <p class="share-expire">
-        {{ created.expiresAt ? `有效期至 ${new Date(created.expiresAt).toLocaleString()}` : '永久有效' }}
-      </p>
+      <svg
+        v-if="qr"
+        class="share-qr"
+        :viewBox="`0 0 ${qr.size} ${qr.size}`"
+        shape-rendering="crispEdges"
+        role="img"
+        aria-label="分享链接二维码"
+      >
+        <rect :width="qr.size" :height="qr.size" fill="#fff" />
+        <path :d="qr.d" fill="#121212" />
+      </svg>
+      <div class="share-info">
+        <el-input :model-value="shareUrl" readonly>
+          <template #prefix><el-icon><Link /></el-icon></template>
+        </el-input>
+        <p v-if="created.hasPassword" class="share-pwd">
+          密码:<code>{{ password }}</code>
+        </p>
+        <p class="share-expire">
+          {{ created.expiresAt ? `有效期至 ${new Date(created.expiresAt).toLocaleString()}` : '永久有效' }}
+        </p>
+      </div>
     </div>
 
     <template #footer>
@@ -157,8 +173,30 @@ function onCopyAll() {
 <style scoped>
 .share-result {
   display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.share-qr {
+  flex: none;
+  width: 116px;
+  height: 116px;
+  border-radius: 6px;
+}
+.share-info {
+  display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
+}
+@media (max-width: 480px) {
+  .share-result {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .share-qr {
+    align-self: center;
+  }
 }
 .share-pwd {
   margin: 0;

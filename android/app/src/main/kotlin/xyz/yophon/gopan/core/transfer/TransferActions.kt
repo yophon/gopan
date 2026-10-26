@@ -37,7 +37,8 @@ class OpenRequests @Inject constructor() {
 }
 
 /** 入上传队列的结果 */
-data class EnqueueResult(val queued: Int, val emptySkipped: Int, val unreadable: Int)
+/** [ids] 入队的上传任务(「生成分享链接」按它等传完,doc/31 四) */
+data class EnqueueResult(val queued: Int, val emptySkipped: Int, val unreadable: Int, val ids: List<Long> = emptyList())
 
 sealed interface PackResult {
     data object Queued : PackResult
@@ -192,8 +193,8 @@ class DefaultTransferActions @Inject constructor(
             UploadSource(Uri.fromFile(it), it.name, it.length(), it.lastModified(), null, owns = true, persisted = false)
         }
         files.filter { it.isFile && it.length() == 0L }.forEach { it.delete() }
-        engine.enqueueUploads(items, parentId, toChat)
-        return EnqueueResult(items.size, files.size - items.size, 0)
+        val ids = engine.enqueueUploads(items, parentId, toChat)
+        return EnqueueResult(items.size, files.size - items.size, 0, ids)
     }
 
     /** 下载到设置里的位置:文件逐个,文件夹客户端展开 */

@@ -183,6 +183,19 @@ func (r *mutationResolver) CreateFolder(ctx context.Context, parentID *string, n
 	return gqlNode(n), nil
 }
 
+// QuickShareFolder is the resolver for the quickShareFolder field.
+func (r *mutationResolver) QuickShareFolder(ctx context.Context) (*Node, error) {
+	id, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	n, err := r.Nodes.QuickShareFolder(ctx, id.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return gqlNode(n), nil
+}
+
 // RenameNode is the resolver for the renameNode field.
 func (r *mutationResolver) RenameNode(ctx context.Context, id string, name string) (*Node, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -456,6 +469,24 @@ func (r *mutationResolver) RequestPreview(ctx context.Context, nodeID string) (*
 		return nil, err
 	}
 	return gqlPreview(info), nil
+}
+
+// RequestRemux is the resolver for the requestRemux field.
+func (r *mutationResolver) RequestRemux(ctx context.Context, nodeID string) (*RemuxInfo, error) {
+	nid, err := parseID(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	// 分享访客在分享范围内也能转:分享出去的电影要让对方看得了
+	ident, err := r.requireNodeAccess(ctx, nid)
+	if err != nil {
+		return nil, err
+	}
+	info, err := r.Previews.RequestRemux(ctx, ident.UserID, nid)
+	if err != nil {
+		return nil, err
+	}
+	return gqlRemux(info), nil
 }
 
 // CreateShare is the resolver for the createShare field.
@@ -1272,6 +1303,22 @@ func (r *nodeResolver) DownloadURL(ctx context.Context, obj *Node) (*string, err
 		}
 	}
 	return &u, nil
+}
+
+// StreamURL is the resolver for the streamUrl field.
+func (r *nodeResolver) StreamURL(ctx context.Context, obj *Node) (*string, error) {
+	if obj.Kind != NodeKindFile || obj.DeletedAt != nil {
+		return nil, nil
+	}
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nid, err := parseID(obj.ID)
+	if err != nil {
+		return nil, err
+	}
+	return r.Uploads.StreamURL(ctx, ident.UserID, nid)
 }
 
 // PlayProgress is the resolver for the playProgress field.

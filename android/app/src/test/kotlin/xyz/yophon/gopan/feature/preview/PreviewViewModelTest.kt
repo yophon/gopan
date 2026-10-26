@@ -18,7 +18,9 @@ import xyz.yophon.gopan.core.data.NodeKind
 import xyz.yophon.gopan.core.data.PreviewKind
 import xyz.yophon.gopan.core.data.NodePreview
 import xyz.yophon.gopan.core.data.archive.ExtractRequest
+import xyz.yophon.gopan.core.AppConfig
 import xyz.yophon.gopan.core.data.media.FakeMediaRepository
+import xyz.yophon.gopan.core.data.media.LyricsRepository
 import xyz.yophon.gopan.core.data.media.MediaUrls
 import xyz.yophon.gopan.core.data.media.NowPlaying
 import xyz.yophon.gopan.core.data.media.NowPlayingStore
@@ -53,12 +55,14 @@ class PreviewViewModelTest {
 
     private fun file(id: String) = Node(id = id, name = "$id.jpg", kind = NodeKind.FILE, size = 10)
 
+    private val lyrics = LyricsRepository(OkHttpClient(), AppConfig("https://drive.example.com", "https://id.example.com", "c", "r"))
+
     private fun viewModel(start: String, current: String? = null): PreviewViewModel {
         val args = buildMap {
             put(PreviewViewModel.NODE_ID_ARG, start)
             if (current != null) put("preview.current", current)
         }
-        return PreviewViewModel(SavedStateHandle(args), sessions, repo, transfers, OkHttpClient(), archives, navRequests, media, reporter, mediaUrls, nowPlaying, FakeQuickRepository(), offline)
+        return PreviewViewModel(SavedStateHandle(args), sessions, repo, transfers, OkHttpClient(), archives, navRequests, media, reporter, mediaUrls, lyrics, nowPlaying, FakeQuickRepository(), offline)
     }
 
     @Test
@@ -104,7 +108,7 @@ class PreviewViewModelTest {
     fun `the settled page is remembered for recreation`() {
         sessions.open(listOf(file("a"), file("b")))
         val handle = SavedStateHandle(mapOf(PreviewViewModel.NODE_ID_ARG to "a"))
-        val vm = PreviewViewModel(handle, sessions, repo, transfers, OkHttpClient(), archives, navRequests, media, reporter, mediaUrls, nowPlaying, FakeQuickRepository(), offline)
+        val vm = PreviewViewModel(handle, sessions, repo, transfers, OkHttpClient(), archives, navRequests, media, reporter, mediaUrls, lyrics, nowPlaying, FakeQuickRepository(), offline)
         vm.onPageSettled(1)
         assertThat(vm.current.value).isEqualTo(1)
         assertThat(handle.get<String>("preview.current")).isEqualTo("b")

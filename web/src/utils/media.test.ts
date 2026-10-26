@@ -4,6 +4,8 @@ import {
   defaultSubtitleIndex,
   formatDuration,
   mediaErrorAction,
+  mergeSubtitles,
+  pickVideoSource,
   progressPercent,
   progressText,
   resumePage,
@@ -119,5 +121,30 @@ describe('mediaErrorAction', () => {
   it('重新取过还失败就不再试', () => {
     expect(mediaErrorAction({ ...base, code: 2, retried: true })).toBe('failed')
     expect(mediaErrorAction({ ...base, code: 4, retried: true, hadPlayed: true })).toBe('unsupported')
+  })
+})
+
+describe('pickVideoSource / mergeSubtitles(doc/31 一)', () => {
+  it('不是要转的容器就放原文件', () => {
+    expect(pickVideoSource('/o', null, false)).toEqual({ kind: 'direct', url: '/o' })
+    expect(pickVideoSource(null, null, false)).toBeNull()
+  })
+  it('转好了放 mp4;能直接放的先放原文件,放失败了才等转换', () => {
+    expect(pickVideoSource('/o', { status: 'DONE', url: '/r', direct: true }, false)).toEqual({ kind: 'remux', url: '/r' })
+    expect(pickVideoSource('/o', { status: 'NONE', direct: true }, false)).toEqual({ kind: 'direct', url: '/o' })
+    expect(pickVideoSource('/o', { status: 'NONE', direct: true }, true)).toEqual({ kind: 'wait' })
+    expect(pickVideoSource('/o', { status: 'RUNNING', direct: false }, false)).toEqual({ kind: 'wait' })
+    expect(pickVideoSource('/o', { status: 'UNSUPPORTED', direct: false }, false)).toEqual({ kind: 'problem' })
+    expect(pickVideoSource('/o', { status: 'FAILED', direct: true }, true)).toEqual({ kind: 'problem' })
+  })
+  it('外挂字幕在前且默认以它为准', () => {
+    const ext = [{ nodeId: 'n1', label: '简体中文', lang: 'zh-Hans', default: true }]
+    const emb = [{ label: '简体中文', lang: 'zh-Hans', url: '/remux/a/sub0.vtt', default: true }]
+    const merged = mergeSubtitles(ext, emb)
+    expect(merged.map((t) => [t.label, t.default, t.url])).toEqual([
+      ['简体中文', true, undefined],
+      ['简体中文(内嵌)', false, '/remux/a/sub0.vtt'],
+    ])
+    expect(mergeSubtitles([], emb)[0]).toMatchObject({ label: '简体中文', default: true, nodeId: 'embedded:0' })
   })
 })

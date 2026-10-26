@@ -64,6 +64,13 @@ const timeText = computed(() => {
   return d ? `${formatDuration(sliderValue.value)} / ${d}` : formatDuration(sliderValue.value)
 })
 
+/** 有带时间的歌词时,播放条第二行显示当前这句(doc/31 二) */
+const currentLyric = computed(() => {
+  const i = player.lyricIndex
+  const text = i >= 0 ? player.lyrics?.lines[i]?.text : ''
+  return text ? text : null
+})
+
 const MODE_SHORT = { order: '顺序', one: '单曲', shuffle: '随机' } as const
 
 function openCurrent() {
@@ -80,7 +87,7 @@ function openCurrent() {
       <span class="mp-text">
         <span class="mp-title">{{ player.current?.name }}</span>
         <span class="mp-sub" :class="{ error: !!player.error }">
-          {{ player.error || (player.loading ? '加载中…' : timeText) }}
+          {{ player.error || (player.loading ? '加载中…' : (currentLyric ?? timeText)) }}
         </span>
       </span>
     </button>

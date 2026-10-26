@@ -21,6 +21,7 @@ import {
   Link,
   List,
   Monitor,
+  VideoPlay,
   Paperclip,
   Rank,
   Refresh,
@@ -59,7 +60,8 @@ import { linkFormatLabels } from '@/utils/links'
 import type { LinkFormat } from '@/utils/links'
 import { withoutQuery } from '@/utils/notifications'
 import { actionToast } from '@/utils/toast'
-import { downloadLabel, downloadToComputer, openWithLocalApp, useNodeDownload } from '@/composables/nodeDownload'
+import { downloadLabel, downloadToComputer, openWithLocalApp, playWithLocalPlayer, useNodeDownload } from '@/composables/nodeDownload'
+import { canPlayExternal } from '@/desktop/play'
 import { nativeDownloads } from '@/desktop/transfers'
 import { collectDropped, nativeUploads, topLevelFiles, uploadViaDesktop, type Handoff } from '@/desktop/handoff'
 import { useUploadsStore } from '@/stores/uploads'
@@ -810,6 +812,8 @@ const menuItems = computed<MenuEntry[]>(() => {
   const entries: MenuEntry[] = []
   if (one) entries.push({ key: 'open', label: one.kind === 'FOLDER' ? '打开' : '预览', icon: one.kind === 'FOLDER' ? FolderOpened : View, hint: 'Enter' })
   if (one?.kind === 'FILE' && nativeDownloads()) entries.push({ key: 'openLocal', label: '用本地程序打开', icon: Monitor })
+  if (one?.kind === 'FILE' && nativeDownloads() && canPlayExternal(one.preview?.kind))
+    entries.push({ key: 'playLocal', label: '用播放器播放', icon: VideoPlay })
   entries.push({ key: 'download', label: downloadLabel(sel), icon: Download })
   if (nativeDownloads()) entries.push({ key: 'downloadTo', label: '下载到…', icon: Download })
   if (one) entries.push({ key: 'share', label: '分享', icon: Share })
@@ -865,6 +869,9 @@ function onMenuSelect(key: string) {
       return
     case 'openLocal':
       if (one) void openWithLocalApp(one)
+      return
+    case 'playLocal':
+      if (one) void playWithLocalPlayer(one)
       return
     case 'download':
       return void onDownload(sel)

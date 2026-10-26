@@ -28,6 +28,7 @@ const REMOTE_PERMISSIONS: &[&str] = &[
     "allow-desktop-open-local",
     "allow-desktop-edits",
     "allow-desktop-edit-action",
+    "allow-desktop-play-external",
 ];
 
 /// 已经给过权限的服务器来源(换了服务器地址再加一份,旧的留着无害)

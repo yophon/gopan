@@ -23,6 +23,7 @@ const COMMANDS: &[&str] = &[
     "desktop_open_local",
     "desktop_edits",
     "desktop_edit_action",
+    "desktop_play_external",
 ];
 
 fn main() {

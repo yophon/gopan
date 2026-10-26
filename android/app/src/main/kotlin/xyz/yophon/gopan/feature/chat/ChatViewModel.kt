@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.ScreenCache
@@ -37,6 +38,7 @@ import xyz.yophon.gopan.core.data.chat.ChatMessage
 import xyz.yophon.gopan.core.data.chat.ChatRepository
 import xyz.yophon.gopan.core.network.gopanResult
 import xyz.yophon.gopan.core.prefs.UserPreferencesRepository
+import xyz.yophon.gopan.core.share.QuickShare
 import xyz.yophon.gopan.core.share.ShareInbox
 import xyz.yophon.gopan.core.share.ShareReceiving
 import xyz.yophon.gopan.core.transfer.Connectivity
@@ -113,6 +115,7 @@ class ChatViewModel @Inject constructor(
     private val transfers: TransferActions,
     private val prefs: UserPreferencesRepository,
     private val shareInbox: ShareInbox,
+    private val quickShare: QuickShare,
     private val connectivity: Connectivity,
     private val previews: PreviewSessionStore,
     private val cache: ScreenCache,
@@ -537,6 +540,22 @@ class ChatViewModel @Inject constructor(
                 _effects.trySend(ChatEffect.TransferQueued)
             }
             if (r.emptySkipped > 0) _effects.trySend(ChatEffect.Message("已跳过 ${r.emptySkipped} 个空文件"))
+        }
+    }
+
+    /** 分享进来的文件:传进「快传」,传完生成分享链接放进剪贴板(doc/31 四) */
+    fun shareAsLink() {
+        val files = takeShared() ?: return
+        viewModelScope.launch {
+            gopanResult { quickShare.start(files) }
+                .onSuccess { label ->
+                    _effects.trySend(ChatEffect.Message("正在上传「$label」,传完分享链接会放进剪贴板"))
+                    _effects.trySend(ChatEffect.TransferQueued)
+                }
+                .onFailure {
+                    _effects.trySend(ChatEffect.Message("没能开始上传:${it.message ?: ""}"))
+                    withContext(Dispatchers.IO) { files.forEach { f -> f.delete() } }
+                }
         }
     }
 

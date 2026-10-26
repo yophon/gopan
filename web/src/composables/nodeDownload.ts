@@ -11,6 +11,7 @@ import { markOpened } from '@/composables/quick'
 import type { NodeListItem } from '@/components/nodes/types'
 import { desktopDownload, nativeDownloads } from '@/desktop/transfers'
 import { openLocal } from '@/desktop/edits'
+import { playExternal } from '@/desktop/play'
 
 function clickA(href: string, download?: string) {
   const a = document.createElement('a')
@@ -53,6 +54,18 @@ export async function openWithLocalApp(node: { id: string; name: string }) {
     if (!opened) ElMessage.info(`正在下载「${node.name}」,下完自动用本地程序打开`)
   } catch (err) {
     ElMessage.error(typeof err === 'string' ? err : errorText(err, '打不开'))
+  }
+}
+
+/** 桌面端「用播放器播放」(doc/31 三) */
+export async function playWithLocalPlayer(node: { id: string }) {
+  try {
+    const name = await playExternal(node.id)
+    ElMessage.success(
+      name === 'Windows Media Player' ? '已交给 Windows Media Player,放不了的话装个 PotPlayer 或 VLC' : `已交给 ${name}`,
+    )
+  } catch (err) {
+    ElMessage.error(typeof err === 'string' ? err : errorText(err, '没能交给播放器'))
   }
 }
 

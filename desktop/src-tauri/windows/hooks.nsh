@@ -15,10 +15,13 @@
   ${If} $UpdateMode <> 1
     DeleteRegKey HKCU "Software\Classes\*\shell\gopan.upload"
     DeleteRegKey HKCU "Software\Classes\*\shell\gopan.send"
+    DeleteRegKey HKCU "Software\Classes\*\shell\gopan.share"
     DeleteRegKey HKCU "Software\Classes\Directory\shell\gopan.upload"
     DeleteRegKey HKCU "Software\Classes\Directory\shell\gopan.send"
+    DeleteRegKey HKCU "Software\Classes\Directory\shell\gopan.share"
     Delete "$APPDATA\Microsoft\Windows\SendTo\gopan.lnk"
     Delete "$APPDATA\Microsoft\Windows\SendTo\gopan 传输助手.lnk"
+    Delete "$APPDATA\Microsoft\Windows\SendTo\gopan 分享链接.lnk"
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "gopan"
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" "gopan"
   ${EndIf}

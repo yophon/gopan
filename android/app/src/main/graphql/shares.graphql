@@ -76,3 +76,10 @@ query ShareRoot {
     updatedAt
   }
 }
+
+# 「生成分享链接」传上来的文件放的文件夹(doc/31 四)
+mutation QuickShareFolder {
+  quickShareFolder {
+    id
+  }
+}

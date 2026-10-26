@@ -195,6 +195,20 @@ func gqlPreview(p service.PreviewInfo) *PreviewInfo {
 		st := TaskStatus(*p.Status)
 		out.Status = &st
 	}
+	if p.Remux != nil {
+		out.Remux = gqlRemux(*p.Remux)
+	}
+	return out
+}
+
+func gqlRemux(r service.RemuxInfo) *RemuxInfo {
+	out := &RemuxInfo{
+		Status: RemuxStatus(r.Status), Progress: r.Progress, URL: r.URL, Direct: r.Direct, Message: r.Message,
+		Subtitles: make([]*EmbeddedSubtitle, 0, len(r.Subtitles)),
+	}
+	for _, s := range r.Subtitles {
+		out.Subtitles = append(out.Subtitles, &EmbeddedSubtitle{Label: s.Label, Lang: s.Lang, URL: s.URL, Default: s.Default})
+	}
 	return out
 }
 

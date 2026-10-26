@@ -477,6 +477,7 @@ fun ChatScreen(
             files = shared,
             onToChat = viewModel::shareToChat,
             onToFolder = viewModel::pickShareFolder,
+            onAsLink = viewModel::shareAsLink,
             onCancel = viewModel::cancelShare,
         )
     }
@@ -496,7 +497,7 @@ fun ChatScreen(
 
 /** 收到分享的文件:列出前几个名字,问去处 */
 @Composable
-private fun SharedFilesDialog(files: List<File>, onToChat: () -> Unit, onToFolder: () -> Unit, onCancel: () -> Unit) {
+private fun SharedFilesDialog(files: List<File>, onToChat: () -> Unit, onToFolder: () -> Unit, onAsLink: () -> Unit, onCancel: () -> Unit) {
     AlertDialog(
         onDismissRequest = {},
         title = { Text(stringResource(R.string.chat_share_title, files.size)) },
@@ -504,13 +505,13 @@ private fun SharedFilesDialog(files: List<File>, onToChat: () -> Unit, onToFolde
             val names = files.take(3).joinToString("\n") { it.name }
             Text(if (files.size > 3) names + "\n" + stringResource(R.string.chat_share_more, files.size - 3) else names)
         },
+        // 三个去处竖着排:窄屏一行放不下
         confirmButton = {
-            TextButton(onClick = onToChat, modifier = Modifier.testTag("share_to_chat")) { Text(stringResource(R.string.chat_share_to_chat)) }
-        },
-        dismissButton = {
-            Row {
-                TextButton(onClick = onCancel) { Text(stringResource(R.string.action_cancel)) }
+            Column(horizontalAlignment = Alignment.End) {
+                TextButton(onClick = onToChat, modifier = Modifier.testTag("share_to_chat")) { Text(stringResource(R.string.chat_share_to_chat)) }
                 TextButton(onClick = onToFolder, modifier = Modifier.testTag("share_to_folder")) { Text(stringResource(R.string.chat_share_to_folder)) }
+                TextButton(onClick = onAsLink, modifier = Modifier.testTag("share_as_link")) { Text(stringResource(R.string.chat_share_as_link)) }
+                TextButton(onClick = onCancel) { Text(stringResource(R.string.action_cancel)) }
             }
         },
     )

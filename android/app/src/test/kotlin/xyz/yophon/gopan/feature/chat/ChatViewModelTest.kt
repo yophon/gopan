@@ -21,7 +21,9 @@ import xyz.yophon.gopan.core.data.chat.ChatRepository
 import xyz.yophon.gopan.core.network.GopanErrors
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.prefs.UserPreferencesRepository
+import xyz.yophon.gopan.core.share.QuickShare
 import xyz.yophon.gopan.core.share.ShareInbox
+import xyz.yophon.gopan.core.share.quickShareLabel
 import xyz.yophon.gopan.core.share.SharePayload
 import xyz.yophon.gopan.core.share.ShareReceiving
 import xyz.yophon.gopan.core.transfer.Connectivity
@@ -40,6 +42,10 @@ class ChatViewModelTest {
     private val transfers = FakeTransferActions()
     private val prefs = UserPreferencesRepository(InMemoryPreferencesDataStore())
     private val inbox = FakeShareInbox()
+    private val quick = object : QuickShare {
+        val started = mutableListOf<List<File>>()
+        override suspend fun start(files: List<File>): String = quickShareLabel(files.map { it.name }).also { started += files }
+    }
     private val net = object : Connectivity {
         override val online = MutableStateFlow(true)
     }
@@ -47,7 +53,7 @@ class ChatViewModelTest {
 
     private var cache = ScreenCache(SessionStore())
 
-    private fun viewModel() = ChatViewModel(repo, transfers, prefs, inbox, net, PreviewSessionStore(), cache).also { vm = it }
+    private fun viewModel() = ChatViewModel(repo, transfers, prefs, inbox, quick, net, PreviewSessionStore(), cache).also { vm = it }
 
     /**
      * 轮询循环跑在测试调度器上:测试体结束前必须停掉,否则 runTest 收尾时永远等不到空闲。
@@ -272,6 +278,15 @@ class ChatViewModelTest {
         assertThat(vm.state.value.sharedFiles).isNull()
         assertThat(vm.state.value.sharePicker).isNull()
 
+        // 生成分享链接:交给 QuickShare,不进传输助手
+        val h = File.createTempFile("share", ".pdf").apply { writeText("z") }
+        inbox.post(SharePayload(null, listOf(h), failed = 0))
+        runCurrent()
+        vm.shareAsLink()
+        runCurrent()
+        assertThat(quick.started.single()).containsExactly(h)
+        assertThat(vm.state.value.sharedFiles).isNull()
+
         // 取消:不传
         inbox.post(SharePayload(null, listOf(File.createTempFile("share", ".bin")), failed = 0))
         runCurrent()
@@ -281,6 +296,7 @@ class ChatViewModelTest {
         assertThat(transfers.uploadedFiles).hasSize(2)
         f.delete()
         g.delete()
+        h.delete()
     }
 
     @Test
@@ -292,7 +308,7 @@ class ChatViewModelTest {
         assertThat(old.state.value.sharedFiles).containsExactly(f)
 
         // 分享进来时传输助手页的 ViewModel 被换掉:新的那个照样看到、也能处理
-        val fresh = ChatViewModel(repo, transfers, prefs, inbox, net, PreviewSessionStore(), cache)
+        val fresh = ChatViewModel(repo, transfers, prefs, inbox, quick, net, PreviewSessionStore(), cache)
         runCurrent()
         assertThat(fresh.state.value.sharedFiles).containsExactly(f)
         fresh.shareToFolder(null, "我的文件")

@@ -9,7 +9,9 @@ mod clipsend;
 mod edits;
 mod handoff;
 mod notify;
+mod player;
 mod prefs;
+mod quickshare;
 mod settings;
 mod shell;
 mod transfer;
@@ -50,6 +52,7 @@ pub fn run() {
         .manage(bridge::Granted::default())
         .manage(shell::Shell::default())
         .manage(handoff::Handoffs::default())
+        .manage(quickshare::QuickShares::default())
         .invoke_handler(tauri::generate_handler![
             bridge::app_status,
             bridge::server_connect,
@@ -71,6 +74,7 @@ pub fn run() {
             edits::desktop_open_local,
             edits::desktop_edits,
             edits::desktop_edit_action,
+            player::desktop_play_external,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

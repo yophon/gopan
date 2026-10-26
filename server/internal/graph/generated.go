@@ -293,6 +293,13 @@ type ComplexityRoot struct {
 		NextOffset func(childComplexity int) int
 	}
 
+	EmbeddedSubtitle struct {
+		Default func(childComplexity int) int
+		Label   func(childComplexity int) int
+		Lang    func(childComplexity int) int
+		URL     func(childComplexity int) int
+	}
+
 	Feed struct {
 		AssetPattern    func(childComplexity int) int
 		CreatedAt       func(childComplexity int) int
@@ -608,12 +615,14 @@ type ComplexityRoot struct {
 		PurgeFileVersions        func(childComplexity int, nodeID *string) int
 		PurgeNodes               func(childComplexity int, ids []string) int
 		PurgeTrash               func(childComplexity int) int
+		QuickShareFolder         func(childComplexity int) int
 		Refresh                  func(childComplexity int) int
 		RefreshFeed              func(childComplexity int, id string) int
 		Register                 func(childComplexity int, username string, password string) int
 		RenameNode               func(childComplexity int, id string, name string) int
 		RenameNodes              func(childComplexity int, items []*RenameItem) int
 		RequestPreview           func(childComplexity int, nodeID string) int
+		RequestRemux             func(childComplexity int, nodeID string) int
 		RestoreFileVersion       func(childComplexity int, id string) int
 		RestoreNodes             func(childComplexity int, ids []string) int
 		RetryJob                 func(childComplexity int, id string) int
@@ -658,6 +667,7 @@ type ComplexityRoot struct {
 		Size         func(childComplexity int) int
 		Starred      func(childComplexity int) int
 		StatsStale   func(childComplexity int) int
+		StreamURL    func(childComplexity int) int
 		SubtreeBytes func(childComplexity int) int
 		SubtreeCount func(childComplexity int) int
 		UpdatedAt    func(childComplexity int) int
@@ -763,6 +773,7 @@ type ComplexityRoot struct {
 		Kind        func(childComplexity int) int
 		LargeURL    func(childComplexity int) int
 		Markdown    func(childComplexity int) int
+		Remux       func(childComplexity int) int
 		Status      func(childComplexity int) int
 		Subtitles   func(childComplexity int) int
 		ThumbURL    func(childComplexity int) int
@@ -845,6 +856,15 @@ type ComplexityRoot struct {
 	RecentPlay struct {
 		Node     func(childComplexity int) int
 		Progress func(childComplexity int) int
+	}
+
+	RemuxInfo struct {
+		Direct    func(childComplexity int) int
+		Message   func(childComplexity int) int
+		Progress  func(childComplexity int) int
+		Status    func(childComplexity int) int
+		Subtitles func(childComplexity int) int
+		URL       func(childComplexity int) int
 	}
 
 	Session struct {
@@ -1028,6 +1048,7 @@ type MutationResolver interface {
 	ChangePassword(ctx context.Context, oldPassword string, newPassword string) (*AuthPayload, error)
 	RevokeSession(ctx context.Context, familyID string) (bool, error)
 	CreateFolder(ctx context.Context, parentID *string, name string) (*Node, error)
+	QuickShareFolder(ctx context.Context) (*Node, error)
 	RenameNode(ctx context.Context, id string, name string) (*Node, error)
 	RenameNodes(ctx context.Context, items []*RenameItem) ([]*Node, error)
 	MoveNodes(ctx context.Context, ids []string, targetParentID *string) ([]*Node, error)
@@ -1048,6 +1069,7 @@ type MutationResolver interface {
 	CompleteUpload(ctx context.Context, sessionID string, etags []*PartEtag) (*Node, error)
 	AbortUpload(ctx context.Context, sessionID string) (bool, error)
 	RequestPreview(ctx context.Context, nodeID string) (*PreviewInfo, error)
+	RequestRemux(ctx context.Context, nodeID string) (*RemuxInfo, error)
 	CreateShare(ctx context.Context, nodeID string, password *string, expiresAt *time.Time) (*Share, error)
 	RevokeShare(ctx context.Context, id string) (bool, error)
 	VerifySharePassword(ctx context.Context, token string, password string) (*ShareAuth, error)
@@ -1107,6 +1129,7 @@ type MutationResolver interface {
 type NodeResolver interface {
 	Preview(ctx context.Context, obj *Node) (*PreviewInfo, error)
 	DownloadURL(ctx context.Context, obj *Node) (*string, error)
+	StreamURL(ctx context.Context, obj *Node) (*string, error)
 
 	PlayProgress(ctx context.Context, obj *Node) (*PlayProgress, error)
 	Path(ctx context.Context, obj *Node) (*string, error)
@@ -2208,6 +2231,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.DuplicatePage.NextOffset(childComplexity), true
+
+	case "EmbeddedSubtitle.default":
+		if e.ComplexityRoot.EmbeddedSubtitle.Default == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EmbeddedSubtitle.Default(childComplexity), true
+	case "EmbeddedSubtitle.label":
+		if e.ComplexityRoot.EmbeddedSubtitle.Label == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EmbeddedSubtitle.Label(childComplexity), true
+	case "EmbeddedSubtitle.lang":
+		if e.ComplexityRoot.EmbeddedSubtitle.Lang == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EmbeddedSubtitle.Lang(childComplexity), true
+	case "EmbeddedSubtitle.url":
+		if e.ComplexityRoot.EmbeddedSubtitle.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EmbeddedSubtitle.URL(childComplexity), true
 
 	case "Feed.assetPattern":
 		if e.ComplexityRoot.Feed.AssetPattern == nil {
@@ -3886,6 +3934,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.PurgeTrash(childComplexity), true
+	case "Mutation.quickShareFolder":
+		if e.ComplexityRoot.Mutation.QuickShareFolder == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Mutation.QuickShareFolder(childComplexity), true
 	case "Mutation.refresh":
 		if e.ComplexityRoot.Mutation.Refresh == nil {
 			break
@@ -3947,6 +4001,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RequestPreview(childComplexity, args["nodeId"].(string)), true
+	case "Mutation.requestRemux":
+		if e.ComplexityRoot.Mutation.RequestRemux == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_requestRemux_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RequestRemux(childComplexity, args["nodeId"].(string)), true
 	case "Mutation.restoreFileVersion":
 		if e.ComplexityRoot.Mutation.RestoreFileVersion == nil {
 			break
@@ -4314,6 +4379,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Node.StatsStale(childComplexity), true
+	case "Node.streamUrl":
+		if e.ComplexityRoot.Node.StreamURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Node.StreamURL(childComplexity), true
 	case "Node.subtreeBytes":
 		if e.ComplexityRoot.Node.SubtreeBytes == nil {
 			break
@@ -4706,6 +4777,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.PreviewInfo.Markdown(childComplexity), true
+	case "PreviewInfo.remux":
+		if e.ComplexityRoot.PreviewInfo.Remux == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PreviewInfo.Remux(childComplexity), true
 	case "PreviewInfo.status":
 		if e.ComplexityRoot.PreviewInfo.Status == nil {
 			break
@@ -5380,6 +5457,43 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.RecentPlay.Progress(childComplexity), true
+
+	case "RemuxInfo.direct":
+		if e.ComplexityRoot.RemuxInfo.Direct == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RemuxInfo.Direct(childComplexity), true
+	case "RemuxInfo.message":
+		if e.ComplexityRoot.RemuxInfo.Message == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RemuxInfo.Message(childComplexity), true
+	case "RemuxInfo.progress":
+		if e.ComplexityRoot.RemuxInfo.Progress == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RemuxInfo.Progress(childComplexity), true
+	case "RemuxInfo.status":
+		if e.ComplexityRoot.RemuxInfo.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RemuxInfo.Status(childComplexity), true
+	case "RemuxInfo.subtitles":
+		if e.ComplexityRoot.RemuxInfo.Subtitles == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RemuxInfo.Subtitles(childComplexity), true
+	case "RemuxInfo.url":
+		if e.ComplexityRoot.RemuxInfo.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RemuxInfo.URL(childComplexity), true
 
 	case "Session.active":
 		if e.ComplexityRoot.Session.Active == nil {
@@ -6149,6 +6263,8 @@ type Node {
   purgeAt: Time
   preview: PreviewInfo!
   downloadUrl: String
+  # 音视频给外部播放器的内联地址,12 小时有效(桌面端「用播放器播放」,doc/31 三);只给登录用户,别的文件为空
+  streamUrl: String
   # 子树统计(仅文件夹;异步重算,statsStale=true 表示数字可能滞后)
   subtreeBytes: Int64
   subtreeCount: Int64
@@ -6207,6 +6323,32 @@ type PreviewInfo {
   # .md 且不超过 2 MB:能渲染着看,GET /md/{nodeId}?token=<access>[&theme=light|dark](doc/23 五.2)。
   # kind 仍是 TEXT,老客户端照旧按文本显示
   markdown: Boolean!
+  # 浏览器放不了的视频容器(mkv / avi / ts / flv …)在服务器上转成 mp4 的状态(doc/31 一)。
+  # 只在 node(id) 详情里给;别的视频、或本站没开转换时为空。安卓 App 自己能放这些格式,不用看它
+  remux: RemuxInfo
+}
+
+type RemuxInfo {
+  status: RemuxStatus!
+  # RUNNING 时 0~1
+  progress: Float
+  # DONE 时的 mp4 地址(站内路径,6 小时内有效;过期了重新查 node 拿新的)
+  url: String
+  # 浏览器多半能直接放原文件(mkv 里是 H.264 + AAC 等、没有内嵌字幕):先放 contentUrl,放不了再 requestRemux
+  direct: Boolean!
+  # UNSUPPORTED / FAILED / UNAVAILABLE 时给人看的原因
+  message: String
+  # DONE 时文件里内嵌的文字字幕,已转成 WebVTT;同文件夹的外挂字幕仍在 PreviewInfo.subtitles
+  subtitles: [EmbeddedSubtitle!]!
+}
+
+enum RemuxStatus { NONE, QUEUED, RUNNING, DONE, UNSUPPORTED, FAILED, UNAVAILABLE }
+
+type EmbeddedSubtitle {
+  label: String!
+  lang: String!
+  url: String!
+  default: Boolean!
 }
 
 # 同文件夹里与视频同名的字幕文件。内容一律转成 WebVTT:GET /sub/{nodeId}?token=<access>
@@ -7276,6 +7418,8 @@ type Mutation {
   revokeSession(familyId: ID!): Boolean!
 
   createFolder(parentId: ID, name: String!): Node!
+  # 根目录的「快传」文件夹,没有就建(幂等):「上传并复制分享链接」传上来的都放这里(doc/31 四)
+  quickShareFolder: Node!
   renameNode(id: ID!, name: String!): Node!
   # 批量改名(doc/27):要么全改、要么都不改;批内互换名字可以;和这批之外的同名、批内重名 NAME_CONFLICT。整批一组动态,能一起撤回
   renameNodes(items: [RenameItem!]!): [Node!]!
@@ -7310,6 +7454,8 @@ type Mutation {
   abortUpload(sessionId: ID!): Boolean!
 
   requestPreview(nodeId: ID!): PreviewInfo!
+  # 把浏览器放不了的视频转成 mp4(doc/31 一);在转、转好了只回状态。分享访客在分享范围内也能用
+  requestRemux(nodeId: ID!): RemuxInfo!
 
   createShare(nodeId: ID!, password: String, expiresAt: Time): Share!
   revokeShare(id: ID!): Boolean!
@@ -7917,6 +8063,20 @@ func (ec *executionContext) childFields_DuplicatePage(ctx context.Context, field
 	return nil, fmt.Errorf("no field named %q was found under type DuplicatePage", field.Name)
 }
 
+func (ec *executionContext) childFields_EmbeddedSubtitle(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "label":
+		return ec.fieldContext_EmbeddedSubtitle_label(ctx, field)
+	case "lang":
+		return ec.fieldContext_EmbeddedSubtitle_lang(ctx, field)
+	case "url":
+		return ec.fieldContext_EmbeddedSubtitle_url(ctx, field)
+	case "default":
+		return ec.fieldContext_EmbeddedSubtitle_default(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type EmbeddedSubtitle", field.Name)
+}
+
 func (ec *executionContext) childFields_Feed(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -8467,6 +8627,8 @@ func (ec *executionContext) childFields_Node(ctx context.Context, field graphql.
 		return ec.fieldContext_Node_preview(ctx, field)
 	case "downloadUrl":
 		return ec.fieldContext_Node_downloadUrl(ctx, field)
+	case "streamUrl":
+		return ec.fieldContext_Node_streamUrl(ctx, field)
 	case "subtreeBytes":
 		return ec.fieldContext_Node_subtreeBytes(ctx, field)
 	case "subtreeCount":
@@ -8691,6 +8853,8 @@ func (ec *executionContext) childFields_PreviewInfo(ctx context.Context, field g
 		return ec.fieldContext_PreviewInfo_subtitles(ctx, field)
 	case "markdown":
 		return ec.fieldContext_PreviewInfo_markdown(ctx, field)
+	case "remux":
+		return ec.fieldContext_PreviewInfo_remux(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type PreviewInfo", field.Name)
 }
@@ -8703,6 +8867,24 @@ func (ec *executionContext) childFields_RecentPlay(ctx context.Context, field gr
 		return ec.fieldContext_RecentPlay_progress(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type RecentPlay", field.Name)
+}
+
+func (ec *executionContext) childFields_RemuxInfo(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "status":
+		return ec.fieldContext_RemuxInfo_status(ctx, field)
+	case "progress":
+		return ec.fieldContext_RemuxInfo_progress(ctx, field)
+	case "url":
+		return ec.fieldContext_RemuxInfo_url(ctx, field)
+	case "direct":
+		return ec.fieldContext_RemuxInfo_direct(ctx, field)
+	case "message":
+		return ec.fieldContext_RemuxInfo_message(ctx, field)
+	case "subtitles":
+		return ec.fieldContext_RemuxInfo_subtitles(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type RemuxInfo", field.Name)
 }
 
 func (ec *executionContext) childFields_Session(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -10134,6 +10316,20 @@ func (ec *executionContext) field_Mutation_renameNodes_args(ctx context.Context,
 }
 
 func (ec *executionContext) field_Mutation_requestPreview_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "nodeId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["nodeId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_requestRemux_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "nodeId",
@@ -15444,6 +15640,98 @@ func (ec *executionContext) fieldContext_DuplicatePage_nextOffset(_ context.Cont
 	return graphql.NewScalarFieldContext("DuplicatePage", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _EmbeddedSubtitle_label(ctx context.Context, field graphql.CollectedField, obj *EmbeddedSubtitle) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EmbeddedSubtitle_label(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Label, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EmbeddedSubtitle_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EmbeddedSubtitle", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _EmbeddedSubtitle_lang(ctx context.Context, field graphql.CollectedField, obj *EmbeddedSubtitle) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EmbeddedSubtitle_lang(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Lang, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EmbeddedSubtitle_lang(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EmbeddedSubtitle", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _EmbeddedSubtitle_url(ctx context.Context, field graphql.CollectedField, obj *EmbeddedSubtitle) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EmbeddedSubtitle_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EmbeddedSubtitle_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EmbeddedSubtitle", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _EmbeddedSubtitle_default(ctx context.Context, field graphql.CollectedField, obj *EmbeddedSubtitle) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EmbeddedSubtitle_default(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Default, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EmbeddedSubtitle_default(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EmbeddedSubtitle", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _Feed_id(ctx context.Context, field graphql.CollectedField, obj *Feed) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -20080,6 +20368,38 @@ func (ec *executionContext) fieldContext_Mutation_createFolder(ctx context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_quickShareFolder(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_quickShareFolder(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Mutation().QuickShareFolder(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Node) graphql.Marshaler {
+			return ec.marshalNNode2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNode(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_quickShareFolder(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Node(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_renameNode(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -20933,6 +21253,50 @@ func (ec *executionContext) fieldContext_Mutation_requestPreview(ctx context.Con
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_requestPreview_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_requestRemux(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_requestRemux(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RequestRemux(ctx, fc.Args["nodeId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *RemuxInfo) graphql.Marshaler {
+			return ec.marshalNRemuxInfo2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRemuxInfo(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_requestRemux(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_RemuxInfo(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_requestRemux_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -23592,6 +23956,29 @@ func (ec *executionContext) fieldContext_Node_downloadUrl(_ context.Context, fie
 	return graphql.NewScalarFieldContext("Node", field, true, true, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _Node_streamUrl(ctx context.Context, field graphql.CollectedField, obj *Node) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Node_streamUrl(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Node().StreamURL(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Node_streamUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Node", field, true, true, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _Node_subtreeBytes(ctx context.Context, field graphql.CollectedField, obj *Node) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -25254,6 +25641,38 @@ func (ec *executionContext) _PreviewInfo_markdown(ctx context.Context, field gra
 }
 func (ec *executionContext) fieldContext_PreviewInfo_markdown(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("PreviewInfo", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _PreviewInfo_remux(ctx context.Context, field graphql.CollectedField, obj *PreviewInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PreviewInfo_remux(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Remux, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *RemuxInfo) graphql.Marshaler {
+			return ec.marshalORemuxInfo2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRemuxInfo(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_PreviewInfo_remux(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PreviewInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_RemuxInfo(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Query_mcpAccessRoots(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -28152,6 +28571,153 @@ func (ec *executionContext) fieldContext_RecentPlay_progress(_ context.Context, 
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_PlayProgress(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RemuxInfo_status(ctx context.Context, field graphql.CollectedField, obj *RemuxInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RemuxInfo_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v RemuxStatus) graphql.Marshaler {
+			return ec.marshalNRemuxStatus2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRemuxStatus(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RemuxInfo_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RemuxInfo", field, false, false, errors.New("field of type RemuxStatus does not have child fields"))
+}
+
+func (ec *executionContext) _RemuxInfo_progress(ctx context.Context, field graphql.CollectedField, obj *RemuxInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RemuxInfo_progress(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Progress, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *float64) graphql.Marshaler {
+			return ec.marshalOFloat2ᚖfloat64(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_RemuxInfo_progress(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RemuxInfo", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _RemuxInfo_url(ctx context.Context, field graphql.CollectedField, obj *RemuxInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RemuxInfo_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_RemuxInfo_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RemuxInfo", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _RemuxInfo_direct(ctx context.Context, field graphql.CollectedField, obj *RemuxInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RemuxInfo_direct(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Direct, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RemuxInfo_direct(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RemuxInfo", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _RemuxInfo_message(ctx context.Context, field graphql.CollectedField, obj *RemuxInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RemuxInfo_message(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Message, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_RemuxInfo_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RemuxInfo", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _RemuxInfo_subtitles(ctx context.Context, field graphql.CollectedField, obj *RemuxInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RemuxInfo_subtitles(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Subtitles, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*EmbeddedSubtitle) graphql.Marshaler {
+			return ec.marshalNEmbeddedSubtitle2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐEmbeddedSubtitleᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RemuxInfo_subtitles(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RemuxInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_EmbeddedSubtitle(ctx, field)
 		},
 	}
 	return fc, nil
@@ -33979,6 +34545,59 @@ func (ec *executionContext) _DuplicatePage(ctx context.Context, sel ast.Selectio
 	return out
 }
 
+var embeddedSubtitleImplementors = []string{"EmbeddedSubtitle"}
+
+func (ec *executionContext) _EmbeddedSubtitle(ctx context.Context, sel ast.SelectionSet, obj *EmbeddedSubtitle) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, embeddedSubtitleImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("EmbeddedSubtitle")
+		case "label":
+			out.Values[i] = ec._EmbeddedSubtitle_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lang":
+			out.Values[i] = ec._EmbeddedSubtitle_lang(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "url":
+			out.Values[i] = ec._EmbeddedSubtitle_url(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "default":
+			out.Values[i] = ec._EmbeddedSubtitle_default(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var feedImplementors = []string{"Feed"}
 
 func (ec *executionContext) _Feed(ctx context.Context, sel ast.SelectionSet, obj *Feed) graphql.Marshaler {
@@ -35960,6 +36579,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "quickShareFolder":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_quickShareFolder(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "renameNode":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_renameNode(ctx, field)
@@ -36096,6 +36722,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "requestPreview":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_requestPreview(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "requestRemux":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_requestRemux(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -36621,6 +37254,44 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 					}
 				}()
 				res = ec._Node_downloadUrl(ctx, field, obj)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "streamUrl":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Node_streamUrl(ctx, field, obj)
 				if res == graphql.RequiredNull {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -37591,6 +38262,11 @@ func (ec *executionContext) _PreviewInfo(ctx context.Context, sel ast.SelectionS
 		case "markdown":
 			out.Values[i] = ec._PreviewInfo_markdown(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "remux":
+			out.Values[i] = ec._PreviewInfo_remux(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:
@@ -39250,6 +39926,69 @@ func (ec *executionContext) _RecentPlay(ctx context.Context, sel ast.SelectionSe
 			}
 		case "progress":
 			out.Values[i] = ec._RecentPlay_progress(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var remuxInfoImplementors = []string{"RemuxInfo"}
+
+func (ec *executionContext) _RemuxInfo(ctx context.Context, sel ast.SelectionSet, obj *RemuxInfo) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, remuxInfoImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("RemuxInfo")
+		case "status":
+			out.Values[i] = ec._RemuxInfo_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "progress":
+			out.Values[i] = ec._RemuxInfo_progress(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "url":
+			out.Values[i] = ec._RemuxInfo_url(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "direct":
+			out.Values[i] = ec._RemuxInfo_direct(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._RemuxInfo_message(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "subtitles":
+			out.Values[i] = ec._RemuxInfo_subtitles(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -41424,6 +42163,32 @@ func (ec *executionContext) marshalNDuplicatePage2ᚖgithubᚗcomᚋyophonᚋgop
 	return ec._DuplicatePage(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNEmbeddedSubtitle2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐEmbeddedSubtitleᚄ(ctx context.Context, sel ast.SelectionSet, v []*EmbeddedSubtitle) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNEmbeddedSubtitle2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐEmbeddedSubtitle(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNEmbeddedSubtitle2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐEmbeddedSubtitle(ctx context.Context, sel ast.SelectionSet, v *EmbeddedSubtitle) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._EmbeddedSubtitle(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNFeed2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐFeed(ctx context.Context, sel ast.SelectionSet, v Feed) graphql.Marshaler {
 	return ec._Feed(ctx, sel, &v)
 }
@@ -42588,6 +43353,30 @@ func (ec *executionContext) marshalNRecentPlay2ᚖgithubᚗcomᚋyophonᚋgopan�
 	return ec._RecentPlay(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNRemuxInfo2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRemuxInfo(ctx context.Context, sel ast.SelectionSet, v RemuxInfo) graphql.Marshaler {
+	return ec._RemuxInfo(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNRemuxInfo2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRemuxInfo(ctx context.Context, sel ast.SelectionSet, v *RemuxInfo) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._RemuxInfo(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNRemuxStatus2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRemuxStatus(ctx context.Context, v any) (RemuxStatus, error) {
+	var res RemuxStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNRemuxStatus2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRemuxStatus(ctx context.Context, sel ast.SelectionSet, v RemuxStatus) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) unmarshalNRenameItem2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRenameItemᚄ(ctx context.Context, v any) ([]*RenameItem, error) {
 	vSlice := graphql.CoerceList(v)
 	var err error
@@ -43347,6 +44136,23 @@ func (ec *executionContext) marshalOFileCategory2ᚖgithubᚗcomᚋyophonᚋgopa
 	return v
 }
 
+func (ec *executionContext) unmarshalOFloat2ᚖfloat64(ctx context.Context, v any) (*float64, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalFloatContext(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOFloat2ᚖfloat64(ctx context.Context, sel ast.SelectionSet, v *float64) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	res := graphql.MarshalFloatContext(*v)
+	return graphql.WrapContextMarshaler(ctx, res)
+}
+
 func (ec *executionContext) unmarshalOID2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
 	if v == nil {
 		return nil, nil
@@ -43494,6 +44300,13 @@ func (ec *executionContext) marshalOPlayProgress2ᚖgithubᚗcomᚋyophonᚋgopa
 		return graphql.Null
 	}
 	return ec._PlayProgress(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalORemuxInfo2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐRemuxInfo(ctx context.Context, sel ast.SelectionSet, v *RemuxInfo) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._RemuxInfo(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOSearchFilter2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐSearchFilter(ctx context.Context, v any) (*SearchFilter, error) {

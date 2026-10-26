@@ -292,6 +292,13 @@ type DuplicatePage struct {
 	NextOffset *int              `json:"nextOffset,omitempty"`
 }
 
+type EmbeddedSubtitle struct {
+	Label   string `json:"label"`
+	Lang    string `json:"lang"`
+	URL     string `json:"url"`
+	Default bool   `json:"default"`
+}
+
 type Feed struct {
 	ID              string     `json:"id"`
 	Kind            FeedKind   `json:"kind"`
@@ -615,6 +622,7 @@ type Node struct {
 	PurgeAt      *time.Time    `json:"purgeAt,omitempty"`
 	Preview      *PreviewInfo  `json:"preview"`
 	DownloadURL  *string       `json:"downloadUrl,omitempty"`
+	StreamURL    *string       `json:"streamUrl,omitempty"`
 	SubtreeBytes *int64        `json:"subtreeBytes,omitempty"`
 	SubtreeCount *int64        `json:"subtreeCount,omitempty"`
 	StatsStale   *bool         `json:"statsStale,omitempty"`
@@ -758,6 +766,7 @@ type PreviewInfo struct {
 	DurationSec *int             `json:"durationSec,omitempty"`
 	Subtitles   []*SubtitleTrack `json:"subtitles"`
 	Markdown    bool             `json:"markdown"`
+	Remux       *RemuxInfo       `json:"remux,omitempty"`
 }
 
 type Query struct {
@@ -766,6 +775,15 @@ type Query struct {
 type RecentPlay struct {
 	Node     *Node         `json:"node"`
 	Progress *PlayProgress `json:"progress"`
+}
+
+type RemuxInfo struct {
+	Status    RemuxStatus         `json:"status"`
+	Progress  *float64            `json:"progress,omitempty"`
+	URL       *string             `json:"url,omitempty"`
+	Direct    bool                `json:"direct"`
+	Message   *string             `json:"message,omitempty"`
+	Subtitles []*EmbeddedSubtitle `json:"subtitles"`
 }
 
 type RenameItem struct {
@@ -1915,6 +1933,71 @@ func (e *PreviewKind) UnmarshalJSON(b []byte) error {
 }
 
 func (e PreviewKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type RemuxStatus string
+
+const (
+	RemuxStatusNone        RemuxStatus = "NONE"
+	RemuxStatusQueued      RemuxStatus = "QUEUED"
+	RemuxStatusRunning     RemuxStatus = "RUNNING"
+	RemuxStatusDone        RemuxStatus = "DONE"
+	RemuxStatusUnsupported RemuxStatus = "UNSUPPORTED"
+	RemuxStatusFailed      RemuxStatus = "FAILED"
+	RemuxStatusUnavailable RemuxStatus = "UNAVAILABLE"
+)
+
+var AllRemuxStatus = []RemuxStatus{
+	RemuxStatusNone,
+	RemuxStatusQueued,
+	RemuxStatusRunning,
+	RemuxStatusDone,
+	RemuxStatusUnsupported,
+	RemuxStatusFailed,
+	RemuxStatusUnavailable,
+}
+
+func (e RemuxStatus) IsValid() bool {
+	switch e {
+	case RemuxStatusNone, RemuxStatusQueued, RemuxStatusRunning, RemuxStatusDone, RemuxStatusUnsupported, RemuxStatusFailed, RemuxStatusUnavailable:
+		return true
+	}
+	return false
+}
+
+func (e RemuxStatus) String() string {
+	return string(e)
+}
+
+func (e *RemuxStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = RemuxStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid RemuxStatus", str)
+	}
+	return nil
+}
+
+func (e RemuxStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *RemuxStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e RemuxStatus) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

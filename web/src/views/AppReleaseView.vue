@@ -7,7 +7,7 @@
  */
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, type FunctionalComponent } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { encode } from 'uqr'
+import { qrPath } from '@/utils/qr'
 
 import changelogSrc from '../../../CHANGELOG.md?raw'
 import BrandLogo from '@/components/BrandLogo.vue'
@@ -143,20 +143,7 @@ const appExtras: [string, string][] = [
 
 // 电脑上给二维码:扫的是这一页而不是安装包,手机上能看到说明,微信扫了也有提示
 const pageUrl = `${location.origin}/app`
-const qr = (() => {
-  const { size, data } = encode(pageUrl, { ecc: 'M', border: 1 })
-  let d = ''
-  data.forEach((row, y) => {
-    for (let x = 0; x < size; x++) {
-      if (!row[x]) continue
-      let run = 1
-      while (x + run < size && row[x + run]) run++
-      d += `M${x} ${y}h${run}v1h-${run}z`
-      x += run - 1
-    }
-  })
-  return { size, d }
-})()
+const qr = qrPath(pageUrl)
 
 function scrollTo(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })

@@ -10,7 +10,7 @@ import xyz.yophon.gopan.core.network.RefreshOutcome
 import xyz.yophon.gopan.core.network.TokenRefresher
 
 /**
- * 播放器的 OkHttp 拦截器:只给本站的 `/sub/…`(外挂字幕)加 `Authorization: Bearer`,401 时单飞刷新一次凭证重放;
+ * 播放器的 OkHttp 拦截器:只给本站的 `/sub/…`(外挂字幕)与 `/lrc/…`(歌词,doc/31 二)加 `Authorization: Bearer`,401 时单飞刷新一次凭证重放;
  * 其它请求(对象存储的预签名地址)原样放行,不带任何凭证。token 不进 URL(不会出现在日志与崩溃报告里)。
  * 在 ExoPlayer 的加载线程上执行,刷新凭证直接阻塞等结果。
  */
@@ -22,9 +22,10 @@ class SubtitleAuthInterceptor(
 
     private val base: HttpUrl = baseUrl.trimEnd('/').toHttpUrl()
 
-    /** 本站(同 scheme / host / 端口)的 /sub/ 路径 */
+    /** 本站(同 scheme / host / 端口)的 /sub/、/lrc/ 路径 */
     fun matches(url: HttpUrl): Boolean =
-        url.scheme == base.scheme && url.host == base.host && url.port == base.port && url.encodedPath.startsWith("/sub/")
+        url.scheme == base.scheme && url.host == base.host && url.port == base.port &&
+            (url.encodedPath.startsWith("/sub/") || url.encodedPath.startsWith("/lrc/"))
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()

@@ -129,6 +129,8 @@ type Node {
   purgeAt: Time
   preview: PreviewInfo!
   downloadUrl: String
+  # 音视频给外部播放器的内联地址,12 小时有效(桌面端「用播放器播放」,doc/31 三);只给登录用户,别的文件为空
+  streamUrl: String
   # 子树统计(仅文件夹;异步重算,statsStale=true 表示数字可能滞后)
   subtreeBytes: Int64
   subtreeCount: Int64
@@ -187,6 +189,32 @@ type PreviewInfo {
   # .md 且不超过 2 MB:能渲染着看,GET /md/{nodeId}?token=<access>[&theme=light|dark](doc/23 五.2)。
   # kind 仍是 TEXT,老客户端照旧按文本显示
   markdown: Boolean!
+  # 浏览器放不了的视频容器(mkv / avi / ts / flv …)在服务器上转成 mp4 的状态(doc/31 一)。
+  # 只在 node(id) 详情里给;别的视频、或本站没开转换时为空。安卓 App 自己能放这些格式,不用看它
+  remux: RemuxInfo
+}
+
+type RemuxInfo {
+  status: RemuxStatus!
+  # RUNNING 时 0~1
+  progress: Float
+  # DONE 时的 mp4 地址(站内路径,6 小时内有效;过期了重新查 node 拿新的)
+  url: String
+  # 浏览器多半能直接放原文件(mkv 里是 H.264 + AAC 等、没有内嵌字幕):先放 contentUrl,放不了再 requestRemux
+  direct: Boolean!
+  # UNSUPPORTED / FAILED / UNAVAILABLE 时给人看的原因
+  message: String
+  # DONE 时文件里内嵌的文字字幕,已转成 WebVTT;同文件夹的外挂字幕仍在 PreviewInfo.subtitles
+  subtitles: [EmbeddedSubtitle!]!
+}
+
+enum RemuxStatus { NONE, QUEUED, RUNNING, DONE, UNSUPPORTED, FAILED, UNAVAILABLE }
+
+type EmbeddedSubtitle {
+  label: String!
+  lang: String!
+  url: String!
+  default: Boolean!
 }
 
 # 同文件夹里与视频同名的字幕文件。内容一律转成 WebVTT:GET /sub/{nodeId}?token=<access>
@@ -1256,6 +1284,8 @@ type Mutation {
   revokeSession(familyId: ID!): Boolean!
 
   createFolder(parentId: ID, name: String!): Node!
+  # 根目录的「快传」文件夹,没有就建(幂等):「上传并复制分享链接」传上来的都放这里(doc/31 四)
+  quickShareFolder: Node!
   renameNode(id: ID!, name: String!): Node!
   # 批量改名(doc/27):要么全改、要么都不改;批内互换名字可以;和这批之外的同名、批内重名 NAME_CONFLICT。整批一组动态,能一起撤回
   renameNodes(items: [RenameItem!]!): [Node!]!
@@ -1290,6 +1320,8 @@ type Mutation {
   abortUpload(sessionId: ID!): Boolean!
 
   requestPreview(nodeId: ID!): PreviewInfo!
+  # 把浏览器放不了的视频转成 mp4(doc/31 一);在转、转好了只回状态。分享访客在分享范围内也能用
+  requestRemux(nodeId: ID!): RemuxInfo!
 
   createShare(nodeId: ID!, password: String, expiresAt: Time): Share!
   revokeShare(id: ID!): Boolean!

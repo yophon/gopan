@@ -7,6 +7,7 @@ import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodeKind
 import xyz.yophon.gopan.core.data.NodePreview
 import xyz.yophon.gopan.core.data.PreviewKind
+import xyz.yophon.gopan.core.data.media.LyricLine
 import xyz.yophon.gopan.core.data.media.NowPlaying
 import xyz.yophon.gopan.core.data.media.PlayProgress
 import xyz.yophon.gopan.core.data.media.QueueEntry
@@ -163,5 +164,16 @@ class MediaLogicTest {
         assertThat(NowPlaying("a", "", true, false, 50, 200, emptyList()).fraction).isEqualTo(0.25f)
         assertThat(NowPlaying("a", "", true, false, 500, 200, emptyList()).fraction).isEqualTo(1f)
         assertThat(NowPlaying("a", "", true, false, 50, 0, emptyList()).fraction).isEqualTo(0f)
+    }
+
+    @Test
+    fun `lyric index is the last line already started`() {
+        val lines = listOf(LyricLine(1.0, "a"), LyricLine(5.0, "b"), LyricLine(9.5, "c"))
+        assertThat(currentLyricIndex(lines, 0)).isEqualTo(-1)
+        assertThat(currentLyricIndex(lines, 1_000)).isEqualTo(0)
+        // 提前 50 毫秒亮
+        assertThat(currentLyricIndex(lines, 4_960)).isEqualTo(1)
+        assertThat(currentLyricIndex(lines, 100_000)).isEqualTo(2)
+        assertThat(currentLyricIndex(emptyList(), 3_000)).isEqualTo(-1)
     }
 }

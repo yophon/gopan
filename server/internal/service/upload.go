@@ -485,6 +485,31 @@ func (s *Uploads) DownloadURL(ctx context.Context, owner, nodeID uuid.UUID) (str
 	return s.obj.PresignGet(ctx, objstore.BlobKey(*row.BlobSha256), row.Name)
 }
 
+// StreamURLTTL 外部播放器的地址:播放器每次拖动都重新请求,15 分钟的预签名撑不过一部电影
+const StreamURLTTL = 12 * time.Hour
+
+// StreamURL 音视频给外部播放器(桌面端「用播放器播放」,doc/31 三)的长效内联地址;别的文件回 nil。
+func (s *Uploads) StreamURL(ctx context.Context, owner, nodeID uuid.UUID) (*string, error) {
+	row, err := s.q.GetNodeWithBlob(ctx, store.GetNodeWithBlobParams{ID: nodeID, OwnerID: owner})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if row.Kind != "file" || row.BlobSha256 == nil || row.BlobMime == nil {
+		return nil, nil
+	}
+	if k := ClassifyPreview(row.Name, row.BlobMime, row.BlobSize); k != PvVideo && k != PvAudio {
+		return nil, nil
+	}
+	u, err := s.obj.PresignGetInlineFor(ctx, objstore.BlobKey(*row.BlobSha256), *row.BlobMime, StreamURLTTL)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
 func (s *Uploads) NodeInfo(ctx context.Context, owner, nodeID uuid.UUID) (store.GetNodeWithBlobRow, error) {
 	row, err := s.q.GetNodeWithBlob(ctx, store.GetNodeWithBlobParams{ID: nodeID, OwnerID: owner})
 	if err != nil {

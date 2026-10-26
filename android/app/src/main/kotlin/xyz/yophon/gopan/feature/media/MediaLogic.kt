@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.media3.common.Player
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.PreviewKind
+import xyz.yophon.gopan.core.data.media.LyricLine
 import xyz.yophon.gopan.core.data.media.NowPlaying
 import xyz.yophon.gopan.core.data.media.PlayProgress
 import xyz.yophon.gopan.core.data.media.QueueEntry
@@ -23,6 +24,26 @@ const val PDF_REPORT_DELAY_MS = 5_000L
 
 /** 下一集倒计时(秒) */
 const val NEXT_EPISODE_COUNTDOWN = 5
+
+/**
+ * 歌词当前该亮哪一行(doc/31 二):最后一个时间不晚于播放位置的;还没到第一行为 -1。提前 50 毫秒亮。
+ */
+fun currentLyricIndex(lines: List<LyricLine>, positionMs: Long): Int {
+    val t = positionMs / 1000.0 + 0.05
+    var lo = 0
+    var hi = lines.size - 1
+    var ans = -1
+    while (lo <= hi) {
+        val mid = (lo + hi) ushr 1
+        if (lines[mid].t <= t) {
+            ans = mid
+            lo = mid + 1
+        } else {
+            hi = mid - 1
+        }
+    }
+    return ans
+}
 
 /**
  * 打开音视频时从哪接着放(毫秒);null = 从头。

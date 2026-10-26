@@ -3,14 +3,12 @@ package worker
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"image"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -149,21 +147,15 @@ func (w *Pool) probeMedia(ctx context.Context, blobID uuid.UUID) error {
 	}
 	cctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(cctx, w.ffprobe,
-		"-v", "quiet", "-show_format", "-of", "json", u).Output()
+	// 时长之外记下主要流的编码:网页据此判断 mkv 能不能直接放、要不要先转封装(doc/31 一)
+	out, err := exec.CommandContext(cctx, w.ffprobe, service.ProbeArgs(u)...).Output()
 	if err != nil {
 		return fmt.Errorf("ffprobe: %w", err)
 	}
-	var probe struct {
-		Format struct {
-			Duration string `json:"duration"`
-		} `json:"format"`
-	}
-	if err := json.Unmarshal(out, &probe); err != nil {
+	meta, err := service.MediaMetaFromProbe(out)
+	if err != nil {
 		return err
 	}
-	dur, _ := strconv.ParseFloat(probe.Format.Duration, 64)
-	meta, _ := json.Marshal(map[string]any{"duration_sec": dur})
 	return w.q.SetBlobMediaMeta(ctx, store.SetBlobMediaMetaParams{ID: blobID, MediaMeta: meta})
 }
 

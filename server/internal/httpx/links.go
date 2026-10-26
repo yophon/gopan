@@ -140,6 +140,52 @@ func SubtitleHandler(auth *service.Auth, media *service.Media, shares *service.S
 	})
 }
 
+// LyricsHandler 歌词:GET /lrc/{node}?token=<access>(也接受 Authorization 头),node 是歌;回解析好的 JSON
+// {"synced":true,"lines":[{"t":12.3,"text":"…"}]}(doc/31 二),没有同名 .lrc 回 404。
+// 分享访客在分享范围内可用;分享的就是这首歌本身时,同文件夹的歌词不在分享范围里。
+func LyricsHandler(auth *service.Auth, media *service.Media, shares *service.Shares) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := r.URL.Query().Get("token")
+		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+			token = strings.TrimPrefix(h, "Bearer ")
+		}
+		ident, err := auth.ParseAccessContext(r.Context(), token)
+		if err != nil {
+			writeArchiveErr(w, &service.Error{Code: "UNAUTHENTICATED", Message: "未登录或凭证已过期"}, http.StatusUnauthorized)
+			return
+		}
+		nodeID, err := uuid.Parse(r.PathValue("node"))
+		if err != nil {
+			writeArchiveErr(w, &service.Error{Code: "INVALID_INPUT", Message: "非法节点 ID"}, http.StatusBadRequest)
+			return
+		}
+		if err := shares.Authorize(r.Context(), ident, nodeID); err != nil {
+			writeServiceErr(w, err)
+			return
+		}
+		if ident.Scope != service.ScopeUser {
+			sh, err := shares.ValidateScope(r.Context(), ident)
+			if err != nil {
+				writeServiceErr(w, err)
+				return
+			}
+			if sh.NodeID == nodeID {
+				writeServiceErr(w, service.ErrNoLyrics)
+				return
+			}
+		}
+		lrc, err := media.Lyrics(r.Context(), ident.UserID, nodeID)
+		if err != nil {
+			writeServiceErr(w, err)
+			return
+		}
+		h := w.Header()
+		h.Set("Content-Type", "application/json; charset=utf-8")
+		h.Set("Cache-Control", "private, max-age=300")
+		_ = json.NewEncoder(w).Encode(lrc)
+	})
+}
+
 // ImageUploadHandler 图床接口:POST /api/img/upload,Authorization: Bearer <图床密钥 或 登录凭证>。
 // 收 multipart(取第一个文件)或直接把图片当请求体(?name= 给文件名);回 JSON。
 func ImageUploadHandler(auth *service.Auth, tokens *service.MCPTokens, links *service.Links, trusted []*net.IPNet) http.Handler {

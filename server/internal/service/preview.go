@@ -81,6 +81,8 @@ type PreviewInfo struct {
 	DurationSec *int
 	// Markdown 能用 /md/{nodeId} 渲染着看(.md 且不超过 2 MB;doc/23 五.2)
 	Markdown bool
+	// 浏览器放不了的视频容器转成 mp4 的状态(doc/31 一);不是这类视频、或本次部署没开时为 nil
+	Remux *RemuxInfo
 }
 
 type Previews struct {
@@ -90,6 +92,7 @@ type Previews struct {
 	enqueue func(ctx context.Context, kind string, blobID uuid.UUID)
 	// office 关闭时(未部署 Gotenberg)不入队转换任务,直接回 UNAVAILABLE 让前端引导下载
 	office bool
+	remux  *Remuxer
 }
 
 func NewPreviews(pool *pgxpool.Pool, obj *objstore.Store) *Previews {
@@ -99,6 +102,11 @@ func NewPreviews(pool *pgxpool.Pool, obj *objstore.Store) *Previews {
 
 func (s *Previews) SetEnqueue(fn func(ctx context.Context, kind string, blobID uuid.UUID)) {
 	s.enqueue = fn
+}
+
+// SetRemuxer 网页放 mkv(doc/31 一);nil = 本次部署不转换。
+func (s *Previews) SetRemuxer(r *Remuxer) {
+	s.remux = r
 }
 
 // SetOfficeEnabled 由 main 按 GOPAN_GOTENBERG_URL 是否配置注入。
@@ -152,6 +160,10 @@ func (s *Previews) ForNode(ctx context.Context, name string, sha *string, mime *
 		}
 		if info.Kind == PvVideo {
 			s.fillDerived(ctx, &info, blob, "cover", &info.LargeURL)
+			if s.remux != nil && RemuxCandidate(name, mime) {
+				ri := s.remux.Info(*sha, name, blob.Size, blob.MediaMeta)
+				info.Remux = &ri
+			}
 		}
 		if info.Kind == PvVideo || info.Kind == PvAudio {
 			info.DurationSec = durationFromMeta(blob.MediaMeta)
@@ -205,6 +217,26 @@ func (s *Previews) Request(ctx context.Context, owner, nodeID uuid.UUID) (Previe
 		info.Status = &st
 	}
 	return info, nil
+}
+
+// RequestRemux 开始把这个视频转成 mp4(已经在转、转好了就只回状态)。owner 是文件主人(分享访客传分享主人)。
+func (s *Previews) RequestRemux(ctx context.Context, owner, nodeID uuid.UUID) (RemuxInfo, error) {
+	row, err := s.q.GetNodeWithBlob(ctx, store.GetNodeWithBlobParams{ID: nodeID, OwnerID: owner})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return RemuxInfo{}, ErrNotFound
+		}
+		return RemuxInfo{}, err
+	}
+	if s.remux == nil || row.BlobSha256 == nil || ClassifyPreview(row.Name, row.BlobMime, row.BlobSize) != PvVideo ||
+		!RemuxCandidate(row.Name, row.BlobMime) {
+		return RemuxInfo{Status: RmUnavailable}, nil
+	}
+	blob, err := s.q.GetBlobBySha256(ctx, *row.BlobSha256)
+	if err != nil {
+		return RemuxInfo{}, err
+	}
+	return s.remux.Request(blob.Sha256, row.Name, blob.Size, blob.MediaMeta)
 }
 
 func (s *Previews) fillDerived(ctx context.Context, info *PreviewInfo, blob store.Blob, kind string, target **string) {

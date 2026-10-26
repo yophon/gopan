@@ -381,7 +381,11 @@ private fun PreviewPageHost(
             onFindNext = { viewModel.nextVideo(item.nodeId) },
             onPlayNext = onPlayNext,
         )
-        is PreviewContent.Audio -> AudioPage(item.nodeId, title, c, isCurrent, onLoadQueue = { viewModel.loadAudioQueue(item.nodeId, title) })
+        is PreviewContent.Audio -> AudioPage(
+            item.nodeId, title, c, isCurrent,
+            onLoadQueue = { viewModel.loadAudioQueue(item.nodeId, title) },
+            onLoadLyrics = { viewModel.loadLyrics(item.nodeId) },
+        )
         is PreviewContent.PdfDownloading -> PdfDownloadingPage(c.fraction)
         is PreviewContent.Pdf -> PdfPage(
             c.file,
