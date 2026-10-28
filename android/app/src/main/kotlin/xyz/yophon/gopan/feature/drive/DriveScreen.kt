@@ -160,7 +160,6 @@ fun DriveScreen(
     onOpenTransfers: () -> Unit,
     onOpenPreview: (nodeId: String) -> Unit,
     onBack: (() -> Unit)?,
-    onOpenRecentPlays: () -> Unit = {},
     /** 网盘首页顶上的「收藏」「最近」入口(doc/24);true = 最近 */
     onOpenQuick: (recent: Boolean) -> Unit = {},
     /** 离线可用的文件夹没网打不开时,去看手机上的副本(doc/26) */
@@ -266,7 +265,7 @@ fun DriveScreen(
                         },
                     )
                 } else {
-                    DriveTopBar(state, viewModel, onBack, onCrumbClick, onOpenSearch, onOpenTrash, onOpenTransfers, onOpenRecentPlays, topBarScroll)
+                    DriveTopBar(state, viewModel, onBack, onCrumbClick, onOpenSearch, onOpenTrash, onOpenTransfers, topBarScroll)
                 }
             },
             floatingActionButton = {
@@ -423,7 +422,6 @@ private fun DriveTopBar(
     onOpenSearch: (Crumb?) -> Unit,
     onOpenTrash: () -> Unit,
     onOpenTransfers: () -> Unit,
-    onOpenRecentPlays: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {
     val rootCrumb = Crumb(null, "")
@@ -463,7 +461,7 @@ private fun DriveTopBar(
                     }
                 }
                 SortMenu(sort = state.sort, onSelect = viewModel::selectSort)
-                OverflowMenu(onOpenTrash = onOpenTrash, onOpenTransfers = onOpenTransfers, onRefresh = viewModel::refresh, onOpenRecentPlays = onOpenRecentPlays)
+                OverflowMenu(onOpenTrash = onOpenTrash, onOpenTransfers = onOpenTransfers, onRefresh = viewModel::refresh)
             },
         )
         if (!state.isRoot) {
@@ -623,7 +621,7 @@ private val SORT_OPTIONS = listOf(
 )
 
 @Composable
-private fun OverflowMenu(onOpenTrash: () -> Unit, onOpenTransfers: () -> Unit, onRefresh: () -> Unit, onOpenRecentPlays: () -> Unit) {
+private fun OverflowMenu(onOpenTrash: () -> Unit, onOpenTransfers: () -> Unit, onRefresh: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
@@ -644,15 +642,6 @@ private fun OverflowMenu(onOpenTrash: () -> Unit, onOpenTransfers: () -> Unit, o
                     onOpenTransfers()
                 },
                 leadingIcon = { Icon(Icons.Outlined.SwapVert, contentDescription = null) },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.media_recent_title)) },
-                onClick = {
-                    expanded = false
-                    onOpenRecentPlays()
-                },
-                leadingIcon = { Icon(Icons.Outlined.History, contentDescription = null) },
-                modifier = Modifier.testTag("drive_recent_plays"),
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.drive_action_trash)) },

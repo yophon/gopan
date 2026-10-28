@@ -459,9 +459,13 @@ UPDATE nodes SET opened_at = now()
 WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL AND kind = 'file';
 
 -- name: ListRecentOpened :many
-SELECT sqlc.embed(n), b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+-- 带上播放 / 阅读进度(没有为空):「最近」列表里直接显示看到哪(doc/24、doc/31 五)
+SELECT sqlc.embed(n), b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256,
+       p.position AS progress_position, p.duration AS progress_duration,
+       p.finished AS progress_finished, p.updated_at AS progress_updated_at
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
+LEFT JOIN play_progress p ON p.owner_id = n.owner_id AND p.node_id = n.id
 WHERE n.owner_id = $1 AND n.opened_at IS NOT NULL AND n.deleted_at IS NULL AND n.kind = 'file'
 ORDER BY n.opened_at DESC, n.id
 LIMIT $2;

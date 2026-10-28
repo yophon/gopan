@@ -1183,9 +1183,12 @@ func (q *Queries) ListExpiredTrashRoots(ctx context.Context, deletedAt pgtype.Ti
 }
 
 const listRecentOpened = `-- name: ListRecentOpened :many
-SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
+SELECT n.id, n.owner_id, n.parent_id, n.name, n.kind, n.blob_id, n.deleted_at, n.created_at, n.updated_at, n.subtree_bytes, n.subtree_count, n.stats_stale, n.starred_at, n.opened_at, b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256,
+       p.position AS progress_position, p.duration AS progress_duration,
+       p.finished AS progress_finished, p.updated_at AS progress_updated_at
 FROM nodes n
 LEFT JOIN blobs b ON b.id = n.blob_id
+LEFT JOIN play_progress p ON p.owner_id = n.owner_id AND p.node_id = n.id
 WHERE n.owner_id = $1 AND n.opened_at IS NOT NULL AND n.deleted_at IS NULL AND n.kind = 'file'
 ORDER BY n.opened_at DESC, n.id
 LIMIT $2
@@ -1197,12 +1200,17 @@ type ListRecentOpenedParams struct {
 }
 
 type ListRecentOpenedRow struct {
-	Node       Node
-	BlobSize   *int64
-	BlobMime   *string
-	BlobSha256 *string
+	Node              Node
+	BlobSize          *int64
+	BlobMime          *string
+	BlobSha256        *string
+	ProgressPosition  *float64
+	ProgressDuration  *float64
+	ProgressFinished  *bool
+	ProgressUpdatedAt pgtype.Timestamptz
 }
 
+// 带上播放 / 阅读进度(没有为空):「最近」列表里直接显示看到哪(doc/24、doc/31 五)
 func (q *Queries) ListRecentOpened(ctx context.Context, arg ListRecentOpenedParams) ([]ListRecentOpenedRow, error) {
 	rows, err := q.db.Query(ctx, listRecentOpened, arg.OwnerID, arg.Limit)
 	if err != nil {
@@ -1230,6 +1238,10 @@ func (q *Queries) ListRecentOpened(ctx context.Context, arg ListRecentOpenedPara
 			&i.BlobSize,
 			&i.BlobMime,
 			&i.BlobSha256,
+			&i.ProgressPosition,
+			&i.ProgressDuration,
+			&i.ProgressFinished,
+			&i.ProgressUpdatedAt,
 		); err != nil {
 			return nil, err
 		}

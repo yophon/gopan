@@ -776,6 +776,7 @@ export type Mutation = {
   purgeFileVersions: Scalars['Int64']['output'];
   purgeNodes: Scalars['Boolean']['output'];
   purgeTrash: Scalars['Boolean']['output'];
+  quickShareFolder: Node;
   refresh: AuthPayload;
   refreshFeed: Feed;
   register: AuthPayload;
@@ -1264,6 +1265,7 @@ export type Node = {
   size?: Maybe<Scalars['Int64']['output']>;
   starred: Scalars['Boolean']['output'];
   statsStale?: Maybe<Scalars['Boolean']['output']>;
+  streamUrl?: Maybe<Scalars['String']['output']>;
   subtreeBytes?: Maybe<Scalars['Int64']['output']>;
   subtreeCount?: Maybe<Scalars['Int64']['output']>;
   updatedAt: Scalars['Time']['output'];
@@ -2829,17 +2831,17 @@ export type SearchContentQueryVariables = Exact<{
 
 export type SearchContentQuery = { __typename?: 'Query', searchContent: { __typename?: 'ContentHitPage', nextCursor?: string | null, items: Array<{ __typename?: 'ContentHit', snippet: string, page?: number | null, node: { __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, mime?: string | null, updatedAt: string, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null } }, highlights: Array<{ __typename?: 'TextRange', start: number, length: number }> }> } };
 
-export type QuickNodeFragment = { __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, subtreeBytes?: number | null, subtreeCount?: number | null, statsStale?: boolean | null, updatedAt: string, openedAt?: string | null, starred: boolean, path?: string | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null } };
+export type QuickNodeFragment = { __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, subtreeBytes?: number | null, subtreeCount?: number | null, statsStale?: boolean | null, updatedAt: string, openedAt?: string | null, starred: boolean, path?: string | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null }, playProgress?: { __typename?: 'PlayProgress', position: number, duration: number, finished: boolean, updatedAt: string } | null };
 
 export type StarredNodesQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type StarredNodesQuery = { __typename?: 'Query', starredNodes: Array<{ __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, subtreeBytes?: number | null, subtreeCount?: number | null, statsStale?: boolean | null, updatedAt: string, openedAt?: string | null, starred: boolean, path?: string | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null } }> };
+export type StarredNodesQuery = { __typename?: 'Query', starredNodes: Array<{ __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, subtreeBytes?: number | null, subtreeCount?: number | null, statsStale?: boolean | null, updatedAt: string, openedAt?: string | null, starred: boolean, path?: string | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null }, playProgress?: { __typename?: 'PlayProgress', position: number, duration: number, finished: boolean, updatedAt: string } | null }> };
 
 export type RecentFilesQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type RecentFilesQuery = { __typename?: 'Query', recentFiles: Array<{ __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, subtreeBytes?: number | null, subtreeCount?: number | null, statsStale?: boolean | null, updatedAt: string, openedAt?: string | null, starred: boolean, path?: string | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null } }> };
+export type RecentFilesQuery = { __typename?: 'Query', recentFiles: Array<{ __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, subtreeBytes?: number | null, subtreeCount?: number | null, statsStale?: boolean | null, updatedAt: string, openedAt?: string | null, starred: boolean, path?: string | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null }, playProgress?: { __typename?: 'PlayProgress', position: number, duration: number, finished: boolean, updatedAt: string } | null }> };
 
 export type SetStarredMutationVariables = Exact<{
   ids: Array<Scalars['ID']['input']> | Scalars['ID']['input'];
@@ -3452,14 +3454,6 @@ export const LinkPrefsFieldsFragmentDoc = new TypedDocumentString(`
   monthlyBytesUsed
 }
     `, {"fragmentName":"LinkPrefsFields"}) as unknown as TypedDocumentString<LinkPrefsFieldsFragment, unknown>;
-export const PlayProgressFieldsFragmentDoc = new TypedDocumentString(`
-    fragment PlayProgressFields on PlayProgress {
-  position
-  duration
-  finished
-  updatedAt
-}
-    `, {"fragmentName":"PlayProgressFields"}) as unknown as TypedDocumentString<PlayProgressFieldsFragment, unknown>;
 export const RemuxFieldsFragmentDoc = new TypedDocumentString(`
     fragment RemuxFields on RemuxInfo {
   status
@@ -3475,6 +3469,14 @@ export const RemuxFieldsFragmentDoc = new TypedDocumentString(`
   }
 }
     `, {"fragmentName":"RemuxFields"}) as unknown as TypedDocumentString<RemuxFieldsFragment, unknown>;
+export const PlayProgressFieldsFragmentDoc = new TypedDocumentString(`
+    fragment PlayProgressFields on PlayProgress {
+  position
+  duration
+  finished
+  updatedAt
+}
+    `, {"fragmentName":"PlayProgressFields"}) as unknown as TypedDocumentString<PlayProgressFieldsFragment, unknown>;
 export const QuickNodeFragmentDoc = new TypedDocumentString(`
     fragment QuickNode on Node {
   id
@@ -3493,8 +3495,16 @@ export const QuickNodeFragmentDoc = new TypedDocumentString(`
     kind
     thumbUrl
   }
+  playProgress {
+    ...PlayProgressFields
+  }
 }
-    `, {"fragmentName":"QuickNode"}) as unknown as TypedDocumentString<QuickNodeFragment, unknown>;
+    fragment PlayProgressFields on PlayProgress {
+  position
+  duration
+  finished
+  updatedAt
+}`, {"fragmentName":"QuickNode"}) as unknown as TypedDocumentString<QuickNodeFragment, unknown>;
 export const NotifyChannelFieldsFragmentDoc = new TypedDocumentString(`
     fragment NotifyChannelFields on NotifyChannel {
   id
@@ -5523,7 +5533,13 @@ export const StarredNodesDocument = new TypedDocumentString(`
     ...QuickNode
   }
 }
-    fragment QuickNode on Node {
+    fragment PlayProgressFields on PlayProgress {
+  position
+  duration
+  finished
+  updatedAt
+}
+fragment QuickNode on Node {
   id
   parentId
   name
@@ -5539,6 +5555,9 @@ export const StarredNodesDocument = new TypedDocumentString(`
   preview {
     kind
     thumbUrl
+  }
+  playProgress {
+    ...PlayProgressFields
   }
 }`) as unknown as TypedDocumentString<StarredNodesQuery, StarredNodesQueryVariables>;
 export const RecentFilesDocument = new TypedDocumentString(`
@@ -5547,7 +5566,13 @@ export const RecentFilesDocument = new TypedDocumentString(`
     ...QuickNode
   }
 }
-    fragment QuickNode on Node {
+    fragment PlayProgressFields on PlayProgress {
+  position
+  duration
+  finished
+  updatedAt
+}
+fragment QuickNode on Node {
   id
   parentId
   name
@@ -5563,6 +5588,9 @@ export const RecentFilesDocument = new TypedDocumentString(`
   preview {
     kind
     thumbUrl
+  }
+  playProgress {
+    ...PlayProgressFields
   }
 }`) as unknown as TypedDocumentString<RecentFilesQuery, RecentFilesQueryVariables>;
 export const SetStarredDocument = new TypedDocumentString(`

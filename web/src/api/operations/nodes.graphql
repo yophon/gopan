@@ -241,6 +241,10 @@ fragment QuickNode on Node {
     kind
     thumbUrl
   }
+  # 只有「最近」给(doc/31 五),收藏里恒为空
+  playProgress {
+    ...PlayProgressFields
+  }
 }
 
 query StarredNodes {

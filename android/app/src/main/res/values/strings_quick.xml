@@ -12,7 +12,16 @@
     <string name="quick_msg_forgotten">已从最近中移除</string>
     <string name="quick_clear">清空</string>
     <string name="quick_clear_title">清空最近</string>
-    <string name="quick_clear_text">「最近」里的记录会全部清掉,文件本身不受影响。</string>
+    <string name="quick_clear_text">「最近」里的记录和看到哪都会清掉,文件本身不受影响。</string>
+    <!-- 最近:接着看与类型筛选(doc/31 五) -->
+    <string name="quick_resume_title">接着看</string>
+    <string name="quick_resume_remove">不再接着看</string>
+    <string name="quick_filter_all">全部</string>
+    <string name="quick_filter_media">影音</string>
+    <string name="quick_filter_doc">文档</string>
+    <string name="quick_filter_image">图片</string>
+    <string name="quick_filter_empty">没有这一类的</string>
+    <string name="quick_progress_finished">已看完</string>
 
     <string name="versions_title">历史版本</string>
     <string name="versions_policy">同名覆盖时留下原来的内容,最多 %1$d 个,%2$d 天后自动清理;占用空间。</string>

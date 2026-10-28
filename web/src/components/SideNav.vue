@@ -23,7 +23,6 @@ import {
   Share,
   Star,
   SwitchButton,
-  VideoPlay,
 } from '@element-plus/icons-vue'
 
 import BrandLogo from '@/components/BrandLogo.vue'
@@ -46,7 +45,6 @@ const emit = defineEmits<{
   (e: 'open-mcp'): void
   (e: 'open-pwd'): void
   (e: 'open-notifications'): void
-  (e: 'open-recent'): void
   (e: 'logout'): void
 }>()
 
@@ -202,10 +200,6 @@ const quotaStatus = computed(() => {
         <span>管理</span>
       </el-menu-item>
     </el-menu>
-    <button type="button" class="nav-extra" @click="emit('open-recent')">
-      <el-icon><VideoPlay /></el-icon>
-      <span>最近播放</span>
-    </button>
     <router-link to="/app" class="nav-extra" @click="emit('navigate')">
       <el-icon><Cellphone /></el-icon>
       <span>安卓 App · 更新日志</span>

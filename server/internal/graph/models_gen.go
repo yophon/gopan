@@ -8,6 +8,8 @@ import (
 	"io"
 	"strconv"
 	"time"
+
+	"github.com/yophon/gopan/server/internal/store"
 )
 
 type Activity struct {
@@ -632,6 +634,8 @@ type Node struct {
 	OpenedAt     *time.Time    `json:"openedAt,omitempty"`
 	// 由列表转换器置位:preview 走零查询乐观路径
 	InList bool `json:"-"`
+	// 「最近」列表顺带查出的进度:列表路径也能给 playProgress
+	ListProgress *store.PlayProgress `json:"-"`
 	// 由转换器置位
 	OpenedAtRaw *time.Time `json:"-"`
 	// 由转换器置位;starred / openedAt 字段 resolver 按身份决定给不给

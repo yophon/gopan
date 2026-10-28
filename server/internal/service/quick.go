@@ -12,7 +12,7 @@ import (
 
 const (
 	maxStarredList = 500
-	maxRecentList  = 100
+	maxRecentList  = 500
 	maxStarBatch   = 500
 )
 
@@ -22,6 +22,8 @@ type QuickRow struct {
 	BlobSize   *int64
 	BlobMime   *string
 	BlobSha256 *string
+	// 「最近」才填:播放 / 阅读进度,没有为 nil
+	Progress *store.PlayProgress
 }
 
 // SetStarred 收藏或取消收藏;回收站里的、不是自己的静默跳过。返回改到的节点。
@@ -62,15 +64,26 @@ func (s *Nodes) Recent(ctx context.Context, owner uuid.UUID, limit int) ([]Quick
 		return nil, err
 	}
 	return mapSlice(rows, func(r store.ListRecentOpenedRow) QuickRow {
-		return QuickRow{Node: r.Node, BlobSize: r.BlobSize, BlobMime: r.BlobMime, BlobSha256: r.BlobSha256}
+		q := QuickRow{Node: r.Node, BlobSize: r.BlobSize, BlobMime: r.BlobMime, BlobSha256: r.BlobSha256}
+		if r.ProgressPosition != nil && r.ProgressDuration != nil {
+			q.Progress = &store.PlayProgress{
+				OwnerID: owner, NodeID: r.Node.ID, Position: *r.ProgressPosition, Duration: *r.ProgressDuration,
+				Finished: r.ProgressFinished != nil && *r.ProgressFinished, UpdatedAt: r.ProgressUpdatedAt,
+			}
+		}
+		return q
 	}), nil
 }
 
-// ClearRecent 从「最近」里拿掉几个(ids 为空 = 全部清掉)。文件本身不受影响。
+// ClearRecent 从「最近」里拿掉几个(ids 为空 = 全部清掉),连播放 / 阅读进度一起清(「接着看」里也没了)。
+// 文件本身不受影响。
 func (s *Nodes) ClearRecent(ctx context.Context, owner uuid.UUID, ids []uuid.UUID) error {
 	if ids == nil {
 		ids = []uuid.UUID{}
 	}
-	_, err := s.q.ClearNodesOpened(ctx, store.ClearNodesOpenedParams{OwnerID: owner, Ids: ids})
+	if _, err := s.q.ClearNodesOpened(ctx, store.ClearNodesOpenedParams{OwnerID: owner, Ids: ids}); err != nil {
+		return err
+	}
+	_, err := s.q.ClearPlayProgressMany(ctx, store.ClearPlayProgressManyParams{OwnerID: owner, Ids: ids})
 	return err
 }

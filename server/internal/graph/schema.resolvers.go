@@ -1323,6 +1323,9 @@ func (r *nodeResolver) StreamURL(ctx context.Context, obj *Node) (*string, error
 
 // PlayProgress is the resolver for the playProgress field.
 func (r *nodeResolver) PlayProgress(ctx context.Context, obj *Node) (*PlayProgress, error) {
+	if obj.ListProgress != nil {
+		return gqlPlayProgress(obj.ListProgress), nil // 「最近」列表顺带查好了(属主自己的列表)
+	}
 	if obj.Kind != NodeKindFile || obj.InList {
 		return nil, nil
 	}

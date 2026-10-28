@@ -1,10 +1,37 @@
 package xyz.yophon.gopan.feature.quick
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
+import xyz.yophon.gopan.core.data.media.PlayProgress
+import xyz.yophon.gopan.core.data.media.RecentPlay
+import xyz.yophon.gopan.feature.drive.NodeVisual
+import xyz.yophon.gopan.feature.media.ProgressText
+import xyz.yophon.gopan.feature.media.progressFraction
+import xyz.yophon.gopan.feature.media.progressText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.History
@@ -71,7 +98,8 @@ private val STARRED_ACTIONS = listOf(
 private val RECENT_ACTIONS = listOf(NodeAction.FORGET) + STARRED_ACTIONS
 
 /**
- * 「收藏」「最近」(doc/24):点文件夹进去、点文件预览;⋮ / 长按出操作。第二行:收藏写所在位置,最近写打开时间。
+ * 「收藏」「最近」(doc/24):点文件夹进去、点文件预览;⋮ / 长按出操作。第二行:收藏写所在位置,最近写打开时间与看到哪。
+ * 最近的顶上是一排「接着看」(没看完的音视频与 PDF)和类型筛选(doc/31 五)。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -143,7 +171,7 @@ fun QuickScreen(
             when (val status = state.status) {
                 ListStatus.Loading -> ListSkeleton()
                 is ListStatus.Error -> FullPage { ErrorState(status.message, onRetry = viewModel::retry) }
-                ListStatus.Content -> if (state.items.isEmpty()) {
+                ListStatus.Content -> if (state.items.isEmpty() && state.plays.isEmpty()) {
                     FullPage {
                         if (state.recent) {
                             EmptyState(
@@ -161,7 +189,27 @@ fun QuickScreen(
                     }
                 } else {
                     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottomBarPadding(24.dp))) {
-                        items(state.items, key = { it.node.id }) { item ->
+                        if (state.recent && state.plays.isNotEmpty()) {
+                            item(key = "resume") {
+                                ResumeStrip(state.plays, onOpen = viewModel::resume, onRemove = viewModel::forgetProgress)
+                            }
+                        }
+                        if (state.recent && state.items.isNotEmpty()) {
+                            item(key = "filter") {
+                                FilterRow(state.filter, onSelect = viewModel::setFilter)
+                            }
+                            if (state.shown.isEmpty()) {
+                                item(key = "filter_empty") {
+                                    Text(
+                                        stringResource(R.string.quick_filter_empty),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
+                                    )
+                                }
+                            }
+                        }
+                        items(state.shown, key = { it.node.id }) { item ->
                             NodeRow(
                                 node = item.node,
                                 secondary = quickSecondary(item, state.recent, state.nowMillis, rootName),
@@ -197,10 +245,97 @@ fun QuickScreen(
     )
 }
 
-/** 收藏:所在位置(「我的文件 / 工作」);最近:打开于多久以前 */
+/** 收藏:所在位置(「我的文件 / 工作」);最近:打开于多久以前,有进度的再写看到哪 */
 @Composable
 private fun quickSecondary(item: QuickItem, recent: Boolean, nowMillis: Long, rootName: String): String {
-    if (recent) return stringResource(R.string.quick_opened_at, formatRelativeTime(item.openedAt, Instant.ofEpochMilli(nowMillis)))
+    if (recent) {
+        val opened = stringResource(R.string.quick_opened_at, formatRelativeTime(item.openedAt, Instant.ofEpochMilli(nowMillis)))
+        val progress = item.progress ?: return opened
+        return "$opened · ${progressLabel(item.node.preview.kind, progress)}"
+    }
     val segs = item.path?.split('/')?.filter { it.isNotEmpty() }?.dropLast(1) ?: emptyList()
     return (listOf(rootName) + segs).joinToString(" / ")
 }
+
+/** 看到 23:15 / 1:42:00、第 12 / 80 页,看完了写「已看完」 */
+@Composable
+private fun progressLabel(kind: xyz.yophon.gopan.core.data.PreviewKind, progress: PlayProgress): String {
+    if (progress.finished) return stringResource(R.string.quick_progress_finished)
+    return when (val t = progressText(kind, progress)) {
+        is ProgressText.Time -> stringResource(R.string.media_recent_position, t.position, t.duration)
+        is ProgressText.Pages -> stringResource(R.string.media_recent_page, t.page, t.count)
+    }
+}
+
+/** 接着看:横着一排卡片,点了从上次的地方接着放;右上角 × 不再接着看 */
+@Composable
+private fun ResumeStrip(plays: List<RecentPlay>, onOpen: (RecentPlay) -> Unit, onRemove: (RecentPlay) -> Unit) {
+    Column(modifier = Modifier.padding(top = 4.dp, bottom = 8.dp).testTag("quick_resume")) {
+        Text(
+            stringResource(R.string.quick_resume_title),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(plays, key = { it.node.id }) { play ->
+                Column(
+                    modifier = Modifier
+                        .width(156.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onOpen(play) }
+                        .testTag("resume:${play.node.name}"),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        NodeVisual(play.node, modifier = Modifier.fillMaxSize(), iconSize = 32.dp, shape = RoundedCornerShape(10.dp))
+                        // 半透明黑底:叠在彩色缩略图上也看得清
+                        IconButton(onClick = { onRemove(play) }, modifier = Modifier.align(Alignment.TopEnd).size(40.dp)) {
+                            Box(
+                                modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = stringResource(R.string.quick_resume_remove),
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                    }
+                    Text(play.node.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+                    LinearProgressIndicator(progress = { progressFraction(play.progress) }, modifier = Modifier.fillMaxWidth().height(3.dp))
+                    Text(
+                        progressLabel(play.node.preview.kind, play.progress),
+                        maxLines = 1,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 全部 / 影音 / 文档 / 图片 */
+@Composable
+private fun FilterRow(selected: RecentFilter, onSelect: (RecentFilter) -> Unit) {
+    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(RecentFilter.entries.toList(), key = { it.name }) { f ->
+            FilterChip(
+                selected = f == selected,
+                onClick = { onSelect(f) },
+                label = { Text(stringResource(f.label)) },
+                modifier = Modifier.testTag("quick_filter:${f.name}"),
+            )
+        }
+    }
+}
+

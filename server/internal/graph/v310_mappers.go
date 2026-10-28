@@ -15,6 +15,7 @@ func gqlQuickRows(rows []service.QuickRow) []*Node {
 	for _, r := range rows {
 		n := gqlNodeRow(nodeRow{Node: r.Node, BlobSize: r.BlobSize, BlobMime: r.BlobMime, BlobSha256: r.BlobSha256})
 		n.InList = true
+		n.ListProgress = r.Progress
 		out = append(out, n)
 	}
 	return out

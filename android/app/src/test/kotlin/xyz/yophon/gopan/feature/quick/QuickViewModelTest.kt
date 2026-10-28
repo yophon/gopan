@@ -11,7 +11,12 @@ import org.junit.Test
 import xyz.yophon.gopan.core.auth.SessionStore
 import xyz.yophon.gopan.core.auth.UserSummary
 import xyz.yophon.gopan.core.data.InMemorySnapshotDisk
+import xyz.yophon.gopan.core.data.NodePreview
+import xyz.yophon.gopan.core.data.PreviewKind
 import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.media.FakeMediaRepository
+import xyz.yophon.gopan.core.data.media.PlayProgress
+import xyz.yophon.gopan.core.data.media.RecentPlay
 import xyz.yophon.gopan.core.data.quick.FakeQuickRepository
 import xyz.yophon.gopan.core.data.quick.QuickRepository
 import xyz.yophon.gopan.core.data.quick.FileVersion
@@ -34,11 +39,12 @@ class QuickViewModelTest {
 
     private val repo = FakeNodesRepository()
     private val quick = FakeQuickRepository()
+    private val media = FakeMediaRepository()
     private val sessions = PreviewSessionStore()
     private val cache = ScreenCache(SessionStore().apply { setSignedIn("t", UserSummary("u1", "u1", 0, 0, false)) }, InMemorySnapshotDisk())
 
     private fun viewModel(recent: Boolean) =
-        QuickViewModel(SavedStateHandle(mapOf(QuickViewModel.RECENT_ARG to recent)), repo, FakeTransferActions(), sessions, quick, cache)
+        QuickViewModel(SavedStateHandle(mapOf(QuickViewModel.RECENT_ARG to recent)), repo, FakeTransferActions(), sessions, quick, cache, media)
 
     @Test
     fun `prefetched snapshot shows at once, then refreshes silently and writes back`() = runTest {
@@ -96,6 +102,47 @@ class QuickViewModelTest {
         advanceUntilIdle()
         assertThat(vm.state.value.items).isEmpty()
         assertThat(quick.calls).contains("clearRecent:all")
+    }
+
+    @Test
+    fun `recent shows resume strip and filters by kind, forgetting progress keeps the row`() = runTest {
+        val video = file("v1", "电影.mkv").copy(preview = NodePreview(kind = PreviewKind.VIDEO))
+        val pdf = file("p1", "手册.pdf").copy(preview = NodePreview(kind = PreviewKind.PDF))
+        val pic = file("i1", "照片.jpg").copy(preview = NodePreview(kind = PreviewKind.IMAGE))
+        val progress = PlayProgress(position = 600.0, duration = 6000.0, finished = false)
+        quick.recentItems = listOf(
+            QuickItem(video, "/电影.mkv", openedAt = "2026-10-28T01:00:00Z", progress = progress),
+            QuickItem(pdf, "/手册.pdf", openedAt = "2026-10-28T00:30:00Z"),
+            QuickItem(pic, "/照片.jpg", openedAt = "2026-10-28T00:00:00Z"),
+        )
+        media.recent = listOf(RecentPlay(video, progress))
+        val vm = viewModel(recent = true)
+        advanceUntilIdle()
+        assertThat(vm.state.value.plays.map { it.node.id }).containsExactly("v1")
+        assertThat(vm.state.value.items[0].progress).isEqualTo(progress)
+
+        vm.setFilter(RecentFilter.MEDIA)
+        assertThat(vm.state.value.shown.map { it.node.id }).containsExactly("v1")
+        vm.setFilter(RecentFilter.DOC)
+        assertThat(vm.state.value.shown.map { it.node.id }).containsExactly("p1")
+        vm.setFilter(RecentFilter.ALL)
+        assertThat(vm.state.value.shown).hasSize(3)
+
+        // 不再接着看:那一排里没了,列表那一行还在、只是不写看到哪
+        vm.forgetProgress(vm.state.value.plays[0])
+        advanceUntilIdle()
+        assertThat(media.cleared).containsExactly("v1")
+        assertThat(vm.state.value.plays).isEmpty()
+        assertThat(vm.state.value.items.first { it.node.id == "v1" }.progress).isNull()
+
+        // 清空:接着看也一起空
+        media.recent = listOf(RecentPlay(video, progress))
+        vm.refresh()
+        advanceUntilIdle()
+        vm.clearAll()
+        advanceUntilIdle()
+        assertThat(vm.state.value.items).isEmpty()
+        assertThat(vm.state.value.plays).isEmpty()
     }
 
     @Test

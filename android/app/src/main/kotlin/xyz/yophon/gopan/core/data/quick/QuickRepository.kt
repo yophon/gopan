@@ -20,6 +20,8 @@ import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodesRepository
 import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.ScreenKey
+import xyz.yophon.gopan.core.data.media.PlayProgress
+import xyz.yophon.gopan.core.data.media.toDomain
 import xyz.yophon.gopan.core.data.toNode
 import xyz.yophon.gopan.core.network.gopanResult
 import xyz.yophon.gopan.core.network.requireData
@@ -35,7 +37,7 @@ import xyz.yophon.gopan.graphql.StarredNodesQuery
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** 收藏 / 最近列表的一项:节点 + 所在路径(显示「位置」)+ 最后打开的时刻(只有「最近」有) */
+/** 收藏 / 最近列表的一项:节点 + 所在路径(显示「位置」)+ 最后打开的时刻与看到哪(只有「最近」有) */
 @Immutable
 @Serializable
 data class QuickItem(
@@ -43,6 +45,7 @@ data class QuickItem(
     /** 从根开始的完整路径,如 /工作/报价.pdf;取不到为 null */
     val path: String?,
     val openedAt: String? = null,
+    val progress: PlayProgress? = null,
 )
 
 /** 文件被同名覆盖时留下的一个旧版本 */
@@ -75,7 +78,7 @@ interface QuickRepository {
     /** 打开(预览、下载)过一个文件:进「最近」 */
     suspend fun markOpened(nodeId: String)
 
-    /** 从「最近」里拿掉;ids 为 null = 全部清掉 */
+    /** 从「最近」里拿掉(连看到哪一起);ids 为 null = 全部清掉 */
     suspend fun clearRecent(ids: List<String>?)
 
     suspend fun versions(nodeId: String): FileVersionList
@@ -142,7 +145,7 @@ class ApolloQuickRepository @Inject constructor(
 
     override suspend fun recent(): List<QuickItem> =
         apollo.query(RecentFilesQuery()).execute().requireData().recentFiles.map {
-            QuickItem(node = it.nodeItem.toNode(), path = it.path, openedAt = it.openedAt)
+            QuickItem(node = it.nodeItem.toNode(), path = it.path, openedAt = it.openedAt, progress = it.playProgress?.playProgressFields?.toDomain())
         }
 
     override suspend fun markOpened(nodeId: String) {

@@ -24,7 +24,6 @@ const ChangePasswordDialog = defineAsyncComponent(() => import('@/components/Cha
 const AppPasswordsDialog = defineAsyncComponent(() => import('@/components/AppPasswordsDialog.vue'))
 const MCPAccessDialog = defineAsyncComponent(() => import('@/components/MCPAccessDialog.vue'))
 const NotificationDrawer = defineAsyncComponent(() => import('@/components/notify/NotificationDrawer.vue'))
-const RecentPlaysDialog = defineAsyncComponent(() => import('@/components/RecentPlaysDialog.vue'))
 const DesktopUploadPicker = defineAsyncComponent(() => import('@/desktop/DesktopUploadPicker.vue'))
 
 const route = useRoute()
@@ -49,19 +48,17 @@ const pwdDialogVisible = ref(false)
 const davDialogVisible = ref(false)
 const mcpDialogVisible = ref(false)
 
-// ---------- 通知与最近播放 ----------
+// ---------- 通知 ----------
 
 const notifyVisible = ref(false)
-const recentVisible = ref(false)
 
-const opened = reactive({ preview: false, pwd: false, dav: false, mcp: false, notify: false, recent: false })
+const opened = reactive({ preview: false, pwd: false, dav: false, mcp: false, notify: false })
 watchEffect(() => {
   if (previewState.visible) opened.preview = true
   if (pwdDialogVisible.value) opened.pwd = true
   if (davDialogVisible.value) opened.dav = true
   if (mcpDialogVisible.value) opened.mcp = true
   if (notifyVisible.value) opened.notify = true
-  if (recentVisible.value) opened.recent = true
 })
 
 const { data: meData } = useQuery({ queryKey: ['me'], queryFn: () => request(MeDocument) })
@@ -70,11 +67,6 @@ const unread = computed(() => meData.value?.me.unreadNotifications ?? 0)
 function openNotifications() {
   navOpen.value = false
   notifyVisible.value = true
-}
-
-function openRecent() {
-  navOpen.value = false
-  recentVisible.value = true
 }
 
 // ---------- ?panel=:通知与推送消息里的链接直达(doc/22 三.4),做完就从地址里去掉 ----------
@@ -110,7 +102,6 @@ async function onLogout() {
         @open-mcp="mcpDialogVisible = true"
         @open-pwd="pwdDialogVisible = true"
         @open-notifications="openNotifications"
-        @open-recent="openRecent"
         @logout="onLogout"
       />
     </el-aside>
@@ -154,7 +145,6 @@ async function onLogout() {
         @open-mcp="mcpDialogVisible = true"
         @open-pwd="pwdDialogVisible = true"
         @open-notifications="openNotifications"
-        @open-recent="openRecent"
         @logout="onLogout"
       />
     </el-drawer>
@@ -166,7 +156,6 @@ async function onLogout() {
     <AppPasswordsDialog v-if="opened.dav" v-model="davDialogVisible" />
     <MCPAccessDialog v-if="opened.mcp" v-model="mcpDialogVisible" />
     <NotificationDrawer v-if="opened.notify" v-model="notifyVisible" />
-    <RecentPlaysDialog v-if="opened.recent" v-model="recentVisible" />
   </el-container>
 </template>
 

@@ -13,7 +13,7 @@ import xyz.yophon.gopan.graphql.fragment.PlayProgressFields
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** 影音(doc/22 二):连播队列、最近播放、播放进度 */
+/** 影音(doc/22 二):连播队列、接着看、播放进度 */
 interface MediaRepository {
     /** 同文件夹里同类(视频或音频)的文件,自然顺序(第2集在第10集前),最多 1000 个,含 [nodeId] 本身 */
     suspend fun playlist(nodeId: String): List<Node>
@@ -24,7 +24,7 @@ interface MediaRepository {
     /** 服务端不记(5 分钟以下的音视频、3 页以下的 PDF)时返回 null */
     suspend fun saveProgress(nodeId: String, position: Double, duration: Double): PlayProgress?
 
-    /** 从「最近播放」里去掉 */
+    /** 不再接着看:清掉这个文件的进度 */
     suspend fun clearProgress(nodeId: String)
 
     companion object {

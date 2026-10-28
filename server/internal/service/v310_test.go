@@ -347,21 +347,36 @@ func TestStarsAndRecent(t *testing.T) {
 	if err := f.nodes.MarkOpened(ctx, uuid.Must(uuid.NewV7()), file.ID); err != nil {
 		t.Fatal(err)
 	}
+	// 有进度的顺带带上进度(doc/31 五)
+	for _, id := range []uuid.UUID{file.ID, other.ID} {
+		if _, err := f.q.UpsertPlayProgress(ctx, store.UpsertPlayProgressParams{OwnerID: f.owner, NodeID: id, Position: 120, Duration: 600}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	recent, err := f.nodes.Recent(ctx, f.owner, 0)
 	if err != nil || len(recent) != 2 || recent[0].Node.ID != other.ID {
 		t.Fatalf("最近打开:%+v %v", recent, err)
 	}
+	if p := recent[0].Progress; p == nil || p.Position != 120 || p.Duration != 600 || p.Finished {
+		t.Fatalf("进度:%+v", p)
+	}
 	if err := f.nodes.ClearRecent(ctx, f.owner, []uuid.UUID{other.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if recent, _ = f.nodes.Recent(ctx, f.owner, 0); len(recent) != 1 || recent[0].Node.ID != file.ID {
+	if recent, _ = f.nodes.Recent(ctx, f.owner, 0); len(recent) != 1 || recent[0].Node.ID != file.ID || recent[0].Progress == nil {
 		t.Fatalf("拿掉一个:%+v", recent)
+	}
+	if _, err := f.q.GetPlayProgress(ctx, store.GetPlayProgressParams{OwnerID: f.owner, NodeID: other.ID}); err == nil {
+		t.Fatal("拿掉的那个进度也该清掉")
 	}
 	if err := f.nodes.ClearRecent(ctx, f.owner, nil); err != nil {
 		t.Fatal(err)
 	}
 	if recent, _ = f.nodes.Recent(ctx, f.owner, 0); len(recent) != 0 {
 		t.Fatal("全部清掉")
+	}
+	if _, err := f.q.GetPlayProgress(ctx, store.GetPlayProgressParams{OwnerID: f.owner, NodeID: file.ID}); err == nil {
+		t.Fatal("全部清掉时进度也清掉")
 	}
 }
 

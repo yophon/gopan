@@ -13,6 +13,11 @@ SELECT * FROM play_progress WHERE owner_id = $1 AND node_id = $2;
 -- name: DeletePlayProgress :execrows
 DELETE FROM play_progress WHERE owner_id = $1 AND node_id = $2;
 
+-- name: ClearPlayProgressMany :execrows
+-- 清「最近」时连进度一起清;ids 为空 = 全部
+DELETE FROM play_progress
+WHERE owner_id = @owner_id AND (cardinality(@ids::uuid[]) = 0 OR node_id = ANY(@ids::uuid[]));
+
 -- name: ListRecentPlays :many
 -- 没看完的,文件还在的,最近的在前。
 SELECT sqlc.embed(p), sqlc.embed(n), b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256

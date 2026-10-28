@@ -1,6 +1,7 @@
 package xyz.yophon.gopan.core.data.media
 
 import androidx.compose.runtime.Immutable
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import xyz.yophon.gopan.core.data.Node
 
@@ -26,6 +27,7 @@ data class SubtitleTrack(
  * [finished]:看完了(剩余不到 3% 或不到 20 秒,PDF 翻到最后一页),下次从头开始。
  */
 @Immutable
+@Serializable
 data class PlayProgress(
     val position: Double,
     val duration: Double,
@@ -33,7 +35,7 @@ data class PlayProgress(
     val updatedAt: String? = null,
 )
 
-/** 「最近播放」的一条:没看完的,最近的在前 */
+/** 「接着看」的一条:没看完的,最近的在前 */
 @Immutable
 data class RecentPlay(val node: Node, val progress: PlayProgress)
 

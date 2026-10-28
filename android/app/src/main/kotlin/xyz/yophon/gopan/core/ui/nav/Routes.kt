@@ -67,10 +67,6 @@ object Routes {
     @Serializable
     data class OfflineFolder(val rootId: String, val path: String = "", val title: String = "")
 
-    /** 最近播放(doc/22 二.3):文件页菜单进来 */
-    @Serializable
-    data object RecentPlays
-
     /**
      * 压缩包浏览(doc/21 四):根导航上的全屏页,从预览页的压缩包卡片进来。
      * [parentId]:压缩包所在的文件夹(「解压到这里」的目标),null = 根目录

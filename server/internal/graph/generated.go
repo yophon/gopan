@@ -7352,8 +7352,8 @@ type Query {
 
   # 收藏(doc/24):最近收藏的在前,最多 500 个;回收站里的不列
   starredNodes: [Node!]!
-  # 最近打开的文件(doc/24):最近的在前,最多 100 个
-  recentFiles(limit: Int = 100): [Node!]!
+  # 最近打开的文件(doc/24):最近的在前,最多 500 个;每项的 playProgress 也一起给(列表里别处不给)
+  recentFiles(limit: Int = 500): [Node!]!
   # 一个文件的历史版本,最近换下来的在前
   fileVersions(nodeId: ID!): FileVersionList!
   # 在线编辑:整份读出一个文本文件。超过 2 MB TOO_LARGE,不是 UTF-8 文本 NOT_TEXT

@@ -30,6 +30,9 @@ models:
       OpenedAtRaw:
         type: "*time.Time"
         description: "由转换器置位"
+      ListProgress:
+        type: "*github.com/yophon/gopan/server/internal/store.PlayProgress"
+        description: "「最近」列表顺带查出的进度:列表路径也能给 playProgress"
     fields:
       starred:
         resolver: true

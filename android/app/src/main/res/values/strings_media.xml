@@ -16,12 +16,7 @@
     <string name="media_repeat_all">列表循环</string>
     <string name="media_repeat_one">单曲循环</string>
     <string name="media_mini_close">停止播放</string>
-    <!-- 最近播放 -->
-    <string name="media_recent_title">最近播放</string>
-    <string name="media_recent_empty">还没有播放记录</string>
-    <string name="media_recent_empty_desc">没看完的视频、音频(5 分钟以上)和 PDF(3 页以上)会记在这里,点一下接着看</string>
+    <!-- 看到哪(「最近」里与「接着看」) -->
     <string name="media_recent_position">看到 %1$s / %2$s</string>
     <string name="media_recent_page">第 %1$d / %2$d 页</string>
-    <string name="media_recent_remove">移出最近播放</string>
-    <string name="media_recent_removed">已移出最近播放</string>
 </resources>

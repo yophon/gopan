@@ -28,6 +28,25 @@ func (q *Queries) CleanupPlayProgress(ctx context.Context) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const clearPlayProgressMany = `-- name: ClearPlayProgressMany :execrows
+DELETE FROM play_progress
+WHERE owner_id = $1 AND (cardinality($2::uuid[]) = 0 OR node_id = ANY($2::uuid[]))
+`
+
+type ClearPlayProgressManyParams struct {
+	OwnerID uuid.UUID
+	Ids     []uuid.UUID
+}
+
+// 清「最近」时连进度一起清;ids 为空 = 全部
+func (q *Queries) ClearPlayProgressMany(ctx context.Context, arg ClearPlayProgressManyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, clearPlayProgressMany, arg.OwnerID, arg.Ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countFolderVideos = `-- name: CountFolderVideos :one
 SELECT count(*) FROM (
     SELECT 1 FROM nodes n JOIN blobs b ON b.id = n.blob_id

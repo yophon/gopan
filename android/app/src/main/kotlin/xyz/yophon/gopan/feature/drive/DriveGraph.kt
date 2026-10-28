@@ -7,13 +7,12 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import xyz.yophon.gopan.core.ui.nav.Routes
-import xyz.yophon.gopan.feature.media.RecentPlaysScreen
 import xyz.yophon.gopan.feature.quick.QuickScreen
 import xyz.yophon.gopan.feature.search.SearchScreen
 import xyz.yophon.gopan.feature.trash.TrashScreen
 
 /**
- * 「文件」tab 的嵌套图:根目录(Routes.Drive)、文件夹(Routes.Folder)、回收站、搜索、最近播放、收藏与最近(Routes.Quick)。
+ * 「文件」tab 的嵌套图:根目录(Routes.Drive)、文件夹(Routes.Folder)、回收站、搜索、收藏与最近(Routes.Quick)。
  * 预览是根导航上的全屏页(盖住底部导航),由 [onOpenPreview] 交给上层打开。
  * 进入文件夹是 push 一个 Folder 路由;面包屑点击优先 popBackStack 回到已在栈里的那一级,不在栈里才 navigate
  * (从搜索结果直接跳进深层文件夹时会这样)。
@@ -31,7 +30,6 @@ fun NavGraphBuilder.driveGraph(navController: NavController, onOpenPreview: (nod
                 onOpenTrash = { entry.ifResumed { navController.navigate(Routes.Trash) } },
                 onOpenTransfers = { entry.ifResumed { navController.navigate(Routes.Transfers) } },
                 onOpenPreview = { id -> entry.ifResumed { onOpenPreview(id) } },
-                onOpenRecentPlays = { entry.ifResumed { navController.navigate(Routes.RecentPlays) } },
                 onOpenQuick = { recent -> entry.ifResumed { navController.navigate(Routes.Quick(recent)) } },
                 onBack = null,
             )
@@ -52,15 +50,8 @@ fun NavGraphBuilder.driveGraph(navController: NavController, onOpenPreview: (nod
                 onOpenTrash = { entry.ifResumed { navController.navigate(Routes.Trash) } },
                 onOpenTransfers = { entry.ifResumed { navController.navigate(Routes.Transfers) } },
                 onOpenPreview = { id -> entry.ifResumed { onOpenPreview(id) } },
-                onOpenRecentPlays = { entry.ifResumed { navController.navigate(Routes.RecentPlays) } },
                 onOpenOffline = { route -> entry.ifResumed { navController.navigate(route) } },
                 onBack = { entry.ifResumed { navController.popBackStack() } },
-            )
-        }
-        composable<Routes.RecentPlays> { entry ->
-            RecentPlaysScreen(
-                onBack = { entry.ifResumed { navController.popBackStack() } },
-                onOpenPreview = { id -> entry.ifResumed { onOpenPreview(id) } },
             )
         }
         composable<Routes.Trash> { entry ->

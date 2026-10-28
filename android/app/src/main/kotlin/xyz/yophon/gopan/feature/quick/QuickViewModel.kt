@@ -14,6 +14,8 @@ import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodesRepository
 import xyz.yophon.gopan.core.data.ScreenCache
+import xyz.yophon.gopan.core.data.media.MediaRepository
+import xyz.yophon.gopan.core.data.media.RecentPlay
 import xyz.yophon.gopan.core.data.quick.QuickItem
 import xyz.yophon.gopan.core.data.quick.QuickRepository
 import xyz.yophon.gopan.core.network.gopanResult
@@ -34,10 +36,16 @@ data class QuickUiState(
     /** 相对时间(「3 小时前」)的基准,每次加载时更新 */
     val nowMillis: Long = System.currentTimeMillis(),
     val confirmClear: Boolean = false,
-)
+    /** 「最近」顶上的「接着看」:没看完的音视频与 PDF(doc/31 五) */
+    val plays: List<RecentPlay> = emptyList(),
+    val filter: RecentFilter = RecentFilter.ALL,
+) {
+    /** 按类型筛过的列表(收藏不筛) */
+    val shown: List<QuickItem> get() = if (recent && filter != RecentFilter.ALL) items.filter { filter.matches(it.node.preview.kind) } else items
+}
 
 /**
- * 「收藏」与「最近」(doc/24)共用:收藏是常去的文件和文件夹,最近是打开过的文件。
+ * 「收藏」与「最近」(doc/24)共用:收藏是常去的文件和文件夹,最近是打开过的文件(带看到哪,顶上一排「接着看」,doc/31 五)。
  * 操作(下载、分享、收藏、历史版本、详情)与文件页共用基类;回到前台时静默刷新(在别处收藏 / 打开过)。
  */
 @HiltViewModel
@@ -48,6 +56,7 @@ class QuickViewModel @Inject constructor(
     previews: PreviewSessionStore,
     private val quick: QuickRepository,
     cache: ScreenCache,
+    private val media: MediaRepository,
 ) : NodeActionsViewModel(repo, transfers, previews) {
 
     private val _state = MutableStateFlow(QuickUiState(recent = savedStateHandle[RECENT_ARG] ?: false))
@@ -103,6 +112,7 @@ class QuickViewModel @Inject constructor(
             _state.update {
                 it.copy(status = if (mode == LoadMode.INITIAL) ListStatus.Loading else it.status, isRefreshing = mode == LoadMode.REFRESH)
             }
+            if (_state.value.recent) launch { loadPlays() }
             gopanResult { if (_state.value.recent) quick.recent() else quick.starred() }
                 .onSuccess { items ->
                     _state.update { it.copy(items = items, status = ListStatus.Content, isRefreshing = false, nowMillis = System.currentTimeMillis()) }
@@ -118,22 +128,51 @@ class QuickViewModel @Inject constructor(
         }
     }
 
+    /** 「接着看」取不到就不显示那一排,不打扰列表 */
+    private suspend fun loadPlays() {
+        gopanResult { media.recentPlays(PLAYS_LIMIT) }.onSuccess { plays -> _state.update { it.copy(plays = plays) } }
+    }
+
+    fun setFilter(filter: RecentFilter) = _state.update { it.copy(filter = filter) }
+
+    /** 接着看:预览会从上次的位置继续 */
+    fun resume(play: RecentPlay) = preview(play.node)
+
+    /** 不再接着看:清掉进度,列表那一行也不再写看到哪;失败了放回来 */
+    fun forgetProgress(play: RecentPlay) {
+        val before = _state.value
+        _state.update { s ->
+            s.copy(
+                plays = s.plays.filterNot { it.node.id == play.node.id },
+                items = s.items.map { if (it.node.id == play.node.id) it.copy(progress = null) else it },
+            )
+        }
+        viewModelScope.launch {
+            gopanResult { media.clearProgress(play.node.id) }
+                .onFailure { e ->
+                    _state.update { it.copy(plays = before.plays, items = before.items) }
+                    send(NodeEffect.Message(UiText.Plain(e.message ?: "操作失败")))
+                }
+        }
+    }
+
     /** 文件夹进去;文件预览,左右翻的是列表里的文件 */
     fun onItemClick(node: Node) {
         if (node.isFolder) send(NodeEffect.OpenFolder(node.id)) else preview(node)
     }
 
-    override fun previewSiblings(): List<Node> = _state.value.items.map { it.node }.filterNot { it.isFolder }
+    override fun previewSiblings(): List<Node> = _state.value.shown.map { it.node }.filterNot { it.isFolder }
 
-    /** 从「最近」里拿掉一个:先从列表去掉,失败了再放回来 */
+    /** 从「最近」里拿掉一个(服务端连进度一起清):先从列表去掉,失败了再放回来 */
     fun forget(node: Node) {
         val before = _state.value.items
-        _state.update { s -> s.copy(items = s.items.filterNot { it.node.id == node.id }) }
+        val beforePlays = _state.value.plays
+        _state.update { s -> s.copy(items = s.items.filterNot { it.node.id == node.id }, plays = s.plays.filterNot { it.node.id == node.id }) }
         viewModelScope.launch {
             gopanResult { quick.clearRecent(listOf(node.id)) }
                 .onSuccess { send(NodeEffect.Message(UiText.Res(R.string.quick_msg_forgotten))) }
                 .onFailure { e ->
-                    _state.update { it.copy(items = before) }
+                    _state.update { it.copy(items = before, plays = beforePlays) }
                     send(NodeEffect.Message(UiText.Plain(e.message ?: "操作失败")))
                 }
         }
@@ -147,7 +186,7 @@ class QuickViewModel @Inject constructor(
         _state.update { it.copy(confirmClear = false) }
         viewModelScope.launch {
             gopanResult { quick.clearRecent(null) }
-                .onSuccess { _state.update { it.copy(items = emptyList()) } }
+                .onSuccess { _state.update { it.copy(items = emptyList(), plays = emptyList()) } }
                 .onFailure { e -> send(NodeEffect.Message(UiText.Plain(e.message ?: "操作失败"))) }
         }
     }
@@ -159,5 +198,8 @@ class QuickViewModel @Inject constructor(
     companion object {
         /** 与 Routes.Quick 的属性名一致 */
         const val RECENT_ARG = "recent"
+
+        /** 「接着看」最多几个 */
+        const val PLAYS_LIMIT = 12
     }
 }

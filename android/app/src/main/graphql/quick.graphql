@@ -12,6 +12,10 @@ query RecentFiles {
     ...NodeItem
     openedAt
     path
+    # 看到哪(doc/31 五);没有为空
+    playProgress {
+      ...PlayProgressFields
+    }
   }
 }
 
