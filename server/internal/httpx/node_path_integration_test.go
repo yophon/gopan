@@ -80,7 +80,7 @@ func TestNodePathField(t *testing.T) {
 	}
 
 	// 分享访客:看不到属主的目录结构,path 为 null(查询本身不报错)
-	sh, err := shares.Create(ctx, owner, work.ID, nil, nil)
+	sh, err := shares.Create(ctx, owner, work.ID, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}

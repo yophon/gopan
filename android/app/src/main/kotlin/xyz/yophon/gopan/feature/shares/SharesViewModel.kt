@@ -133,6 +133,19 @@ class SharesViewModel @Inject constructor(
         }
     }
 
+    /** 文件夹分享打开 / 关掉「对方上传」(doc/32 一) */
+    fun toggleUpload(share: Share) {
+        val allow = !share.allowUpload
+        viewModelScope.launch {
+            gopanResult { repo.setUpload(share.id, allow) }
+                .onSuccess {
+                    _state.update { s -> s.copy(items = s.items.map { if (it.id == share.id) it.copy(allowUpload = allow) else it }) }
+                    _effects.trySend(SharesEffect.Message(UiText.Res(if (allow) R.string.shares_msg_upload_on else R.string.shares_msg_upload_off)))
+                }
+                .onFailure { e -> _effects.trySend(SharesEffect.Message(UiText.Plain(e.message ?: "设置失败"))) }
+        }
+    }
+
     companion object {
         /** 落盘,冷启动后也有 */
         val CACHE_KEY = ScreenKey("shares", ListSerializer(Share.serializer()))

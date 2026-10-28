@@ -111,7 +111,7 @@ func TestArchiveEntryHTTP(t *testing.T) {
 	}
 
 	// 分享访客:分享里的能读,外面的不行
-	sh, err := shares.Create(ctx, owner, shared.ID, nil, nil)
+	sh, err := shares.Create(ctx, owner, shared.ID, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}

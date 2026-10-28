@@ -20,6 +20,7 @@ const (
 	ActorAgent   = "agent"
 	ActorImg     = "img"
 	ActorCollect = "collect"
+	ActorShare   = "share" // 分享访客(doc/32 一),Ref 是分享 id
 	ActorJob     = "job"
 	ActorFeed    = "feed"
 	ActorClip    = "clip"
@@ -197,6 +198,11 @@ func recordActs(ctx context.Context, q *store.Queries, owner uuid.UUID, items ..
 	if err != nil {
 		return err
 	}
+	if c, ok := filesChange(items); ok {
+		if err := notifyChange(ctx, q, owner, c); err != nil {
+			return err
+		}
+	}
 	a := ActorFrom(ctx)
 	return q.InsertActivities(ctx, store.InsertActivitiesParams{
 		OwnerID: owner, ActorKind: a.Kind, ActorRef: a.Ref, ActorLabel: truncateRunes(a.Label, 100),
@@ -209,6 +215,10 @@ func recordActs(ctx context.Context, q *store.Queries, owner uuid.UUID, items ..
 type sessionActor struct {
 	Actor
 	ChatSource string `json:"s,omitempty"`
+	// 分享访客(doc/32 一):留的名字,与开会话时的 IP / 客户端(定稿在 worker 里,拿不到请求)
+	Uploader string `json:"u,omitempty"`
+	IP       string `json:"ip,omitempty"`
+	UA       string `json:"ua,omitempty"`
 }
 
 // actorJSON / actorFromJSON 上传会话里存的来源(worker 定稿时取回)。

@@ -9,6 +9,7 @@ export type ActorKindValue =
   | 'AGENT'
   | 'IMG'
   | 'COLLECT'
+  | 'SHARE'
   | 'JOB'
   | 'FEED'
   | 'CLIP'
@@ -59,6 +60,7 @@ export const ACTOR_KINDS: ActorKindValue[] = [
   'AGENT',
   'IMG',
   'COLLECT',
+  'SHARE',
   'JOB',
   'FEED',
   'CLIP',
@@ -73,6 +75,7 @@ export const actorKindLabel: Record<ActorKindValue, string> = {
   AGENT: 'Agent',
   IMG: '图床',
   COLLECT: '收集链接',
+  SHARE: '分享访客',
   JOB: '后台任务',
   FEED: '订阅',
   CLIP: '剪藏',

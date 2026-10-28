@@ -132,15 +132,15 @@ func TestShareLanding(t *testing.T) {
 	file := mknode(`报告<v1>&"final".pdf`, "file")
 	folder := mknode("photos", "folder")
 
-	fileShare, err := shares.Create(ctx, owner, file.ID, nil, nil)
+	fileShare, err := shares.Create(ctx, owner, file.ID, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	folderShare, err := shares.Create(ctx, owner, folder.ID, nil, nil)
+	folderShare, err := shares.Create(ctx, owner, folder.ID, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	deadShare, err := shares.Create(ctx, owner, file.ID, nil, nil)
+	deadShare, err := shares.Create(ctx, owner, file.ID, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestShareLanding(t *testing.T) {
 
 	// 有密码的分享:卡片上不露名字
 	pwd := "s3cret"
-	lockedShare, err := shares.Create(ctx, owner, file.ID, &pwd, nil)
+	lockedShare, err := shares.Create(ctx, owner, file.ID, &pwd, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,7 +363,7 @@ func TestPackHandlerIntegration(t *testing.T) {
 
 	// 访客 token 指向已撤销的分享 → 410 SHARE_EXPIRED
 	ctx := context.Background()
-	sh, err := e.shares.Create(ctx, e.owner, e.root.ID, nil, nil)
+	sh, err := e.shares.Create(ctx, e.owner, e.root.ID, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}

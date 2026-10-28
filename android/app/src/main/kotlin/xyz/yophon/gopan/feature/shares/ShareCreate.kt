@@ -85,6 +85,8 @@ data class ShareCreateState(
     val expiry: ShareExpiry = ShareExpiry.DAYS_7,
     val usePassword: Boolean = false,
     val password: String = "",
+    /** 文件夹分享:对方也能往里传 */
+    val allowUpload: Boolean = false,
     val creating: Boolean = false,
     val error: String? = null,
     /** 创建好了:链接 + (有的话)密码 */
@@ -111,7 +113,9 @@ class ShareCreateViewModel @Inject constructor(
 
     fun setPassword(value: String) = _state.update { it.copy(password = value.take(MAX_PASSWORD), error = null) }
 
-    fun create(nodeId: String, now: Instant = Instant.now()) {
+    fun setAllowUpload(on: Boolean) = _state.update { it.copy(allowUpload = on) }
+
+    fun create(nodeId: String, now: Instant = Instant.now(), isFolder: Boolean = false) {
         val s = _state.value
         if (s.creating || s.created != null) return
         val password = s.password.trim()
@@ -121,7 +125,7 @@ class ShareCreateViewModel @Inject constructor(
         }
         _state.update { it.copy(creating = true, error = null) }
         viewModelScope.launch {
-            gopanResult { repo.create(nodeId, password.takeIf { s.usePassword }, s.expiry.expiresAt(now)) }
+            gopanResult { repo.create(nodeId, password.takeIf { s.usePassword }, s.expiry.expiresAt(now), allowUpload = isFolder && s.allowUpload) }
                 .onSuccess { share -> _state.update { it.copy(creating = false, created = share, url = config.shareUrl(share.token), password = password) } }
                 .onFailure { e -> _state.update { it.copy(creating = false, error = e.message ?: "创建分享失败") } }
         }
@@ -164,14 +168,14 @@ fun ShareCreateDialog(node: Node, instanceKey: String, onDismiss: () -> Unit, on
         },
         text = {
             if (created == null || url == null) {
-                ShareForm(state, viewModel)
+                ShareForm(state, viewModel, node.isFolder)
             } else {
                 ShareResult(created, url, state.password)
             }
         },
         confirmButton = {
             if (created == null || url == null) {
-                TextButton(onClick = { viewModel.create(node.id) }, enabled = !state.creating, modifier = Modifier.testTag("share_create")) {
+                TextButton(onClick = { viewModel.create(node.id, isFolder = node.isFolder) }, enabled = !state.creating, modifier = Modifier.testTag("share_create")) {
                     if (state.creating) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     else Text(stringResource(R.string.share_create))
                 }
@@ -205,7 +209,7 @@ fun ShareCreateDialog(node: Node, instanceKey: String, onDismiss: () -> Unit, on
 }
 
 @Composable
-private fun ShareForm(state: ShareCreateState, viewModel: ShareCreateViewModel) {
+private fun ShareForm(state: ShareCreateState, viewModel: ShareCreateViewModel, isFolder: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(stringResource(R.string.share_expiry), style = MaterialTheme.typography.labelLarge)
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -240,6 +244,21 @@ private fun ShareForm(state: ShareCreateState, viewModel: ShareCreateViewModel) 
                 modifier = Modifier.fillMaxWidth().testTag("share_password"),
             )
         }
+        if (isFolder) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.share_upload_toggle), style = MaterialTheme.typography.bodyLarge)
+                    if (state.allowUpload) {
+                        Text(
+                            stringResource(R.string.share_upload_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Switch(checked = state.allowUpload, onCheckedChange = viewModel::setAllowUpload, modifier = Modifier.testTag("share_upload_switch"))
+            }
+        }
         state.error?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("share_error"))
         }
@@ -263,7 +282,8 @@ private fun ShareResult(share: Share, url: String, password: String) {
         }
         Spacer(Modifier.height(2.dp))
         Text(
-            share.expiresAt?.let { stringResource(R.string.share_expires_at, formatTime(it)) } ?: stringResource(R.string.shares_forever),
+            (share.expiresAt?.let { stringResource(R.string.share_expires_at, formatTime(it)) } ?: stringResource(R.string.shares_forever)) +
+                (if (share.allowUpload) stringResource(R.string.share_upload_on_suffix) else ""),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -18,6 +18,7 @@ import xyz.yophon.gopan.core.share.AppNavRequests
 import xyz.yophon.gopan.core.share.IncomingShareStore
 import xyz.yophon.gopan.core.share.NavRequest
 import xyz.yophon.gopan.core.transfer.AppVisibility
+import xyz.yophon.gopan.core.network.ChangeStream
 import xyz.yophon.gopan.core.ui.theme.GopanTheme
 import xyz.yophon.gopan.feature.clips.ClipOpenRequests
 import javax.inject.Inject
@@ -38,6 +39,10 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var clipOpens: ClipOpenRequests
+
+    /** 自动刷新的推送连接:在前台时连着(doc/32 二) */
+    @Inject
+    lateinit var changeStream: ChangeStream
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -80,11 +85,13 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         AppVisibility.foreground = true
+        changeStream.start()
     }
 
     override fun onStop() {
         super.onStop()
         AppVisibility.foreground = false
+        changeStream.stop()
     }
 
     private fun handleIntent(intent: Intent?) {

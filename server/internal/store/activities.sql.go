@@ -250,6 +250,16 @@ func (q *Queries) NodePath(ctx context.Context, id uuid.UUID) (string, error) {
 	return path, err
 }
 
+const notifyChange = `-- name: NotifyChange :exec
+SELECT pg_notify('gopan_changes', $1::text)
+`
+
+// 自动刷新(doc/32 二):pg_notify 随事务提交才发出,回滚就不发
+func (q *Queries) NotifyChange(ctx context.Context, payload string) error {
+	_, err := q.db.Exec(ctx, notifyChange, payload)
+	return err
+}
+
 const setTransferSessionActor = `-- name: SetTransferSessionActor :exec
 UPDATE transfer_sessions SET actor = $2 WHERE id = $1
 `

@@ -250,10 +250,14 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
+// Unwrap 让 http.NewResponseController 够到底下的连接:打包、WebDAV、直链这些长响应靠它放开
+// Server 级的 60s WriteTimeout,自动刷新的推送连接靠它 Flush。少了它两样都悄悄失效。
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 // normalizePath 归一指标的 path 标签,防 /s/{token} 这类动态段打爆基数。
 func normalizePath(p string) string {
 	switch {
-	case p == "/query", p == "/healthz", p == "/pack", p == "/mcp", p == "/app":
+	case p == "/query", p == "/healthz", p == "/pack", p == "/mcp", p == "/app", p == "/api/events":
 		return p
 	case strings.HasPrefix(p, "/oauth/"):
 		return "/oauth/:endpoint"

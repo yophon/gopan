@@ -72,6 +72,7 @@ object ActivityLogic {
         ActorKind.AGENT -> "Agent"
         ActorKind.IMG -> "图床密钥"
         ActorKind.COLLECT -> "收集链接"
+        ActorKind.SHARE -> "分享访客"
         ActorKind.JOB -> "后台任务"
         ActorKind.FEED -> "订阅"
         ActorKind.CLIP -> "剪藏"
@@ -79,7 +80,7 @@ object ActivityLogic {
     }
 
     /** 名字本身就说明了来源的:设备名(「Edge · Windows」「安卓 App · Pixel 8」)、任务名(离线下载 / 解压)、系统清理 */
-    private val selfDescribing = setOf(ActorKind.WEB, ActorKind.ANDROID, ActorKind.JOB, ActorKind.CLIP, ActorKind.SYSTEM)
+    private val selfDescribing = setOf(ActorKind.WEB, ActorKind.ANDROID, ActorKind.SHARE, ActorKind.JOB, ActorKind.CLIP, ActorKind.SYSTEM)
 
     /** 来源的显示名:「rclone(WebDAV)」「作业收集 · 张三(收集链接)」「Edge · Windows」;没有名字时只显示种类 */
     fun actorText(actor: ActivityActor): String {

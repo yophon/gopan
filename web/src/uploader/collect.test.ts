@@ -116,7 +116,7 @@ describe('createCollectUploader', () => {
     up.add([makeFile()])
     await flush()
 
-    expect(t.init).toHaveBeenCalledWith('f.bin', 8)
+    expect(t.init).toHaveBeenCalledWith('f.bin', 8, null)
     expect(FakeXHR.instances.map((x) => x.url).sort()).toEqual(['u1', 'u2'])
     const task = up.tasks[0]!
     expect(task.status).toBe('done')
@@ -161,6 +161,17 @@ describe('createCollectUploader', () => {
     expect(FakeXHR.instances.map((x) => x.url)).toEqual(['u2'])
     expect(t.complete).toHaveBeenCalledWith('old')
     expect(up.tasks[0]!.status).toBe('done')
+  })
+
+  it('分享访客:目标文件夹交给 init;断点记录按文件夹区分', async () => {
+    storage.set('k', JSON.stringify([{ sessionId: 'old', fileName: 'f.bin', size: 8, lastModified: 111, target: 'A' }]))
+    const t = transport()
+    const up = createCollectUploader(t, 'k')
+    up.add([makeFile()], 'B') // 同一个文件传到另一个文件夹:不沿用 A 的会话
+    await flush()
+    expect(t.session).not.toHaveBeenCalled()
+    expect(t.init).toHaveBeenCalledWith('f.bin', 8, 'B')
+    expect(up.tasks[0]!.target).toBe('B')
   })
 
   it('断点会话已过期:丢掉记录重新开会话', async () => {

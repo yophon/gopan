@@ -11,7 +11,8 @@ import type { CreateShareMutation } from '@/api/gen/graphql'
 import { qrPath } from '@/utils/qr'
 
 const visible = defineModel<boolean>({ required: true })
-const props = defineProps<{ node: { id: string; name: string } | null }>()
+const props = defineProps<{ node: { id: string; name: string; kind?: string } | null }>()
+const isFolder = computed(() => props.node?.kind === 'FOLDER')
 
 const queryClient = useQueryClient()
 
@@ -19,6 +20,8 @@ const queryClient = useQueryClient()
 
 const usePassword = ref(false)
 const password = ref('')
+/** 文件夹分享:对方也能往里传(doc/32 一) */
+const allowUpload = ref(false)
 /** 有效期(天),0 = 永久 */
 const expireDays = ref(7)
 const expireOptions = [
@@ -36,6 +39,7 @@ watch(visible, (v) => {
     created.value = null
     usePassword.value = false
     password.value = ''
+    allowUpload.value = false
     expireDays.value = 7
   }
 })
@@ -58,6 +62,7 @@ const createMutation = useMutation({
       nodeId: props.node!.id,
       password: usePassword.value && password.value ? password.value : null,
       expiresAt,
+      allowUpload: isFolder.value && allowUpload.value,
     })
   },
   onSuccess: (data) => {
@@ -116,6 +121,10 @@ function onCopyAll() {
       <el-form-item label="密码保护">
         <el-switch v-model="usePassword" />
       </el-form-item>
+      <el-form-item v-if="isFolder" label="对方上传">
+        <el-switch v-model="allowUpload" />
+        <span v-if="allowUpload" class="share-hint">能往里传文件、建文件夹,不能删除和改名</span>
+      </el-form-item>
       <el-form-item v-if="usePassword" label="密码">
         <el-input
           v-model="password"
@@ -147,7 +156,7 @@ function onCopyAll() {
           密码:<code>{{ password }}</code>
         </p>
         <p class="share-expire">
-          {{ created.expiresAt ? `有效期至 ${new Date(created.expiresAt).toLocaleString()}` : '永久有效' }}
+          {{ created.expiresAt ? `有效期至 ${new Date(created.expiresAt).toLocaleString()}` : '永久有效' }}{{ created.allowUpload ? ' · 对方能上传' : '' }}
         </p>
       </div>
     </div>
@@ -208,6 +217,11 @@ function onCopyAll() {
   border-radius: 4px;
   background: var(--el-fill-color-light);
   font-weight: 600;
+}
+.share-hint {
+  margin-left: 10px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 .share-expire {
   margin: 0;

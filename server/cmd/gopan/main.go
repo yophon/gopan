@@ -175,6 +175,7 @@ func run() error {
 	previews.SetRemuxer(remuxer)
 	shares := service.NewShares(q, auth)
 	collects := service.NewCollects(pool, auth, uploads)
+	shareUploads := service.NewShareUploads(pool, shares, uploads)
 	content := service.NewContentSearch(pool, cfg.ContentIndex)
 	admin := service.NewAdmin(q, cfg.DefaultQuota)
 	admin.SetContentIndex(cfg.ContentIndex)
@@ -234,11 +235,13 @@ func run() error {
 	}
 	go jobs.Run(ctx, cfg.JobWorkers)
 	go notifier.Run(ctx)
+	changes := service.NewChangeHub(pool) // 自动刷新(doc/32 二)
+	go changes.Run(ctx)
 	linksDone := make(chan struct{})
 	go func() { links.Run(ctx); close(linksDone) }()
 
 	es := graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
-		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass, MCPTokens: mcpTokens, OAuth: oauth, Chats: chats, Collects: collects, Content: content, Jobs: jobs, Archives: archives,
+		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass, MCPTokens: mcpTokens, OAuth: oauth, Chats: chats, Collects: collects, ShareUploads: shareUploads, Content: content, Jobs: jobs, Archives: archives,
 		Media: media, Notify: notifier, Links: links,
 		Activities: activities, Space: space, Feeds: feeds, Clips: clips,
 		Versions: versions,
@@ -262,6 +265,7 @@ func run() error {
 		})
 	}
 	mux.Handle("POST /query", httpx.WithAuth(httpx.NewGraphQLHandler(es, cfg.DevMode), auth, cfg.TrustedProxies))
+	mux.Handle("GET /api/events", httpx.EventsHandler(auth, changes))
 	oauthHTTP := oauthserver.New(oauth)
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", oauthHTTP.AuthorizationMetadata)
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource", oauthHTTP.ProtectedResourceMetadata)
@@ -337,6 +341,7 @@ func run() error {
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
+	srv.RegisterOnShutdown(changes.Close) // 推送连接是长连接,不关掉 Shutdown 要等满超时
 
 	errCh := make(chan error, 1)
 	go func() {

@@ -486,6 +486,7 @@ type Share struct {
 	ExpiresAt    pgtype.Timestamptz
 	RevokedAt    pgtype.Timestamptz
 	CreatedAt    pgtype.Timestamptz
+	AllowUpload  bool
 }
 
 type ShareVisit struct {
@@ -495,6 +496,7 @@ type ShareVisit struct {
 	Ip        *string
 	UserAgent *string
 	CreatedAt pgtype.Timestamptz
+	Detail    *string
 }
 
 type Task struct {
@@ -550,6 +552,7 @@ type UploadSession struct {
 	VisitorID       *uuid.UUID
 	Actor           []byte
 	ReplaceExisting bool
+	ShareID         *uuid.UUID
 }
 
 type User struct {

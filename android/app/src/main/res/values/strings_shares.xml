@@ -8,6 +8,12 @@
     <string name="shares_expired">已过期 %1$s</string>
     <string name="shares_no_visits">暂无访问</string>
     <string name="shares_visits">访问 %1$d · 下载 %2$d</string>
+    <string name="shares_visits_upload">访问 %1$d · 下载 %2$d · 上传 %3$d</string>
+    <string name="shares_allow_upload">对方能上传</string>
+    <string name="shares_action_upload_on">允许对方上传</string>
+    <string name="shares_action_upload_off">关闭对方上传</string>
+    <string name="shares_msg_upload_on">对方现在能往里传文件了</string>
+    <string name="shares_msg_upload_off">已关闭对方上传</string>
     <string name="shares_has_password">有密码保护</string>
     <string name="shares_action_copy">复制链接</string>
     <string name="shares_action_send">发送链接</string>
@@ -27,6 +33,7 @@
     <string name="visits_kind_verify">打开分享</string>
     <string name="visits_kind_download">下载文件</string>
     <string name="visits_kind_pack">打包下载</string>
+    <string name="visits_kind_upload">上传文件</string>
     <string name="share_create_title">分享「%1$s」</string>
     <string name="share_created_title">分享链接已创建</string>
     <string name="share_expiry">有效期</string>
@@ -36,6 +43,9 @@
     <string name="share_expiry_forever">永久</string>
     <string name="share_password_toggle">密码保护</string>
     <string name="share_password_hint">访客需输入此密码</string>
+    <string name="share_upload_toggle">对方上传</string>
+    <string name="share_upload_hint">能往里传文件、建文件夹,不能删除和改名</string>
+    <string name="share_upload_on_suffix"> · 对方能上传</string>
     <string name="share_create">创建分享</string>
     <string name="share_password_line">密码:%1$s</string>
     <string name="share_expires_at">有效期至 %1$s</string>

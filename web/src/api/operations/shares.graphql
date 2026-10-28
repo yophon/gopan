@@ -1,8 +1,9 @@
-mutation CreateShare($nodeId: ID!, $password: String, $expiresAt: Time) {
-  createShare(nodeId: $nodeId, password: $password, expiresAt: $expiresAt) {
+mutation CreateShare($nodeId: ID!, $password: String, $expiresAt: Time, $allowUpload: Boolean) {
+  createShare(nodeId: $nodeId, password: $password, expiresAt: $expiresAt, allowUpload: $allowUpload) {
     id
     token
     hasPassword
+    allowUpload
     expiresAt
     createdAt
     node {
@@ -17,16 +18,22 @@ mutation RevokeShare($id: ID!) {
   revokeShare(id: $id)
 }
 
+mutation SetShareUpload($id: ID!, $allow: Boolean!) {
+  setShareUpload(id: $id, allow: $allow)
+}
+
 query MyShares {
   myShares {
     id
     token
     hasPassword
+    allowUpload
     expiresAt
     createdAt
     visitStats {
       verifyCount
       downloadCount
+      uploadCount
       lastVisitAt
       lastVisitKind
     }
@@ -44,6 +51,7 @@ query ShareVisits($shareId: ID!, $limit: Int) {
     kind
     ip
     userAgent
+    detail
     createdAt
   }
 }
@@ -56,6 +64,7 @@ query ShareInfo($token: String!) {
     kind
     needPassword
     expired
+    allowUpload
     expiresAt
     size
     fileCount
@@ -77,5 +86,38 @@ query ShareRoot {
     kind
     size
     updatedAt
+  }
+}
+
+# ---- 分享访客上传(doc/32 一,guest token 调用)----
+
+mutation ShareInitUpload($parentId: ID!, $name: String!, $size: Int64!, $uploaderName: String) {
+  shareInitUpload(parentId: $parentId, name: $name, size: $size, uploaderName: $uploaderName) {
+    ...CollectSessionFields
+  }
+}
+
+query ShareUploadSession($id: ID!) {
+  shareUploadSession(id: $id) {
+    ...CollectSessionFields
+  }
+}
+
+mutation ShareCompleteUpload($sessionId: ID!, $etags: [PartEtag!]!) {
+  shareCompleteUpload(sessionId: $sessionId, etags: $etags) {
+    id
+    name
+    size
+  }
+}
+
+mutation ShareAbortUpload($sessionId: ID!) {
+  shareAbortUpload(sessionId: $sessionId)
+}
+
+mutation ShareEnsureFolder($parentId: ID!, $name: String!, $uploaderName: String) {
+  shareEnsureFolder(parentId: $parentId, name: $name, uploaderName: $uploaderName) {
+    id
+    name
   }
 }

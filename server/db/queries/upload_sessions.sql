@@ -11,9 +11,9 @@ UPDATE upload_sessions SET status = $3, fail_reason = $4
 WHERE id = $1 AND owner_id = $2;
 
 -- name: CountActiveSessions :one
--- 收集链接上访客开的会话不占属主自己的名额(另有每链接 / 每访客的上限)
+-- 收集链接、分享上访客开的会话不占属主自己的名额(另有每链接 / 每分享的上限)
 SELECT count(*) FROM upload_sessions
-WHERE owner_id = $1 AND request_id IS NULL AND status IN ('uploading','completing','verifying');
+WHERE owner_id = $1 AND request_id IS NULL AND share_id IS NULL AND status IN ('uploading','completing','verifying');
 
 -- name: ListExpiredSessions :many
 SELECT * FROM upload_sessions

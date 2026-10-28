@@ -29,6 +29,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
+import { realtimeConnected } from '@/api/realtime'
 import {
   ChatFolderInfoDocument,
   ChatMessagesDocument,
@@ -116,13 +117,17 @@ watch(folderData, (f) => {
 const PAGE_LATEST = 200
 const PAGE_OLDER = 100
 const POLL_MS = 2000
+/** 推送连着时新消息由它通知,轮询只是兜底(doc/32 二) */
+const POLL_PUSHED_MS = 30_000
 
 const messages = ref<ChatMsg[]>([])
 const pending = ref<PendingMsg[]>([])
 
 // 页面不可见时停掉轮询(vue-query 收到 false 即暂停),回到前台立刻拉一次
 const visibility = useDocumentVisibility()
-const pollInterval = computed(() => (visibility.value === 'visible' ? POLL_MS : false))
+const pollInterval = computed(() =>
+  visibility.value === 'visible' ? (realtimeConnected.value ? POLL_PUSHED_MS : POLL_MS) : false,
+)
 
 const latestQuery = useQuery({
   queryKey: ['chatMessages'],

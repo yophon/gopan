@@ -92,6 +92,7 @@ export type ActorKind =
   | 'FEED'
   | 'IMG'
   | 'JOB'
+  | 'SHARE'
   | 'SYSTEM'
   | 'WEB'
   | 'WEBDAV';
@@ -800,7 +801,12 @@ export type Mutation = {
   setClipPrefs: ClipPrefs;
   setLinkPrefs: LinkPrefs;
   setMCPAccessRoot: Scalars['Boolean']['output'];
+  setShareUpload: Scalars['Boolean']['output'];
   setStarred: Array<Node>;
+  shareAbortUpload: Scalars['Boolean']['output'];
+  shareCompleteUpload: Node;
+  shareEnsureFolder: Node;
+  shareInitUpload: UploadSession;
   testNotifyChannel: Scalars['Boolean']['output'];
   undoActivities: UndoResult;
   updateFeed: Feed;
@@ -948,6 +954,7 @@ export type MutationCreateNotifyChannelArgs = {
 
 
 export type MutationCreateShareArgs = {
+  allowUpload?: InputMaybe<Scalars['Boolean']['input']>;
   expiresAt?: InputMaybe<Scalars['Time']['input']>;
   nodeId: Scalars['ID']['input'];
   password?: InputMaybe<Scalars['String']['input']>;
@@ -1201,9 +1208,41 @@ export type MutationSetMcpAccessRootArgs = {
 };
 
 
+export type MutationSetShareUploadArgs = {
+  allow: Scalars['Boolean']['input'];
+  id: Scalars['ID']['input'];
+};
+
+
 export type MutationSetStarredArgs = {
   ids: Array<Scalars['ID']['input']>;
   starred: Scalars['Boolean']['input'];
+};
+
+
+export type MutationShareAbortUploadArgs = {
+  sessionId: Scalars['ID']['input'];
+};
+
+
+export type MutationShareCompleteUploadArgs = {
+  etags: Array<PartEtag>;
+  sessionId: Scalars['ID']['input'];
+};
+
+
+export type MutationShareEnsureFolderArgs = {
+  name: Scalars['String']['input'];
+  parentId: Scalars['ID']['input'];
+  uploaderName?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type MutationShareInitUploadArgs = {
+  name: Scalars['String']['input'];
+  parentId: Scalars['ID']['input'];
+  size: Scalars['Int64']['input'];
+  uploaderName?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -1518,6 +1557,7 @@ export type Query = {
   sessions: Array<Session>;
   shareInfo: ShareInfo;
   shareRoot: Node;
+  shareUploadSession: UploadSession;
   shareVisits: Array<ShareVisit>;
   spaceDuplicates: DuplicatePage;
   spaceEmptyFolders: Array<SpaceFile>;
@@ -1725,6 +1765,11 @@ export type QueryShareInfoArgs = {
 };
 
 
+export type QueryShareUploadSessionArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
 export type QueryShareVisitsArgs = {
   limit?: InputMaybe<Scalars['Int']['input']>;
   shareId: Scalars['ID']['input'];
@@ -1848,6 +1893,7 @@ export type Session = {
 
 export type Share = {
   __typename?: 'Share';
+  allowUpload: Scalars['Boolean']['output'];
   createdAt: Scalars['Time']['output'];
   expiresAt?: Maybe<Scalars['Time']['output']>;
   hasPassword: Scalars['Boolean']['output'];
@@ -1864,6 +1910,7 @@ export type ShareAuth = {
 
 export type ShareInfo = {
   __typename?: 'ShareInfo';
+  allowUpload: Scalars['Boolean']['output'];
   expired: Scalars['Boolean']['output'];
   expiresAt?: Maybe<Scalars['Time']['output']>;
   fileCount?: Maybe<Scalars['Int64']['output']>;
@@ -1877,6 +1924,7 @@ export type ShareInfo = {
 export type ShareVisit = {
   __typename?: 'ShareVisit';
   createdAt: Scalars['Time']['output'];
+  detail?: Maybe<Scalars['String']['output']>;
   ip?: Maybe<Scalars['String']['output']>;
   kind: Scalars['String']['output'];
   userAgent?: Maybe<Scalars['String']['output']>;
@@ -1887,6 +1935,7 @@ export type ShareVisitStats = {
   downloadCount: Scalars['Int64']['output'];
   lastVisitAt?: Maybe<Scalars['Time']['output']>;
   lastVisitKind?: Maybe<Scalars['String']['output']>;
+  uploadCount: Scalars['Int64']['output'];
   verifyCount: Scalars['Int64']['output'];
 };
 
@@ -2995,10 +3044,11 @@ export type CreateShareMutationVariables = Exact<{
   nodeId: Scalars['ID']['input'];
   password?: InputMaybe<Scalars['String']['input']>;
   expiresAt?: InputMaybe<Scalars['Time']['input']>;
+  allowUpload?: InputMaybe<Scalars['Boolean']['input']>;
 }>;
 
 
-export type CreateShareMutation = { __typename?: 'Mutation', createShare: { __typename?: 'Share', id: string, token: string, hasPassword: boolean, expiresAt?: string | null, createdAt: string, node: { __typename?: 'Node', id: string, name: string, kind: NodeKind } } };
+export type CreateShareMutation = { __typename?: 'Mutation', createShare: { __typename?: 'Share', id: string, token: string, hasPassword: boolean, allowUpload: boolean, expiresAt?: string | null, createdAt: string, node: { __typename?: 'Node', id: string, name: string, kind: NodeKind } } };
 
 export type RevokeShareMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3007,10 +3057,18 @@ export type RevokeShareMutationVariables = Exact<{
 
 export type RevokeShareMutation = { __typename?: 'Mutation', revokeShare: boolean };
 
+export type SetShareUploadMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+  allow: Scalars['Boolean']['input'];
+}>;
+
+
+export type SetShareUploadMutation = { __typename?: 'Mutation', setShareUpload: boolean };
+
 export type MySharesQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type MySharesQuery = { __typename?: 'Query', myShares: Array<{ __typename?: 'Share', id: string, token: string, hasPassword: boolean, expiresAt?: string | null, createdAt: string, visitStats: { __typename?: 'ShareVisitStats', verifyCount: number, downloadCount: number, lastVisitAt?: string | null, lastVisitKind?: string | null }, node: { __typename?: 'Node', id: string, name: string, kind: NodeKind } }> };
+export type MySharesQuery = { __typename?: 'Query', myShares: Array<{ __typename?: 'Share', id: string, token: string, hasPassword: boolean, allowUpload: boolean, expiresAt?: string | null, createdAt: string, visitStats: { __typename?: 'ShareVisitStats', verifyCount: number, downloadCount: number, uploadCount: number, lastVisitAt?: string | null, lastVisitKind?: string | null }, node: { __typename?: 'Node', id: string, name: string, kind: NodeKind } }> };
 
 export type ShareVisitsQueryVariables = Exact<{
   shareId: Scalars['ID']['input'];
@@ -3018,14 +3076,14 @@ export type ShareVisitsQueryVariables = Exact<{
 }>;
 
 
-export type ShareVisitsQuery = { __typename?: 'Query', shareVisits: Array<{ __typename?: 'ShareVisit', kind: string, ip?: string | null, userAgent?: string | null, createdAt: string }> };
+export type ShareVisitsQuery = { __typename?: 'Query', shareVisits: Array<{ __typename?: 'ShareVisit', kind: string, ip?: string | null, userAgent?: string | null, detail?: string | null, createdAt: string }> };
 
 export type ShareInfoQueryVariables = Exact<{
   token: Scalars['String']['input'];
 }>;
 
 
-export type ShareInfoQuery = { __typename?: 'Query', shareInfo: { __typename?: 'ShareInfo', token: string, name: string, kind: NodeKind, needPassword: boolean, expired: boolean, expiresAt?: string | null, size?: number | null, fileCount?: number | null } };
+export type ShareInfoQuery = { __typename?: 'Query', shareInfo: { __typename?: 'ShareInfo', token: string, name: string, kind: NodeKind, needPassword: boolean, expired: boolean, allowUpload: boolean, expiresAt?: string | null, size?: number | null, fileCount?: number | null } };
 
 export type VerifySharePasswordMutationVariables = Exact<{
   token: Scalars['String']['input'];
@@ -3039,6 +3097,47 @@ export type ShareRootQueryVariables = Exact<{ [key: string]: never; }>;
 
 
 export type ShareRootQuery = { __typename?: 'Query', shareRoot: { __typename?: 'Node', id: string, name: string, kind: NodeKind, size?: number | null, updatedAt: string } };
+
+export type ShareInitUploadMutationVariables = Exact<{
+  parentId: Scalars['ID']['input'];
+  name: Scalars['String']['input'];
+  size: Scalars['Int64']['input'];
+  uploaderName?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type ShareInitUploadMutation = { __typename?: 'Mutation', shareInitUpload: { __typename?: 'UploadSession', id: string, partSize: number, uploadedParts: Array<number>, expiresAt: string, status: string, partUrls: Array<{ __typename?: 'PartUrl', partNumber: number, url: string }> } };
+
+export type ShareUploadSessionQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type ShareUploadSessionQuery = { __typename?: 'Query', shareUploadSession: { __typename?: 'UploadSession', id: string, partSize: number, uploadedParts: Array<number>, expiresAt: string, status: string, partUrls: Array<{ __typename?: 'PartUrl', partNumber: number, url: string }> } };
+
+export type ShareCompleteUploadMutationVariables = Exact<{
+  sessionId: Scalars['ID']['input'];
+  etags: Array<PartEtag> | PartEtag;
+}>;
+
+
+export type ShareCompleteUploadMutation = { __typename?: 'Mutation', shareCompleteUpload: { __typename?: 'Node', id: string, name: string, size?: number | null } };
+
+export type ShareAbortUploadMutationVariables = Exact<{
+  sessionId: Scalars['ID']['input'];
+}>;
+
+
+export type ShareAbortUploadMutation = { __typename?: 'Mutation', shareAbortUpload: boolean };
+
+export type ShareEnsureFolderMutationVariables = Exact<{
+  parentId: Scalars['ID']['input'];
+  name: Scalars['String']['input'];
+  uploaderName?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type ShareEnsureFolderMutation = { __typename?: 'Mutation', shareEnsureFolder: { __typename?: 'Node', id: string, name: string } };
 
 export type SpaceFileFieldsFragment = { __typename?: 'SpaceFile', path: string, category?: FileCategory | null, node: { __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, mime?: string | null, updatedAt: string, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null } } };
 
@@ -5808,11 +5907,17 @@ export const RevokeSessionDocument = new TypedDocumentString(`
 }
     `) as unknown as TypedDocumentString<RevokeSessionMutation, RevokeSessionMutationVariables>;
 export const CreateShareDocument = new TypedDocumentString(`
-    mutation CreateShare($nodeId: ID!, $password: String, $expiresAt: Time) {
-  createShare(nodeId: $nodeId, password: $password, expiresAt: $expiresAt) {
+    mutation CreateShare($nodeId: ID!, $password: String, $expiresAt: Time, $allowUpload: Boolean) {
+  createShare(
+    nodeId: $nodeId
+    password: $password
+    expiresAt: $expiresAt
+    allowUpload: $allowUpload
+  ) {
     id
     token
     hasPassword
+    allowUpload
     expiresAt
     createdAt
     node {
@@ -5828,17 +5933,24 @@ export const RevokeShareDocument = new TypedDocumentString(`
   revokeShare(id: $id)
 }
     `) as unknown as TypedDocumentString<RevokeShareMutation, RevokeShareMutationVariables>;
+export const SetShareUploadDocument = new TypedDocumentString(`
+    mutation SetShareUpload($id: ID!, $allow: Boolean!) {
+  setShareUpload(id: $id, allow: $allow)
+}
+    `) as unknown as TypedDocumentString<SetShareUploadMutation, SetShareUploadMutationVariables>;
 export const MySharesDocument = new TypedDocumentString(`
     query MyShares {
   myShares {
     id
     token
     hasPassword
+    allowUpload
     expiresAt
     createdAt
     visitStats {
       verifyCount
       downloadCount
+      uploadCount
       lastVisitAt
       lastVisitKind
     }
@@ -5856,6 +5968,7 @@ export const ShareVisitsDocument = new TypedDocumentString(`
     kind
     ip
     userAgent
+    detail
     createdAt
   }
 }
@@ -5868,6 +5981,7 @@ export const ShareInfoDocument = new TypedDocumentString(`
     kind
     needPassword
     expired
+    allowUpload
     expiresAt
     size
     fileCount
@@ -5892,6 +6006,67 @@ export const ShareRootDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<ShareRootQuery, ShareRootQueryVariables>;
+export const ShareInitUploadDocument = new TypedDocumentString(`
+    mutation ShareInitUpload($parentId: ID!, $name: String!, $size: Int64!, $uploaderName: String) {
+  shareInitUpload(
+    parentId: $parentId
+    name: $name
+    size: $size
+    uploaderName: $uploaderName
+  ) {
+    ...CollectSessionFields
+  }
+}
+    fragment CollectSessionFields on UploadSession {
+  id
+  partSize
+  partUrls {
+    partNumber
+    url
+  }
+  uploadedParts
+  expiresAt
+  status
+}`) as unknown as TypedDocumentString<ShareInitUploadMutation, ShareInitUploadMutationVariables>;
+export const ShareUploadSessionDocument = new TypedDocumentString(`
+    query ShareUploadSession($id: ID!) {
+  shareUploadSession(id: $id) {
+    ...CollectSessionFields
+  }
+}
+    fragment CollectSessionFields on UploadSession {
+  id
+  partSize
+  partUrls {
+    partNumber
+    url
+  }
+  uploadedParts
+  expiresAt
+  status
+}`) as unknown as TypedDocumentString<ShareUploadSessionQuery, ShareUploadSessionQueryVariables>;
+export const ShareCompleteUploadDocument = new TypedDocumentString(`
+    mutation ShareCompleteUpload($sessionId: ID!, $etags: [PartEtag!]!) {
+  shareCompleteUpload(sessionId: $sessionId, etags: $etags) {
+    id
+    name
+    size
+  }
+}
+    `) as unknown as TypedDocumentString<ShareCompleteUploadMutation, ShareCompleteUploadMutationVariables>;
+export const ShareAbortUploadDocument = new TypedDocumentString(`
+    mutation ShareAbortUpload($sessionId: ID!) {
+  shareAbortUpload(sessionId: $sessionId)
+}
+    `) as unknown as TypedDocumentString<ShareAbortUploadMutation, ShareAbortUploadMutationVariables>;
+export const ShareEnsureFolderDocument = new TypedDocumentString(`
+    mutation ShareEnsureFolder($parentId: ID!, $name: String!, $uploaderName: String) {
+  shareEnsureFolder(parentId: $parentId, name: $name, uploaderName: $uploaderName) {
+    id
+    name
+  }
+}
+    `) as unknown as TypedDocumentString<ShareEnsureFolderMutation, ShareEnsureFolderMutationVariables>;
 export const SpaceOverviewDocument = new TypedDocumentString(`
     query SpaceOverview {
   spaceOverview {

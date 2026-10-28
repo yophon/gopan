@@ -490,7 +490,7 @@ func (r *mutationResolver) RequestRemux(ctx context.Context, nodeID string) (*Re
 }
 
 // CreateShare is the resolver for the createShare field.
-func (r *mutationResolver) CreateShare(ctx context.Context, nodeID string, password *string, expiresAt *time.Time) (*Share, error) {
+func (r *mutationResolver) CreateShare(ctx context.Context, nodeID string, password *string, expiresAt *time.Time, allowUpload *bool) (*Share, error) {
 	ident, err := httpx.UserFrom(ctx)
 	if err != nil {
 		return nil, err
@@ -499,7 +499,7 @@ func (r *mutationResolver) CreateShare(ctx context.Context, nodeID string, passw
 	if err != nil {
 		return nil, err
 	}
-	sh, err := r.Shares.Create(ctx, ident.UserID, nid, password, expiresAt)
+	sh, err := r.Shares.Create(ctx, ident.UserID, nid, password, expiresAt, allowUpload != nil && *allowUpload)
 	if err != nil {
 		return nil, err
 	}
@@ -509,7 +509,7 @@ func (r *mutationResolver) CreateShare(ctx context.Context, nodeID string, passw
 	}
 	out := &Share{
 		ID: sh.ID.String(), Token: sh.Token, Node: node,
-		HasPassword: sh.PasswordHash != nil, CreatedAt: sh.CreatedAt.Time,
+		HasPassword: sh.PasswordHash != nil, AllowUpload: sh.AllowUpload, CreatedAt: sh.CreatedAt.Time,
 		VisitStats: &ShareVisitStats{}, // 刚建的分享还没有访问
 	}
 	if sh.ExpiresAt.Valid {
@@ -530,6 +530,22 @@ func (r *mutationResolver) RevokeShare(ctx context.Context, id string) (bool, er
 		return false, err
 	}
 	if err := r.Shares.Revoke(ctx, ident.UserID, sid); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// SetShareUpload is the resolver for the setShareUpload field.
+func (r *mutationResolver) SetShareUpload(ctx context.Context, id string, allow bool) (bool, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	sid, err := parseID(id)
+	if err != nil {
+		return false, err
+	}
+	if err := r.Shares.SetUpload(ctx, ident.UserID, sid, allow); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -681,6 +697,77 @@ func (r *mutationResolver) CollectAbortUpload(ctx context.Context, sessionID str
 		return false, err
 	}
 	return true, nil
+}
+
+// ShareInitUpload is the resolver for the shareInitUpload field.
+func (r *mutationResolver) ShareInitUpload(ctx context.Context, parentID string, name string, size int64, uploaderName *string) (*UploadSession, error) {
+	ident, err := httpx.IdentityFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pid, err := parseID(parentID)
+	if err != nil {
+		return nil, err
+	}
+	v, err := r.ShareUploads.InitUpload(ctx, ident, pid, name, size, deref(uploaderName, ""))
+	if err != nil {
+		return nil, err
+	}
+	return gqlSession(v), nil
+}
+
+// ShareCompleteUpload is the resolver for the shareCompleteUpload field.
+func (r *mutationResolver) ShareCompleteUpload(ctx context.Context, sessionID string, etags []*PartEtag) (*Node, error) {
+	ident, err := httpx.IdentityFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sid, err := parseID(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	tags := make(map[int]string, len(etags))
+	for _, e := range etags {
+		tags[e.PartNumber] = e.Etag
+	}
+	n, err := r.ShareUploads.CompleteUpload(ctx, ident, sid, tags)
+	if err != nil {
+		return nil, err
+	}
+	return r.getNodeFull(ctx, ident.UserID, n.ID)
+}
+
+// ShareAbortUpload is the resolver for the shareAbortUpload field.
+func (r *mutationResolver) ShareAbortUpload(ctx context.Context, sessionID string) (bool, error) {
+	ident, err := httpx.IdentityFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	sid, err := parseID(sessionID)
+	if err != nil {
+		return false, err
+	}
+	if err := r.ShareUploads.AbortUpload(ctx, ident, sid); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// ShareEnsureFolder is the resolver for the shareEnsureFolder field.
+func (r *mutationResolver) ShareEnsureFolder(ctx context.Context, parentID string, name string, uploaderName *string) (*Node, error) {
+	ident, err := httpx.IdentityFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pid, err := parseID(parentID)
+	if err != nil {
+		return nil, err
+	}
+	n, err := r.ShareUploads.EnsureFolder(ctx, ident, pid, name, deref(uploaderName, ""))
+	if err != nil {
+		return nil, err
+	}
+	return gqlNode(n), nil
 }
 
 // CreateAppPassword is the resolver for the createAppPassword field.
@@ -1639,7 +1726,7 @@ func (r *queryResolver) ShareVisits(ctx context.Context, shareID string, limit *
 	}
 	out := make([]*ShareVisit, 0, len(rows))
 	for _, v := range rows {
-		item := &ShareVisit{Kind: v.Kind, IP: v.Ip, UserAgent: v.UserAgent}
+		item := &ShareVisit{Kind: v.Kind, IP: v.Ip, UserAgent: v.UserAgent, Detail: v.Detail}
 		item.CreatedAt = v.CreatedAt.Time
 		out = append(out, item)
 	}
@@ -1672,7 +1759,7 @@ func (r *queryResolver) ShareInfo(ctx context.Context, token string) (*ShareInfo
 	out := &ShareInfo{
 		Token: info.Token, Name: info.Name,
 		Kind:         NodeKind(map[string]string{"file": "FILE", "folder": "FOLDER"}[info.Kind]),
-		NeedPassword: info.NeedPassword, Expired: info.Expired,
+		NeedPassword: info.NeedPassword, Expired: info.Expired, AllowUpload: info.AllowUpload,
 	}
 	// 有密码的分享:验密前不透露规模与期限
 	if !info.NeedPassword && !info.Expired {
@@ -1796,6 +1883,23 @@ func (r *queryResolver) CollectMyUploads(ctx context.Context) ([]*CollectUpload,
 		out = append(out, gqlCollectUpload(row.FileName, row.Size, row.CreatedAt.Time))
 	}
 	return out, nil
+}
+
+// ShareUploadSession is the resolver for the shareUploadSession field.
+func (r *queryResolver) ShareUploadSession(ctx context.Context, id string) (*UploadSession, error) {
+	ident, err := httpx.IdentityFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sid, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+	v, err := r.ShareUploads.UploadSession(ctx, ident, sid)
+	if err != nil {
+		return nil, err
+	}
+	return gqlSession(v), nil
 }
 
 // AppPasswords is the resolver for the appPasswords field.

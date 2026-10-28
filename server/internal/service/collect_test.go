@@ -460,7 +460,7 @@ func TestCollectTokenIsolation(t *testing.T) {
 	}
 
 	// 分享令牌冒充不了收集访客
-	sh, err := shares.Create(ctx, f.owner, f.folder, nil, nil)
+	sh, err := shares.Create(ctx, f.owner, f.folder, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}

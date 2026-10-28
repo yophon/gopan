@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { useInfiniteQuery, useQuery } from '@tanstack/vue-query'
-import { ElMessage } from 'element-plus'
-import { Close, Download, FolderOpened, Grid, List, Lock, View } from '@element-plus/icons-vue'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown, Close, Download, FolderAdd, FolderOpened, Grid, List, Lock, Upload, View } from '@element-plus/icons-vue'
 
 import { guestRequest, hasErrorCode, plainRequest } from '@/api/client'
 import { errorText } from '@/api/errors'
@@ -11,8 +11,13 @@ import {
   ChildrenDocument,
   NodeDownloadUrlDocument,
   NodePreviewDocument,
+  ShareAbortUploadDocument,
+  ShareCompleteUploadDocument,
+  ShareEnsureFolderDocument,
   ShareInfoDocument,
+  ShareInitUploadDocument,
   ShareRootDocument,
+  ShareUploadSessionDocument,
   VerifySharePasswordDocument,
 } from '@/api/gen/graphql'
 import type { ChildrenQuery } from '@/api/gen/graphql'
@@ -26,12 +31,17 @@ import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
 import NodeIcon from '@/components/nodes/NodeIcon.vue'
 import ContextMenu, { type MenuEntry } from '@/components/ContextMenu.vue'
+import GuestUploadTasks from '@/components/visitor/GuestUploadTasks.vue'
+import { useUploadKeepAwake } from '@/composables/uploadKeepAwake'
+import { createCollectUploader, type CollectTransport } from '@/uploader/collect'
+import { collectDataTransfer, collectRelativePaths, groupByDir, MAX_DROP_FILES, type Collected } from '@/uploader/dropTree'
 import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 import '@/styles/visitor.css'
 
 /**
  * 分享的访客页(/s/:token)。不登录:打开链接 → (有密码就输密码)→ 看、预览、下载。
  * 拿到链接的人多半在手机微信里点开,手机优先;跟着访客自己的系统切深浅色。
+ * 文件夹分享开了「允许对方上传」时,还能往当前文件夹传文件、传文件夹、建文件夹(doc/32 一)。
  */
 
 type ChildItem = ChildrenQuery['children']['items'][number]
@@ -103,6 +113,8 @@ watch(info, (i) => {
 // ---------- 验密 / 领取访客凭证 ----------
 
 const password = ref('')
+/** 验过的密码:传大文件时访客凭证 30 分钟过期,拿它悄悄重领 */
+const lastPassword = ref('')
 const verifying = ref(false)
 const verifyError = ref<string | null>(null)
 
@@ -111,6 +123,7 @@ async function verify(pwd: string) {
   verifyError.value = null
   try {
     const res = await plainRequest(VerifySharePasswordDocument, { token: token.value, password: pwd })
+    lastPassword.value = pwd
     setGuestToken(res.verifySharePassword.accessToken)
   } catch (err) {
     if (hasErrorCode(err, 'SHARE_EXPIRED')) {
@@ -307,6 +320,189 @@ function onSheetSelect(key: string) {
 }
 
 const summary = computed(() => (info.value ? shareSummary(info.value) : ''))
+
+// ---------- 对方上传(doc/32 一) ----------
+
+const queryClient = useQueryClient()
+const canUpload = computed(() => !!info.value?.allowUpload && root.value?.kind === 'FOLDER')
+
+/** 凭证过期了就用验过的密码重领一张,接着做;重领不了照常报错 */
+async function call<T>(fn: (tok: string) => Promise<T>): Promise<T> {
+  const tok = guestToken.value
+  if (!tok) throw { code: 'UNAUTHENTICATED' }
+  try {
+    return await fn(tok)
+  } catch (err) {
+    if (!hasErrorCode(err, 'UNAUTHENTICATED')) throw err
+    const res = await plainRequest(VerifySharePasswordDocument, { token: token.value, password: lastPassword.value })
+    setGuestToken(res.verifySharePassword.accessToken)
+    return fn(res.verifySharePassword.accessToken)
+  }
+}
+
+// 访客留的名字:问一次,记在这台设备上(空串 = 选了不留名)
+const NAME_KEY = 'gopan_share_uploader'
+function readName(): string | null {
+  try {
+    return localStorage.getItem(NAME_KEY)
+  } catch {
+    return null
+  }
+}
+const uploaderName = ref<string | null>(readName())
+function saveName(v: string) {
+  uploaderName.value = v
+  try {
+    localStorage.setItem(NAME_KEY, v)
+  } catch {
+    // 隐私模式:这次记在内存里
+  }
+}
+
+/** 第一次传之前问名字;关掉对话框 = 不传了 */
+async function askName(): Promise<boolean> {
+  if (uploaderName.value !== null) return true
+  try {
+    const { value } = await ElMessageBox.prompt('对方会看到是谁传的,也可以不留', '留个名字', {
+      confirmButtonText: '好',
+      cancelButtonText: '不留名',
+      inputPlaceholder: '你的名字',
+      distinguishCancelAndClose: true,
+      inputValidator: (v) => (v ?? '').trim().length <= 50 || '名字不超过 50 个字',
+    })
+    saveName((value ?? '').trim())
+  } catch (action) {
+    if (action !== 'cancel') return false
+    saveName('')
+  }
+  return true
+}
+
+const who = () => uploaderName.value || null
+
+const transport: CollectTransport = {
+  init: (name, size, target) =>
+    call((t) => guestRequest(ShareInitUploadDocument, t, { parentId: target!, name, size, uploaderName: who() })).then(
+      (r) => r.shareInitUpload,
+    ),
+  session: (id) => call((t) => guestRequest(ShareUploadSessionDocument, t, { id })).then((r) => r.shareUploadSession),
+  complete: (sessionId) =>
+    call((t) => guestRequest(ShareCompleteUploadDocument, t, { sessionId, etags: [] })).then((r) => ({
+      name: r.shareCompleteUpload.name,
+      size: Number(r.shareCompleteUpload.size ?? 0),
+    })),
+  abort: (sessionId) => call((t) => guestRequest(ShareAbortUploadDocument, t, { sessionId })).then(() => undefined),
+}
+const uploader = createCollectUploader(transport, `gopan_share_up_${token.value}`)
+const pendingUploads = computed(() => uploader.tasks.filter((t) => t.status !== 'done'))
+useUploadKeepAwake(uploader.busy)
+
+// 传完一个就刷新列表(可能落在别的子文件夹里,全刷)
+const doneCount = computed(() => uploader.tasks.filter((t) => t.status === 'done').length)
+watch(doneCount, () => void queryClient.invalidateQueries({ queryKey: ['shareChildren'] }))
+
+async function ensureFolder(parentId: string, name: string): Promise<string> {
+  const r = await call((t) => guestRequest(ShareEnsureFolderDocument, t, { parentId, name, uploaderName: who() }))
+  return r.shareEnsureFolder.id
+}
+
+/** 文件(可带相对目录)传进 base:先逐级找到或建出文件夹,再按文件夹入队 */
+async function uploadCollected(collected: Collected[], base: string) {
+  const files = collected.filter((c) => {
+    if (c.file.size > 0) return true
+    ElMessage.warning(`「${c.file.name}」是空文件,已跳过`)
+    return false
+  })
+  if (!files.length || !(await askName())) return
+  if (collected.length >= MAX_DROP_FILES) ElMessage.warning(`一次最多传 ${MAX_DROP_FILES} 个文件,超出的没有传`)
+  const ids = new Map<string, string>([['', base]])
+  async function dirId(dirs: string[]): Promise<string> {
+    const key = dirs.join('/')
+    const hit = ids.get(key)
+    if (hit) return hit
+    const id = await ensureFolder(await dirId(dirs.slice(0, -1)), dirs[dirs.length - 1]!)
+    ids.set(key, id)
+    return id
+  }
+  try {
+    for (const g of groupByDir(files)) uploader.add(g.files, await dirId(g.dirs))
+    if (ids.size > 1) void queryClient.invalidateQueries({ queryKey: ['shareChildren'] })
+  } catch (err) {
+    if (!onGuestError(err)) ElMessage.error(errorText(err, '建文件夹失败'))
+  }
+}
+
+const fileInput = ref<HTMLInputElement | null>(null)
+const dirInput = ref<HTMLInputElement | null>(null)
+
+function onPick(e: Event) {
+  const input = e.target as HTMLInputElement
+  const target = currentFolder.value?.id
+  if (target) void uploadCollected(collectRelativePaths(Array.from(input.files ?? [])), target)
+  input.value = '' // 同一批可以再选
+}
+
+async function newFolder() {
+  const target = currentFolder.value?.id
+  if (!target) return
+  let name: string
+  try {
+    const { value } = await ElMessageBox.prompt('', '新建文件夹', {
+      confirmButtonText: '建好',
+      cancelButtonText: '取消',
+      inputPlaceholder: '文件夹名字',
+      inputValidator: (v) => !!(v ?? '').trim() || '起个名字',
+    })
+    name = value.trim()
+  } catch {
+    return
+  }
+  if (!(await askName())) return
+  try {
+    await ensureFolder(target, name)
+    void queryClient.invalidateQueries({ queryKey: ['shareChildren'] })
+  } catch (err) {
+    if (!onGuestError(err)) ElMessage.error(errorText(err, '建文件夹失败'))
+  }
+}
+
+function onUploadMenu(key: string) {
+  if (key === 'files') fileInput.value?.click()
+  else if (key === 'dir') dirInput.value?.click()
+  else if (key === 'mkdir') void newFolder()
+}
+
+// 往列表上拖文件、文件夹
+const dropping = ref(false)
+let dropDepth = 0
+function hasFiles(e: DragEvent) {
+  return canUpload.value && !!e.dataTransfer?.types.includes('Files')
+}
+function onDragEnter(e: DragEvent) {
+  if (!hasFiles(e)) return
+  dropDepth++
+  dropping.value = true
+}
+function onDragLeave(e: DragEvent) {
+  if (!hasFiles(e)) return
+  dropDepth = Math.max(0, dropDepth - 1)
+  if (dropDepth === 0) dropping.value = false
+}
+function onDragOver(e: DragEvent) {
+  if (hasFiles(e)) e.preventDefault()
+}
+async function onDrop(e: DragEvent) {
+  dropDepth = 0
+  dropping.value = false
+  const target = currentFolder.value?.id
+  if (!hasFiles(e) || !e.dataTransfer || !target) return
+  try {
+    const { collected } = await collectDataTransfer(e.dataTransfer)
+    await uploadCollected(collected, target)
+  } catch (err) {
+    ElMessage.error(errorText(err, '读取拖进来的文件失败'))
+  }
+}
 </script>
 
 <template>
@@ -403,13 +599,37 @@ const summary = computed(() => (info.value ? shareSummary(info.value) : ''))
               <h1 class="v-title" :title="root.name">{{ root.name }}</h1>
               <p v-if="summary" class="v-sub">{{ summary }}</p>
             </div>
-            <el-button type="primary" size="large" :icon="Download" class="v-head-btn" @click="download([root])">
-              全部下载
-            </el-button>
+            <div class="v-head-btns">
+              <el-dropdown v-if="canUpload" trigger="click" @command="onUploadMenu">
+                <el-button size="large" :icon="Upload" class="v-head-btn">
+                  上传<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="files" :icon="Upload">上传文件</el-dropdown-item>
+                    <el-dropdown-item command="dir" :icon="FolderOpened">上传文件夹</el-dropdown-item>
+                    <el-dropdown-item command="mkdir" :icon="FolderAdd">新建文件夹</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <el-button type="primary" size="large" :icon="Download" class="v-head-btn" @click="download([root])">
+                全部下载
+              </el-button>
+            </div>
           </div>
+          <input ref="fileInput" type="file" multiple hidden @change="onPick" />
+          <input ref="dirInput" type="file" webkitdirectory hidden @change="onPick" />
+          <GuestUploadTasks :uploader="uploader" :tasks="pendingUploads" />
         </section>
 
-        <section class="v-folder">
+        <section
+          class="v-folder"
+          :class="{ dropping }"
+          @dragenter="onDragEnter"
+          @dragleave="onDragLeave"
+          @dragover="onDragOver"
+          @drop.prevent="onDrop"
+        >
           <div class="v-bar">
             <!-- 在根上时头部已经写着名字,路径只在进了子文件夹后出现 -->
             <nav v-if="navStack.length" class="v-crumbs" aria-label="位置">
@@ -537,12 +757,27 @@ const summary = computed(() => (info.value ? shareSummary(info.value) : ''))
 .v-head-text {
   min-width: 0;
 }
+.v-head-btns {
+  display: flex;
+  flex: none;
+  gap: 10px;
+}
 .v-head-btn {
   flex: none;
   border-radius: 999px;
 }
+.v-head-btns :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
 .v-folder {
   width: 100%;
+  border-radius: 12px;
+  outline: 2px dashed transparent;
+  outline-offset: 4px;
+  transition: outline-color 0.15s;
+}
+.v-folder.dropping {
+  outline-color: var(--gp-ink-3);
 }
 .v-bar {
   display: flex;
@@ -609,7 +844,11 @@ const summary = computed(() => (info.value ? shareSummary(info.value) : ''))
     flex-direction: column;
     align-items: stretch;
   }
-  .v-head-btn {
+  .v-head-btns {
+    flex-direction: column-reverse;
+  }
+  .v-head-btn,
+  .v-head-btns :deep(.el-dropdown) {
     width: 100%;
   }
   .v-actions .el-button {

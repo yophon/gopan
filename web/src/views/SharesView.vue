@@ -3,11 +3,11 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
-import { CopyDocument, DataLine, Delete, Document, Folder, Lock, View } from '@element-plus/icons-vue'
+import { CopyDocument, DataLine, Delete, Document, Folder, Lock, Upload, View } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
-import { MySharesDocument, RevokeShareDocument } from '@/api/gen/graphql'
+import { MySharesDocument, RevokeShareDocument, SetShareUploadDocument } from '@/api/gen/graphql'
 import type { MySharesQuery } from '@/api/gen/graphql'
 import { formatTime } from '@/utils/format'
 import { useBreakpoints } from '@/composables/breakpoints'
@@ -62,6 +62,20 @@ const revokeMutation = useMutation({
   onError: (err) => ElMessage.error(errorText(err, '取消分享失败')),
 })
 
+/** 文件夹分享打开 / 关掉「对方上传」(doc/32 一) */
+const uploadMutation = useMutation({
+  mutationFn: (vars: { id: string; allow: boolean }) => request(SetShareUploadDocument, vars),
+  onSuccess: (_, vars) => {
+    ElMessage.success(vars.allow ? '对方现在能往里传文件了' : '已关闭对方上传')
+    void queryClient.invalidateQueries({ queryKey: ['myShares'] })
+  },
+  onError: (err) => ElMessage.error(errorText(err, '设置失败')),
+})
+
+function toggleUpload(row: ShareItem) {
+  uploadMutation.mutate({ id: row.id, allow: !row.allowUpload })
+}
+
 function asShare(row: unknown): ShareItem {
   return row as ShareItem
 }
@@ -81,8 +95,9 @@ function openVisits(row: ShareItem) {
 /** 桌面按钮与手机卡片共用的一句话。计数是近 180 天的,不是历史总量。 */
 function visitText(row: ShareItem): string {
   const v = row.visitStats
-  if (v.verifyCount + v.downloadCount === 0) return '暂无访问'
-  return `访问 ${v.verifyCount} · 下载 ${v.downloadCount}`
+  if (v.verifyCount + v.downloadCount + v.uploadCount === 0) return '暂无访问'
+  const text = `访问 ${v.verifyCount} · 下载 ${v.downloadCount}`
+  return v.uploadCount > 0 ? `${text} · 上传 ${v.uploadCount}` : text
 }
 
 function shareUrl(row: ShareItem): string {
@@ -133,12 +148,18 @@ const sheet = ref<{ visible: boolean; node: NodeListItem | null }>({
 })
 
 /** 不同分享可能指向同名节点,这里按行内点击的目标节点取分享记录 */
-const sheetItems: SheetItem[] = [
-  { key: 'open', label: '打开链接', icon: View },
-  { key: 'copy', label: '复制链接', icon: CopyDocument },
-  { key: 'visits', label: '访问记录', icon: DataLine },
-  { key: 'revoke', label: '取消分享', icon: Delete, danger: true },
-]
+const sheetItems = computed<SheetItem[]>(() => {
+  const share = sheet.value.node ? byNodeId.value.get(sheet.value.node.id) : undefined
+  return [
+    { key: 'open', label: '打开链接', icon: View },
+    { key: 'copy', label: '复制链接', icon: CopyDocument },
+    { key: 'visits', label: '访问记录', icon: DataLine },
+    ...(share?.node.kind === 'FOLDER'
+      ? [{ key: 'upload', label: share.allowUpload ? '关闭对方上传' : '允许对方上传', icon: Upload }]
+      : []),
+    { key: 'revoke', label: '取消分享', icon: Delete, danger: true },
+  ]
+})
 
 function onSheetSelect(key: string) {
   const node = sheet.value.node
@@ -155,6 +176,10 @@ function onSheetSelect(key: string) {
   }
   if (key === 'visits') {
     openVisits(share)
+    return
+  }
+  if (key === 'upload') {
+    toggleUpload(share)
     return
   }
   revokeMutation.mutate({ id: share.id })
@@ -194,6 +219,9 @@ function onSheetSelect(key: string) {
               <el-icon v-if="asShare(row).hasPassword" class="lock-icon" title="有密码保护">
                 <Lock />
               </el-icon>
+              <el-icon v-if="asShare(row).allowUpload" class="lock-icon" title="对方能上传">
+                <Upload />
+              </el-icon>
             </span>
           </template>
         </el-table-column>
@@ -213,10 +241,18 @@ function onSheetSelect(key: string) {
             </el-button>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" align="center">
+        <el-table-column label="操作" width="260" align="center">
           <template #default="{ row }">
             <el-button link type="primary" :icon="CopyDocument" @click="onCopy(asShare(row))">
               复制链接
+            </el-button>
+            <el-button
+              v-if="asShare(row).node.kind === 'FOLDER'"
+              link
+              type="primary"
+              @click="toggleUpload(asShare(row))"
+            >
+              {{ asShare(row).allowUpload ? '关闭上传' : '允许上传' }}
             </el-button>
             <el-popconfirm
               title="取消后链接立即失效,确定?"

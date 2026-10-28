@@ -175,11 +175,11 @@ function locationOf(node: NodeListItem): string {
 const selectedIds = ref<string[]>([])
 watch(q, () => (selectedIds.value = []))
 const { download } = useNodeDownload()
-const shareTarget = ref<{ id: string; name: string } | null>(null)
+const shareTarget = ref<{ id: string; name: string; kind: string } | null>(null)
 const shareVisible = ref(false)
 
 function openShare(node: NodeListItem) {
-  shareTarget.value = { id: node.id, name: node.name }
+  shareTarget.value = { id: node.id, name: node.name, kind: node.kind }
   shareVisible.value = true
 }
 

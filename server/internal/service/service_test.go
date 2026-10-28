@@ -367,7 +367,7 @@ func TestShareLifecycle(t *testing.T) {
 
 	// 带密码分享 docs
 	pw := "sesame88"
-	sh, err := shares.Create(ctx, owner, docs.ID, &pw, nil)
+	sh, err := shares.Create(ctx, owner, docs.ID, &pw, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -438,7 +438,7 @@ func TestShareLifecycle(t *testing.T) {
 
 	// 过期分享:Access 拒绝
 	past := time.Now().Add(time.Second)
-	sh2, err := shares.Create(ctx, owner, docs.ID, nil, &past)
+	sh2, err := shares.Create(ctx, owner, docs.ID, nil, &past, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -448,7 +448,7 @@ func TestShareLifecycle(t *testing.T) {
 	}
 
 	// 无密码分享:空密码直接拿 token;彻底删除节点级联删分享
-	sh3, err := shares.Create(ctx, owner, docs.ID, nil, nil)
+	sh3, err := shares.Create(ctx, owner, docs.ID, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -571,7 +571,7 @@ func TestSpaceAnalysis(t *testing.T) {
 	// 过期的分享与直链
 	shares := service.NewShares(f.q, newAuth(f.pool))
 	exp := time.Now().Add(time.Hour)
-	sh, err := shares.Create(t.Context(), f.owner, docs.ID, nil, &exp)
+	sh, err := shares.Create(t.Context(), f.owner, docs.ID, nil, &exp, false)
 	if err != nil {
 		t.Fatal(err)
 	}

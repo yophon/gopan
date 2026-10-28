@@ -88,7 +88,7 @@ func TestAdmin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sh, err := shares.Create(ctx, rb.User.ID, folder.ID, nil, nil)
+	sh, err := shares.Create(ctx, rb.User.ID, folder.ID, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}

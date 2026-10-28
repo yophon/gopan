@@ -13,9 +13,9 @@ import (
 )
 
 const createShare = `-- name: CreateShare :one
-INSERT INTO shares (id, token, node_id, created_by, password_hash, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, token, node_id, created_by, password_hash, expires_at, revoked_at, created_at
+INSERT INTO shares (id, token, node_id, created_by, password_hash, expires_at, allow_upload)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, token, node_id, created_by, password_hash, expires_at, revoked_at, created_at, allow_upload
 `
 
 type CreateShareParams struct {
@@ -25,6 +25,7 @@ type CreateShareParams struct {
 	CreatedBy    uuid.UUID
 	PasswordHash *string
 	ExpiresAt    pgtype.Timestamptz
+	AllowUpload  bool
 }
 
 func (q *Queries) CreateShare(ctx context.Context, arg CreateShareParams) (Share, error) {
@@ -35,6 +36,7 @@ func (q *Queries) CreateShare(ctx context.Context, arg CreateShareParams) (Share
 		arg.CreatedBy,
 		arg.PasswordHash,
 		arg.ExpiresAt,
+		arg.AllowUpload,
 	)
 	var i Share
 	err := row.Scan(
@@ -46,6 +48,68 @@ func (q *Queries) CreateShare(ctx context.Context, arg CreateShareParams) (Share
 		&i.ExpiresAt,
 		&i.RevokedAt,
 		&i.CreatedAt,
+		&i.AllowUpload,
+	)
+	return i, err
+}
+
+const createShareUploadSession = `-- name: CreateShareUploadSession :one
+INSERT INTO upload_sessions (id, owner_id, size, target_parent, target_name, minio_upload_id, part_size,
+    expires_at, object_key, share_id, actor)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id, actor, replace_existing, share_id
+`
+
+type CreateShareUploadSessionParams struct {
+	ID            uuid.UUID
+	OwnerID       uuid.UUID
+	Size          int64
+	TargetParent  *uuid.UUID
+	TargetName    string
+	MinioUploadID string
+	PartSize      int32
+	ExpiresAt     pgtype.Timestamptz
+	ObjectKey     *string
+	ShareID       *uuid.UUID
+	Actor         []byte
+}
+
+func (q *Queries) CreateShareUploadSession(ctx context.Context, arg CreateShareUploadSessionParams) (UploadSession, error) {
+	row := q.db.QueryRow(ctx, createShareUploadSession,
+		arg.ID,
+		arg.OwnerID,
+		arg.Size,
+		arg.TargetParent,
+		arg.TargetName,
+		arg.MinioUploadID,
+		arg.PartSize,
+		arg.ExpiresAt,
+		arg.ObjectKey,
+		arg.ShareID,
+		arg.Actor,
+	)
+	var i UploadSession
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Sha256,
+		&i.Size,
+		&i.TargetParent,
+		&i.TargetName,
+		&i.MinioUploadID,
+		&i.PartSize,
+		&i.Status,
+		&i.FailReason,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.ObjectKey,
+		&i.NodeID,
+		&i.FailCode,
+		&i.RequestID,
+		&i.VisitorID,
+		&i.Actor,
+		&i.ReplaceExisting,
+		&i.ShareID,
 	)
 	return i, err
 }
@@ -64,7 +128,7 @@ func (q *Queries) DeleteExpiredShareVisits(ctx context.Context) (int64, error) {
 }
 
 const getShareByID = `-- name: GetShareByID :one
-SELECT s.id, s.token, s.node_id, s.created_by, s.password_hash, s.expires_at, s.revoked_at, s.created_at, n.name AS node_name, n.kind AS node_kind, n.deleted_at AS node_deleted_at,
+SELECT s.id, s.token, s.node_id, s.created_by, s.password_hash, s.expires_at, s.revoked_at, s.created_at, s.allow_upload, n.name AS node_name, n.kind AS node_kind, n.deleted_at AS node_deleted_at,
        (u.disabled_at IS NOT NULL)::boolean AS owner_disabled
 FROM shares s JOIN nodes n ON n.id = s.node_id JOIN users u ON u.id = s.created_by
 WHERE s.id = $1
@@ -79,6 +143,7 @@ type GetShareByIDRow struct {
 	ExpiresAt     pgtype.Timestamptz
 	RevokedAt     pgtype.Timestamptz
 	CreatedAt     pgtype.Timestamptz
+	AllowUpload   bool
 	NodeName      string
 	NodeKind      string
 	NodeDeletedAt pgtype.Timestamptz
@@ -97,6 +162,7 @@ func (q *Queries) GetShareByID(ctx context.Context, id uuid.UUID) (GetShareByIDR
 		&i.ExpiresAt,
 		&i.RevokedAt,
 		&i.CreatedAt,
+		&i.AllowUpload,
 		&i.NodeName,
 		&i.NodeKind,
 		&i.NodeDeletedAt,
@@ -106,7 +172,7 @@ func (q *Queries) GetShareByID(ctx context.Context, id uuid.UUID) (GetShareByIDR
 }
 
 const getShareByToken = `-- name: GetShareByToken :one
-SELECT s.id, s.token, s.node_id, s.created_by, s.password_hash, s.expires_at, s.revoked_at, s.created_at, n.name AS node_name, n.kind AS node_kind, n.deleted_at AS node_deleted_at,
+SELECT s.id, s.token, s.node_id, s.created_by, s.password_hash, s.expires_at, s.revoked_at, s.created_at, s.allow_upload, n.name AS node_name, n.kind AS node_kind, n.deleted_at AS node_deleted_at,
        (u.disabled_at IS NOT NULL)::boolean AS owner_disabled,
        n.subtree_bytes AS node_subtree_bytes, n.subtree_count AS node_subtree_count,
        b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256
@@ -124,6 +190,7 @@ type GetShareByTokenRow struct {
 	ExpiresAt        pgtype.Timestamptz
 	RevokedAt        pgtype.Timestamptz
 	CreatedAt        pgtype.Timestamptz
+	AllowUpload      bool
 	NodeName         string
 	NodeKind         string
 	NodeDeletedAt    pgtype.Timestamptz
@@ -148,6 +215,7 @@ func (q *Queries) GetShareByToken(ctx context.Context, token string) (GetShareBy
 		&i.ExpiresAt,
 		&i.RevokedAt,
 		&i.CreatedAt,
+		&i.AllowUpload,
 		&i.NodeName,
 		&i.NodeKind,
 		&i.NodeDeletedAt,
@@ -161,13 +229,52 @@ func (q *Queries) GetShareByToken(ctx context.Context, token string) (GetShareBy
 	return i, err
 }
 
+const getShareUploadSession = `-- name: GetShareUploadSession :one
+SELECT id, owner_id, sha256, size, target_parent, target_name, minio_upload_id, part_size, status, fail_reason, created_at, expires_at, object_key, node_id, fail_code, request_id, visitor_id, actor, replace_existing, share_id FROM upload_sessions WHERE id = $1 AND share_id = $2
+`
+
+type GetShareUploadSessionParams struct {
+	ID      uuid.UUID
+	ShareID *uuid.UUID
+}
+
+// 访客只能碰这个分享上的会话
+func (q *Queries) GetShareUploadSession(ctx context.Context, arg GetShareUploadSessionParams) (UploadSession, error) {
+	row := q.db.QueryRow(ctx, getShareUploadSession, arg.ID, arg.ShareID)
+	var i UploadSession
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Sha256,
+		&i.Size,
+		&i.TargetParent,
+		&i.TargetName,
+		&i.MinioUploadID,
+		&i.PartSize,
+		&i.Status,
+		&i.FailReason,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.ObjectKey,
+		&i.NodeID,
+		&i.FailCode,
+		&i.RequestID,
+		&i.VisitorID,
+		&i.Actor,
+		&i.ReplaceExisting,
+		&i.ShareID,
+	)
+	return i, err
+}
+
 const listMyShares = `-- name: ListMyShares :many
-SELECT s.id, s.token, s.password_hash, s.expires_at, s.created_at,
+SELECT s.id, s.token, s.password_hash, s.expires_at, s.created_at, s.allow_upload,
        n.id AS node_id, n.parent_id AS node_parent_id, n.name AS node_name,
        n.kind AS node_kind, n.created_at AS node_created_at, n.updated_at AS node_updated_at,
        b.size AS blob_size, b.mime AS blob_mime, b.sha256 AS blob_sha256,
        COALESCE(v.verify_count, 0)::bigint   AS verify_count,
        COALESCE(v.download_count, 0)::bigint AS download_count,
+       COALESCE(v.upload_count, 0)::bigint   AS upload_count,
        v.last_at   AS last_visit_at,
        v.last_kind AS last_visit_kind
 FROM shares s
@@ -175,7 +282,8 @@ JOIN nodes n ON n.id = s.node_id
 LEFT JOIN blobs b ON b.id = n.blob_id
 LEFT JOIN LATERAL (
     SELECT count(*) FILTER (WHERE sv.kind = 'verify')  AS verify_count,
-           count(*) FILTER (WHERE sv.kind <> 'verify') AS download_count,
+           count(*) FILTER (WHERE sv.kind IN ('download', 'pack')) AS download_count,
+           count(*) FILTER (WHERE sv.kind = 'upload')  AS upload_count,
            max(sv.created_at)::timestamptz             AS last_at,
            COALESCE((array_agg(sv.kind ORDER BY sv.created_at DESC, sv.id DESC))[1], '')::text AS last_kind
     FROM share_visits sv
@@ -191,6 +299,7 @@ type ListMySharesRow struct {
 	PasswordHash  *string
 	ExpiresAt     pgtype.Timestamptz
 	CreatedAt     pgtype.Timestamptz
+	AllowUpload   bool
 	NodeID        uuid.UUID
 	NodeParentID  *uuid.UUID
 	NodeName      string
@@ -202,6 +311,7 @@ type ListMySharesRow struct {
 	BlobSha256    *string
 	VerifyCount   int64
 	DownloadCount int64
+	UploadCount   int64
 	LastVisitAt   pgtype.Timestamptz
 	LastVisitKind string
 }
@@ -224,6 +334,7 @@ func (q *Queries) ListMyShares(ctx context.Context, createdBy uuid.UUID) ([]List
 			&i.PasswordHash,
 			&i.ExpiresAt,
 			&i.CreatedAt,
+			&i.AllowUpload,
 			&i.NodeID,
 			&i.NodeParentID,
 			&i.NodeName,
@@ -235,6 +346,7 @@ func (q *Queries) ListMyShares(ctx context.Context, createdBy uuid.UUID) ([]List
 			&i.BlobSha256,
 			&i.VerifyCount,
 			&i.DownloadCount,
+			&i.UploadCount,
 			&i.LastVisitAt,
 			&i.LastVisitKind,
 		); err != nil {
@@ -249,7 +361,7 @@ func (q *Queries) ListMyShares(ctx context.Context, createdBy uuid.UUID) ([]List
 }
 
 const listShareVisits = `-- name: ListShareVisits :many
-SELECT kind, ip, user_agent, created_at
+SELECT kind, ip, user_agent, detail, created_at
 FROM share_visits
 WHERE share_id = $1
 ORDER BY created_at DESC, id DESC
@@ -265,6 +377,7 @@ type ListShareVisitsRow struct {
 	Kind      string
 	Ip        *string
 	UserAgent *string
+	Detail    *string
 	CreatedAt pgtype.Timestamptz
 }
 
@@ -281,6 +394,7 @@ func (q *Queries) ListShareVisits(ctx context.Context, arg ListShareVisitsParams
 			&i.Kind,
 			&i.Ip,
 			&i.UserAgent,
+			&i.Detail,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -293,9 +407,55 @@ func (q *Queries) ListShareVisits(ctx context.Context, arg ListShareVisitsParams
 	return items, nil
 }
 
+const lockShare = `-- name: LockShare :one
+SELECT s.id, s.token, s.node_id, s.created_by, s.password_hash, s.expires_at, s.revoked_at, s.created_at, s.allow_upload, n.name AS node_name, n.deleted_at AS node_deleted_at, n.kind AS node_kind,
+       (u.disabled_at IS NOT NULL)::boolean AS owner_disabled
+FROM shares s JOIN nodes n ON n.id = s.node_id JOIN users u ON u.id = s.created_by
+WHERE s.id = $1
+FOR UPDATE OF s
+`
+
+type LockShareRow struct {
+	ID            uuid.UUID
+	Token         string
+	NodeID        uuid.UUID
+	CreatedBy     uuid.UUID
+	PasswordHash  *string
+	ExpiresAt     pgtype.Timestamptz
+	RevokedAt     pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+	AllowUpload   bool
+	NodeName      string
+	NodeDeletedAt pgtype.Timestamptz
+	NodeKind      string
+	OwnerDisabled bool
+}
+
+// 访客上传落库时锁住分享行:同一分享的并发落库串行挑名字,也串行复核分享还开着上传。
+func (q *Queries) LockShare(ctx context.Context, id uuid.UUID) (LockShareRow, error) {
+	row := q.db.QueryRow(ctx, lockShare, id)
+	var i LockShareRow
+	err := row.Scan(
+		&i.ID,
+		&i.Token,
+		&i.NodeID,
+		&i.CreatedBy,
+		&i.PasswordHash,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.AllowUpload,
+		&i.NodeName,
+		&i.NodeDeletedAt,
+		&i.NodeKind,
+		&i.OwnerDisabled,
+	)
+	return i, err
+}
+
 const recordShareVisit = `-- name: RecordShareVisit :exec
-INSERT INTO share_visits (share_id, kind, ip, user_agent)
-VALUES ($1, $2, $3, $4)
+INSERT INTO share_visits (share_id, kind, ip, user_agent, detail)
+VALUES ($1, $2, $3, $4, $5)
 `
 
 type RecordShareVisitParams struct {
@@ -303,6 +463,7 @@ type RecordShareVisitParams struct {
 	Kind      string
 	Ip        *string
 	UserAgent *string
+	Detail    *string
 }
 
 // 尽力而为:埋点失败绝不能影响访客的访问,调用方只记日志。
@@ -312,6 +473,7 @@ func (q *Queries) RecordShareVisit(ctx context.Context, arg RecordShareVisitPara
 		arg.Kind,
 		arg.Ip,
 		arg.UserAgent,
+		arg.Detail,
 	)
 	return err
 }
@@ -332,4 +494,44 @@ func (q *Queries) RevokeShare(ctx context.Context, arg RevokeShareParams) (int64
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const setShareUpload = `-- name: SetShareUpload :execrows
+UPDATE shares s SET allow_upload = $3
+FROM nodes n
+WHERE s.id = $1 AND s.created_by = $2 AND s.revoked_at IS NULL AND n.id = s.node_id
+  AND (n.kind = 'folder' OR NOT $3)
+`
+
+type SetShareUploadParams struct {
+	ID          uuid.UUID
+	CreatedBy   uuid.UUID
+	AllowUpload bool
+}
+
+// 只有文件夹分享能开上传
+func (q *Queries) SetShareUpload(ctx context.Context, arg SetShareUploadParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setShareUpload, arg.ID, arg.CreatedBy, arg.AllowUpload)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const shareUploadPending = `-- name: ShareUploadPending :one
+SELECT count(*)::bigint AS sessions, COALESCE(sum(size), 0)::bigint AS bytes
+FROM upload_sessions
+WHERE share_id = $1 AND status IN ('uploading', 'completing')
+`
+
+type ShareUploadPendingRow struct {
+	Sessions int64
+	Bytes    int64
+}
+
+func (q *Queries) ShareUploadPending(ctx context.Context, shareID *uuid.UUID) (ShareUploadPendingRow, error) {
+	row := q.db.QueryRow(ctx, shareUploadPending, shareID)
+	var i ShareUploadPendingRow
+	err := row.Scan(&i.Sessions, &i.Bytes)
+	return i, err
 }

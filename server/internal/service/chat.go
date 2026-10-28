@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -88,7 +89,10 @@ func attachChatMessage(ctx context.Context, q *store.Queries, owner uuid.UUID, p
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return notifyChange(ctx, q, owner, Change{Topic: "chat"})
 }
 
 func toChatMessage(row store.ChatMessage) ChatMessage {
@@ -161,6 +165,7 @@ func (s *Chats) SendText(ctx context.Context, ownerID uuid.UUID, body string) (C
 	if err != nil {
 		return ChatMessage{}, err
 	}
+	s.changed(ctx, ownerID)
 	return toChatMessage(row), nil
 }
 
@@ -197,6 +202,9 @@ func (s *Chats) SendNode(ctx context.Context, ownerID, nodeID uuid.UUID) (ChatMe
 	if err != nil {
 		return ChatMessage{}, err
 	}
+	if err := notifyChange(ctx, qtx, ownerID, Change{Topic: "chat"}); err != nil {
+		return ChatMessage{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return ChatMessage{}, err
 	}
@@ -213,7 +221,15 @@ func (s *Chats) Delete(ctx context.Context, ownerID, id uuid.UUID) error {
 	if n == 0 {
 		return ErrNotFound
 	}
+	s.changed(ctx, ownerID)
 	return nil
+}
+
+// changed 告诉这个人的其他设备传输助手变了。消息已经写进去了,通知失败只记日志。
+func (s *Chats) changed(ctx context.Context, owner uuid.UUID) {
+	if err := notifyChange(ctx, s.q, owner, Change{Topic: "chat"}); err != nil {
+		slog.Warn("notify chat change", "owner", owner, "err", err)
+	}
 }
 
 // Search 按关键词检索会话:正文或附件文件名包含 query(不区分大小写)。

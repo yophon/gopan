@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +18,7 @@ import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.CachedPage
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodesRepository
+import xyz.yophon.gopan.core.network.ChangeFeed
 import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.mergePages
@@ -64,6 +66,7 @@ data class TrashUiState(
 class TrashViewModel @Inject constructor(
     private val repo: NodesRepository,
     cache: ScreenCache,
+    changes: ChangeFeed = ChangeFeed.None,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(TrashUiState())
@@ -86,6 +89,10 @@ class TrashViewModel @Inject constructor(
         }
         cache.mirror(viewModelScope, CACHE_KEY, _state) { s -> CachedPage(s.items, s.nextCursor).takeIf { s.status == ListStatus.Content } }
         load(if (cached != null) LoadMode.SILENT else LoadMode.INITIAL)
+        // 别处删了、还原了、清掉了:静默刷新(doc/32 二)
+        viewModelScope.launch {
+            changes.changes.filter { it.touchesTrash }.collect { if (_state.value.status == ListStatus.Content) load(LoadMode.SILENT) }
+        }
     }
 
     private enum class LoadMode { INITIAL, REFRESH, SILENT }

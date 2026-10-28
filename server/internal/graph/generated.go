@@ -589,7 +589,7 @@ type ComplexityRoot struct {
 		CreateLinks              func(childComplexity int, nodeIds []string) int
 		CreateMCPAPIKey          func(childComplexity int, name string, scopes []string) int
 		CreateNotifyChannel      func(childComplexity int, input NotifyChannelInput) int
-		CreateShare              func(childComplexity int, nodeID string, password *string, expiresAt *time.Time) int
+		CreateShare              func(childComplexity int, nodeID string, password *string, expiresAt *time.Time, allowUpload *bool) int
 		CreateTextFile           func(childComplexity int, parentID *string, name string, content *string) int
 		DecideOAuthAuthorization func(childComplexity int, input OAuthAuthorizationInput, approved bool) int
 		DeleteChatMessage        func(childComplexity int, id string) int
@@ -639,7 +639,12 @@ type ComplexityRoot struct {
 		SetClipPrefs             func(childComplexity int, input ClipPrefsInput) int
 		SetLinkPrefs             func(childComplexity int, input LinkPrefsInput) int
 		SetMCPAccessRoot         func(childComplexity int, credentialID string, credentialType string, rootPath *string) int
+		SetShareUpload           func(childComplexity int, id string, allow bool) int
 		SetStarred               func(childComplexity int, ids []string, starred bool) int
+		ShareAbortUpload         func(childComplexity int, sessionID string) int
+		ShareCompleteUpload      func(childComplexity int, sessionID string, etags []*PartEtag) int
+		ShareEnsureFolder        func(childComplexity int, parentID string, name string, uploaderName *string) int
+		ShareInitUpload          func(childComplexity int, parentID string, name string, size int64, uploaderName *string) int
 		TestNotifyChannel        func(childComplexity int, id string) int
 		UndoActivities           func(childComplexity int, selection UndoSelection) int
 		UpdateFeed               func(childComplexity int, id string, input FeedInput) int
@@ -838,6 +843,7 @@ type ComplexityRoot struct {
 		Sessions                  func(childComplexity int) int
 		ShareInfo                 func(childComplexity int, token string) int
 		ShareRoot                 func(childComplexity int) int
+		ShareUploadSession        func(childComplexity int, id string) int
 		ShareVisits               func(childComplexity int, shareID string, limit *int) int
 		SpaceDuplicates           func(childComplexity int, offset *int, limit *int) int
 		SpaceEmptyFolders         func(childComplexity int, limit *int) int
@@ -879,6 +885,7 @@ type ComplexityRoot struct {
 	}
 
 	Share struct {
+		AllowUpload func(childComplexity int) int
 		CreatedAt   func(childComplexity int) int
 		ExpiresAt   func(childComplexity int) int
 		HasPassword func(childComplexity int) int
@@ -893,6 +900,7 @@ type ComplexityRoot struct {
 	}
 
 	ShareInfo struct {
+		AllowUpload  func(childComplexity int) int
 		Expired      func(childComplexity int) int
 		ExpiresAt    func(childComplexity int) int
 		FileCount    func(childComplexity int) int
@@ -905,6 +913,7 @@ type ComplexityRoot struct {
 
 	ShareVisit struct {
 		CreatedAt func(childComplexity int) int
+		Detail    func(childComplexity int) int
 		IP        func(childComplexity int) int
 		Kind      func(childComplexity int) int
 		UserAgent func(childComplexity int) int
@@ -914,6 +923,7 @@ type ComplexityRoot struct {
 		DownloadCount func(childComplexity int) int
 		LastVisitAt   func(childComplexity int) int
 		LastVisitKind func(childComplexity int) int
+		UploadCount   func(childComplexity int) int
 		VerifyCount   func(childComplexity int) int
 	}
 
@@ -1070,8 +1080,9 @@ type MutationResolver interface {
 	AbortUpload(ctx context.Context, sessionID string) (bool, error)
 	RequestPreview(ctx context.Context, nodeID string) (*PreviewInfo, error)
 	RequestRemux(ctx context.Context, nodeID string) (*RemuxInfo, error)
-	CreateShare(ctx context.Context, nodeID string, password *string, expiresAt *time.Time) (*Share, error)
+	CreateShare(ctx context.Context, nodeID string, password *string, expiresAt *time.Time, allowUpload *bool) (*Share, error)
 	RevokeShare(ctx context.Context, id string) (bool, error)
+	SetShareUpload(ctx context.Context, id string, allow bool) (bool, error)
 	VerifySharePassword(ctx context.Context, token string, password string) (*ShareAuth, error)
 	CreateFileRequest(ctx context.Context, folderID string, input FileRequestInput, password *string) (*FileRequest, error)
 	UpdateFileRequest(ctx context.Context, id string, input FileRequestInput) (*FileRequest, error)
@@ -1081,6 +1092,10 @@ type MutationResolver interface {
 	CollectInitUpload(ctx context.Context, name string, size int64) (*UploadSession, error)
 	CollectCompleteUpload(ctx context.Context, sessionID string, etags []*PartEtag) (*CollectUpload, error)
 	CollectAbortUpload(ctx context.Context, sessionID string) (bool, error)
+	ShareInitUpload(ctx context.Context, parentID string, name string, size int64, uploaderName *string) (*UploadSession, error)
+	ShareCompleteUpload(ctx context.Context, sessionID string, etags []*PartEtag) (*Node, error)
+	ShareAbortUpload(ctx context.Context, sessionID string) (bool, error)
+	ShareEnsureFolder(ctx context.Context, parentID string, name string, uploaderName *string) (*Node, error)
 	CreateAppPassword(ctx context.Context, name string) (string, error)
 	RevokeAppPassword(ctx context.Context, id string) (bool, error)
 	CreateMCPAPIKey(ctx context.Context, name string, scopes []string) (*MCPAPIKeyCreated, error)
@@ -1156,6 +1171,7 @@ type QueryResolver interface {
 	FileRequestInfo(ctx context.Context, token string) (*FileRequestInfo, error)
 	CollectUploadSession(ctx context.Context, id string) (*UploadSession, error)
 	CollectMyUploads(ctx context.Context) ([]*CollectUpload, error)
+	ShareUploadSession(ctx context.Context, id string) (*UploadSession, error)
 	AppPasswords(ctx context.Context) ([]*AppPassword, error)
 	McpAPIKeys(ctx context.Context) ([]*MCPAPIKey, error)
 	OauthGrants(ctx context.Context) ([]*OAuthGrant, error)
@@ -3673,7 +3689,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.CreateShare(childComplexity, args["nodeId"].(string), args["password"].(*string), args["expiresAt"].(*time.Time)), true
+		return e.ComplexityRoot.Mutation.CreateShare(childComplexity, args["nodeId"].(string), args["password"].(*string), args["expiresAt"].(*time.Time), args["allowUpload"].(*bool)), true
 	case "Mutation.createTextFile":
 		if e.ComplexityRoot.Mutation.CreateTextFile == nil {
 			break
@@ -4188,6 +4204,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetMCPAccessRoot(childComplexity, args["credentialId"].(string), args["credentialType"].(string), args["rootPath"].(*string)), true
+	case "Mutation.setShareUpload":
+		if e.ComplexityRoot.Mutation.SetShareUpload == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setShareUpload_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetShareUpload(childComplexity, args["id"].(string), args["allow"].(bool)), true
 	case "Mutation.setStarred":
 		if e.ComplexityRoot.Mutation.SetStarred == nil {
 			break
@@ -4199,6 +4226,50 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetStarred(childComplexity, args["ids"].([]string), args["starred"].(bool)), true
+	case "Mutation.shareAbortUpload":
+		if e.ComplexityRoot.Mutation.ShareAbortUpload == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_shareAbortUpload_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ShareAbortUpload(childComplexity, args["sessionId"].(string)), true
+	case "Mutation.shareCompleteUpload":
+		if e.ComplexityRoot.Mutation.ShareCompleteUpload == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_shareCompleteUpload_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ShareCompleteUpload(childComplexity, args["sessionId"].(string), args["etags"].([]*PartEtag)), true
+	case "Mutation.shareEnsureFolder":
+		if e.ComplexityRoot.Mutation.ShareEnsureFolder == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_shareEnsureFolder_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ShareEnsureFolder(childComplexity, args["parentId"].(string), args["name"].(string), args["uploaderName"].(*string)), true
+	case "Mutation.shareInitUpload":
+		if e.ComplexityRoot.Mutation.ShareInitUpload == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_shareInitUpload_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ShareInitUpload(childComplexity, args["parentId"].(string), args["name"].(string), args["size"].(int64), args["uploaderName"].(*string)), true
 	case "Mutation.testNotifyChannel":
 		if e.ComplexityRoot.Mutation.TestNotifyChannel == nil {
 			break
@@ -5316,6 +5387,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.ShareRoot(childComplexity), true
+	case "Query.shareUploadSession":
+		if e.ComplexityRoot.Query.ShareUploadSession == nil {
+			break
+		}
+
+		args, err := ec.field_Query_shareUploadSession_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.ShareUploadSession(childComplexity, args["id"].(string)), true
 	case "Query.shareVisits":
 		if e.ComplexityRoot.Query.ShareVisits == nil {
 			break
@@ -5544,6 +5626,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Session.UserAgent(childComplexity), true
 
+	case "Share.allowUpload":
+		if e.ComplexityRoot.Share.AllowUpload == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Share.AllowUpload(childComplexity), true
 	case "Share.createdAt":
 		if e.ComplexityRoot.Share.CreatedAt == nil {
 			break
@@ -5594,6 +5682,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ShareAuth.AccessToken(childComplexity), true
 
+	case "ShareInfo.allowUpload":
+		if e.ComplexityRoot.ShareInfo.AllowUpload == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareInfo.AllowUpload(childComplexity), true
 	case "ShareInfo.expired":
 		if e.ComplexityRoot.ShareInfo.Expired == nil {
 			break
@@ -5649,6 +5743,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ShareVisit.CreatedAt(childComplexity), true
+	case "ShareVisit.detail":
+		if e.ComplexityRoot.ShareVisit.Detail == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareVisit.Detail(childComplexity), true
 	case "ShareVisit.ip":
 		if e.ComplexityRoot.ShareVisit.IP == nil {
 			break
@@ -5686,6 +5786,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ShareVisitStats.LastVisitKind(childComplexity), true
+	case "ShareVisitStats.uploadCount":
+		if e.ComplexityRoot.ShareVisitStats.UploadCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ShareVisitStats.UploadCount(childComplexity), true
 	case "ShareVisitStats.verifyCount":
 		if e.ComplexityRoot.ShareVisitStats.VerifyCount == nil {
 			break
@@ -6651,6 +6757,8 @@ type Share {
   token: String!
   node: Node!
   hasPassword: Boolean!
+  # 访客能往里传文件、建文件夹(只有文件夹分享会是 true,doc/32 一)
+  allowUpload: Boolean!
   expiresAt: Time
   createdAt: Time!
   # 访问统计。没有访问时返回全零对象(非空,前端不用判空)。
@@ -6659,10 +6767,12 @@ type Share {
 
 # 一条分享访问记录。
 type ShareVisit {
-  # verify(访客进入)/ download(单文件下载)/ pack(打包下载)
+  # verify(访客进入)/ download(单文件下载)/ pack(打包下载)/ upload(访客传了文件)
   kind: String!
   ip: String
   userAgent: String
+  # upload 时是「访客留的名字 · 文件名」
+  detail: String
   createdAt: Time!
 }
 
@@ -6674,6 +6784,7 @@ type ShareVisit {
 type ShareVisitStats {
   verifyCount: Int64!
   downloadCount: Int64!
+  uploadCount: Int64!
   lastVisitAt: Time
   lastVisitKind: String
 }
@@ -6684,6 +6795,8 @@ type ShareInfo {
   kind: NodeKind!
   needPassword: Boolean!
   expired: Boolean!
+  # 访客能上传(doc/32 一)
+  allowUpload: Boolean!
   # 访客页头部显示(v3.8):有密码的分享在验密前一律为 null,不提前透露内容的规模
   expiresAt: Time
   # 文件是大小;文件夹是子树体积与文件数(异步统计,可能略滞后)
@@ -6875,7 +6988,7 @@ type ChatMessage {
 
 # ---------- 动态与撤回(doc/23 二) ----------
 
-enum ActorKind { WEB, ANDROID, WEBDAV, AGENT, IMG, COLLECT, JOB, FEED, CLIP, SYSTEM }
+enum ActorKind { WEB, ANDROID, WEBDAV, AGENT, IMG, COLLECT, SHARE, JOB, FEED, CLIP, SYSTEM }
 enum ActivityAction { MKDIR, UPLOAD, OVERWRITE, RENAME, MOVE, COPY, DELETE, RESTORE, PURGE, EXTRACT }
 
 type ActivityActor {
@@ -7290,6 +7403,8 @@ type Query {
   fileRequestInfo(token: String!): FileRequestInfo!
   collectUploadSession(id: ID!): UploadSession!
   collectMyUploads: [CollectUpload!]!
+  # 分享访客的上传会话(断点续传),doc/32 一
+  shareUploadSession(id: ID!): UploadSession!
 
   appPasswords: [AppPassword!]!
   mcpAPIKeys: [MCPAPIKey!]!
@@ -7457,8 +7572,10 @@ type Mutation {
   # 把浏览器放不了的视频转成 mp4(doc/31 一);在转、转好了只回状态。分享访客在分享范围内也能用
   requestRemux(nodeId: ID!): RemuxInfo!
 
-  createShare(nodeId: ID!, password: String, expiresAt: Time): Share!
+  createShare(nodeId: ID!, password: String, expiresAt: Time, allowUpload: Boolean = false): Share!
   revokeShare(id: ID!): Boolean!
+  # 打开 / 关掉「允许对方上传」(只对文件夹分享)
+  setShareUpload(id: ID!, allow: Boolean!): Boolean!
   verifySharePassword(token: String!, password: String!): ShareAuth!
 
   # 收集文件:属主侧
@@ -7472,6 +7589,13 @@ type Mutation {
   collectInitUpload(name: String!, size: Int64!): UploadSession!
   collectCompleteUpload(sessionId: ID!, etags: [PartEtag!]!): CollectUpload!
   collectAbortUpload(sessionId: ID!): Boolean!
+
+  # 分享访客往分享范围里的文件夹传文件(分享开着上传时,doc/32 一)。uploaderName 选填,记进动态与访问记录
+  shareInitUpload(parentId: ID!, name: String!, size: Int64!, uploaderName: String): UploadSession!
+  shareCompleteUpload(sessionId: ID!, etags: [PartEtag!]!): Node!
+  shareAbortUpload(sessionId: ID!): Boolean!
+  # 找到或建出 parent 里名叫 name 的文件夹(同名文件夹已在就用它)
+  shareEnsureFolder(parentId: ID!, name: String!, uploaderName: String): Node!
 
   # WebDAV 应用密码:明文只在返回值出现一次
   createAppPassword(name: String!): String!
@@ -8919,6 +9043,8 @@ func (ec *executionContext) childFields_Share(ctx context.Context, field graphql
 		return ec.fieldContext_Share_node(ctx, field)
 	case "hasPassword":
 		return ec.fieldContext_Share_hasPassword(ctx, field)
+	case "allowUpload":
+		return ec.fieldContext_Share_allowUpload(ctx, field)
 	case "expiresAt":
 		return ec.fieldContext_Share_expiresAt(ctx, field)
 	case "createdAt":
@@ -8949,6 +9075,8 @@ func (ec *executionContext) childFields_ShareInfo(ctx context.Context, field gra
 		return ec.fieldContext_ShareInfo_needPassword(ctx, field)
 	case "expired":
 		return ec.fieldContext_ShareInfo_expired(ctx, field)
+	case "allowUpload":
+		return ec.fieldContext_ShareInfo_allowUpload(ctx, field)
 	case "expiresAt":
 		return ec.fieldContext_ShareInfo_expiresAt(ctx, field)
 	case "size":
@@ -8967,6 +9095,8 @@ func (ec *executionContext) childFields_ShareVisit(ctx context.Context, field gr
 		return ec.fieldContext_ShareVisit_ip(ctx, field)
 	case "userAgent":
 		return ec.fieldContext_ShareVisit_userAgent(ctx, field)
+	case "detail":
+		return ec.fieldContext_ShareVisit_detail(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_ShareVisit_createdAt(ctx, field)
 	}
@@ -8979,6 +9109,8 @@ func (ec *executionContext) childFields_ShareVisitStats(ctx context.Context, fie
 		return ec.fieldContext_ShareVisitStats_verifyCount(ctx, field)
 	case "downloadCount":
 		return ec.fieldContext_ShareVisitStats_downloadCount(ctx, field)
+	case "uploadCount":
+		return ec.fieldContext_ShareVisitStats_uploadCount(ctx, field)
 	case "lastVisitAt":
 		return ec.fieldContext_ShareVisitStats_lastVisitAt(ctx, field)
 	case "lastVisitKind":
@@ -9788,6 +9920,14 @@ func (ec *executionContext) field_Mutation_createShare_args(ctx context.Context,
 		return nil, err
 	}
 	args["expiresAt"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "allowUpload",
+		func(ctx context.Context, v any) (*bool, error) {
+			return ec.unmarshalOBoolean2ᚖbool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["allowUpload"] = arg3
 	return args, nil
 }
 
@@ -10623,6 +10763,28 @@ func (ec *executionContext) field_Mutation_setMCPAccessRoot_args(ctx context.Con
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_setShareUpload_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "allow",
+		func(ctx context.Context, v any) (bool, error) {
+			return ec.unmarshalNBoolean2bool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["allow"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_setStarred_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -10642,6 +10804,110 @@ func (ec *executionContext) field_Mutation_setStarred_args(ctx context.Context, 
 		return nil, err
 	}
 	args["starred"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_shareAbortUpload_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "sessionId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["sessionId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_shareCompleteUpload_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "sessionId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["sessionId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "etags",
+		func(ctx context.Context, v any) ([]*PartEtag, error) {
+			return ec.unmarshalNPartEtag2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐPartEtagᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["etags"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_shareEnsureFolder_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "parentId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["parentId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "name",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "uploaderName",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["uploaderName"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_shareInitUpload_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "parentId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["parentId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "name",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "size",
+		func(ctx context.Context, v any) (int64, error) {
+			return ec.unmarshalNInt642int64(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["size"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "uploaderName",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["uploaderName"] = arg3
 	return args, nil
 }
 
@@ -11464,6 +11730,20 @@ func (ec *executionContext) field_Query_shareInfo_args(ctx context.Context, rawA
 		return nil, err
 	}
 	args["token"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_shareUploadSession_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -21313,7 +21593,7 @@ func (ec *executionContext) _Mutation_createShare(ctx context.Context, field gra
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().CreateShare(ctx, fc.Args["nodeId"].(string), fc.Args["password"].(*string), fc.Args["expiresAt"].(*time.Time))
+			return ec.Resolvers.Mutation().CreateShare(ctx, fc.Args["nodeId"].(string), fc.Args["password"].(*string), fc.Args["expiresAt"].(*time.Time), fc.Args["allowUpload"].(*bool))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *Share) graphql.Marshaler {
@@ -21385,6 +21665,50 @@ func (ec *executionContext) fieldContext_Mutation_revokeShare(ctx context.Contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_revokeShare_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setShareUpload(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_setShareUpload(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetShareUpload(ctx, fc.Args["id"].(string), fc.Args["allow"].(bool))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_setShareUpload(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setShareUpload_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -21781,6 +22105,182 @@ func (ec *executionContext) fieldContext_Mutation_collectAbortUpload(ctx context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_collectAbortUpload_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_shareInitUpload(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_shareInitUpload(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ShareInitUpload(ctx, fc.Args["parentId"].(string), fc.Args["name"].(string), fc.Args["size"].(int64), fc.Args["uploaderName"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *UploadSession) graphql.Marshaler {
+			return ec.marshalNUploadSession2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐUploadSession(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_shareInitUpload(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UploadSession(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_shareInitUpload_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_shareCompleteUpload(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_shareCompleteUpload(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ShareCompleteUpload(ctx, fc.Args["sessionId"].(string), fc.Args["etags"].([]*PartEtag))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Node) graphql.Marshaler {
+			return ec.marshalNNode2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNode(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_shareCompleteUpload(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Node(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_shareCompleteUpload_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_shareAbortUpload(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_shareAbortUpload(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ShareAbortUpload(ctx, fc.Args["sessionId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_shareAbortUpload(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_shareAbortUpload_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_shareEnsureFolder(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_shareEnsureFolder(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ShareEnsureFolder(ctx, fc.Args["parentId"].(string), fc.Args["name"].(string), fc.Args["uploaderName"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Node) graphql.Marshaler {
+			return ec.marshalNNode2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNode(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_shareEnsureFolder(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Node(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_shareEnsureFolder_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -26427,6 +26927,50 @@ func (ec *executionContext) fieldContext_Query_collectMyUploads(_ context.Contex
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_shareUploadSession(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_shareUploadSession(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().ShareUploadSession(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *UploadSession) graphql.Marshaler {
+			return ec.marshalNUploadSession2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐUploadSession(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_shareUploadSession(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UploadSession(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_shareUploadSession_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_appPasswords(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29008,6 +29552,29 @@ func (ec *executionContext) fieldContext_Share_hasPassword(_ context.Context, fi
 	return graphql.NewScalarFieldContext("Share", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
+func (ec *executionContext) _Share_allowUpload(ctx context.Context, field graphql.CollectedField, obj *Share) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Share_allowUpload(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AllowUpload, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Share_allowUpload(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Share", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _Share_expiresAt(ctx context.Context, field graphql.CollectedField, obj *Share) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29224,6 +29791,29 @@ func (ec *executionContext) fieldContext_ShareInfo_expired(_ context.Context, fi
 	return graphql.NewScalarFieldContext("ShareInfo", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
+func (ec *executionContext) _ShareInfo_allowUpload(ctx context.Context, field graphql.CollectedField, obj *ShareInfo) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareInfo_allowUpload(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AllowUpload, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ShareInfo_allowUpload(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareInfo", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _ShareInfo_expiresAt(ctx context.Context, field graphql.CollectedField, obj *ShareInfo) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29362,6 +29952,29 @@ func (ec *executionContext) fieldContext_ShareVisit_userAgent(_ context.Context,
 	return graphql.NewScalarFieldContext("ShareVisit", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _ShareVisit_detail(ctx context.Context, field graphql.CollectedField, obj *ShareVisit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareVisit_detail(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Detail, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ShareVisit_detail(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareVisit", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _ShareVisit_createdAt(ctx context.Context, field graphql.CollectedField, obj *ShareVisit) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29428,6 +30041,29 @@ func (ec *executionContext) _ShareVisitStats_downloadCount(ctx context.Context, 
 	)
 }
 func (ec *executionContext) fieldContext_ShareVisitStats_downloadCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ShareVisitStats", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _ShareVisitStats_uploadCount(ctx context.Context, field graphql.CollectedField, obj *ShareVisitStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ShareVisitStats_uploadCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UploadCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ShareVisitStats_uploadCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ShareVisitStats", field, false, false, errors.New("field of type Int64 does not have child fields"))
 }
 
@@ -36747,6 +37383,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "setShareUpload":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setShareUpload(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "verifySharePassword":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_verifySharePassword(ctx, field)
@@ -36806,6 +37449,34 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "collectAbortUpload":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_collectAbortUpload(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "shareInitUpload":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_shareInitUpload(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "shareCompleteUpload":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_shareCompleteUpload(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "shareAbortUpload":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_shareAbortUpload(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "shareEnsureFolder":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_shareEnsureFolder(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -38728,6 +39399,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "shareUploadSession":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_shareUploadSession(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "appPasswords":
 			field := field
 
@@ -40118,6 +40811,11 @@ func (ec *executionContext) _Share(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "allowUpload":
+			out.Values[i] = ec._Share_allowUpload(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "expiresAt":
 			out.Values[i] = ec._Share_expiresAt(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
@@ -40229,6 +40927,11 @@ func (ec *executionContext) _ShareInfo(ctx context.Context, sel ast.SelectionSet
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "allowUpload":
+			out.Values[i] = ec._ShareInfo_allowUpload(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "expiresAt":
 			out.Values[i] = ec._ShareInfo_expiresAt(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
@@ -40292,6 +40995,11 @@ func (ec *executionContext) _ShareVisit(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "detail":
+			out.Values[i] = ec._ShareVisit_detail(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "createdAt":
 			out.Values[i] = ec._ShareVisit_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -40337,6 +41045,11 @@ func (ec *executionContext) _ShareVisitStats(ctx context.Context, sel ast.Select
 			}
 		case "downloadCount":
 			out.Values[i] = ec._ShareVisitStats_downloadCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "uploadCount":
+			out.Values[i] = ec._ShareVisitStats_uploadCount(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

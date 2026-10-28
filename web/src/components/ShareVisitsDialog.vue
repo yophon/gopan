@@ -24,6 +24,7 @@ const KIND_TEXT: Record<string, string> = {
   verify: '打开分享',
   download: '下载文件',
   pack: '打包下载',
+  upload: '上传文件',
 }
 
 function kindText(kind: string): string {
@@ -51,13 +52,16 @@ function kindText(kind: string): string {
       <el-table-column label="时间" width="170">
         <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
       </el-table-column>
-      <el-table-column label="动作" width="110">
-        <template #default="{ row }">{{ kindText(row.kind) }}</template>
+      <el-table-column label="动作" min-width="150">
+        <template #default="{ row }">
+          {{ kindText(row.kind) }}
+          <div v-if="row.detail" class="detail" :title="row.detail">{{ row.detail }}</div>
+        </template>
       </el-table-column>
       <el-table-column label="IP" width="140">
         <template #default="{ row }">{{ row.ip ?? '—' }}</template>
       </el-table-column>
-      <el-table-column label="客户端" min-width="180">
+      <el-table-column label="客户端" min-width="160">
         <template #default="{ row }">
           <span :title="row.userAgent ?? ''">{{ describeUserAgent(row.userAgent) }}</span>
         </template>
@@ -67,6 +71,13 @@ function kindText(kind: string): string {
 </template>
 
 <style scoped>
+.detail {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .hint {
   margin: 0 0 12px;
   color: var(--el-text-color-secondary);

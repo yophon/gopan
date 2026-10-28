@@ -36,6 +36,7 @@ import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.ScreenKey
 import xyz.yophon.gopan.core.data.chat.ChatMessage
 import xyz.yophon.gopan.core.data.chat.ChatRepository
+import xyz.yophon.gopan.core.network.ChangeFeed
 import xyz.yophon.gopan.core.network.gopanResult
 import xyz.yophon.gopan.core.prefs.UserPreferencesRepository
 import xyz.yophon.gopan.core.share.QuickShare
@@ -119,6 +120,7 @@ class ChatViewModel @Inject constructor(
     private val connectivity: Connectivity,
     private val previews: PreviewSessionStore,
     private val cache: ScreenCache,
+    private val changes: ChangeFeed = ChangeFeed.None,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -183,6 +185,10 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             transfers.events.filter { it is TransferEvent.UploadDone && it.task.toChat }.collect { if (visible) refreshLatest() }
         }
+        // 别的设备发了、删了消息:服务端推过来就拉(doc/32 二)
+        viewModelScope.launch {
+            changes.changes.filter { it.touchesChat }.collect { if (visible) refreshLatest() }
+        }
         viewModelScope.launch {
             connectivity.online.collect { online ->
                 if (!online) {
@@ -224,7 +230,8 @@ class ChatViewModel @Inject constructor(
             pollJob = viewModelScope.launch {
                 while (true) {
                     refreshLatest()
-                    delay(POLL_INTERVAL_MS)
+                    // 推送连着时新消息由它通知,轮询只是兜底
+                    delay(if (changes.connected.value) POLL_PUSHED_MS else POLL_INTERVAL_MS)
                 }
             }
         }
@@ -659,6 +666,7 @@ class ChatViewModel @Inject constructor(
         val LATEST_CACHE_KEY = ScreenKey("chat.latest", ListSerializer(ChatMessage.serializer()))
 
         const val POLL_INTERVAL_MS = 2_000L
+        const val POLL_PUSHED_MS = 30_000L
         const val SEARCH_DEBOUNCE_MS = 300L
         const val HIGHLIGHT_MS = 1_500L
         const val DRAFT_SAVE_DEBOUNCE_MS = 500L

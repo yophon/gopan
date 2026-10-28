@@ -51,6 +51,7 @@ type ShareOutput struct {
 	URL         string     `json:"url"`
 	Name        string     `json:"name,omitempty"`
 	HasPassword bool       `json:"has_password"`
+	AllowUpload bool       `json:"allow_upload,omitempty"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 }
 type SharesOutput struct {
@@ -61,6 +62,7 @@ type CreateShareInput struct {
 	Path           *string    `json:"path,omitempty"`
 	Password       *string    `json:"password,omitempty"`
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
+	AllowUpload    bool       `json:"allow_upload,omitempty" jsonschema:"folders only: visitors can also upload files and create folders (never delete, rename or overwrite)"`
 	IdempotencyKey string     `json:"idempotency_key,omitempty"`
 }
 
@@ -73,12 +75,12 @@ func (s *Server) createShare(ctx context.Context, _ *mcp.CallToolRequest, in Cre
 	if err != nil {
 		return nil, ShareOutput{}, err
 	}
-	sh, err := s.nodes.MCPShares().Create(ctx, p.UserID, id, in.Password, in.ExpiresAt)
+	sh, err := s.nodes.MCPShares().Create(ctx, p.UserID, id, in.Password, in.ExpiresAt, in.AllowUpload)
 	if err != nil {
 		return nil, ShareOutput{}, err
 	}
 	base, _ := ctx.Value(baseURLKey{}).(string)
-	out := ShareOutput{ID: sh.ID.String(), NodeID: sh.NodeID.String(), URL: base + "/s/" + sh.Token, HasPassword: sh.PasswordHash != nil}
+	out := ShareOutput{ID: sh.ID.String(), NodeID: sh.NodeID.String(), URL: base + "/s/" + sh.Token, HasPassword: sh.PasswordHash != nil, AllowUpload: sh.AllowUpload}
 	if sh.ExpiresAt.Valid {
 		out.ExpiresAt = &sh.ExpiresAt.Time
 	}
@@ -99,7 +101,7 @@ func (s *Server) listShares(ctx context.Context, _ *mcp.CallToolRequest, _ Empty
 		if err := s.nodes.CheckMCPNode(ctx, p, sh.NodeID, true); err != nil {
 			continue
 		}
-		item := ShareOutput{ID: sh.ID.String(), NodeID: sh.NodeID.String(), URL: base + "/s/" + sh.Token, Name: sh.NodeName, HasPassword: sh.PasswordHash != nil}
+		item := ShareOutput{ID: sh.ID.String(), NodeID: sh.NodeID.String(), URL: base + "/s/" + sh.Token, Name: sh.NodeName, HasPassword: sh.PasswordHash != nil, AllowUpload: sh.AllowUpload}
 		if sh.ExpiresAt.Valid {
 			item.ExpiresAt = &sh.ExpiresAt.Time
 		}

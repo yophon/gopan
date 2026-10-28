@@ -43,6 +43,7 @@ import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -264,6 +265,7 @@ fun SharesScreen(
             onSend = { if (!system.sendText(viewModel.url(sheetShare), context.getString(R.string.share_send_chooser))) toast(R.string.share_no_app) },
             onOpen = { if (!system.openUrl(viewModel.url(sheetShare))) toast(R.string.shares_no_browser) },
             onVisits = { onOpenVisits(sheetShare) },
+            onToggleUpload = { viewModel.toggleUpload(sheetShare) },
             onRevoke = { revokeFor = sheetShare.id },
         )
     }
@@ -300,10 +302,10 @@ private fun shareSecondary(share: Share): String {
         share.isExpired() -> stringResource(R.string.shares_expired, formatTime(share.expiresAt))
         else -> stringResource(R.string.shares_until, formatTime(share.expiresAt))
     }
-    val visits = if (share.verifyCount + share.downloadCount == 0L) {
-        stringResource(R.string.shares_no_visits)
-    } else {
-        stringResource(R.string.shares_visits, share.verifyCount, share.downloadCount)
+    val visits = when {
+        share.verifyCount + share.downloadCount + share.uploadCount == 0L -> stringResource(R.string.shares_no_visits)
+        share.uploadCount > 0 -> stringResource(R.string.shares_visits_upload, share.verifyCount, share.downloadCount, share.uploadCount)
+        else -> stringResource(R.string.shares_visits, share.verifyCount, share.downloadCount)
     }
     return "${formatTime(share.createdAt)} · $expiry · $visits"
 }
@@ -326,6 +328,10 @@ private fun ShareRow(share: Share, revoking: Boolean, onClick: () -> Unit) {
                 if (share.hasPassword) {
                     Spacer(Modifier.size(6.dp))
                     Icon(Icons.Outlined.Lock, contentDescription = stringResource(R.string.shares_has_password), modifier = Modifier.size(16.dp))
+                }
+                if (share.allowUpload) {
+                    Spacer(Modifier.size(6.dp))
+                    Icon(Icons.Outlined.Upload, contentDescription = stringResource(R.string.shares_allow_upload), modifier = Modifier.size(16.dp))
                 }
             }
         },
@@ -353,6 +359,7 @@ private fun ShareActionSheet(
     onSend: () -> Unit,
     onOpen: () -> Unit,
     onVisits: () -> Unit,
+    onToggleUpload: () -> Unit,
     onRevoke: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -374,6 +381,10 @@ private fun ShareActionSheet(
         SheetAction(Icons.AutoMirrored.Outlined.Send, stringResource(R.string.shares_action_send)) { pick(onSend) }
         SheetAction(Icons.AutoMirrored.Outlined.OpenInNew, stringResource(R.string.shares_action_open)) { pick(onOpen) }
         SheetAction(Icons.Outlined.Insights, stringResource(R.string.shares_action_visits)) { pick(onVisits) }
+        if (share.isFolder) {
+            val label = if (share.allowUpload) R.string.shares_action_upload_off else R.string.shares_action_upload_on
+            SheetAction(Icons.Outlined.Upload, stringResource(label)) { pick(onToggleUpload) }
+        }
         SheetAction(Icons.Outlined.LinkOff, stringResource(R.string.shares_action_revoke), destructive = true) { pick(onRevoke) }
         Spacer(Modifier.height(16.dp).navigationBarsPadding())
     }
@@ -455,10 +466,13 @@ private fun VisitRow(visit: ShareVisit) {
     ListItem(
         headlineContent = { Text(visitKindText(visit.kind)) },
         supportingContent = {
-            Text(
-                listOf(formatTime(visit.createdAt), visit.ip ?: "—", describeUserAgent(visit.userAgent)).joinToString(" · "),
-                maxLines = 2,
-            )
+            Column {
+                visit.detail?.let { Text(it, maxLines = 1, overflow = TextOverflow.MiddleEllipsis) }
+                Text(
+                    listOf(formatTime(visit.createdAt), visit.ip ?: "—", describeUserAgent(visit.userAgent)).joinToString(" · "),
+                    maxLines = 2,
+                )
+            }
         },
         modifier = Modifier.testTag("visit_row"),
     )
@@ -469,5 +483,6 @@ private fun visitKindText(kind: String): String = when (kind) {
     "verify" -> stringResource(R.string.visits_kind_verify)
     "download" -> stringResource(R.string.visits_kind_download)
     "pack" -> stringResource(R.string.visits_kind_pack)
+    "upload" -> stringResource(R.string.visits_kind_upload)
     else -> kind
 }

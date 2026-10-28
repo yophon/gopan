@@ -36,6 +36,23 @@ func (n *Notifier) noteCollectUpload(ctx context.Context, tx pgx.Tx, owner uuid.
 	})
 }
 
+// noteShareUpload 访客往分享里传了一个文件:同一分享 30 分钟内合并成一条。随落库的事务一起提交。
+func (n *Notifier) noteShareUpload(ctx context.Context, tx pgx.Tx, owner uuid.UUID, sh store.LockShareRow, uploader string, node store.Node, size int64) {
+	who := uploader
+	if who == "" {
+		who = "访客"
+	}
+	t := &Target{Kind: TgNode, ID: node.ID.String()}
+	if node.ParentID != nil {
+		t.ParentID = node.ParentID.String()
+	}
+	n.NotifyTx(ctx, tx, owner, Event{
+		Kind: EvShareUpload, Level: LvInfo, Title: "分享「" + sh.NodeName + "」收到新文件",
+		Body:   fmt.Sprintf("%s 传了 %s(%s)", who, node.Name, humanBytes(size)),
+		Target: t, GroupKey: "share_upload:" + sh.ID.String(),
+	})
+}
+
 // noteCollectFull 属主空间不够,访客的上传被拒(每条链接每天一次)。不在业务事务里写:那个事务要回滚。
 func (n *Notifier) noteCollectFull(ctx context.Context, owner, reqID uuid.UUID, title string) {
 	n.Notify(context.WithoutCancel(ctx), owner, Event{

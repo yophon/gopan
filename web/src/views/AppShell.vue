@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, reactive, ref, watch, watchEffect } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, reactive, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Bell } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { MeDocument } from '@/api/gen/graphql'
+import { startRealtime } from '@/api/realtime'
 import { useAuthStore } from '@/stores/auth'
 import { useUploadsStore } from '@/stores/uploads'
 import { useBreakpoints } from '@/composables/breakpoints'
@@ -30,6 +31,9 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const queryClient = useQueryClient()
+
+// 别处改了网盘,这里自动刷新(doc/32 二)
+onBeforeUnmount(startRealtime(queryClient))
 
 const { isMobile } = useBreakpoints()
 

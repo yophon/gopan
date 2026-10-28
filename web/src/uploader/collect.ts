@@ -8,17 +8,18 @@ import { InterruptedError, uploadParts, uploadedBytes } from './parts'
 import type { PartSession } from './parts'
 
 /**
- * 收集链接访客页的上传器(doc/20 二.5)。与登录用户的 manager.ts 共用分片引擎(parts.ts),
+ * 收集链接与分享访客页的上传器(doc/20 二.5、doc/32 一)。与登录用户的 manager.ts 共用分片引擎(parts.ts),
  * 但它是页面级的:一个页面一个实例,不进全局 store,不走登录态的 request。
  *
  * - 不算 sha256(没有秒传),选完文件直接开传。
  * - 同时 2 个文件、每个 3 片并行;任务级 3 次指数退避。
  * - 断点续传:会话 id 按 (名字, 大小, 修改时间) 存 localStorage,键里带链接 token,
  *   不和属主自己的上传记录混。同一浏览器重新打开链接、重新选同一个文件就接着传。
+ * - 分享访客能传进不同的文件夹:add 时带 target(文件夹 id),原样交给 transport.init。
  */
 
 export interface CollectTransport {
-  init(name: string, size: number): Promise<CollectSession>
+  init(name: string, size: number, target: string | null): Promise<CollectSession>
   session(id: string): Promise<CollectSession>
   complete(id: string): Promise<{ name: string; size: number }>
   abort(id: string): Promise<void>
@@ -40,6 +41,8 @@ export interface CollectTask {
   /** 落库后的名字(撞名时服务端会自动改名) */
   finalName: string | null
   sessionId: string | null
+  /** 传到哪个文件夹(分享访客);收集链接为空 */
+  target: string | null
 }
 
 interface ResumeRecord {
@@ -47,6 +50,7 @@ interface ResumeRecord {
   fileName: string
   size: number
   lastModified: number
+  target?: string | null
 }
 
 const MAX_ACTIVE_FILES = 2
@@ -64,6 +68,10 @@ export const COLLECT_FATAL_CODES = new Set([
   'INVALID_INPUT',
   'NOT_FOUND',
   'NAME_CONFLICT',
+  'NOT_A_FOLDER',
+  'SHARE_EXPIRED',
+  'SHARE_NO_UPLOAD',
+  'SHARE_FULL',
 ])
 
 /** 会话已不可用,丢掉断点记录走全新上传 */
@@ -103,9 +111,13 @@ export function createCollectUploader(transport: CollectTransport, resumeKey: st
       // 隐私模式等:没有断点续传,不影响上传
     }
   }
-  function matchRecord(file: File): ResumeRecord | undefined {
+  function matchRecord(file: File, target: string | null): ResumeRecord | undefined {
     return loadRecords().find(
-      (r) => r.fileName === file.name && r.size === file.size && r.lastModified === file.lastModified,
+      (r) =>
+        r.fileName === file.name &&
+        r.size === file.size &&
+        r.lastModified === file.lastModified &&
+        (r.target ?? null) === target,
     )
   }
   function addRecord(r: ResumeRecord) {
@@ -118,9 +130,9 @@ export function createCollectUploader(transport: CollectTransport, resumeKey: st
 
   // ---------- 入队与调度 ----------
 
-  function add(files: File[]) {
+  function add(files: File[], target: string | null = null) {
     for (const file of files) {
-      const record = matchRecord(file)
+      const record = matchRecord(file, target)
       const task: CollectTask = {
         id: randomId(),
         fileName: file.name,
@@ -130,6 +142,7 @@ export function createCollectUploader(transport: CollectTransport, resumeKey: st
         error: null,
         finalName: null,
         sessionId: record?.sessionId ?? null,
+        target,
       }
       tasks.push(task)
       runtimes.set(task.id, {
@@ -179,9 +192,15 @@ export function createCollectUploader(transport: CollectTransport, resumeKey: st
       }
       throwIfCanceled(rt)
       if (!session) {
-        session = await transport.init(task.fileName, task.size)
+        session = await transport.init(task.fileName, task.size, task.target)
         task.sessionId = session.id
-        addRecord({ sessionId: session.id, fileName: task.fileName, size: task.size, lastModified: rt.file.lastModified })
+        addRecord({
+          sessionId: session.id,
+          fileName: task.fileName,
+          size: task.size,
+          lastModified: rt.file.lastModified,
+          target: task.target,
+        })
       }
       rt.session = session
       throwIfCanceled(rt)

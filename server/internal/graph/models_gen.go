@@ -821,6 +821,7 @@ type Share struct {
 	Token       string           `json:"token"`
 	Node        *Node            `json:"node"`
 	HasPassword bool             `json:"hasPassword"`
+	AllowUpload bool             `json:"allowUpload"`
 	ExpiresAt   *time.Time       `json:"expiresAt,omitempty"`
 	CreatedAt   time.Time        `json:"createdAt"`
 	VisitStats  *ShareVisitStats `json:"visitStats"`
@@ -836,6 +837,7 @@ type ShareInfo struct {
 	Kind         NodeKind   `json:"kind"`
 	NeedPassword bool       `json:"needPassword"`
 	Expired      bool       `json:"expired"`
+	AllowUpload  bool       `json:"allowUpload"`
 	ExpiresAt    *time.Time `json:"expiresAt,omitempty"`
 	Size         *int64     `json:"size,omitempty"`
 	FileCount    *int64     `json:"fileCount,omitempty"`
@@ -845,12 +847,14 @@ type ShareVisit struct {
 	Kind      string    `json:"kind"`
 	IP        *string   `json:"ip,omitempty"`
 	UserAgent *string   `json:"userAgent,omitempty"`
+	Detail    *string   `json:"detail,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
 type ShareVisitStats struct {
 	VerifyCount   int64      `json:"verifyCount"`
 	DownloadCount int64      `json:"downloadCount"`
+	UploadCount   int64      `json:"uploadCount"`
 	LastVisitAt   *time.Time `json:"lastVisitAt,omitempty"`
 	LastVisitKind *string    `json:"lastVisitKind,omitempty"`
 }
@@ -1038,6 +1042,7 @@ const (
 	ActorKindAgent   ActorKind = "AGENT"
 	ActorKindImg     ActorKind = "IMG"
 	ActorKindCollect ActorKind = "COLLECT"
+	ActorKindShare   ActorKind = "SHARE"
 	ActorKindJob     ActorKind = "JOB"
 	ActorKindFeed    ActorKind = "FEED"
 	ActorKindClip    ActorKind = "CLIP"
@@ -1051,6 +1056,7 @@ var AllActorKind = []ActorKind{
 	ActorKindAgent,
 	ActorKindImg,
 	ActorKindCollect,
+	ActorKindShare,
 	ActorKindJob,
 	ActorKindFeed,
 	ActorKindClip,
@@ -1059,7 +1065,7 @@ var AllActorKind = []ActorKind{
 
 func (e ActorKind) IsValid() bool {
 	switch e {
-	case ActorKindWeb, ActorKindAndroid, ActorKindWebdav, ActorKindAgent, ActorKindImg, ActorKindCollect, ActorKindJob, ActorKindFeed, ActorKindClip, ActorKindSystem:
+	case ActorKindWeb, ActorKindAndroid, ActorKindWebdav, ActorKindAgent, ActorKindImg, ActorKindCollect, ActorKindShare, ActorKindJob, ActorKindFeed, ActorKindClip, ActorKindSystem:
 		return true
 	}
 	return false

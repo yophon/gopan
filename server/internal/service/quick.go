@@ -50,8 +50,16 @@ func (s *Nodes) Starred(ctx context.Context, owner uuid.UUID) ([]QuickRow, error
 
 // MarkOpened 记一次打开(网页 / App 预览、播放、下载时上报)。文件夹、回收站里的、别人的忽略。
 func (s *Nodes) MarkOpened(ctx context.Context, owner, id uuid.UUID) error {
-	_, err := s.q.MarkNodeOpened(ctx, store.MarkNodeOpenedParams{ID: id, OwnerID: owner})
-	return err
+	n, err := s.q.MarkNodeOpened(ctx, store.MarkNodeOpenedParams{ID: id, OwnerID: owner})
+	if err != nil || n == 0 {
+		return err
+	}
+	return s.recentChanged(ctx, owner)
+}
+
+// recentChanged 告诉这个人的其他设备「最近」变了(doc/32 二)。
+func (s *Nodes) recentChanged(ctx context.Context, owner uuid.UUID) error {
+	return notifyChange(ctx, s.q, owner, Change{Topic: "recent"})
 }
 
 // Recent 最近打开的文件,最近的在前。
@@ -84,6 +92,8 @@ func (s *Nodes) ClearRecent(ctx context.Context, owner uuid.UUID, ids []uuid.UUI
 	if _, err := s.q.ClearNodesOpened(ctx, store.ClearNodesOpenedParams{OwnerID: owner, Ids: ids}); err != nil {
 		return err
 	}
-	_, err := s.q.ClearPlayProgressMany(ctx, store.ClearPlayProgressManyParams{OwnerID: owner, Ids: ids})
-	return err
+	if _, err := s.q.ClearPlayProgressMany(ctx, store.ClearPlayProgressManyParams{OwnerID: owner, Ids: ids}); err != nil {
+		return err
+	}
+	return s.recentChanged(ctx, owner)
 }

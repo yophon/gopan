@@ -72,6 +72,7 @@ import NodeCardList from '@/components/nodes/NodeCardList.vue'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
 import { baseNameRange, DRAG_MIME, nextSort, parseSortPref, stepSelection, type SortKey, type SortPref } from '@/components/nodes/browser'
 import type { NodeListItem, SheetItem } from '@/components/nodes/types'
+import { MAX_DROP_FILES, walkEntry, type Collected } from '@/uploader/dropTree'
 
 type ChildItem = ChildrenQuery['children']['items'][number]
 
@@ -506,50 +507,6 @@ useEventListener(window, 'dragleave', (e: DragEvent) => {
   if (!hasFiles(e)) return
   dragDepth.value = Math.max(0, dragDepth.value - 1)
 })
-const MAX_DROP_FILES = 1000
-
-/** readEntries 每批最多返回 100 项,必须循环读空 */
-function readAllEntries(dir: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
-  const reader = dir.createReader()
-  return new Promise((resolve, reject) => {
-    const all: FileSystemEntry[] = []
-    const step = () =>
-      reader.readEntries((batch) => {
-        if (batch.length === 0) {
-          resolve(all)
-          return
-        }
-        all.push(...batch)
-        step()
-      }, reject)
-    step()
-  })
-}
-
-function entryFile(entry: FileSystemFileEntry): Promise<File> {
-  return new Promise((resolve, reject) => entry.file(resolve, reject))
-}
-
-type Collected = { dirs: string[]; file: File }
-
-/** 深度优先展开 entry 树 → (相对目录段, 文件) 列表;空目录记进 emptyDirs */
-async function walkEntry(entry: FileSystemEntry, dirs: string[], out: Collected[], emptyDirs: string[][]): Promise<void> {
-  if (out.length >= MAX_DROP_FILES) return
-  if (entry.isFile) {
-    out.push({ dirs, file: await entryFile(entry as FileSystemFileEntry) })
-    return
-  }
-  if (entry.isDirectory) {
-    const children = await readAllEntries(entry as FileSystemDirectoryEntry)
-    const sub = [...dirs, entry.name]
-    if (children.length === 0) {
-      emptyDirs.push(sub)
-      return
-    }
-    for (const c of children) await walkEntry(c, sub, out, emptyDirs)
-  }
-}
-
 /** 一个文件夹下的全部子项(翻完所有页):建目录链时找同名文件夹不能只看第一页 */
 async function allChildren(parentId: string | null) {
   const out: ChildItem[] = []
@@ -654,10 +611,10 @@ const { download: onDownload, downloadingId } = useNodeDownload()
 // ---------- 分享 / 收集 / 离线下载 / 解压 / 直链 / 详情 ----------
 
 const shareDialogVisible = ref(false)
-const shareTarget = ref<{ id: string; name: string } | null>(null)
+const shareTarget = ref<{ id: string; name: string; kind: string } | null>(null)
 
-function openShare(row: { id: string; name: string }) {
-  shareTarget.value = { id: row.id, name: row.name }
+function openShare(row: { id: string; name: string; kind: string }) {
+  shareTarget.value = { id: row.id, name: row.name, kind: row.kind }
   shareDialogVisible.value = true
 }
 

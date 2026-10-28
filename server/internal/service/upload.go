@@ -225,7 +225,7 @@ func (s *Uploads) sessionView(ctx context.Context, sess store.UploadSession) (*S
 			continue
 		}
 		var u string
-		if sess.RequestID != nil {
+		if sess.RequestID != nil || sess.ShareID != nil {
 			// 匿名访客:把这一片的长度签进去,拿到地址也只能传这么大
 			u, err = s.obj.PresignPartSized(ctx, key, sess.MinioUploadID, n, partLen(sess, n))
 		} else {

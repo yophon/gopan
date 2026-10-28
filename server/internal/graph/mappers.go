@@ -250,13 +250,14 @@ func gqlShare(r store.ListMySharesRow) *Share {
 		Token:       r.Token,
 		Node:        node,
 		HasPassword: r.PasswordHash != nil,
+		AllowUpload: r.AllowUpload,
 		CreatedAt:   r.CreatedAt.Time,
 	}
 	if r.ExpiresAt.Valid {
 		t := r.ExpiresAt.Time
 		out.ExpiresAt = &t
 	}
-	stats := &ShareVisitStats{VerifyCount: r.VerifyCount, DownloadCount: r.DownloadCount}
+	stats := &ShareVisitStats{VerifyCount: r.VerifyCount, DownloadCount: r.DownloadCount, UploadCount: r.UploadCount}
 	if r.LastVisitAt.Valid {
 		t := r.LastVisitAt.Time
 		stats.LastVisitAt = &t

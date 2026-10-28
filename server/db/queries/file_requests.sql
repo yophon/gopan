@@ -93,9 +93,9 @@ SELECT count(*)::bigint FROM upload_sessions
 WHERE visitor_id = $1 AND status IN ('uploading', 'completing');
 
 -- name: SumOwnerCollectPendingBytes :one
--- 属主配额要预留所有收集链接上进行中的会话(参照 Agent 直传的 SumActiveTransferBytes)。
+-- 属主配额要预留所有收集链接、分享上传上进行中的访客会话(参照 Agent 直传的 SumActiveTransferBytes)。
 SELECT COALESCE(sum(size), 0)::bigint FROM upload_sessions
-WHERE owner_id = $1 AND request_id IS NOT NULL AND status IN ('uploading', 'completing');
+WHERE owner_id = $1 AND (request_id IS NOT NULL OR share_id IS NOT NULL) AND status IN ('uploading', 'completing');
 
 -- name: ListFileRequestUploads :many
 -- 收件记录,新的在前;id 游标。文件还在(未删除)时带出节点信息。

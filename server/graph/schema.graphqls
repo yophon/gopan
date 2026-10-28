@@ -517,6 +517,8 @@ type Share {
   token: String!
   node: Node!
   hasPassword: Boolean!
+  # 访客能往里传文件、建文件夹(只有文件夹分享会是 true,doc/32 一)
+  allowUpload: Boolean!
   expiresAt: Time
   createdAt: Time!
   # 访问统计。没有访问时返回全零对象(非空,前端不用判空)。
@@ -525,10 +527,12 @@ type Share {
 
 # 一条分享访问记录。
 type ShareVisit {
-  # verify(访客进入)/ download(单文件下载)/ pack(打包下载)
+  # verify(访客进入)/ download(单文件下载)/ pack(打包下载)/ upload(访客传了文件)
   kind: String!
   ip: String
   userAgent: String
+  # upload 时是「访客留的名字 · 文件名」
+  detail: String
   createdAt: Time!
 }
 
@@ -540,6 +544,7 @@ type ShareVisit {
 type ShareVisitStats {
   verifyCount: Int64!
   downloadCount: Int64!
+  uploadCount: Int64!
   lastVisitAt: Time
   lastVisitKind: String
 }
@@ -550,6 +555,8 @@ type ShareInfo {
   kind: NodeKind!
   needPassword: Boolean!
   expired: Boolean!
+  # 访客能上传(doc/32 一)
+  allowUpload: Boolean!
   # 访客页头部显示(v3.8):有密码的分享在验密前一律为 null,不提前透露内容的规模
   expiresAt: Time
   # 文件是大小;文件夹是子树体积与文件数(异步统计,可能略滞后)
@@ -741,7 +748,7 @@ type ChatMessage {
 
 # ---------- 动态与撤回(doc/23 二) ----------
 
-enum ActorKind { WEB, ANDROID, WEBDAV, AGENT, IMG, COLLECT, JOB, FEED, CLIP, SYSTEM }
+enum ActorKind { WEB, ANDROID, WEBDAV, AGENT, IMG, COLLECT, SHARE, JOB, FEED, CLIP, SYSTEM }
 enum ActivityAction { MKDIR, UPLOAD, OVERWRITE, RENAME, MOVE, COPY, DELETE, RESTORE, PURGE, EXTRACT }
 
 type ActivityActor {
@@ -1156,6 +1163,8 @@ type Query {
   fileRequestInfo(token: String!): FileRequestInfo!
   collectUploadSession(id: ID!): UploadSession!
   collectMyUploads: [CollectUpload!]!
+  # 分享访客的上传会话(断点续传),doc/32 一
+  shareUploadSession(id: ID!): UploadSession!
 
   appPasswords: [AppPassword!]!
   mcpAPIKeys: [MCPAPIKey!]!
@@ -1323,8 +1332,10 @@ type Mutation {
   # 把浏览器放不了的视频转成 mp4(doc/31 一);在转、转好了只回状态。分享访客在分享范围内也能用
   requestRemux(nodeId: ID!): RemuxInfo!
 
-  createShare(nodeId: ID!, password: String, expiresAt: Time): Share!
+  createShare(nodeId: ID!, password: String, expiresAt: Time, allowUpload: Boolean = false): Share!
   revokeShare(id: ID!): Boolean!
+  # 打开 / 关掉「允许对方上传」(只对文件夹分享)
+  setShareUpload(id: ID!, allow: Boolean!): Boolean!
   verifySharePassword(token: String!, password: String!): ShareAuth!
 
   # 收集文件:属主侧
@@ -1338,6 +1349,13 @@ type Mutation {
   collectInitUpload(name: String!, size: Int64!): UploadSession!
   collectCompleteUpload(sessionId: ID!, etags: [PartEtag!]!): CollectUpload!
   collectAbortUpload(sessionId: ID!): Boolean!
+
+  # 分享访客往分享范围里的文件夹传文件(分享开着上传时,doc/32 一)。uploaderName 选填,记进动态与访问记录
+  shareInitUpload(parentId: ID!, name: String!, size: Int64!, uploaderName: String): UploadSession!
+  shareCompleteUpload(sessionId: ID!, etags: [PartEtag!]!): Node!
+  shareAbortUpload(sessionId: ID!): Boolean!
+  # 找到或建出 parent 里名叫 name 的文件夹(同名文件夹已在就用它)
+  shareEnsureFolder(parentId: ID!, name: String!, uploaderName: String): Node!
 
   # WebDAV 应用密码:明文只在返回值出现一次
   createAppPassword(name: String!): String!

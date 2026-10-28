@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
-import { CircleCheckFilled, Close, Lock, Refresh, UploadFilled } from '@element-plus/icons-vue'
+import { CircleCheckFilled, Lock, UploadFilled } from '@element-plus/icons-vue'
 
 import { guestRequest, hasErrorCode, plainRequest } from '@/api/client'
 import { errorText } from '@/api/errors'
@@ -18,10 +18,12 @@ import {
 } from '@/api/gen/graphql'
 import { formatBytes, formatTime } from '@/utils/format'
 import { createCollectUploader } from '@/uploader/collect'
-import type { CollectTask, CollectTransport } from '@/uploader/collect'
+import type { CollectTransport } from '@/uploader/collect'
 import { expiryText } from '@/utils/visitor'
 import { useBreakpoints } from '@/composables/breakpoints'
 import BrandLogo from '@/components/BrandLogo.vue'
+import GuestUploadTasks from '@/components/visitor/GuestUploadTasks.vue'
+import { useUploadKeepAwake } from '@/composables/uploadKeepAwake'
 import '@/styles/visitor.css'
 
 /**
@@ -212,68 +214,8 @@ function onDrop(e: DragEvent) {
   addFiles(files)
 }
 
-function percent(t: CollectTask): number {
-  return t.size ? Math.floor((t.uploadedBytes / t.size) * 100) : 0
-}
-
-function statusText(t: CollectTask): string {
-  switch (t.status) {
-    case 'queued':
-      return '等待中'
-    case 'uploading':
-      return `${percent(t)}%`
-    case 'completing':
-      return '校验中'
-    case 'failed':
-      return t.error ?? '上传失败'
-    case 'canceled':
-      return '已取消'
-    default:
-      return ''
-  }
-}
-
-// ---------- 传的时候别让手机熄屏 / 别关页面 ----------
-
-let wakeLock: { release: () => Promise<void> } | null = null
-
-async function holdWakeLock(on: boolean) {
-  const wl = (navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } }).wakeLock
-  if (!wl) return
-  try {
-    if (on && !wakeLock) wakeLock = await wl.request('screen')
-    if (!on && wakeLock) {
-      await wakeLock.release()
-      wakeLock = null
-    }
-  } catch {
-    wakeLock = null // 省电模式等会拒绝,不影响上传
-  }
-}
-
-watch(uploader.busy, (b) => void holdWakeLock(b))
-
-function onVisibility() {
-  // 切回前台时系统已经释放了屏幕常亮,重新申请
-  if (document.visibilityState === 'visible' && uploader.busy.value) {
-    wakeLock = null
-    void holdWakeLock(true)
-  }
-}
-
-function onBeforeUnload(e: BeforeUnloadEvent) {
-  if (uploader.busy.value) e.preventDefault()
-}
-
-onMounted(() => {
-  window.addEventListener('beforeunload', onBeforeUnload)
-  document.addEventListener('visibilitychange', onVisibility)
-})
-onBeforeUnmount(() => {
-  window.removeEventListener('beforeunload', onBeforeUnload)
-  document.removeEventListener('visibilitychange', onVisibility)
-  void holdWakeLock(false)
-})
+// 传的时候别让手机熄屏、别关页面
+useUploadKeepAwake(uploader.busy)
 
 const { isMobile } = useBreakpoints()
 
@@ -360,25 +302,7 @@ watch(info, (i) => {
             <input ref="fileInput" type="file" multiple hidden @change="onPick" />
           </div>
 
-          <ul v-if="pending.length" class="c-tasks">
-            <li v-for="t in pending" :key="t.id" class="c-task" :class="t.status">
-              <div class="c-row">
-                <span class="c-name" :title="t.fileName">{{ t.fileName }}</span>
-                <span class="c-status">{{ formatBytes(t.size) }} · {{ statusText(t) }}</span>
-                <el-button v-if="t.status === 'failed'" link :icon="Refresh" title="重试" aria-label="重试" @click="uploader.retry(t.id)" />
-                <el-button
-                  v-if="t.status === 'failed' || t.status === 'canceled'"
-                  link
-                  :icon="Close"
-                  title="移除"
-                  aria-label="移除"
-                  @click="uploader.remove(t.id)"
-                />
-                <el-button v-else link :icon="Close" title="取消" aria-label="取消" @click="uploader.cancel(t.id)" />
-              </div>
-              <div class="c-bar"><i :style="{ width: `${percent(t)}%` }" /></div>
-            </li>
-          </ul>
+          <GuestUploadTasks :uploader="uploader" :tasks="pending" />
 
           <section v-if="delivered.length" class="c-done">
             <h2 class="c-done-title">
@@ -453,7 +377,6 @@ watch(info, (i) => {
   font-size: 13px;
   color: var(--gp-ink-3);
 }
-.c-tasks,
 .c-done ul {
   display: flex;
   flex-direction: column;
@@ -461,10 +384,6 @@ watch(info, (i) => {
   margin: 18px 0 0;
   padding: 0;
   list-style: none;
-}
-.c-task {
-  display: grid;
-  gap: 4px;
 }
 .c-row {
   display: flex;
@@ -481,30 +400,10 @@ watch(info, (i) => {
   font-size: 14px;
   color: var(--gp-ink);
 }
-.c-status,
 .c-size {
   flex: none;
   font-size: 12px;
   color: var(--gp-ink-3);
-}
-.c-task.failed .c-status {
-  color: var(--el-color-danger);
-}
-.c-bar {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--el-fill-color-dark);
-  overflow: hidden;
-}
-.c-bar i {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-  background: var(--gp-ink);
-  transition: width 0.3s;
-}
-.c-task.failed .c-bar i {
-  background: var(--el-color-danger);
 }
 .c-done {
   margin-top: 22px;

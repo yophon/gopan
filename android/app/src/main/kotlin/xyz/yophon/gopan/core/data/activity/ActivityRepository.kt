@@ -26,7 +26,7 @@ import xyz.yophon.gopan.graphql.type.UndoSelection as GqlSelection
 
 /** 改动的来源(与 GraphQL ActorKind 同名;服务端 actor_kind 是它的小写) */
 enum class ActorKind {
-    WEB, ANDROID, WEBDAV, AGENT, IMG, COLLECT, JOB, FEED, CLIP, SYSTEM;
+    WEB, ANDROID, WEBDAV, AGENT, IMG, COLLECT, SHARE, JOB, FEED, CLIP, SYSTEM;
 
     companion object {
         /** 大小写都认(GraphQL 是大写,通知目标 id 里是小写);认不出返回 null */

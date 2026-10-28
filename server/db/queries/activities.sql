@@ -62,3 +62,7 @@ UPDATE upload_sessions SET actor = $2 WHERE id = $1;
 
 -- name: SetTransferSessionActor :exec
 UPDATE transfer_sessions SET actor = $2 WHERE id = $1;
+
+-- name: NotifyChange :exec
+-- 自动刷新(doc/32 二):pg_notify 随事务提交才发出,回滚就不发
+SELECT pg_notify('gopan_changes', @payload::text);

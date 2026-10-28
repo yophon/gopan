@@ -19,6 +19,7 @@ import timber.log.Timber
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodesRepository
+import xyz.yophon.gopan.core.network.ChangeFeed
 import xyz.yophon.gopan.core.data.mergePages
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.network.gopanResult
@@ -96,6 +97,7 @@ class DriveViewModel @Inject constructor(
     transfers: TransferActions,
     previews: PreviewSessionStore,
     private val connectivity: Connectivity,
+    changes: ChangeFeed = ChangeFeed.None,
 ) : NodeActionsViewModel(repo, transfers, previews) {
 
     val parentId: String? = savedStateHandle[FOLDER_ID_ARG]
@@ -136,6 +138,13 @@ class DriveViewModel @Inject constructor(
         viewModelScope.launch {
             transfers.events
                 .filter { it is TransferEvent.UploadDone && it.task.parentId == parentId }
+                .debounce(UPLOAD_REFRESH_DEBOUNCE_MS)
+                .collect { if (_state.value.status == ListStatus.Content) load(LoadMode.SILENT) }
+        }
+        // 别处(网页、别的设备、WebDAV、分享访客)改了这个文件夹:静默刷新(doc/32 二)
+        viewModelScope.launch {
+            changes.changes
+                .filter { it.touchesFolder(parentId) }
                 .debounce(UPLOAD_REFRESH_DEBOUNCE_MS)
                 .collect { if (_state.value.status == ListStatus.Content) load(LoadMode.SILENT) }
         }

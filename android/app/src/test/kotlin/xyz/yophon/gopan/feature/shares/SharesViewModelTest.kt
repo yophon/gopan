@@ -41,9 +41,17 @@ class FakeSharesRepository : SharesRepository {
         return shares.toList()
     }
 
-    override suspend fun create(nodeId: String, password: String?, expiresAt: Instant?): Share {
+    val uploadToggles = mutableListOf<Pair<String, Boolean>>()
+    var lastAllowUpload: Boolean? = null
+
+    override suspend fun create(nodeId: String, password: String?, expiresAt: Instant?, allowUpload: Boolean): Share {
         created += Triple(nodeId, password, expiresAt)
-        return share("new", nodeId, hasPassword = password != null, expiresAt = expiresAt?.toString())
+        lastAllowUpload = allowUpload
+        return share("new", nodeId, hasPassword = password != null, expiresAt = expiresAt?.toString()).copy(allowUpload = allowUpload)
+    }
+
+    override suspend fun setUpload(id: String, allow: Boolean) {
+        uploadToggles += id to allow
     }
 
     override suspend fun revoke(id: String) {
@@ -114,6 +122,21 @@ class SharesViewModelTest {
         }
         assertThat(vm.state.value.items).isEmpty()
         assertThat(repo.revoked).containsExactly("a")
+    }
+
+    @Test
+    fun `toggling upload on a folder share updates the row and says so`() = runTest {
+        repo.shares = mutableListOf(share("a").copy(isFolder = true))
+        val vm = SharesViewModel(repo, testConfig, ScreenCache(SessionStore()))
+        advanceUntilIdle()
+
+        vm.effects.test {
+            vm.toggleUpload(vm.state.value.items.single())
+            val msg = awaitItem() as SharesEffect.Message
+            assertThat((msg.text as UiText.Res).id).isEqualTo(R.string.shares_msg_upload_on)
+        }
+        assertThat(repo.uploadToggles).containsExactly("a" to true)
+        assertThat(vm.state.value.items.single().allowUpload).isTrue()
     }
 
     @Test
@@ -203,6 +226,22 @@ class ShareCreateViewModelTest {
         val s = vm.state.value
         assertThat(s.url).isEqualTo("https://drive.example/s/tok-new")
         assertThat(s.created?.hasPassword).isFalse()
+    }
+
+    @Test
+    fun `only a folder share can let the other side upload`() = runTest {
+        val vm = ShareCreateViewModel(repo, testConfig)
+        vm.setAllowUpload(true)
+        vm.create("file1")
+        advanceUntilIdle()
+        assertThat(repo.lastAllowUpload).isFalse()
+
+        val folder = ShareCreateViewModel(repo, testConfig)
+        folder.setAllowUpload(true)
+        folder.create("dir1", isFolder = true)
+        advanceUntilIdle()
+        assertThat(repo.lastAllowUpload).isTrue()
+        assertThat(folder.state.value.created?.allowUpload).isTrue()
     }
 
     @Test

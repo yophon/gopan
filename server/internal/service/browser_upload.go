@@ -185,13 +185,22 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 	q := s.q.WithTx(tx)
 	parent, name := sess.TargetParent, sess.TargetName
 	var collect *collectTarget
-	if sess.RequestID != nil {
+	var share *shareTarget
+	switch {
+	case sess.RequestID != nil:
 		// 先锁链接行再锁用户行,与 Collects.InitUpload 同序
 		if collect, err = resolveCollectTarget(ctx, q, sess, size); err != nil {
 			return nil, err
 		}
 		parent, name = &collect.parent, collect.name
+	case sess.ShareID != nil:
+		// 先锁分享行再锁用户行,与 ShareUploads.InitUpload 同序
+		if share, err = resolveShareTarget(ctx, q, sess); err != nil {
+			return nil, err
+		}
+		parent, name = &share.parent, share.name
 	}
+	guest := collect != nil || share != nil
 	u, err := q.GetUserByIDForUpdate(ctx, sess.OwnerID)
 	if err != nil {
 		return nil, err
@@ -200,11 +209,14 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 		if collect != nil {
 			return nil, errCollectClosed
 		}
+		if share != nil {
+			return nil, errShareExpired
+		}
 		return nil, errf("UNAUTHENTICATED", "账号已停用")
 	}
 	// 「替换」上传(doc/24):同名文件还在就覆盖它,配额由覆盖逻辑按是否留旧版本细算
 	var replaceTarget *store.Node
-	if sess.ReplaceExisting && collect == nil {
+	if sess.ReplaceExisting && !guest {
 		ex, err := q.GetActiveChildByName(ctx, store.GetActiveChildByNameParams{OwnerID: sess.OwnerID, ParentID: parent, Name: name})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return nil, err
@@ -217,6 +229,9 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 		if collect != nil {
 			s.notify.noteCollectFull(ctx, sess.OwnerID, collect.request.ID, collect.request.Title)
 			return nil, errCollectFull // 不向访客透露属主的空间状态
+		}
+		if share != nil {
+			return nil, errShareFull
 		}
 		return nil, errf("QUOTA_EXCEEDED", "存储配额不足")
 	}
@@ -246,7 +261,7 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 	}
 	n, err := q.CreateNode(ctx, store.CreateNodeParams{ID: uuid.Must(uuid.NewV7()), OwnerID: sess.OwnerID, ParentID: parent, Name: name, Kind: "file", BlobID: &blob.ID})
 	if isUniqueViolation(err) {
-		if collect != nil {
+		if guest {
 			// 名字是锁住链接行之后挑的,还撞名只可能是属主同时在这个目录里建了同名文件:
 			// 不算终态失败,整笔回滚,下一轮重新挑名字
 			return nil, fmt.Errorf("collect upload %s: name %q taken concurrently", sess.ID, name)
@@ -291,6 +306,12 @@ func (s *Uploads) finalizeBrowserUpload(ctx context.Context, tx pgx.Tx, sess sto
 			label += " · " + uploader
 		}
 		actx = WithActor(ctx, Actor{Kind: ActorCollect, Ref: collect.request.ID.String(), Label: label})
+	}
+	if share != nil {
+		if err := share.record(ctx, q, sess, n, sum); err != nil {
+			return nil, err
+		}
+		s.notify.noteShareUpload(ctx, tx, sess.OwnerID, share.share, share.guest.Uploader, n, size)
 	}
 	if err := recordActs(actx, q, sess.OwnerID, fileAct(OpUpload, n, size)); err != nil {
 		return nil, err

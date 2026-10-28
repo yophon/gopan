@@ -120,7 +120,7 @@ func TestMarkdownHTTP(t *testing.T) {
 	}
 
 	// 分享访客:分享范围内能看、能跟相对路径;范围外的 404
-	sh, err := shares.Create(ctx, owner, folder.ID, nil, nil)
+	sh, err := shares.Create(ctx, owner, folder.ID, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}

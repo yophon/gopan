@@ -26,6 +26,7 @@ import (
 const (
 	EvCollectUpload = "collect_upload"
 	EvCollectFull   = "collect_full"
+	EvShareUpload   = "share_upload"
 	EvJobDone       = "job_done"
 	EvJobFailed     = "job_failed"
 	EvQuota         = "quota"
@@ -52,6 +53,7 @@ type EventKind struct {
 var EventKinds = []EventKind{
 	{EvCollectUpload, "收集链接收到文件", true, false},
 	{EvCollectFull, "收集链接因空间不足拒收", true, false},
+	{EvShareUpload, "分享收到对方传的文件", true, false},
 	{EvJobDone, "离线下载 / 解压完成", false, false},
 	{EvJobFailed, "离线下载 / 解压失败", true, false},
 	{EvQuota, "空间快满", true, false},

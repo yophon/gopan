@@ -1,8 +1,9 @@
-mutation CreateShare($nodeId: ID!, $password: String, $expiresAt: Time) {
-  createShare(nodeId: $nodeId, password: $password, expiresAt: $expiresAt) {
+mutation CreateShare($nodeId: ID!, $password: String, $expiresAt: Time, $allowUpload: Boolean) {
+  createShare(nodeId: $nodeId, password: $password, expiresAt: $expiresAt, allowUpload: $allowUpload) {
     id
     token
     hasPassword
+    allowUpload
     expiresAt
     createdAt
     node {
@@ -17,16 +18,23 @@ mutation RevokeShare($id: ID!) {
   revokeShare(id: $id)
 }
 
+# 文件夹分享打开 / 关掉「对方上传」(doc/32 一)
+mutation SetShareUpload($id: ID!, $allow: Boolean!) {
+  setShareUpload(id: $id, allow: $allow)
+}
+
 query MyShares {
   myShares {
     id
     token
     hasPassword
+    allowUpload
     expiresAt
     createdAt
     visitStats {
       verifyCount
       downloadCount
+      uploadCount
       lastVisitAt
       lastVisitKind
     }
@@ -44,6 +52,7 @@ query ShareVisits($shareId: ID!, $limit: Int) {
     kind
     ip
     userAgent
+    detail
     createdAt
   }
 }

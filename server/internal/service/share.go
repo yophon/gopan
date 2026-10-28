@@ -57,12 +57,17 @@ func (s *Shares) allow(key string) bool {
 
 // ---- 属主操作 ----
 
-func (s *Shares) Create(ctx context.Context, owner, nodeID uuid.UUID, password *string, expiresAt *time.Time) (store.Share, error) {
-	if _, err := s.q.GetActiveNodeOwned(ctx, store.GetActiveNodeOwnedParams{ID: nodeID, OwnerID: owner}); err != nil {
+// Create 建分享。allowUpload 只对文件夹有效(doc/32 一)。
+func (s *Shares) Create(ctx context.Context, owner, nodeID uuid.UUID, password *string, expiresAt *time.Time, allowUpload bool) (store.Share, error) {
+	n, err := s.q.GetActiveNodeOwned(ctx, store.GetActiveNodeOwnedParams{ID: nodeID, OwnerID: owner})
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return store.Share{}, ErrNotFound
 		}
 		return store.Share{}, err
+	}
+	if allowUpload && n.Kind != "folder" {
+		return store.Share{}, errf("NOT_A_FOLDER", "只有文件夹分享能让对方上传")
 	}
 	if expiresAt != nil && !expiresAt.After(time.Now()) {
 		return store.Share{}, errf("INVALID_INPUT", "有效期必须是将来的时间")
@@ -91,7 +96,7 @@ func (s *Shares) Create(ctx context.Context, owner, nodeID uuid.UUID, password *
 		}
 		sh, err := s.q.CreateShare(ctx, store.CreateShareParams{
 			ID: uuid.Must(uuid.NewV7()), Token: token, NodeID: nodeID,
-			CreatedBy: owner, PasswordHash: pwHash, ExpiresAt: exp,
+			CreatedBy: owner, PasswordHash: pwHash, ExpiresAt: exp, AllowUpload: allowUpload,
 		})
 		if isUniqueViolation(err) {
 			continue
@@ -112,6 +117,22 @@ func (s *Shares) Revoke(ctx context.Context, owner, id uuid.UUID) error {
 	return nil
 }
 
+// SetUpload 打开 / 关掉「允许对方上传」。关掉即时生效:进行中的访客上传落库时复核,会失败。
+func (s *Shares) SetUpload(ctx context.Context, owner, id uuid.UUID, allow bool) error {
+	n, err := s.q.SetShareUpload(ctx, store.SetShareUploadParams{ID: id, CreatedBy: owner, AllowUpload: allow})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		// 没改到:分享不在、不是自己的,或者对文件分享开上传
+		if sh, err := s.q.GetShareByID(ctx, id); err == nil && sh.CreatedBy == owner && !sh.RevokedAt.Valid && sh.NodeKind != "folder" {
+			return errf("NOT_A_FOLDER", "只有文件夹分享能让对方上传")
+		}
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Shares) List(ctx context.Context, owner uuid.UUID) ([]store.ListMySharesRow, error) {
 	return s.q.ListMyShares(ctx, owner)
 }
@@ -124,6 +145,7 @@ type ShareInfoView struct {
 	Kind         string
 	NeedPassword bool
 	Expired      bool
+	AllowUpload  bool
 	ExpiresAt    *time.Time
 	// 文件是自身大小;文件夹是子树体积与文件数(异步统计,可能略滞后)
 	Size  int64
@@ -147,6 +169,7 @@ func (s *Shares) Info(ctx context.Context, token string) (*ShareInfoView, error)
 		Kind:         sh.NodeKind,
 		NeedPassword: sh.PasswordHash != nil,
 		Expired:      shareDead(sh.RevokedAt.Valid, sh.ExpiresAt, sh.NodeDeletedAt.Valid, sh.OwnerDisabled),
+		AllowUpload:  sh.AllowUpload && sh.NodeKind == "folder",
 		Size:         sh.NodeSubtreeBytes,
 		Files:        sh.NodeSubtreeCount,
 		BlobSha:      sh.BlobSha256,

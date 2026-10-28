@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,6 +14,8 @@ import kotlinx.coroutines.launch
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.data.Node
 import xyz.yophon.gopan.core.data.NodesRepository
+import xyz.yophon.gopan.core.network.Change
+import xyz.yophon.gopan.core.network.ChangeFeed
 import xyz.yophon.gopan.core.data.ScreenCache
 import xyz.yophon.gopan.core.data.media.MediaRepository
 import xyz.yophon.gopan.core.data.media.RecentPlay
@@ -57,6 +60,7 @@ class QuickViewModel @Inject constructor(
     private val quick: QuickRepository,
     cache: ScreenCache,
     private val media: MediaRepository,
+    changes: ChangeFeed = ChangeFeed.None,
 ) : NodeActionsViewModel(repo, transfers, previews) {
 
     private val _state = MutableStateFlow(QuickUiState(recent = savedStateHandle[RECENT_ARG] ?: false))
@@ -85,6 +89,12 @@ class QuickViewModel @Inject constructor(
         }
         // 乐观修改(从最近里拿掉、清空)也跟着写回快照
         cache.mirror(viewModelScope, key, _state) { s -> s.items.takeIf { s.status == ListStatus.Content } }
+        // 别的设备打开过文件、文件改名删除了:静默刷新(doc/32 二)
+        viewModelScope.launch {
+            changes.changes
+                .filter { if (_state.value.recent) it.touchesRecent else it.topic == Change.FILES || it.topic == Change.RESYNC }
+                .collect { if (_state.value.status == ListStatus.Content && loadJob?.isActive != true) load(LoadMode.SILENT) }
+        }
     }
 
     private fun showCached(items: List<QuickItem>) {

@@ -20,6 +20,8 @@ type Resolver struct {
 	OAuth     *service.OAuth
 	Chats     *service.Chats
 	Collects  *service.Collects
+	// ShareUploads 分享访客的上传(doc/32 一)
+	ShareUploads *service.ShareUploads
 	Content   *service.ContentSearch
 	Jobs      *service.Jobs
 	Archives  *service.Archives
