@@ -122,13 +122,37 @@ type ComplexityRoot struct {
 	}
 
 	AdminUser struct {
+		AiTokensToday func(childComplexity int) int
+		CreatedAt     func(childComplexity int) int
+		Disabled      func(childComplexity int) int
+		ID            func(childComplexity int) int
+		IsAdmin       func(childComplexity int) int
+		QuotaBytes    func(childComplexity int) int
+		UsedBytes     func(childComplexity int) int
+		Username      func(childComplexity int) int
+	}
+
+	AiConversation struct {
 		CreatedAt  func(childComplexity int) int
-		Disabled   func(childComplexity int) int
+		Entries    func(childComplexity int) int
 		ID         func(childComplexity int) int
-		IsAdmin    func(childComplexity int) int
-		QuotaBytes func(childComplexity int) int
-		UsedBytes  func(childComplexity int) int
-		Username   func(childComplexity int) int
+		Model      func(childComplexity int) int
+		ProviderID func(childComplexity int) int
+		Title      func(childComplexity int) int
+		UpdatedAt  func(childComplexity int) int
+	}
+
+	AiProvider struct {
+		BaseURL     func(childComplexity int) int
+		DailyTokens func(childComplexity int) int
+		HasKey      func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Kind        func(childComplexity int) int
+		Models      func(childComplexity int) int
+		Name        func(childComplexity int) int
+		Site        func(childComplexity int) int
+		UpdatedAt   func(childComplexity int) int
+		UsedTokens  func(childComplexity int) int
 	}
 
 	AppPassword struct {
@@ -165,6 +189,20 @@ type ComplexityRoot struct {
 		Solid      func(childComplexity int) int
 		Status     func(childComplexity int) int
 		TotalSize  func(childComplexity int) int
+	}
+
+	AssistantAccess struct {
+		Disabled func(childComplexity int) int
+		Groups   func(childComplexity int) int
+	}
+
+	AssistantGroup struct {
+		DefaultPermission func(childComplexity int) int
+		Key               func(childComplexity int) int
+		Label             func(childComplexity int) int
+		Outbound          func(childComplexity int) int
+		Permission        func(childComplexity int) int
+		Scopes            func(childComplexity int) int
 	}
 
 	AuthPayload struct {
@@ -563,6 +601,7 @@ type ComplexityRoot struct {
 
 	Mutation struct {
 		AbortUpload              func(childComplexity int, sessionID string) int
+		AdminCreateAiProvider    func(childComplexity int, input AiProviderInput) int
 		AdminCreateUser          func(childComplexity int, username string, password string, quotaBytes *int64) int
 		AdminPauseLink           func(childComplexity int, id string, paused bool) int
 		AdminResetPassword       func(childComplexity int, userID string) int
@@ -570,6 +609,7 @@ type ComplexityRoot struct {
 		AdminRevokeLink          func(childComplexity int, id string) int
 		AdminSetDisabled         func(childComplexity int, userID string, disabled bool) int
 		AdminSetQuota            func(childComplexity int, userID string, quotaBytes int64) int
+		AppendAiEntries          func(childComplexity int, conversationID string, fromSeq int, entries []string) int
 		CancelJob                func(childComplexity int, id string) int
 		ChangePassword           func(childComplexity int, oldPassword string, newPassword string) int
 		ClearFinishedJobs        func(childComplexity int) int
@@ -582,6 +622,8 @@ type ComplexityRoot struct {
 		CollectInitUpload        func(childComplexity int, name string, size int64) int
 		CompleteUpload           func(childComplexity int, sessionID string, etags []*PartEtag) int
 		CopyNodes                func(childComplexity int, ids []string, targetParentID *string) int
+		CreateAiConversation     func(childComplexity int, title string, providerID *string, model *string) int
+		CreateAiProvider         func(childComplexity int, input AiProviderInput) int
 		CreateAppPassword        func(childComplexity int, name string) int
 		CreateFeed               func(childComplexity int, input FeedInput) int
 		CreateFileRequest        func(childComplexity int, folderID string, input FileRequestInput, password *string) int
@@ -592,6 +634,8 @@ type ComplexityRoot struct {
 		CreateShare              func(childComplexity int, nodeID string, password *string, expiresAt *time.Time, allowUpload *bool) int
 		CreateTextFile           func(childComplexity int, parentID *string, name string, content *string) int
 		DecideOAuthAuthorization func(childComplexity int, input OAuthAuthorizationInput, approved bool) int
+		DeleteAiConversation     func(childComplexity int, id string) int
+		DeleteAiProvider         func(childComplexity int, id string) int
 		DeleteChatMessage        func(childComplexity int, id string) int
 		DeleteFeed               func(childComplexity int, id string) int
 		DeleteFileVersions       func(childComplexity int, ids []string) int
@@ -636,6 +680,7 @@ type ComplexityRoot struct {
 		SaveProgress             func(childComplexity int, nodeID string, position float64, duration float64) int
 		SaveTextFile             func(childComplexity int, nodeID string, content string, baseSha256 *string) int
 		SendChatMessage          func(childComplexity int, body *string, nodeID *string) int
+		SetAssistantAccess       func(childComplexity int, disabled bool, groups []*AssistantGroupInput) int
 		SetClipPrefs             func(childComplexity int, input ClipPrefsInput) int
 		SetLinkPrefs             func(childComplexity int, input LinkPrefsInput) int
 		SetMCPAccessRoot         func(childComplexity int, credentialID string, credentialType string, rootPath *string) int
@@ -647,6 +692,8 @@ type ComplexityRoot struct {
 		ShareInitUpload          func(childComplexity int, parentID string, name string, size int64, uploaderName *string) int
 		TestNotifyChannel        func(childComplexity int, id string) int
 		UndoActivities           func(childComplexity int, selection UndoSelection) int
+		UpdateAiConversation     func(childComplexity int, id string, title *string, providerID *string, model *string) int
+		UpdateAiProvider         func(childComplexity int, id string, input AiProviderInput) int
 		UpdateFeed               func(childComplexity int, id string, input FeedInput) int
 		UpdateFileRequest        func(childComplexity int, id string, input FileRequestInput) int
 		UpdateLink               func(childComplexity int, id string, input DirectLinkInput) int
@@ -787,13 +834,20 @@ type ComplexityRoot struct {
 	Query struct {
 		Activities                func(childComplexity int, filter *ActivityFilter, cursor *string, limit *int) int
 		ActivityActors            func(childComplexity int) int
+		AdminAiProviders          func(childComplexity int) int
 		AdminLinkStats            func(childComplexity int) int
 		AdminOverview             func(childComplexity int) int
 		AdminStorage              func(childComplexity int) int
 		AdminUsers                func(childComplexity int) int
+		AiConversation            func(childComplexity int, id string) int
+		AiConversations           func(childComplexity int, before *time.Time, limit *int) int
+		AiEntries                 func(childComplexity int, conversationID string, fromSeq *int) int
+		AiProviderKey             func(childComplexity int, id string) int
+		AiProviders               func(childComplexity int) int
 		AppPasswords              func(childComplexity int) int
 		ArchiveEntries            func(childComplexity int, nodeID string, path *string, cursor *string) int
 		ArchiveInfo               func(childComplexity int, nodeID string) int
+		AssistantAccess           func(childComplexity int) int
 		ChatFolder                func(childComplexity int) int
 		ChatMessages              func(childComplexity int, limit *int, before *string, after *string, query *string) int
 		Children                  func(childComplexity int, parentID *string, cursor *string, order *NodeOrder, desc *bool) int
@@ -1140,6 +1194,15 @@ type MutationResolver interface {
 	ClipURL(ctx context.Context, url string, html *string, force *bool) (*ClipResult, error)
 	MarkClipRead(ctx context.Context, id string, read *bool) (*Clip, error)
 	SetClipPrefs(ctx context.Context, input ClipPrefsInput) (*ClipPrefs, error)
+	CreateAiProvider(ctx context.Context, input AiProviderInput) (*AiProvider, error)
+	AdminCreateAiProvider(ctx context.Context, input AiProviderInput) (*AiProvider, error)
+	UpdateAiProvider(ctx context.Context, id string, input AiProviderInput) (*AiProvider, error)
+	DeleteAiProvider(ctx context.Context, id string) (bool, error)
+	SetAssistantAccess(ctx context.Context, disabled bool, groups []*AssistantGroupInput) (*AssistantAccess, error)
+	CreateAiConversation(ctx context.Context, title string, providerID *string, model *string) (*AiConversation, error)
+	AppendAiEntries(ctx context.Context, conversationID string, fromSeq int, entries []string) (*AiConversation, error)
+	UpdateAiConversation(ctx context.Context, id string, title *string, providerID *string, model *string) (*AiConversation, error)
+	DeleteAiConversation(ctx context.Context, id string) (bool, error)
 }
 type NodeResolver interface {
 	Preview(ctx context.Context, obj *Node) (*PreviewInfo, error)
@@ -1224,6 +1287,13 @@ type QueryResolver interface {
 	Clip(ctx context.Context, id string) (*Clip, error)
 	NodeClip(ctx context.Context, nodeID string) (*Clip, error)
 	ClipPrefs(ctx context.Context) (*ClipPrefs, error)
+	AiProviders(ctx context.Context) ([]*AiProvider, error)
+	AdminAiProviders(ctx context.Context) ([]*AiProvider, error)
+	AiProviderKey(ctx context.Context, id string) (string, error)
+	AssistantAccess(ctx context.Context) (*AssistantAccess, error)
+	AiConversations(ctx context.Context, before *time.Time, limit *int) ([]*AiConversation, error)
+	AiConversation(ctx context.Context, id string) (*AiConversation, error)
+	AiEntries(ctx context.Context, conversationID string, fromSeq *int) ([]string, error)
 }
 type UserResolver interface {
 	UnreadNotifications(ctx context.Context, obj *User) (int, error)
@@ -1573,6 +1643,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.AdminStorage.TextIndexBytes(childComplexity), true
 
+	case "AdminUser.aiTokensToday":
+		if e.ComplexityRoot.AdminUser.AiTokensToday == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AdminUser.AiTokensToday(childComplexity), true
 	case "AdminUser.createdAt":
 		if e.ComplexityRoot.AdminUser.CreatedAt == nil {
 			break
@@ -1615,6 +1691,110 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AdminUser.Username(childComplexity), true
+
+	case "AiConversation.createdAt":
+		if e.ComplexityRoot.AiConversation.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiConversation.CreatedAt(childComplexity), true
+	case "AiConversation.entries":
+		if e.ComplexityRoot.AiConversation.Entries == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiConversation.Entries(childComplexity), true
+	case "AiConversation.id":
+		if e.ComplexityRoot.AiConversation.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiConversation.ID(childComplexity), true
+	case "AiConversation.model":
+		if e.ComplexityRoot.AiConversation.Model == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiConversation.Model(childComplexity), true
+	case "AiConversation.providerId":
+		if e.ComplexityRoot.AiConversation.ProviderID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiConversation.ProviderID(childComplexity), true
+	case "AiConversation.title":
+		if e.ComplexityRoot.AiConversation.Title == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiConversation.Title(childComplexity), true
+	case "AiConversation.updatedAt":
+		if e.ComplexityRoot.AiConversation.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiConversation.UpdatedAt(childComplexity), true
+
+	case "AiProvider.baseUrl":
+		if e.ComplexityRoot.AiProvider.BaseURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiProvider.BaseURL(childComplexity), true
+	case "AiProvider.dailyTokens":
+		if e.ComplexityRoot.AiProvider.DailyTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiProvider.DailyTokens(childComplexity), true
+	case "AiProvider.hasKey":
+		if e.ComplexityRoot.AiProvider.HasKey == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiProvider.HasKey(childComplexity), true
+	case "AiProvider.id":
+		if e.ComplexityRoot.AiProvider.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiProvider.ID(childComplexity), true
+	case "AiProvider.kind":
+		if e.ComplexityRoot.AiProvider.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiProvider.Kind(childComplexity), true
+	case "AiProvider.models":
+		if e.ComplexityRoot.AiProvider.Models == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiProvider.Models(childComplexity), true
+	case "AiProvider.name":
+		if e.ComplexityRoot.AiProvider.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiProvider.Name(childComplexity), true
+	case "AiProvider.site":
+		if e.ComplexityRoot.AiProvider.Site == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiProvider.Site(childComplexity), true
+	case "AiProvider.updatedAt":
+		if e.ComplexityRoot.AiProvider.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiProvider.UpdatedAt(childComplexity), true
+	case "AiProvider.usedTokens":
+		if e.ComplexityRoot.AiProvider.UsedTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiProvider.UsedTokens(childComplexity), true
 
 	case "AppPassword.createdAt":
 		if e.ComplexityRoot.AppPassword.CreatedAt == nil {
@@ -1763,6 +1943,56 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ArchiveInfo.TotalSize(childComplexity), true
+
+	case "AssistantAccess.disabled":
+		if e.ComplexityRoot.AssistantAccess.Disabled == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AssistantAccess.Disabled(childComplexity), true
+	case "AssistantAccess.groups":
+		if e.ComplexityRoot.AssistantAccess.Groups == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AssistantAccess.Groups(childComplexity), true
+
+	case "AssistantGroup.defaultPermission":
+		if e.ComplexityRoot.AssistantGroup.DefaultPermission == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AssistantGroup.DefaultPermission(childComplexity), true
+	case "AssistantGroup.key":
+		if e.ComplexityRoot.AssistantGroup.Key == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AssistantGroup.Key(childComplexity), true
+	case "AssistantGroup.label":
+		if e.ComplexityRoot.AssistantGroup.Label == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AssistantGroup.Label(childComplexity), true
+	case "AssistantGroup.outbound":
+		if e.ComplexityRoot.AssistantGroup.Outbound == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AssistantGroup.Outbound(childComplexity), true
+	case "AssistantGroup.permission":
+		if e.ComplexityRoot.AssistantGroup.Permission == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AssistantGroup.Permission(childComplexity), true
+	case "AssistantGroup.scopes":
+		if e.ComplexityRoot.AssistantGroup.Scopes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AssistantGroup.Scopes(childComplexity), true
 
 	case "AuthPayload.accessToken":
 		if e.ComplexityRoot.AuthPayload.AccessToken == nil {
@@ -3408,6 +3638,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AbortUpload(childComplexity, args["sessionId"].(string)), true
+	case "Mutation.adminCreateAiProvider":
+		if e.ComplexityRoot.Mutation.AdminCreateAiProvider == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_adminCreateAiProvider_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AdminCreateAiProvider(childComplexity, args["input"].(AiProviderInput)), true
 	case "Mutation.adminCreateUser":
 		if e.ComplexityRoot.Mutation.AdminCreateUser == nil {
 			break
@@ -3480,6 +3721,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AdminSetQuota(childComplexity, args["userId"].(string), args["quotaBytes"].(int64)), true
+	case "Mutation.appendAiEntries":
+		if e.ComplexityRoot.Mutation.AppendAiEntries == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_appendAiEntries_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AppendAiEntries(childComplexity, args["conversationId"].(string), args["fromSeq"].(int), args["entries"].([]string)), true
 	case "Mutation.cancelJob":
 		if e.ComplexityRoot.Mutation.CancelJob == nil {
 			break
@@ -3602,6 +3854,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CopyNodes(childComplexity, args["ids"].([]string), args["targetParentId"].(*string)), true
+	case "Mutation.createAiConversation":
+		if e.ComplexityRoot.Mutation.CreateAiConversation == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createAiConversation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateAiConversation(childComplexity, args["title"].(string), args["providerId"].(*string), args["model"].(*string)), true
+	case "Mutation.createAiProvider":
+		if e.ComplexityRoot.Mutation.CreateAiProvider == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createAiProvider_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateAiProvider(childComplexity, args["input"].(AiProviderInput)), true
 	case "Mutation.createAppPassword":
 		if e.ComplexityRoot.Mutation.CreateAppPassword == nil {
 			break
@@ -3712,6 +3986,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DecideOAuthAuthorization(childComplexity, args["input"].(OAuthAuthorizationInput), args["approved"].(bool)), true
+	case "Mutation.deleteAiConversation":
+		if e.ComplexityRoot.Mutation.DeleteAiConversation == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteAiConversation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteAiConversation(childComplexity, args["id"].(string)), true
+	case "Mutation.deleteAiProvider":
+		if e.ComplexityRoot.Mutation.DeleteAiProvider == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteAiProvider_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteAiProvider(childComplexity, args["id"].(string)), true
 	case "Mutation.deleteChatMessage":
 		if e.ComplexityRoot.Mutation.DeleteChatMessage == nil {
 			break
@@ -4171,6 +4467,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SendChatMessage(childComplexity, args["body"].(*string), args["nodeId"].(*string)), true
+	case "Mutation.setAssistantAccess":
+		if e.ComplexityRoot.Mutation.SetAssistantAccess == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setAssistantAccess_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetAssistantAccess(childComplexity, args["disabled"].(bool), args["groups"].([]*AssistantGroupInput)), true
 	case "Mutation.setClipPrefs":
 		if e.ComplexityRoot.Mutation.SetClipPrefs == nil {
 			break
@@ -4292,6 +4599,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UndoActivities(childComplexity, args["selection"].(UndoSelection)), true
+	case "Mutation.updateAiConversation":
+		if e.ComplexityRoot.Mutation.UpdateAiConversation == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateAiConversation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateAiConversation(childComplexity, args["id"].(string), args["title"].(*string), args["providerId"].(*string), args["model"].(*string)), true
+	case "Mutation.updateAiProvider":
+		if e.ComplexityRoot.Mutation.UpdateAiProvider == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateAiProvider_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateAiProvider(childComplexity, args["id"].(string), args["input"].(AiProviderInput)), true
 	case "Mutation.updateFeed":
 		if e.ComplexityRoot.Mutation.UpdateFeed == nil {
 			break
@@ -4890,6 +5219,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.ActivityActors(childComplexity), true
+	case "Query.adminAiProviders":
+		if e.ComplexityRoot.Query.AdminAiProviders == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AdminAiProviders(childComplexity), true
 	case "Query.adminLinkStats":
 		if e.ComplexityRoot.Query.AdminLinkStats == nil {
 			break
@@ -4914,6 +5249,56 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AdminUsers(childComplexity), true
+	case "Query.aiConversation":
+		if e.ComplexityRoot.Query.AiConversation == nil {
+			break
+		}
+
+		args, err := ec.field_Query_aiConversation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AiConversation(childComplexity, args["id"].(string)), true
+	case "Query.aiConversations":
+		if e.ComplexityRoot.Query.AiConversations == nil {
+			break
+		}
+
+		args, err := ec.field_Query_aiConversations_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AiConversations(childComplexity, args["before"].(*time.Time), args["limit"].(*int)), true
+	case "Query.aiEntries":
+		if e.ComplexityRoot.Query.AiEntries == nil {
+			break
+		}
+
+		args, err := ec.field_Query_aiEntries_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AiEntries(childComplexity, args["conversationId"].(string), args["fromSeq"].(*int)), true
+	case "Query.aiProviderKey":
+		if e.ComplexityRoot.Query.AiProviderKey == nil {
+			break
+		}
+
+		args, err := ec.field_Query_aiProviderKey_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AiProviderKey(childComplexity, args["id"].(string)), true
+	case "Query.aiProviders":
+		if e.ComplexityRoot.Query.AiProviders == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AiProviders(childComplexity), true
 	case "Query.appPasswords":
 		if e.ComplexityRoot.Query.AppPasswords == nil {
 			break
@@ -4942,6 +5327,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.ArchiveInfo(childComplexity, args["nodeId"].(string)), true
+	case "Query.assistantAccess":
+		if e.ComplexityRoot.Query.AssistantAccess == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AssistantAccess(childComplexity), true
 	case "Query.chatFolder":
 		if e.ComplexityRoot.Query.ChatFolder == nil {
 			break
@@ -6152,6 +6543,8 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	ec := newExecutionContext(opCtx, e, make(chan graphql.DeferredResult))
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputActivityFilter,
+		ec.unmarshalInputAiProviderInput,
+		ec.unmarshalInputAssistantGroupInput,
 		ec.unmarshalInputClipPrefsInput,
 		ec.unmarshalInputDirectLinkInput,
 		ec.unmarshalInputFeedInput,
@@ -6318,6 +6711,8 @@ type AdminUser {
   disabled: Boolean!
   quotaBytes: Int64!
   usedBytes: Int64!
+  # 今天经站点提供的模型服务用掉的 token(doc/33)
+  aiTokensToday: Int64!
   createdAt: Time!
 }
 
@@ -6988,7 +7383,7 @@ type ChatMessage {
 
 # ---------- 动态与撤回(doc/23 二) ----------
 
-enum ActorKind { WEB, ANDROID, WEBDAV, AGENT, IMG, COLLECT, SHARE, JOB, FEED, CLIP, SYSTEM }
+enum ActorKind { WEB, ANDROID, WEBDAV, AGENT, ASSISTANT, IMG, COLLECT, SHARE, JOB, FEED, CLIP, SYSTEM }
 enum ActivityAction { MKDIR, UPLOAD, OVERWRITE, RENAME, MOVE, COPY, DELETE, RESTORE, PURGE, EXTRACT }
 
 type ActivityActor {
@@ -7681,6 +8076,102 @@ type Mutation {
 
 type MCPAccessRoot { credentialId: ID!, credentialType: String!, rootId: ID!, rootName: String! }
 type MCPAuditEvent { id: Int64!, credentialId: ID!, credentialType: String!, endpoint: String!, tool: String!, status: String!, errorCode: String, createdAt: Time! }
+
+# ---------- 助手(doc/33) ----------
+
+enum AiProviderKind { OPENAI, ANTHROPIC, GOOGLE, OPENAI_RESPONSES }
+
+type AiProvider {
+  id: ID!
+  name: String!
+  kind: AiProviderKind!
+  baseUrl: String!
+  # 第一个是默认
+  models: [String!]!
+  hasKey: Boolean!
+  # 站点提供的(管理员配):只能经服务器转发
+  site: Boolean!
+  # 站点提供的:每人每天的 token 上限,0 = 不限
+  dailyTokens: Int64!
+  # 今天经服务器转发用掉的 token(当前用户)
+  usedTokens: Int64!
+  updatedAt: Time!
+}
+
+# key:null = 不变,"" = 清掉;dailyTokens 只对站点提供的有效
+input AiProviderInput {
+  name: String!
+  kind: AiProviderKind!
+  baseUrl: String!
+  models: [String!]!
+  key: String
+  dailyTokens: Int64 = 0
+}
+
+enum AssistantPermission { ALLOW, ASK, DENY }
+
+# 助手权限表的一行;scopes 是这组对应的 MCP scope,工具的 _meta["gopan/scopes"] 用的同一套
+type AssistantGroup {
+  key: String!
+  label: String!
+  scopes: [String!]!
+  permission: AssistantPermission!
+  defaultPermission: AssistantPermission!
+  # 能把东西发到外面(公开链接、访问任意网址),改成允许时提示风险
+  outbound: Boolean!
+}
+
+type AssistantAccess {
+  disabled: Boolean!
+  groups: [AssistantGroup!]!
+}
+
+input AssistantGroupInput {
+  key: String!
+  permission: AssistantPermission!
+}
+
+type AiConversation {
+  id: ID!
+  title: String!
+  providerId: ID
+  model: String!
+  # 条目数,也是下一次追加的 fromSeq
+  entries: Int!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+extend type Query {
+  # 自己的 + 站点提供的(站点的在前)
+  aiProviders: [AiProvider!]!
+  # 管理员:站点提供的
+  adminAiProviders: [AiProvider!]!
+  # 直连用:只给自己的服务的 key;站点提供的一律拒绝
+  aiProviderKey(id: ID!): String!
+  assistantAccess: AssistantAccess!
+  # 最近的在前;before 是上一页最后一个的 updatedAt
+  aiConversations(before: Time, limit: Int = 50): [AiConversation!]!
+  aiConversation(id: ID!): AiConversation!
+  # 条目原样的 JSON 文本,从 fromSeq 起
+  aiEntries(conversationId: ID!, fromSeq: Int = 0): [String!]!
+}
+
+extend type Mutation {
+  createAiProvider(input: AiProviderInput!): AiProvider!
+  # 管理员:建站点提供的
+  adminCreateAiProvider(input: AiProviderInput!): AiProvider!
+  # 自己的;管理员也能改 / 删站点提供的
+  updateAiProvider(id: ID!, input: AiProviderInput!): AiProvider!
+  deleteAiProvider(id: ID!): Boolean!
+  # groups 只需给要改的组
+  setAssistantAccess(disabled: Boolean!, groups: [AssistantGroupInput!]!): AssistantAccess!
+  createAiConversation(title: String!, providerId: ID, model: String): AiConversation!
+  # fromSeq 必须等于现有条数,否则 CONFLICT(别的设备先写了)
+  appendAiEntries(conversationId: ID!, fromSeq: Int!, entries: [String!]!): AiConversation!
+  updateAiConversation(id: ID!, title: String, providerId: ID, model: String): AiConversation!
+  deleteAiConversation(id: ID!): Boolean!
+}
 `, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
@@ -7857,10 +8348,58 @@ func (ec *executionContext) childFields_AdminUser(ctx context.Context, field gra
 		return ec.fieldContext_AdminUser_quotaBytes(ctx, field)
 	case "usedBytes":
 		return ec.fieldContext_AdminUser_usedBytes(ctx, field)
+	case "aiTokensToday":
+		return ec.fieldContext_AdminUser_aiTokensToday(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_AdminUser_createdAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type AdminUser", field.Name)
+}
+
+func (ec *executionContext) childFields_AiConversation(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_AiConversation_id(ctx, field)
+	case "title":
+		return ec.fieldContext_AiConversation_title(ctx, field)
+	case "providerId":
+		return ec.fieldContext_AiConversation_providerId(ctx, field)
+	case "model":
+		return ec.fieldContext_AiConversation_model(ctx, field)
+	case "entries":
+		return ec.fieldContext_AiConversation_entries(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_AiConversation_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_AiConversation_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AiConversation", field.Name)
+}
+
+func (ec *executionContext) childFields_AiProvider(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_AiProvider_id(ctx, field)
+	case "name":
+		return ec.fieldContext_AiProvider_name(ctx, field)
+	case "kind":
+		return ec.fieldContext_AiProvider_kind(ctx, field)
+	case "baseUrl":
+		return ec.fieldContext_AiProvider_baseUrl(ctx, field)
+	case "models":
+		return ec.fieldContext_AiProvider_models(ctx, field)
+	case "hasKey":
+		return ec.fieldContext_AiProvider_hasKey(ctx, field)
+	case "site":
+		return ec.fieldContext_AiProvider_site(ctx, field)
+	case "dailyTokens":
+		return ec.fieldContext_AiProvider_dailyTokens(ctx, field)
+	case "usedTokens":
+		return ec.fieldContext_AiProvider_usedTokens(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_AiProvider_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AiProvider", field.Name)
 }
 
 func (ec *executionContext) childFields_AppPassword(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -7933,6 +8472,34 @@ func (ec *executionContext) childFields_ArchiveInfo(ctx context.Context, field g
 		return ec.fieldContext_ArchiveInfo_error(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ArchiveInfo", field.Name)
+}
+
+func (ec *executionContext) childFields_AssistantAccess(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "disabled":
+		return ec.fieldContext_AssistantAccess_disabled(ctx, field)
+	case "groups":
+		return ec.fieldContext_AssistantAccess_groups(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AssistantAccess", field.Name)
+}
+
+func (ec *executionContext) childFields_AssistantGroup(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "key":
+		return ec.fieldContext_AssistantGroup_key(ctx, field)
+	case "label":
+		return ec.fieldContext_AssistantGroup_label(ctx, field)
+	case "scopes":
+		return ec.fieldContext_AssistantGroup_scopes(ctx, field)
+	case "permission":
+		return ec.fieldContext_AssistantGroup_permission(ctx, field)
+	case "defaultPermission":
+		return ec.fieldContext_AssistantGroup_defaultPermission(ctx, field)
+	case "outbound":
+		return ec.fieldContext_AssistantGroup_outbound(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AssistantGroup", field.Name)
 }
 
 func (ec *executionContext) childFields_AuthPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -9443,6 +10010,20 @@ func (ec *executionContext) field_Mutation_abortUpload_args(ctx context.Context,
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_adminCreateAiProvider_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (AiProviderInput, error) {
+			return ec.unmarshalNAiProviderInput2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProviderInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_adminCreateUser_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -9564,6 +10145,36 @@ func (ec *executionContext) field_Mutation_adminSetQuota_args(ctx context.Contex
 		return nil, err
 	}
 	args["quotaBytes"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_appendAiEntries_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "conversationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["conversationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "fromSeq",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["fromSeq"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "entries",
+		func(ctx context.Context, v any) ([]string, error) {
+			return ec.unmarshalNString2ᚕstringᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["entries"] = arg2
 	return args, nil
 }
 
@@ -9760,6 +10371,50 @@ func (ec *executionContext) field_Mutation_copyNodes_args(ctx context.Context, r
 		return nil, err
 	}
 	args["targetParentId"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_createAiConversation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "title",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["title"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "providerId",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["providerId"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "model",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["model"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_createAiProvider_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (AiProviderInput, error) {
+			return ec.unmarshalNAiProviderInput2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProviderInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
 	return args, nil
 }
 
@@ -9980,6 +10635,34 @@ func (ec *executionContext) field_Mutation_decideOAuthAuthorization_args(ctx con
 		return nil, err
 	}
 	args["approved"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteAiConversation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteAiProvider_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -10705,6 +11388,28 @@ func (ec *executionContext) field_Mutation_sendChatMessage_args(ctx context.Cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_setAssistantAccess_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "disabled",
+		func(ctx context.Context, v any) (bool, error) {
+			return ec.unmarshalNBoolean2bool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["disabled"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "groups",
+		func(ctx context.Context, v any) ([]*AssistantGroupInput, error) {
+			return ec.unmarshalNAssistantGroupInput2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantGroupInputᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["groups"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_setClipPrefs_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -10939,6 +11644,66 @@ func (ec *executionContext) field_Mutation_undoActivities_args(ctx context.Conte
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_updateAiConversation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "title",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["title"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "providerId",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["providerId"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "model",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["model"] = arg3
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_updateAiProvider_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (AiProviderInput, error) {
+			return ec.unmarshalNAiProviderInput2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProviderInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_updateFeed_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -11090,6 +11855,78 @@ func (ec *executionContext) field_Query_activities_args(ctx context.Context, raw
 		return nil, err
 	}
 	args["limit"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_aiConversation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_aiConversations_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "before",
+		func(ctx context.Context, v any) (*time.Time, error) {
+			return ec.unmarshalOTime2ᚖtimeᚐTime(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["before"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_aiEntries_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "conversationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["conversationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "fromSeq",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["fromSeq"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_aiProviderKey_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -13407,6 +14244,29 @@ func (ec *executionContext) fieldContext_AdminUser_usedBytes(_ context.Context, 
 	return graphql.NewScalarFieldContext("AdminUser", field, false, false, errors.New("field of type Int64 does not have child fields"))
 }
 
+func (ec *executionContext) _AdminUser_aiTokensToday(ctx context.Context, field graphql.CollectedField, obj *AdminUser) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AdminUser_aiTokensToday(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AiTokensToday, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AdminUser_aiTokensToday(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AdminUser", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
 func (ec *executionContext) _AdminUser_createdAt(ctx context.Context, field graphql.CollectedField, obj *AdminUser) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -13428,6 +14288,397 @@ func (ec *executionContext) _AdminUser_createdAt(ctx context.Context, field grap
 }
 func (ec *executionContext) fieldContext_AdminUser_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("AdminUser", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _AiConversation_id(ctx context.Context, field graphql.CollectedField, obj *AiConversation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiConversation_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiConversation_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiConversation", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AiConversation_title(ctx context.Context, field graphql.CollectedField, obj *AiConversation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiConversation_title(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Title, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiConversation_title(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiConversation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AiConversation_providerId(ctx context.Context, field graphql.CollectedField, obj *AiConversation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiConversation_providerId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ProviderID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AiConversation_providerId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiConversation", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AiConversation_model(ctx context.Context, field graphql.CollectedField, obj *AiConversation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiConversation_model(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Model, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiConversation_model(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiConversation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AiConversation_entries(ctx context.Context, field graphql.CollectedField, obj *AiConversation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiConversation_entries(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Entries, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiConversation_entries(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiConversation", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AiConversation_createdAt(ctx context.Context, field graphql.CollectedField, obj *AiConversation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiConversation_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiConversation_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiConversation", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _AiConversation_updatedAt(ctx context.Context, field graphql.CollectedField, obj *AiConversation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiConversation_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiConversation_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiConversation", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _AiProvider_id(ctx context.Context, field graphql.CollectedField, obj *AiProvider) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiProvider_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiProvider_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiProvider", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AiProvider_name(ctx context.Context, field graphql.CollectedField, obj *AiProvider) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiProvider_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiProvider_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiProvider", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AiProvider_kind(ctx context.Context, field graphql.CollectedField, obj *AiProvider) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiProvider_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v AiProviderKind) graphql.Marshaler {
+			return ec.marshalNAiProviderKind2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProviderKind(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiProvider_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiProvider", field, false, false, errors.New("field of type AiProviderKind does not have child fields"))
+}
+
+func (ec *executionContext) _AiProvider_baseUrl(ctx context.Context, field graphql.CollectedField, obj *AiProvider) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiProvider_baseUrl(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.BaseURL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiProvider_baseUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiProvider", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AiProvider_models(ctx context.Context, field graphql.CollectedField, obj *AiProvider) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiProvider_models(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Models, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiProvider_models(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiProvider", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AiProvider_hasKey(ctx context.Context, field graphql.CollectedField, obj *AiProvider) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiProvider_hasKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HasKey, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiProvider_hasKey(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiProvider", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AiProvider_site(ctx context.Context, field graphql.CollectedField, obj *AiProvider) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiProvider_site(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Site, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiProvider_site(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiProvider", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AiProvider_dailyTokens(ctx context.Context, field graphql.CollectedField, obj *AiProvider) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiProvider_dailyTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DailyTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiProvider_dailyTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiProvider", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _AiProvider_usedTokens(ctx context.Context, field graphql.CollectedField, obj *AiProvider) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiProvider_usedTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UsedTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiProvider_usedTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiProvider", field, false, false, errors.New("field of type Int64 does not have child fields"))
+}
+
+func (ec *executionContext) _AiProvider_updatedAt(ctx context.Context, field graphql.CollectedField, obj *AiProvider) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiProvider_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiProvider_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiProvider", field, false, false, errors.New("field of type Time does not have child fields"))
 }
 
 func (ec *executionContext) _AppPassword_id(ctx context.Context, field graphql.CollectedField, obj *AppPassword) (ret graphql.Marshaler) {
@@ -13989,6 +15240,199 @@ func (ec *executionContext) _ArchiveInfo_error(ctx context.Context, field graphq
 }
 func (ec *executionContext) fieldContext_ArchiveInfo_error(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ArchiveInfo", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AssistantAccess_disabled(ctx context.Context, field graphql.CollectedField, obj *AssistantAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AssistantAccess_disabled(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Disabled, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AssistantAccess_disabled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AssistantAccess", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AssistantAccess_groups(ctx context.Context, field graphql.CollectedField, obj *AssistantAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AssistantAccess_groups(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Groups, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*AssistantGroup) graphql.Marshaler {
+			return ec.marshalNAssistantGroup2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantGroupᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AssistantAccess_groups(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AssistantAccess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AssistantGroup(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AssistantGroup_key(ctx context.Context, field graphql.CollectedField, obj *AssistantGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AssistantGroup_key(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Key, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AssistantGroup_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AssistantGroup", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AssistantGroup_label(ctx context.Context, field graphql.CollectedField, obj *AssistantGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AssistantGroup_label(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Label, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AssistantGroup_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AssistantGroup", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AssistantGroup_scopes(ctx context.Context, field graphql.CollectedField, obj *AssistantGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AssistantGroup_scopes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Scopes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AssistantGroup_scopes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AssistantGroup", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AssistantGroup_permission(ctx context.Context, field graphql.CollectedField, obj *AssistantGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AssistantGroup_permission(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Permission, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v AssistantPermission) graphql.Marshaler {
+			return ec.marshalNAssistantPermission2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantPermission(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AssistantGroup_permission(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AssistantGroup", field, false, false, errors.New("field of type AssistantPermission does not have child fields"))
+}
+
+func (ec *executionContext) _AssistantGroup_defaultPermission(ctx context.Context, field graphql.CollectedField, obj *AssistantGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AssistantGroup_defaultPermission(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DefaultPermission, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v AssistantPermission) graphql.Marshaler {
+			return ec.marshalNAssistantPermission2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantPermission(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AssistantGroup_defaultPermission(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AssistantGroup", field, false, false, errors.New("field of type AssistantPermission does not have child fields"))
+}
+
+func (ec *executionContext) _AssistantGroup_outbound(ctx context.Context, field graphql.CollectedField, obj *AssistantGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AssistantGroup_outbound(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Outbound, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AssistantGroup_outbound(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AssistantGroup", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _AuthPayload_accessToken(ctx context.Context, field graphql.CollectedField, obj *AuthPayload) (ret graphql.Marshaler) {
@@ -24148,6 +25592,402 @@ func (ec *executionContext) fieldContext_Mutation_setClipPrefs(ctx context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_createAiProvider(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createAiProvider(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateAiProvider(ctx, fc.Args["input"].(AiProviderInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AiProvider) graphql.Marshaler {
+			return ec.marshalNAiProvider2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProvider(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createAiProvider(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AiProvider(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createAiProvider_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_adminCreateAiProvider(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_adminCreateAiProvider(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AdminCreateAiProvider(ctx, fc.Args["input"].(AiProviderInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AiProvider) graphql.Marshaler {
+			return ec.marshalNAiProvider2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProvider(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_adminCreateAiProvider(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AiProvider(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_adminCreateAiProvider_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateAiProvider(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_updateAiProvider(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateAiProvider(ctx, fc.Args["id"].(string), fc.Args["input"].(AiProviderInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AiProvider) graphql.Marshaler {
+			return ec.marshalNAiProvider2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProvider(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_updateAiProvider(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AiProvider(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateAiProvider_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteAiProvider(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteAiProvider(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteAiProvider(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteAiProvider(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteAiProvider_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setAssistantAccess(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_setAssistantAccess(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetAssistantAccess(ctx, fc.Args["disabled"].(bool), fc.Args["groups"].([]*AssistantGroupInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AssistantAccess) graphql.Marshaler {
+			return ec.marshalNAssistantAccess2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantAccess(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_setAssistantAccess(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AssistantAccess(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setAssistantAccess_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createAiConversation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createAiConversation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateAiConversation(ctx, fc.Args["title"].(string), fc.Args["providerId"].(*string), fc.Args["model"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AiConversation) graphql.Marshaler {
+			return ec.marshalNAiConversation2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiConversation(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createAiConversation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AiConversation(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createAiConversation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_appendAiEntries(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_appendAiEntries(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AppendAiEntries(ctx, fc.Args["conversationId"].(string), fc.Args["fromSeq"].(int), fc.Args["entries"].([]string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AiConversation) graphql.Marshaler {
+			return ec.marshalNAiConversation2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiConversation(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_appendAiEntries(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AiConversation(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_appendAiEntries_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateAiConversation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_updateAiConversation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateAiConversation(ctx, fc.Args["id"].(string), fc.Args["title"].(*string), fc.Args["providerId"].(*string), fc.Args["model"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AiConversation) graphql.Marshaler {
+			return ec.marshalNAiConversation2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiConversation(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_updateAiConversation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AiConversation(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateAiConversation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteAiConversation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteAiConversation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteAiConversation(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteAiConversation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteAiConversation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Node_id(ctx context.Context, field graphql.CollectedField, obj *Node) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -28980,6 +30820,278 @@ func (ec *executionContext) fieldContext_Query_clipPrefs(_ context.Context, fiel
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_aiProviders(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_aiProviders(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AiProviders(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*AiProvider) graphql.Marshaler {
+			return ec.marshalNAiProvider2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProviderᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_aiProviders(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AiProvider(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_adminAiProviders(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_adminAiProviders(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AdminAiProviders(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*AiProvider) graphql.Marshaler {
+			return ec.marshalNAiProvider2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProviderᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_adminAiProviders(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AiProvider(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_aiProviderKey(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_aiProviderKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AiProviderKey(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_aiProviderKey(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_aiProviderKey_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_assistantAccess(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_assistantAccess(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AssistantAccess(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AssistantAccess) graphql.Marshaler {
+			return ec.marshalNAssistantAccess2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantAccess(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_assistantAccess(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AssistantAccess(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_aiConversations(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_aiConversations(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AiConversations(ctx, fc.Args["before"].(*time.Time), fc.Args["limit"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*AiConversation) graphql.Marshaler {
+			return ec.marshalNAiConversation2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiConversationᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_aiConversations(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AiConversation(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_aiConversations_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_aiConversation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_aiConversation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AiConversation(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AiConversation) graphql.Marshaler {
+			return ec.marshalNAiConversation2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiConversation(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_aiConversation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AiConversation(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_aiConversation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_aiEntries(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_aiEntries(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AiEntries(ctx, fc.Args["conversationId"].(string), fc.Args["fromSeq"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_aiEntries(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_aiEntries_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -32608,6 +34720,112 @@ func (ec *executionContext) unmarshalInputActivityFilter(ctx context.Context, ob
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputAiProviderInput(ctx context.Context, obj any) (AiProviderInput, error) {
+	var it AiProviderInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	if _, present := asMap["dailyTokens"]; !present {
+		asMap["dailyTokens"] = 0
+	}
+
+	fieldsInOrder := [...]string{"name", "kind", "baseUrl", "models", "key", "dailyTokens"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "kind":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("kind"))
+			data, err := ec.unmarshalNAiProviderKind2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProviderKind(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Kind = data
+		case "baseUrl":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("baseUrl"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.BaseURL = data
+		case "models":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("models"))
+			data, err := ec.unmarshalNString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Models = data
+		case "key":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Key = data
+		case "dailyTokens":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("dailyTokens"))
+			data, err := ec.unmarshalOInt642ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DailyTokens = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputAssistantGroupInput(ctx context.Context, obj any) (AssistantGroupInput, error) {
+	var it AssistantGroupInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"key", "permission"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "key":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Key = data
+		case "permission":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("permission"))
+			data, err := ec.unmarshalNAssistantPermission2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantPermission(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Permission = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputClipPrefsInput(ctx context.Context, obj any) (ClipPrefsInput, error) {
 	var it ClipPrefsInput
 	if obj == nil {
@@ -33886,8 +36104,164 @@ func (ec *executionContext) _AdminUser(ctx context.Context, sel ast.SelectionSet
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "aiTokensToday":
+			out.Values[i] = ec._AdminUser_aiTokensToday(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createdAt":
 			out.Values[i] = ec._AdminUser_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var aiConversationImplementors = []string{"AiConversation"}
+
+func (ec *executionContext) _AiConversation(ctx context.Context, sel ast.SelectionSet, obj *AiConversation) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, aiConversationImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AiConversation")
+		case "id":
+			out.Values[i] = ec._AiConversation_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "title":
+			out.Values[i] = ec._AiConversation_title(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "providerId":
+			out.Values[i] = ec._AiConversation_providerId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "model":
+			out.Values[i] = ec._AiConversation_model(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "entries":
+			out.Values[i] = ec._AiConversation_entries(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._AiConversation_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._AiConversation_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var aiProviderImplementors = []string{"AiProvider"}
+
+func (ec *executionContext) _AiProvider(ctx context.Context, sel ast.SelectionSet, obj *AiProvider) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, aiProviderImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AiProvider")
+		case "id":
+			out.Values[i] = ec._AiProvider_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._AiProvider_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._AiProvider_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "baseUrl":
+			out.Values[i] = ec._AiProvider_baseUrl(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "models":
+			out.Values[i] = ec._AiProvider_models(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hasKey":
+			out.Values[i] = ec._AiProvider_hasKey(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "site":
+			out.Values[i] = ec._AiProvider_site(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "dailyTokens":
+			out.Values[i] = ec._AiProvider_dailyTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "usedTokens":
+			out.Values[i] = ec._AiProvider_usedTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._AiProvider_updatedAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -34141,6 +36515,112 @@ func (ec *executionContext) _ArchiveInfo(ctx context.Context, sel ast.SelectionS
 		case "error":
 			out.Values[i] = ec._ArchiveInfo_error(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var assistantAccessImplementors = []string{"AssistantAccess"}
+
+func (ec *executionContext) _AssistantAccess(ctx context.Context, sel ast.SelectionSet, obj *AssistantAccess) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, assistantAccessImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AssistantAccess")
+		case "disabled":
+			out.Values[i] = ec._AssistantAccess_disabled(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "groups":
+			out.Values[i] = ec._AssistantAccess_groups(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var assistantGroupImplementors = []string{"AssistantGroup"}
+
+func (ec *executionContext) _AssistantGroup(ctx context.Context, sel ast.SelectionSet, obj *AssistantGroup) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, assistantGroupImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AssistantGroup")
+		case "key":
+			out.Values[i] = ec._AssistantGroup_key(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "label":
+			out.Values[i] = ec._AssistantGroup_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "scopes":
+			out.Values[i] = ec._AssistantGroup_scopes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "permission":
+			out.Values[i] = ec._AssistantGroup_permission(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "defaultPermission":
+			out.Values[i] = ec._AssistantGroup_defaultPermission(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "outbound":
+			out.Values[i] = ec._AssistantGroup_outbound(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		default:
@@ -37789,6 +40269,69 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "createAiProvider":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createAiProvider(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adminCreateAiProvider":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_adminCreateAiProvider(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateAiProvider":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateAiProvider(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteAiProvider":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteAiProvider(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "setAssistantAccess":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setAssistantAccess(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createAiConversation":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createAiConversation(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "appendAiEntries":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_appendAiEntries(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateAiConversation":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateAiConversation(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteAiConversation":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteAiConversation(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -40565,6 +43108,160 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "aiProviders":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_aiProviders(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "adminAiProviders":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_adminAiProviders(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "aiProviderKey":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_aiProviderKey(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "assistantAccess":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_assistantAccess(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "aiConversations":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_aiConversations(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "aiConversation":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_aiConversation(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "aiEntries":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_aiEntries(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -42440,6 +45137,81 @@ func (ec *executionContext) marshalNAdminUser2ᚖgithubᚗcomᚋyophonᚋgopan�
 	return ec._AdminUser(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNAiConversation2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiConversation(ctx context.Context, sel ast.SelectionSet, v AiConversation) graphql.Marshaler {
+	return ec._AiConversation(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAiConversation2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiConversationᚄ(ctx context.Context, sel ast.SelectionSet, v []*AiConversation) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAiConversation2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiConversation(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAiConversation2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiConversation(ctx context.Context, sel ast.SelectionSet, v *AiConversation) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AiConversation(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAiProvider2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProvider(ctx context.Context, sel ast.SelectionSet, v AiProvider) graphql.Marshaler {
+	return ec._AiProvider(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAiProvider2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProviderᚄ(ctx context.Context, sel ast.SelectionSet, v []*AiProvider) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAiProvider2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProvider(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAiProvider2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProvider(ctx context.Context, sel ast.SelectionSet, v *AiProvider) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AiProvider(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNAiProviderInput2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProviderInput(ctx context.Context, v any) (AiProviderInput, error) {
+	res, err := ec.unmarshalInputAiProviderInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNAiProviderKind2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProviderKind(ctx context.Context, v any) (AiProviderKind, error) {
+	var res AiProviderKind
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNAiProviderKind2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProviderKind(ctx context.Context, sel ast.SelectionSet, v AiProviderKind) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) marshalNAppPassword2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAppPasswordᚄ(ctx context.Context, sel ast.SelectionSet, v []*AppPassword) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -42527,6 +45299,75 @@ func (ec *executionContext) unmarshalNArchiveStatus2githubᚗcomᚋyophonᚋgopa
 }
 
 func (ec *executionContext) marshalNArchiveStatus2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐArchiveStatus(ctx context.Context, sel ast.SelectionSet, v ArchiveStatus) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNAssistantAccess2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantAccess(ctx context.Context, sel ast.SelectionSet, v AssistantAccess) graphql.Marshaler {
+	return ec._AssistantAccess(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAssistantAccess2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantAccess(ctx context.Context, sel ast.SelectionSet, v *AssistantAccess) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AssistantAccess(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAssistantGroup2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantGroupᚄ(ctx context.Context, sel ast.SelectionSet, v []*AssistantGroup) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAssistantGroup2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantGroup(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAssistantGroup2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantGroup(ctx context.Context, sel ast.SelectionSet, v *AssistantGroup) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AssistantGroup(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNAssistantGroupInput2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantGroupInputᚄ(ctx context.Context, v any) ([]*AssistantGroupInput, error) {
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]*AssistantGroupInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNAssistantGroupInput2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantGroupInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNAssistantGroupInput2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantGroupInput(ctx context.Context, v any) (*AssistantGroupInput, error) {
+	res, err := ec.unmarshalInputAssistantGroupInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNAssistantPermission2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantPermission(ctx context.Context, v any) (AssistantPermission, error) {
+	var res AssistantPermission
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNAssistantPermission2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAssistantPermission(ctx context.Context, sel ast.SelectionSet, v AssistantPermission) graphql.Marshaler {
 	return v
 }
 

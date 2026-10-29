@@ -26,6 +26,7 @@ import { absoluteLinkUrl, linkStatusMeta } from '@/utils/links'
 import { useBreakpoints } from '@/composables/breakpoints'
 import { useLinksEnabled } from '@/composables/links'
 import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
+import AdminAiProviders from '@/components/assistant/AdminAiProviders.vue'
 import type { SheetItem } from '@/components/nodes/types'
 
 type AdminUser = AdminUsersQuery['adminUsers'][number]
@@ -394,6 +395,8 @@ const retryMutation = useMutation({
       </div>
     </div>
 
+    <AdminAiProviders />
+
     <div class="toolbar">
       <el-button type="primary" :icon="Plus" @click="createVisible = true">新建用户</el-button>
     </div>
@@ -412,6 +415,9 @@ const retryMutation = useMutation({
         <template #default="{ row }">
           {{ formatBytes(asUser(row).usedBytes) }} / {{ formatBytes(asUser(row).quotaBytes) }}
         </template>
+      </el-table-column>
+      <el-table-column label="助手今天" width="110" align="right">
+        <template #default="{ row }">{{ asUser(row).aiTokensToday ? `${asUser(row).aiTokensToday} token` : '' }}</template>
       </el-table-column>
       <el-table-column label="创建时间" width="180">
         <template #default="{ row }">{{ formatTime(asUser(row).createdAt) }}</template>

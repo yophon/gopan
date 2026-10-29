@@ -68,10 +68,16 @@ type MCPPrincipal struct {
 	CredentialType string
 	Scopes         map[string]struct{}
 	Name           string // API Key 的名字 / OAuth 客户端名
+	// 助手(doc/33 三):对话 id 记进动态来源;Turn 是这一轮回答,它做的改动合成一批
+	Conversation uuid.UUID
+	Turn         uuid.UUID
 }
 
 // Actor 动态里的来源:Agent(API Key / OAuth 授权),名字是 Key 的名字或客户端名。
 func (p *MCPPrincipal) Actor() Actor {
+	if p.CredentialType == CredentialAssistant {
+		return Actor{Kind: ActorAssistant, Ref: p.Conversation.String(), Label: "助手"}
+	}
 	return Actor{Kind: ActorAgent, Ref: p.CredentialType + ":" + p.CredentialID.String(), Label: p.Name}
 }
 

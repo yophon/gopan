@@ -1,0 +1,93 @@
+# 助手(doc/33):模型服务、权限、对话记录
+
+fragment AiProviderFields on AiProvider {
+  id
+  name
+  kind
+  baseUrl
+  models
+  hasKey
+  site
+  dailyTokens
+  usedTokens
+  updatedAt
+}
+
+query AiProviders {
+  aiProviders { ...AiProviderFields }
+}
+
+query AdminAiProviders {
+  adminAiProviders { ...AiProviderFields }
+}
+
+query AiProviderKey($id: ID!) {
+  aiProviderKey(id: $id)
+}
+
+mutation CreateAiProvider($input: AiProviderInput!) {
+  createAiProvider(input: $input) { ...AiProviderFields }
+}
+
+mutation AdminCreateAiProvider($input: AiProviderInput!) {
+  adminCreateAiProvider(input: $input) { ...AiProviderFields }
+}
+
+mutation UpdateAiProvider($id: ID!, $input: AiProviderInput!) {
+  updateAiProvider(id: $id, input: $input) { ...AiProviderFields }
+}
+
+mutation DeleteAiProvider($id: ID!) {
+  deleteAiProvider(id: $id)
+}
+
+fragment AssistantAccessFields on AssistantAccess {
+  disabled
+  groups { key label scopes permission defaultPermission outbound }
+}
+
+query AssistantAccess {
+  assistantAccess { ...AssistantAccessFields }
+}
+
+mutation SetAssistantAccess($disabled: Boolean!, $groups: [AssistantGroupInput!]!) {
+  setAssistantAccess(disabled: $disabled, groups: $groups) { ...AssistantAccessFields }
+}
+
+fragment AiConversationFields on AiConversation {
+  id
+  title
+  providerId
+  model
+  entries
+  createdAt
+  updatedAt
+}
+
+query AiConversations($before: Time, $limit: Int) {
+  aiConversations(before: $before, limit: $limit) { ...AiConversationFields }
+}
+
+query AiConversation($id: ID!) {
+  aiConversation(id: $id) { ...AiConversationFields }
+}
+
+query AiEntries($conversationId: ID!, $fromSeq: Int) {
+  aiEntries(conversationId: $conversationId, fromSeq: $fromSeq)
+}
+
+mutation CreateAiConversation($title: String!, $providerId: ID, $model: String) {
+  createAiConversation(title: $title, providerId: $providerId, model: $model) { ...AiConversationFields }
+}
+
+mutation AppendAiEntries($conversationId: ID!, $fromSeq: Int!, $entries: [String!]!) {
+  appendAiEntries(conversationId: $conversationId, fromSeq: $fromSeq, entries: $entries) { ...AiConversationFields }
+}
+
+mutation UpdateAiConversation($id: ID!, $title: String, $providerId: ID, $model: String) {
+  updateAiConversation(id: $id, title: $title, providerId: $providerId, model: $model) { ...AiConversationFields }
+}
+
+mutation DeleteAiConversation($id: ID!) {
+  deleteAiConversation(id: $id)
+}

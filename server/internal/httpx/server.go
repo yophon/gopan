@@ -277,6 +277,8 @@ func normalizePath(p string) string {
 		return "/sub/:node"
 	case strings.HasPrefix(p, "/remux/"):
 		return "/remux/:sha"
+	case strings.HasPrefix(p, "/api/ai/"):
+		return "/api/ai/:provider/*"
 	case strings.HasPrefix(p, "/lrc/"):
 		return "/lrc/:node"
 	case strings.HasPrefix(p, "/md/"):

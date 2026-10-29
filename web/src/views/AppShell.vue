@@ -2,7 +2,7 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, reactive, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Bell } from '@element-plus/icons-vue'
+import { Bell, MagicStick } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { MeDocument } from '@/api/gen/graphql'
@@ -17,6 +17,7 @@ import BrandLogo from '@/components/BrandLogo.vue'
 import MiniPlayer from '@/components/player/MiniPlayer.vue'
 import { previewState } from '@/composables/preview'
 import { desktopWindow } from '@/desktop/bridge'
+import { assistantOpen, toggleAssistant } from '@/assistant/state'
 
 // 弹窗 / 抽屉第一次打开时才加载(连同它们用到的表格、表单、标签页这些组件),之后一直挂着,关的动画照常。
 // 上传抽屉要轮询后台任务、迷你播放条持有全站唯一的 <audio>,这两个照旧常驻
@@ -26,6 +27,8 @@ const AppPasswordsDialog = defineAsyncComponent(() => import('@/components/AppPa
 const MCPAccessDialog = defineAsyncComponent(() => import('@/components/MCPAccessDialog.vue'))
 const NotificationDrawer = defineAsyncComponent(() => import('@/components/notify/NotificationDrawer.vue'))
 const DesktopUploadPicker = defineAsyncComponent(() => import('@/desktop/DesktopUploadPicker.vue'))
+// 助手(doc/33):连同 tau 内核一起按需加载,点开才下载
+const AssistantPanel = defineAsyncComponent(() => import('@/components/assistant/AssistantPanel.vue'))
 
 const route = useRoute()
 const router = useRouter()
@@ -56,8 +59,9 @@ const mcpDialogVisible = ref(false)
 
 const notifyVisible = ref(false)
 
-const opened = reactive({ preview: false, pwd: false, dav: false, mcp: false, notify: false })
+const opened = reactive({ preview: false, pwd: false, dav: false, mcp: false, notify: false, assistant: false })
 watchEffect(() => {
+  if (assistantOpen.value) opened.assistant = true
   if (previewState.visible) opened.preview = true
   if (pwdDialogVisible.value) opened.pwd = true
   if (davDialogVisible.value) opened.dav = true
@@ -110,7 +114,7 @@ async function onLogout() {
       />
     </el-aside>
 
-    <el-container class="body" direction="vertical">
+    <el-container class="body" :class="{ 'with-assistant': assistantOpen && !isMobile && !embed }" direction="vertical">
       <header v-if="isMobile && !embed" class="topbar">
         <el-button text class="topbar-btn" title="打开导航" aria-label="打开导航" @click="navOpen = true">
           <!-- 三道杠;Element 的 Menu 图标是四个方块,像「应用」不像「菜单」 -->
@@ -119,6 +123,7 @@ async function onLogout() {
           </svg>
         </el-button>
         <span class="topbar-title"><BrandLogo /></span>
+        <el-button text class="topbar-btn" :icon="MagicStick" title="助手" aria-label="助手" @click="toggleAssistant()" />
         <el-badge :value="unread" :max="99" :hidden="unread === 0" class="topbar-badge">
           <el-button
             text
@@ -160,6 +165,7 @@ async function onLogout() {
     <AppPasswordsDialog v-if="opened.dav" v-model="davDialogVisible" />
     <MCPAccessDialog v-if="opened.mcp" v-model="mcpDialogVisible" />
     <NotificationDrawer v-if="opened.notify" v-model="notifyVisible" />
+    <AssistantPanel v-if="opened.assistant && !embed" v-show="assistantOpen" />
   </el-container>
 </template>
 
@@ -173,6 +179,10 @@ async function onLogout() {
 }
 .body {
   min-width: 0;
+}
+/* 助手面板贴在右边:主内容让出它的宽度,开着也能继续点文件列表 */
+.body.with-assistant {
+  margin-right: 420px;
 }
 .topbar {
   display: flex;

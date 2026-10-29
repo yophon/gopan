@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"sort"
@@ -34,12 +35,26 @@ type Server struct {
 	links             *service.Links
 	activities        *service.Activities
 	clips             *service.Clips
+	auth              *service.Auth      // 助手用登录凭证(doc/33 三)
+	assistant         *service.Assistant // 助手的权限
 }
 
-func NewHandler(nodes *service.Nodes, uploads *service.Uploads, tokens *service.MCPTokens, oauth *service.OAuth, packer *service.Packer, tickets *service.PackTickets, chats *service.Chats, content *service.ContentSearch, jobs *service.Jobs, archives *service.Archives, links *service.Links, activities *service.Activities, clips *service.Clips) http.Handler {
+// Option 可选的依赖。
+type Option func(*Server)
+
+// WithAssistant 让 /mcp 也认助手(登录凭证 + X-Gopan-Assistant)。
+func WithAssistant(auth *service.Auth, assistant *service.Assistant) Option {
+	return func(s *Server) { s.auth, s.assistant = auth, assistant }
+}
+
+func NewHandler(nodes *service.Nodes, uploads *service.Uploads, tokens *service.MCPTokens, oauth *service.OAuth, packer *service.Packer, tickets *service.PackTickets, chats *service.Chats, content *service.ContentSearch, jobs *service.Jobs, archives *service.Archives, links *service.Links, activities *service.Activities, clips *service.Clips, opts ...Option) http.Handler {
 	s := &Server{nodes: nodes, uploads: uploads, tokens: tokens, oauth: oauth, packer: packer, tickets: tickets, chats: chats, content: content, jobs: jobs, archives: archives, links: links, activities: activities, clips: clips}
+	for _, o := range opts {
+		o(s)
+	}
 	protocol := mcp.NewServer(&mcp.Implementation{Name: "gopan", Version: "2.3.0"}, nil)
 	s.registerTools(protocol)
+	protocol.AddReceivingMiddleware(assistantToolFilter)
 	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return protocol }, &mcp.StreamableHTTPOptions{
 		Stateless: true, JSONResponse: true,
 	})
@@ -54,7 +69,19 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 			http.Error(w, "missing MCP bearer token", http.StatusUnauthorized)
 			return
 		}
-		principal, err := s.authenticate(r.Context(), strings.TrimSpace(strings.TrimPrefix(h, "Bearer ")))
+		bearer := strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))
+		var principal *service.MCPPrincipal
+		var err error
+		if r.Header.Get(assistantHeader) != "" && s.admin == nil {
+			principal, err = s.authenticateAssistant(r, bearer)
+			var se *service.Error
+			if errors.As(err, &se) && se.Code == "FORBIDDEN" {
+				http.Error(w, se.Message, http.StatusForbidden)
+				return
+			}
+		} else {
+			principal, err = s.authenticate(r.Context(), bearer)
+		}
 		if err != nil {
 			s.writeAuthenticateHeader(w, r)
 			http.Error(w, "invalid MCP bearer token", http.StatusUnauthorized)

@@ -12,10 +12,14 @@ import (
 )
 
 func addTool[In, Out any](s *Server, server *mcp.Server, tool *mcp.Tool, handler func(context.Context, *mcp.CallToolRequest, In) (*mcp.CallToolResult, Out, error)) {
+	annotateTool(tool)
 	mcp.AddTool(server, tool, func(ctx context.Context, req *mcp.CallToolRequest, in In) (res *mcp.CallToolResult, out Out, err error) {
 		p, _ := ctx.Value(principalKey{}).(*service.MCPPrincipal)
 		if p == nil {
 			return nil, out, service.ErrUnauthenticated
+		}
+		if p.CredentialType == service.CredentialAssistant && !assistantVisible(p, tool.Name) {
+			return nil, out, service.ErrForbidden
 		}
 		raw, e := json.Marshal(in)
 		if e != nil {
@@ -41,7 +45,12 @@ func addTool[In, Out any](s *Server, server *mcp.Server, tool *mcp.Tool, handler
 			return nil, out, e
 		}
 		// 动态(doc/23 二):这次工具调用里的所有改动算一批,来源是这把凭据
-		ctx = service.WithBatch(service.WithActor(ctx, p.Actor()))
+		ctx = service.WithActor(ctx, p.Actor())
+		if p.Turn != uuid.Nil {
+			ctx = service.WithBatchID(ctx, p.Turn) // 助手同一轮回答的改动合成一批
+		} else {
+			ctx = service.WithBatch(ctx)
+		}
 		defer func() {
 			status, code := "success", ""
 			if batch, ok := any(out).(BatchOutput); ok && batch.Failed > 0 {

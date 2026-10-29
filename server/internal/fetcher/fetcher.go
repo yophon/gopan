@@ -133,6 +133,11 @@ func (g Guard) control(_, address string, _ syscall.RawConn) error {
 	return nil
 }
 
+// Dialer 每次拨号都过 Guard 的拨号器,给别处自己拼 Transport 用(助手的模型转发,doc/33 三)。
+func (g Guard) Dialer() *net.Dialer {
+	return &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second, Control: g.control}
+}
+
 // Client 出网用的 http.Client:每次拨号都过 Guard,不走系统代理(经代理时 IP 检查就失效了),
 // 不自动解 gzip(否则存下的字节与源文件不一致),重定向最多 MaxRedirects 次且只能是 http / https。
 // 不设整体超时:大文件要下很久,断线由 Stream 的读空闲计时器判断。

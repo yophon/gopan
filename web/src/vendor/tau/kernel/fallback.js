@@ -1,0 +1,68 @@
+// Model fallback (P54c, yo-agent's provider fallback chain; Claude Code's --fallback-model): a
+// request that fails before producing anything — rate limited, overloaded, unreachable, refused
+// for its key, out of credit — goes to the next route once the agent's retries on the current one
+// are spent (Claude Code retries an overload, then switches). A route that has started answering
+// in a run keeps the rest of the run, so two models never read each other's tool calls mid-run
+// (yo-agent, after LangBot). Which failures switch is configurable (default: all five).
+import { HttpError, TauError } from "./errors.js";
+export const FALLBACK_REASONS = ["rate_limit", "overloaded", "network", "auth", "billing"];
+/** Classify a failure: an HTTP status when there is one, else the message. Undefined: do not switch. */
+export function fallbackReasonOf(failure) {
+    const message = failure instanceof Error ? failure.message : typeof failure === "string" ? failure : "";
+    if (failure instanceof HttpError) {
+        if (failure.status === 401 || failure.status === 403)
+            return "auth";
+        if (failure.status === 402)
+            return "billing";
+        if (failure.status === 429)
+            return BILLING.test(failure.bodyText) ? "billing" : "rate_limit";
+        if (failure.status === 503 || failure.status === 529)
+            return "overloaded";
+        if (failure.status === 502 || failure.status === 504)
+            return "network";
+        return undefined;
+    }
+    if (failure instanceof TauError && (failure.code === "network_error" || failure.code === "timeout"))
+        return "network";
+    if (BILLING.test(message))
+        return "billing";
+    if (/\b(401|403)\b|unauthori[sz]ed|forbidden|invalid[ _-]?api[ _-]?key|authentication/i.test(message))
+        return "auth";
+    if (/\b(429)\b|rate[ _-]?limit|too many requests/i.test(message))
+        return "rate_limit";
+    if (/\b(503|529)\b|overloaded|unavailable/i.test(message))
+        return "overloaded";
+    if (/network|ECONNREFUSED|ECONNRESET|ENOTFOUND|fetch failed|timed? ?out/i.test(message))
+        return "network";
+    return undefined;
+}
+const BILLING = /insufficient[ _-]?(balance|quota|credit|funds)|billing|payment required|\b402\b|quota exceeded/i;
+/** The routes of one run: `primary`, then `options.routes`. Make one per run. */
+export function createFallbackChain(primary, options) {
+    const routes = [primary, ...options.routes];
+    const switchOn = new Set(options.on ?? FALLBACK_REASONS);
+    let index = 0;
+    let answered = false;
+    const transport = (request) => (async function* () {
+        const route = routes[index];
+        for await (const event of route.transport({ ...request, model: route.model })) {
+            answered = true;
+            yield event;
+        }
+    })();
+    transport.supportsHeaders = primary.transport.supportsHeaders;
+    transport.supportsProviderEvents = primary.transport.supportsProviderEvents;
+    return {
+        transport,
+        fallBack(failure) {
+            const next = routes[index + 1];
+            const reason = fallbackReasonOf(failure);
+            if (answered || !next || !reason || !switchOn.has(reason))
+                return false;
+            const message = failure instanceof Error ? failure.message : String(failure);
+            options.onSwitch?.({ from: routes[index].label, to: next.label, reason, message });
+            index++;
+            return true;
+        },
+    };
+}

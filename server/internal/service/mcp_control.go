@@ -40,8 +40,12 @@ func (s *Nodes) SetMCPAccessRoot(ctx context.Context, owner, id uuid.UUID, kind 
 		err = s.db().QueryRow(ctx, `SELECT scopes FROM mcp_tokens WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL`, id, owner).Scan(&scopes)
 	case "oauth":
 		err = s.db().QueryRow(ctx, `SELECT scopes FROM oauth_grants WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL`, id, owner).Scan(&scopes)
+	case CredentialAssistant: // 助手(doc/33):每人固定一项,credential_id 就是用户 id
+		if id != owner {
+			return ErrNotFound
+		}
 	default:
-		return errf("INVALID_INPUT", "credential_type 必须为 api_key 或 oauth")
+		return errf("INVALID_INPUT", "credential_type 必须为 api_key、oauth 或 assistant")
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound

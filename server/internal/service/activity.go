@@ -14,17 +14,18 @@ import (
 
 // 来源(与 GraphQL ActorKind 小写同名)。
 const (
-	ActorWeb     = "web"
-	ActorAndroid = "android"
-	ActorWebDAV  = "webdav"
-	ActorAgent   = "agent"
-	ActorImg     = "img"
-	ActorCollect = "collect"
-	ActorShare   = "share" // 分享访客(doc/32 一),Ref 是分享 id
-	ActorJob     = "job"
-	ActorFeed    = "feed"
-	ActorClip    = "clip"
-	ActorSystem  = "system"
+	ActorWeb       = "web"
+	ActorAndroid   = "android"
+	ActorWebDAV    = "webdav"
+	ActorAgent     = "agent"
+	ActorImg       = "img"
+	ActorCollect   = "collect"
+	ActorShare     = "share"     // 分享访客(doc/32 一),Ref 是分享 id
+	ActorAssistant = "assistant" // 助手(doc/33),Ref 是对话 id
+	ActorJob       = "job"
+	ActorFeed      = "feed"
+	ActorClip      = "clip"
+	ActorSystem    = "system"
 )
 
 // 操作(与 GraphQL ActivityAction 小写同名)。
@@ -84,6 +85,11 @@ func SessionActor(family uuid.UUID, ua string) Actor {
 // 没开批次时每次服务层调用各自一批(一次多选移动是一批)。
 func WithBatch(ctx context.Context) context.Context {
 	return context.WithValue(ctx, batchKey{}, uuid.Must(uuid.NewV7()))
+}
+
+// WithBatchID 用给定的批次:助手同一轮回答的几次工具调用合成一批(doc/33 三)。
+func WithBatchID(ctx context.Context, id uuid.UUID) context.Context {
+	return context.WithValue(ctx, batchKey{}, id)
 }
 
 func batchOf(ctx context.Context) uuid.UUID {

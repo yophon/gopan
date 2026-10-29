@@ -87,6 +87,7 @@ export type ActivityPage = {
 export type ActorKind =
   | 'AGENT'
   | 'ANDROID'
+  | 'ASSISTANT'
   | 'CLIP'
   | 'COLLECT'
   | 'FEED'
@@ -140,6 +141,7 @@ export type AdminStorage = {
 
 export type AdminUser = {
   __typename?: 'AdminUser';
+  aiTokensToday: Scalars['Int64']['output'];
   createdAt: Scalars['Time']['output'];
   disabled: Scalars['Boolean']['output'];
   id: Scalars['ID']['output'];
@@ -148,6 +150,46 @@ export type AdminUser = {
   usedBytes: Scalars['Int64']['output'];
   username: Scalars['String']['output'];
 };
+
+export type AiConversation = {
+  __typename?: 'AiConversation';
+  createdAt: Scalars['Time']['output'];
+  entries: Scalars['Int']['output'];
+  id: Scalars['ID']['output'];
+  model: Scalars['String']['output'];
+  providerId?: Maybe<Scalars['ID']['output']>;
+  title: Scalars['String']['output'];
+  updatedAt: Scalars['Time']['output'];
+};
+
+export type AiProvider = {
+  __typename?: 'AiProvider';
+  baseUrl: Scalars['String']['output'];
+  dailyTokens: Scalars['Int64']['output'];
+  hasKey: Scalars['Boolean']['output'];
+  id: Scalars['ID']['output'];
+  kind: AiProviderKind;
+  models: Array<Scalars['String']['output']>;
+  name: Scalars['String']['output'];
+  site: Scalars['Boolean']['output'];
+  updatedAt: Scalars['Time']['output'];
+  usedTokens: Scalars['Int64']['output'];
+};
+
+export type AiProviderInput = {
+  baseUrl: Scalars['String']['input'];
+  dailyTokens?: InputMaybe<Scalars['Int64']['input']>;
+  key?: InputMaybe<Scalars['String']['input']>;
+  kind: AiProviderKind;
+  models: Array<Scalars['String']['input']>;
+  name: Scalars['String']['input'];
+};
+
+export type AiProviderKind =
+  | 'ANTHROPIC'
+  | 'GOOGLE'
+  | 'OPENAI'
+  | 'OPENAI_RESPONSES';
 
 export type AppPassword = {
   __typename?: 'AppPassword';
@@ -195,6 +237,32 @@ export type ArchiveStatus =
   | 'PENDING'
   | 'TRUNCATED'
   | 'UNSUPPORTED';
+
+export type AssistantAccess = {
+  __typename?: 'AssistantAccess';
+  disabled: Scalars['Boolean']['output'];
+  groups: Array<AssistantGroup>;
+};
+
+export type AssistantGroup = {
+  __typename?: 'AssistantGroup';
+  defaultPermission: AssistantPermission;
+  key: Scalars['String']['output'];
+  label: Scalars['String']['output'];
+  outbound: Scalars['Boolean']['output'];
+  permission: AssistantPermission;
+  scopes: Array<Scalars['String']['output']>;
+};
+
+export type AssistantGroupInput = {
+  key: Scalars['String']['input'];
+  permission: AssistantPermission;
+};
+
+export type AssistantPermission =
+  | 'ALLOW'
+  | 'ASK'
+  | 'DENY';
 
 export type AuthPayload = {
   __typename?: 'AuthPayload';
@@ -725,6 +793,7 @@ export type McpAuditEvent = {
 export type Mutation = {
   __typename?: 'Mutation';
   abortUpload: Scalars['Boolean']['output'];
+  adminCreateAiProvider: AiProvider;
   adminCreateUser: AdminUser;
   adminPauseLink: Scalars['Boolean']['output'];
   adminResetPassword: Scalars['String']['output'];
@@ -732,6 +801,7 @@ export type Mutation = {
   adminRevokeLink: Scalars['Boolean']['output'];
   adminSetDisabled: AdminUser;
   adminSetQuota: AdminUser;
+  appendAiEntries: AiConversation;
   cancelJob: Job;
   changePassword: AuthPayload;
   clearFinishedJobs: Scalars['Int']['output'];
@@ -744,6 +814,8 @@ export type Mutation = {
   collectInitUpload: UploadSession;
   completeUpload: Node;
   copyNodes: Array<Node>;
+  createAiConversation: AiConversation;
+  createAiProvider: AiProvider;
   createAppPassword: Scalars['String']['output'];
   createFeed: Feed;
   createFileRequest: FileRequest;
@@ -754,6 +826,8 @@ export type Mutation = {
   createShare: Share;
   createTextFile: Node;
   decideOAuthAuthorization: OAuthAuthorizationResult;
+  deleteAiConversation: Scalars['Boolean']['output'];
+  deleteAiProvider: Scalars['Boolean']['output'];
   deleteChatMessage: Scalars['Boolean']['output'];
   deleteFeed: Scalars['Boolean']['output'];
   deleteFileVersions: Scalars['Boolean']['output'];
@@ -798,6 +872,7 @@ export type Mutation = {
   saveProgress?: Maybe<PlayProgress>;
   saveTextFile: Node;
   sendChatMessage: ChatMessage;
+  setAssistantAccess: AssistantAccess;
   setClipPrefs: ClipPrefs;
   setLinkPrefs: LinkPrefs;
   setMCPAccessRoot: Scalars['Boolean']['output'];
@@ -809,6 +884,8 @@ export type Mutation = {
   shareInitUpload: UploadSession;
   testNotifyChannel: Scalars['Boolean']['output'];
   undoActivities: UndoResult;
+  updateAiConversation: AiConversation;
+  updateAiProvider: AiProvider;
   updateFeed: Feed;
   updateFileRequest: FileRequest;
   updateLink: DirectLink;
@@ -819,6 +896,11 @@ export type Mutation = {
 
 export type MutationAbortUploadArgs = {
   sessionId: Scalars['ID']['input'];
+};
+
+
+export type MutationAdminCreateAiProviderArgs = {
+  input: AiProviderInput;
 };
 
 
@@ -854,6 +936,13 @@ export type MutationAdminSetDisabledArgs = {
 export type MutationAdminSetQuotaArgs = {
   quotaBytes: Scalars['Int64']['input'];
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationAppendAiEntriesArgs = {
+  conversationId: Scalars['ID']['input'];
+  entries: Array<Scalars['String']['input']>;
+  fromSeq: Scalars['Int']['input'];
 };
 
 
@@ -914,6 +1003,18 @@ export type MutationCopyNodesArgs = {
 };
 
 
+export type MutationCreateAiConversationArgs = {
+  model?: InputMaybe<Scalars['String']['input']>;
+  providerId?: InputMaybe<Scalars['ID']['input']>;
+  title: Scalars['String']['input'];
+};
+
+
+export type MutationCreateAiProviderArgs = {
+  input: AiProviderInput;
+};
+
+
 export type MutationCreateAppPasswordArgs = {
   name: Scalars['String']['input'];
 };
@@ -971,6 +1072,16 @@ export type MutationCreateTextFileArgs = {
 export type MutationDecideOAuthAuthorizationArgs = {
   approved: Scalars['Boolean']['input'];
   input: OAuthAuthorizationInput;
+};
+
+
+export type MutationDeleteAiConversationArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteAiProviderArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1191,6 +1302,12 @@ export type MutationSendChatMessageArgs = {
 };
 
 
+export type MutationSetAssistantAccessArgs = {
+  disabled: Scalars['Boolean']['input'];
+  groups: Array<AssistantGroupInput>;
+};
+
+
 export type MutationSetClipPrefsArgs = {
   input: ClipPrefsInput;
 };
@@ -1253,6 +1370,20 @@ export type MutationTestNotifyChannelArgs = {
 
 export type MutationUndoActivitiesArgs = {
   selection: UndoSelection;
+};
+
+
+export type MutationUpdateAiConversationArgs = {
+  id: Scalars['ID']['input'];
+  model?: InputMaybe<Scalars['String']['input']>;
+  providerId?: InputMaybe<Scalars['ID']['input']>;
+  title?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type MutationUpdateAiProviderArgs = {
+  id: Scalars['ID']['input'];
+  input: AiProviderInput;
 };
 
 
@@ -1501,13 +1632,20 @@ export type Query = {
   __typename?: 'Query';
   activities: ActivityPage;
   activityActors: Array<ActivityActorSummary>;
+  adminAiProviders: Array<AiProvider>;
   adminLinkStats: AdminLinkStats;
   adminOverview: AdminOverview;
   adminStorage: AdminStorage;
   adminUsers: Array<AdminUser>;
+  aiConversation: AiConversation;
+  aiConversations: Array<AiConversation>;
+  aiEntries: Array<Scalars['String']['output']>;
+  aiProviderKey: Scalars['String']['output'];
+  aiProviders: Array<AiProvider>;
   appPasswords: Array<AppPassword>;
   archiveEntries: ArchiveEntryPage;
   archiveInfo: ArchiveInfo;
+  assistantAccess: AssistantAccess;
   chatFolder?: Maybe<Node>;
   chatMessages: Array<ChatMessage>;
   children: NodePage;
@@ -1578,6 +1716,28 @@ export type QueryActivitiesArgs = {
   cursor?: InputMaybe<Scalars['String']['input']>;
   filter?: InputMaybe<ActivityFilter>;
   limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryAiConversationArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryAiConversationsArgs = {
+  before?: InputMaybe<Scalars['Time']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryAiEntriesArgs = {
+  conversationId: Scalars['ID']['input'];
+  fromSeq?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryAiProviderKeyArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -2098,7 +2258,7 @@ export type UndoActivitiesMutation = { __typename?: 'Mutation', undoActivities: 
 export type AdminUsersQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type AdminUsersQuery = { __typename?: 'Query', adminUsers: Array<{ __typename?: 'AdminUser', id: string, username: string, isAdmin: boolean, disabled: boolean, quotaBytes: number, usedBytes: number, createdAt: string }> };
+export type AdminUsersQuery = { __typename?: 'Query', adminUsers: Array<{ __typename?: 'AdminUser', id: string, username: string, isAdmin: boolean, disabled: boolean, quotaBytes: number, usedBytes: number, aiTokensToday: number, createdAt: string }> };
 
 export type AdminOverviewQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -2186,6 +2346,129 @@ export type ExtractArchiveMutationVariables = Exact<{
 
 
 export type ExtractArchiveMutation = { __typename?: 'Mutation', extractArchive: { __typename?: 'Job', id: string, status: JobStatus, title: string } };
+
+export type AiProviderFieldsFragment = { __typename?: 'AiProvider', id: string, name: string, kind: AiProviderKind, baseUrl: string, models: Array<string>, hasKey: boolean, site: boolean, dailyTokens: number, usedTokens: number, updatedAt: string };
+
+export type AiProvidersQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type AiProvidersQuery = { __typename?: 'Query', aiProviders: Array<{ __typename?: 'AiProvider', id: string, name: string, kind: AiProviderKind, baseUrl: string, models: Array<string>, hasKey: boolean, site: boolean, dailyTokens: number, usedTokens: number, updatedAt: string }> };
+
+export type AdminAiProvidersQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type AdminAiProvidersQuery = { __typename?: 'Query', adminAiProviders: Array<{ __typename?: 'AiProvider', id: string, name: string, kind: AiProviderKind, baseUrl: string, models: Array<string>, hasKey: boolean, site: boolean, dailyTokens: number, usedTokens: number, updatedAt: string }> };
+
+export type AiProviderKeyQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type AiProviderKeyQuery = { __typename?: 'Query', aiProviderKey: string };
+
+export type CreateAiProviderMutationVariables = Exact<{
+  input: AiProviderInput;
+}>;
+
+
+export type CreateAiProviderMutation = { __typename?: 'Mutation', createAiProvider: { __typename?: 'AiProvider', id: string, name: string, kind: AiProviderKind, baseUrl: string, models: Array<string>, hasKey: boolean, site: boolean, dailyTokens: number, usedTokens: number, updatedAt: string } };
+
+export type AdminCreateAiProviderMutationVariables = Exact<{
+  input: AiProviderInput;
+}>;
+
+
+export type AdminCreateAiProviderMutation = { __typename?: 'Mutation', adminCreateAiProvider: { __typename?: 'AiProvider', id: string, name: string, kind: AiProviderKind, baseUrl: string, models: Array<string>, hasKey: boolean, site: boolean, dailyTokens: number, usedTokens: number, updatedAt: string } };
+
+export type UpdateAiProviderMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+  input: AiProviderInput;
+}>;
+
+
+export type UpdateAiProviderMutation = { __typename?: 'Mutation', updateAiProvider: { __typename?: 'AiProvider', id: string, name: string, kind: AiProviderKind, baseUrl: string, models: Array<string>, hasKey: boolean, site: boolean, dailyTokens: number, usedTokens: number, updatedAt: string } };
+
+export type DeleteAiProviderMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type DeleteAiProviderMutation = { __typename?: 'Mutation', deleteAiProvider: boolean };
+
+export type AssistantAccessFieldsFragment = { __typename?: 'AssistantAccess', disabled: boolean, groups: Array<{ __typename?: 'AssistantGroup', key: string, label: string, scopes: Array<string>, permission: AssistantPermission, defaultPermission: AssistantPermission, outbound: boolean }> };
+
+export type AssistantAccessQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type AssistantAccessQuery = { __typename?: 'Query', assistantAccess: { __typename?: 'AssistantAccess', disabled: boolean, groups: Array<{ __typename?: 'AssistantGroup', key: string, label: string, scopes: Array<string>, permission: AssistantPermission, defaultPermission: AssistantPermission, outbound: boolean }> } };
+
+export type SetAssistantAccessMutationVariables = Exact<{
+  disabled: Scalars['Boolean']['input'];
+  groups: Array<AssistantGroupInput> | AssistantGroupInput;
+}>;
+
+
+export type SetAssistantAccessMutation = { __typename?: 'Mutation', setAssistantAccess: { __typename?: 'AssistantAccess', disabled: boolean, groups: Array<{ __typename?: 'AssistantGroup', key: string, label: string, scopes: Array<string>, permission: AssistantPermission, defaultPermission: AssistantPermission, outbound: boolean }> } };
+
+export type AiConversationFieldsFragment = { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, createdAt: string, updatedAt: string };
+
+export type AiConversationsQueryVariables = Exact<{
+  before?: InputMaybe<Scalars['Time']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+}>;
+
+
+export type AiConversationsQuery = { __typename?: 'Query', aiConversations: Array<{ __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, createdAt: string, updatedAt: string }> };
+
+export type AiConversationQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type AiConversationQuery = { __typename?: 'Query', aiConversation: { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, createdAt: string, updatedAt: string } };
+
+export type AiEntriesQueryVariables = Exact<{
+  conversationId: Scalars['ID']['input'];
+  fromSeq?: InputMaybe<Scalars['Int']['input']>;
+}>;
+
+
+export type AiEntriesQuery = { __typename?: 'Query', aiEntries: Array<string> };
+
+export type CreateAiConversationMutationVariables = Exact<{
+  title: Scalars['String']['input'];
+  providerId?: InputMaybe<Scalars['ID']['input']>;
+  model?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type CreateAiConversationMutation = { __typename?: 'Mutation', createAiConversation: { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, createdAt: string, updatedAt: string } };
+
+export type AppendAiEntriesMutationVariables = Exact<{
+  conversationId: Scalars['ID']['input'];
+  fromSeq: Scalars['Int']['input'];
+  entries: Array<Scalars['String']['input']> | Scalars['String']['input'];
+}>;
+
+
+export type AppendAiEntriesMutation = { __typename?: 'Mutation', appendAiEntries: { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, createdAt: string, updatedAt: string } };
+
+export type UpdateAiConversationMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+  title?: InputMaybe<Scalars['String']['input']>;
+  providerId?: InputMaybe<Scalars['ID']['input']>;
+  model?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type UpdateAiConversationMutation = { __typename?: 'Mutation', updateAiConversation: { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, createdAt: string, updatedAt: string } };
+
+export type DeleteAiConversationMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type DeleteAiConversationMutation = { __typename?: 'Mutation', deleteAiConversation: boolean };
 
 export type LoginMutationVariables = Exact<{
   username: Scalars['String']['input'];
@@ -3355,6 +3638,44 @@ export const UndoResultFieldsFragmentDoc = new TypedDocumentString(`
   undoneAt
   undoable
 }`, {"fragmentName":"UndoResultFields"}) as unknown as TypedDocumentString<UndoResultFieldsFragment, unknown>;
+export const AiProviderFieldsFragmentDoc = new TypedDocumentString(`
+    fragment AiProviderFields on AiProvider {
+  id
+  name
+  kind
+  baseUrl
+  models
+  hasKey
+  site
+  dailyTokens
+  usedTokens
+  updatedAt
+}
+    `, {"fragmentName":"AiProviderFields"}) as unknown as TypedDocumentString<AiProviderFieldsFragment, unknown>;
+export const AssistantAccessFieldsFragmentDoc = new TypedDocumentString(`
+    fragment AssistantAccessFields on AssistantAccess {
+  disabled
+  groups {
+    key
+    label
+    scopes
+    permission
+    defaultPermission
+    outbound
+  }
+}
+    `, {"fragmentName":"AssistantAccessFields"}) as unknown as TypedDocumentString<AssistantAccessFieldsFragment, unknown>;
+export const AiConversationFieldsFragmentDoc = new TypedDocumentString(`
+    fragment AiConversationFields on AiConversation {
+  id
+  title
+  providerId
+  model
+  entries
+  createdAt
+  updatedAt
+}
+    `, {"fragmentName":"AiConversationFields"}) as unknown as TypedDocumentString<AiConversationFieldsFragment, unknown>;
 export const ClipFieldsFragmentDoc = new TypedDocumentString(`
     fragment ClipFields on Clip {
   id
@@ -3798,6 +4119,7 @@ export const AdminUsersDocument = new TypedDocumentString(`
     disabled
     quotaBytes
     usedBytes
+    aiTokensToday
     createdAt
   }
 }
@@ -3929,6 +4251,234 @@ export const ExtractArchiveDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<ExtractArchiveMutation, ExtractArchiveMutationVariables>;
+export const AiProvidersDocument = new TypedDocumentString(`
+    query AiProviders {
+  aiProviders {
+    ...AiProviderFields
+  }
+}
+    fragment AiProviderFields on AiProvider {
+  id
+  name
+  kind
+  baseUrl
+  models
+  hasKey
+  site
+  dailyTokens
+  usedTokens
+  updatedAt
+}`) as unknown as TypedDocumentString<AiProvidersQuery, AiProvidersQueryVariables>;
+export const AdminAiProvidersDocument = new TypedDocumentString(`
+    query AdminAiProviders {
+  adminAiProviders {
+    ...AiProviderFields
+  }
+}
+    fragment AiProviderFields on AiProvider {
+  id
+  name
+  kind
+  baseUrl
+  models
+  hasKey
+  site
+  dailyTokens
+  usedTokens
+  updatedAt
+}`) as unknown as TypedDocumentString<AdminAiProvidersQuery, AdminAiProvidersQueryVariables>;
+export const AiProviderKeyDocument = new TypedDocumentString(`
+    query AiProviderKey($id: ID!) {
+  aiProviderKey(id: $id)
+}
+    `) as unknown as TypedDocumentString<AiProviderKeyQuery, AiProviderKeyQueryVariables>;
+export const CreateAiProviderDocument = new TypedDocumentString(`
+    mutation CreateAiProvider($input: AiProviderInput!) {
+  createAiProvider(input: $input) {
+    ...AiProviderFields
+  }
+}
+    fragment AiProviderFields on AiProvider {
+  id
+  name
+  kind
+  baseUrl
+  models
+  hasKey
+  site
+  dailyTokens
+  usedTokens
+  updatedAt
+}`) as unknown as TypedDocumentString<CreateAiProviderMutation, CreateAiProviderMutationVariables>;
+export const AdminCreateAiProviderDocument = new TypedDocumentString(`
+    mutation AdminCreateAiProvider($input: AiProviderInput!) {
+  adminCreateAiProvider(input: $input) {
+    ...AiProviderFields
+  }
+}
+    fragment AiProviderFields on AiProvider {
+  id
+  name
+  kind
+  baseUrl
+  models
+  hasKey
+  site
+  dailyTokens
+  usedTokens
+  updatedAt
+}`) as unknown as TypedDocumentString<AdminCreateAiProviderMutation, AdminCreateAiProviderMutationVariables>;
+export const UpdateAiProviderDocument = new TypedDocumentString(`
+    mutation UpdateAiProvider($id: ID!, $input: AiProviderInput!) {
+  updateAiProvider(id: $id, input: $input) {
+    ...AiProviderFields
+  }
+}
+    fragment AiProviderFields on AiProvider {
+  id
+  name
+  kind
+  baseUrl
+  models
+  hasKey
+  site
+  dailyTokens
+  usedTokens
+  updatedAt
+}`) as unknown as TypedDocumentString<UpdateAiProviderMutation, UpdateAiProviderMutationVariables>;
+export const DeleteAiProviderDocument = new TypedDocumentString(`
+    mutation DeleteAiProvider($id: ID!) {
+  deleteAiProvider(id: $id)
+}
+    `) as unknown as TypedDocumentString<DeleteAiProviderMutation, DeleteAiProviderMutationVariables>;
+export const AssistantAccessDocument = new TypedDocumentString(`
+    query AssistantAccess {
+  assistantAccess {
+    ...AssistantAccessFields
+  }
+}
+    fragment AssistantAccessFields on AssistantAccess {
+  disabled
+  groups {
+    key
+    label
+    scopes
+    permission
+    defaultPermission
+    outbound
+  }
+}`) as unknown as TypedDocumentString<AssistantAccessQuery, AssistantAccessQueryVariables>;
+export const SetAssistantAccessDocument = new TypedDocumentString(`
+    mutation SetAssistantAccess($disabled: Boolean!, $groups: [AssistantGroupInput!]!) {
+  setAssistantAccess(disabled: $disabled, groups: $groups) {
+    ...AssistantAccessFields
+  }
+}
+    fragment AssistantAccessFields on AssistantAccess {
+  disabled
+  groups {
+    key
+    label
+    scopes
+    permission
+    defaultPermission
+    outbound
+  }
+}`) as unknown as TypedDocumentString<SetAssistantAccessMutation, SetAssistantAccessMutationVariables>;
+export const AiConversationsDocument = new TypedDocumentString(`
+    query AiConversations($before: Time, $limit: Int) {
+  aiConversations(before: $before, limit: $limit) {
+    ...AiConversationFields
+  }
+}
+    fragment AiConversationFields on AiConversation {
+  id
+  title
+  providerId
+  model
+  entries
+  createdAt
+  updatedAt
+}`) as unknown as TypedDocumentString<AiConversationsQuery, AiConversationsQueryVariables>;
+export const AiConversationDocument = new TypedDocumentString(`
+    query AiConversation($id: ID!) {
+  aiConversation(id: $id) {
+    ...AiConversationFields
+  }
+}
+    fragment AiConversationFields on AiConversation {
+  id
+  title
+  providerId
+  model
+  entries
+  createdAt
+  updatedAt
+}`) as unknown as TypedDocumentString<AiConversationQuery, AiConversationQueryVariables>;
+export const AiEntriesDocument = new TypedDocumentString(`
+    query AiEntries($conversationId: ID!, $fromSeq: Int) {
+  aiEntries(conversationId: $conversationId, fromSeq: $fromSeq)
+}
+    `) as unknown as TypedDocumentString<AiEntriesQuery, AiEntriesQueryVariables>;
+export const CreateAiConversationDocument = new TypedDocumentString(`
+    mutation CreateAiConversation($title: String!, $providerId: ID, $model: String) {
+  createAiConversation(title: $title, providerId: $providerId, model: $model) {
+    ...AiConversationFields
+  }
+}
+    fragment AiConversationFields on AiConversation {
+  id
+  title
+  providerId
+  model
+  entries
+  createdAt
+  updatedAt
+}`) as unknown as TypedDocumentString<CreateAiConversationMutation, CreateAiConversationMutationVariables>;
+export const AppendAiEntriesDocument = new TypedDocumentString(`
+    mutation AppendAiEntries($conversationId: ID!, $fromSeq: Int!, $entries: [String!]!) {
+  appendAiEntries(
+    conversationId: $conversationId
+    fromSeq: $fromSeq
+    entries: $entries
+  ) {
+    ...AiConversationFields
+  }
+}
+    fragment AiConversationFields on AiConversation {
+  id
+  title
+  providerId
+  model
+  entries
+  createdAt
+  updatedAt
+}`) as unknown as TypedDocumentString<AppendAiEntriesMutation, AppendAiEntriesMutationVariables>;
+export const UpdateAiConversationDocument = new TypedDocumentString(`
+    mutation UpdateAiConversation($id: ID!, $title: String, $providerId: ID, $model: String) {
+  updateAiConversation(
+    id: $id
+    title: $title
+    providerId: $providerId
+    model: $model
+  ) {
+    ...AiConversationFields
+  }
+}
+    fragment AiConversationFields on AiConversation {
+  id
+  title
+  providerId
+  model
+  entries
+  createdAt
+  updatedAt
+}`) as unknown as TypedDocumentString<UpdateAiConversationMutation, UpdateAiConversationMutationVariables>;
+export const DeleteAiConversationDocument = new TypedDocumentString(`
+    mutation DeleteAiConversation($id: ID!) {
+  deleteAiConversation(id: $id)
+}
+    `) as unknown as TypedDocumentString<DeleteAiConversationMutation, DeleteAiConversationMutationVariables>;
 export const LoginDocument = new TypedDocumentString(`
     mutation Login($username: String!, $password: String!) {
   login(username: $username, password: $password) {

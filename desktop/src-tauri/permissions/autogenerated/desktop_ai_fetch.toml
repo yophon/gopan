@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-ai-fetch"
+description = "Enables the desktop_ai_fetch command without any pre-configured scope."
+commands.allow = ["desktop_ai_fetch"]
+
+[[permission]]
+identifier = "deny-desktop-ai-fetch"
+description = "Denies the desktop_ai_fetch command without any pre-configured scope."
+commands.deny = ["desktop_ai_fetch"]

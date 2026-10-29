@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-ai-abort"
+description = "Enables the desktop_ai_abort command without any pre-configured scope."
+commands.allow = ["desktop_ai_abort"]
+
+[[permission]]
+identifier = "deny-desktop-ai-abort"
+description = "Denies the desktop_ai_abort command without any pre-configured scope."
+commands.deny = ["desktop_ai_abort"]

@@ -78,6 +78,8 @@ type AdminUser {
   disabled: Boolean!
   quotaBytes: Int64!
   usedBytes: Int64!
+  # 今天经站点提供的模型服务用掉的 token(doc/33)
+  aiTokensToday: Int64!
   createdAt: Time!
 }
 
@@ -748,7 +750,7 @@ type ChatMessage {
 
 # ---------- 动态与撤回(doc/23 二) ----------
 
-enum ActorKind { WEB, ANDROID, WEBDAV, AGENT, IMG, COLLECT, SHARE, JOB, FEED, CLIP, SYSTEM }
+enum ActorKind { WEB, ANDROID, WEBDAV, AGENT, ASSISTANT, IMG, COLLECT, SHARE, JOB, FEED, CLIP, SYSTEM }
 enum ActivityAction { MKDIR, UPLOAD, OVERWRITE, RENAME, MOVE, COPY, DELETE, RESTORE, PURGE, EXTRACT }
 
 type ActivityActor {
@@ -1441,3 +1443,99 @@ type Mutation {
 
 type MCPAccessRoot { credentialId: ID!, credentialType: String!, rootId: ID!, rootName: String! }
 type MCPAuditEvent { id: Int64!, credentialId: ID!, credentialType: String!, endpoint: String!, tool: String!, status: String!, errorCode: String, createdAt: Time! }
+
+# ---------- 助手(doc/33) ----------
+
+enum AiProviderKind { OPENAI, ANTHROPIC, GOOGLE, OPENAI_RESPONSES }
+
+type AiProvider {
+  id: ID!
+  name: String!
+  kind: AiProviderKind!
+  baseUrl: String!
+  # 第一个是默认
+  models: [String!]!
+  hasKey: Boolean!
+  # 站点提供的(管理员配):只能经服务器转发
+  site: Boolean!
+  # 站点提供的:每人每天的 token 上限,0 = 不限
+  dailyTokens: Int64!
+  # 今天经服务器转发用掉的 token(当前用户)
+  usedTokens: Int64!
+  updatedAt: Time!
+}
+
+# key:null = 不变,"" = 清掉;dailyTokens 只对站点提供的有效
+input AiProviderInput {
+  name: String!
+  kind: AiProviderKind!
+  baseUrl: String!
+  models: [String!]!
+  key: String
+  dailyTokens: Int64 = 0
+}
+
+enum AssistantPermission { ALLOW, ASK, DENY }
+
+# 助手权限表的一行;scopes 是这组对应的 MCP scope,工具的 _meta["gopan/scopes"] 用的同一套
+type AssistantGroup {
+  key: String!
+  label: String!
+  scopes: [String!]!
+  permission: AssistantPermission!
+  defaultPermission: AssistantPermission!
+  # 能把东西发到外面(公开链接、访问任意网址),改成允许时提示风险
+  outbound: Boolean!
+}
+
+type AssistantAccess {
+  disabled: Boolean!
+  groups: [AssistantGroup!]!
+}
+
+input AssistantGroupInput {
+  key: String!
+  permission: AssistantPermission!
+}
+
+type AiConversation {
+  id: ID!
+  title: String!
+  providerId: ID
+  model: String!
+  # 条目数,也是下一次追加的 fromSeq
+  entries: Int!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+extend type Query {
+  # 自己的 + 站点提供的(站点的在前)
+  aiProviders: [AiProvider!]!
+  # 管理员:站点提供的
+  adminAiProviders: [AiProvider!]!
+  # 直连用:只给自己的服务的 key;站点提供的一律拒绝
+  aiProviderKey(id: ID!): String!
+  assistantAccess: AssistantAccess!
+  # 最近的在前;before 是上一页最后一个的 updatedAt
+  aiConversations(before: Time, limit: Int = 50): [AiConversation!]!
+  aiConversation(id: ID!): AiConversation!
+  # 条目原样的 JSON 文本,从 fromSeq 起
+  aiEntries(conversationId: ID!, fromSeq: Int = 0): [String!]!
+}
+
+extend type Mutation {
+  createAiProvider(input: AiProviderInput!): AiProvider!
+  # 管理员:建站点提供的
+  adminCreateAiProvider(input: AiProviderInput!): AiProvider!
+  # 自己的;管理员也能改 / 删站点提供的
+  updateAiProvider(id: ID!, input: AiProviderInput!): AiProvider!
+  deleteAiProvider(id: ID!): Boolean!
+  # groups 只需给要改的组
+  setAssistantAccess(disabled: Boolean!, groups: [AssistantGroupInput!]!): AssistantAccess!
+  createAiConversation(title: String!, providerId: ID, model: String): AiConversation!
+  # fromSeq 必须等于现有条数,否则 CONFLICT(别的设备先写了)
+  appendAiEntries(conversationId: ID!, fromSeq: Int!, entries: [String!]!): AiConversation!
+  updateAiConversation(id: ID!, title: String, providerId: ID, model: String): AiConversation!
+  deleteAiConversation(id: ID!): Boolean!
+}

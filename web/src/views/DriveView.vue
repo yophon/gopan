@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, reactive, ref, watch, watchEffect } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, reactive, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useEventListener } from '@vueuse/core'
@@ -73,6 +73,7 @@ import NodeActionSheet from '@/components/nodes/NodeActionSheet.vue'
 import { baseNameRange, DRAG_MIME, nextSort, parseSortPref, stepSelection, type SortKey, type SortPref } from '@/components/nodes/browser'
 import type { NodeListItem, SheetItem } from '@/components/nodes/types'
 import { MAX_DROP_FILES, walkEntry, type Collected } from '@/uploader/dropTree'
+import { setAssistantContext } from '@/assistant/state'
 
 type ChildItem = ChildrenQuery['children']['items'][number]
 
@@ -172,6 +173,16 @@ const selection = computed<ChildItem[]>(() => {
 })
 const single = computed<ChildItem | null>(() => (selection.value.length === 1 ? selection.value[0]! : null))
 const showSelectionBar = computed(() => isMobile.value && ui.selectionMode)
+
+// 告诉助手用户正在看哪儿、选了什么(doc/33 一):「这几个」「这里」指的就是它们
+watchEffect(() => {
+  setAssistantContext({
+    path: `/${(crumbs.value ?? []).map((c) => c.name).join('/')}`,
+    folderId: folderId.value,
+    selection: selection.value.map((n) => ({ id: n.id, name: n.name, kind: n.kind === 'FOLDER' ? 'folder' : 'file' })),
+  })
+})
+onBeforeUnmount(() => setAssistantContext(null))
 
 // 换文件夹、换排序:清掉选中
 watch(folderId, () => clearSelection())

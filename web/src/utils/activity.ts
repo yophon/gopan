@@ -7,6 +7,7 @@ export type ActorKindValue =
   | 'ANDROID'
   | 'WEBDAV'
   | 'AGENT'
+  | 'ASSISTANT'
   | 'IMG'
   | 'COLLECT'
   | 'SHARE'
@@ -58,6 +59,7 @@ export const ACTOR_KINDS: ActorKindValue[] = [
   'ANDROID',
   'WEBDAV',
   'AGENT',
+  'ASSISTANT',
   'IMG',
   'COLLECT',
   'SHARE',
@@ -73,6 +75,7 @@ export const actorKindLabel: Record<ActorKindValue, string> = {
   ANDROID: '安卓 App',
   WEBDAV: 'WebDAV',
   AGENT: 'Agent',
+  ASSISTANT: '助手',
   IMG: '图床',
   COLLECT: '收集链接',
   SHARE: '分享访客',

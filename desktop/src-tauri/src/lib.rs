@@ -1,5 +1,6 @@
 //! gopan 桌面端(Windows,doc/29):主窗口是网页版,外壳补上托盘、后台传输、传输助手小窗、截图上传、右键菜单。
 
+mod aifetch;
 mod api;
 mod auth;
 mod bridge;
@@ -48,6 +49,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(auth::Auth::default())
+        .manage(aifetch::AiFetches::default())
         .manage(ui::Origins::default())
         .manage(bridge::Granted::default())
         .manage(shell::Shell::default())
@@ -75,6 +77,8 @@ pub fn run() {
             edits::desktop_edits,
             edits::desktop_edit_action,
             player::desktop_play_external,
+            aifetch::desktop_ai_fetch,
+            aifetch::desktop_ai_abort,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

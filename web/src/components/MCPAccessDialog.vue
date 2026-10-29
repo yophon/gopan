@@ -16,12 +16,13 @@ import {
 import { formatTime } from '@/utils/format'
 import { isImageKey, mcpScopeLabel, mcpScopeOptions, mcpAdminScopeOptions } from '@/utils/mcpScopes'
 import { useAuthStore } from '@/stores/auth'
+import AssistantAccessPane from '@/components/assistant/AssistantAccessPane.vue'
 
 const visible = defineModel<boolean>({ required: true })
 const queryClient = useQueryClient()
 
 const endpoint = `${location.origin}/mcp`
-const activeTab = ref<'keys' | 'oauth' | 'audit'>('oauth')
+const activeTab = ref<'assistant' | 'keys' | 'oauth' | 'audit'>('assistant')
 const auth = useAuthStore()
 const adminKey = ref(false)
 const scopeOptions = computed(() => adminKey.value ? mcpAdminScopeOptions : mcpScopeOptions)
@@ -128,6 +129,13 @@ async function copy(text: string) {
     </el-alert>
 
     <el-tabs v-model="activeTab">
+      <!-- 助手(doc/33):每人固定一项,用登录凭证,没有自己的 key;按组三态 -->
+      <el-tab-pane label="助手" name="assistant">
+        <AssistantAccessPane
+          :root-label="auth.user ? rootLabel(auth.user.id, 'assistant') : '全盘'"
+          @edit-root="auth.user && editRoot(auth.user.id, 'assistant')"
+        />
+      </el-tab-pane>
       <el-tab-pane label="API Key" name="keys">
         <el-switch v-if="auth.user?.isAdmin" v-model="adminKey" active-text="创建管理员专用 Key" />
         <p class="connection-help">适合 CI 或不支持 OAuth 的客户端。每个客户端使用单独的 Key，并选择所需权限。</p>

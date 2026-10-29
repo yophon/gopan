@@ -102,13 +102,46 @@ type AdminStorage struct {
 }
 
 type AdminUser struct {
+	ID            string    `json:"id"`
+	Username      string    `json:"username"`
+	IsAdmin       bool      `json:"isAdmin"`
+	Disabled      bool      `json:"disabled"`
+	QuotaBytes    int64     `json:"quotaBytes"`
+	UsedBytes     int64     `json:"usedBytes"`
+	AiTokensToday int64     `json:"aiTokensToday"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
+type AiConversation struct {
 	ID         string    `json:"id"`
-	Username   string    `json:"username"`
-	IsAdmin    bool      `json:"isAdmin"`
-	Disabled   bool      `json:"disabled"`
-	QuotaBytes int64     `json:"quotaBytes"`
-	UsedBytes  int64     `json:"usedBytes"`
+	Title      string    `json:"title"`
+	ProviderID *string   `json:"providerId,omitempty"`
+	Model      string    `json:"model"`
+	Entries    int       `json:"entries"`
 	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+}
+
+type AiProvider struct {
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	Kind        AiProviderKind `json:"kind"`
+	BaseURL     string         `json:"baseUrl"`
+	Models      []string       `json:"models"`
+	HasKey      bool           `json:"hasKey"`
+	Site        bool           `json:"site"`
+	DailyTokens int64          `json:"dailyTokens"`
+	UsedTokens  int64          `json:"usedTokens"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
+}
+
+type AiProviderInput struct {
+	Name        string         `json:"name"`
+	Kind        AiProviderKind `json:"kind"`
+	BaseURL     string         `json:"baseUrl"`
+	Models      []string       `json:"models"`
+	Key         *string        `json:"key,omitempty"`
+	DailyTokens *int64         `json:"dailyTokens,omitempty"`
 }
 
 type AppPassword struct {
@@ -145,6 +178,25 @@ type ArchiveInfo struct {
 	Solid      bool          `json:"solid"`
 	Encrypted  bool          `json:"encrypted"`
 	Error      *string       `json:"error,omitempty"`
+}
+
+type AssistantAccess struct {
+	Disabled bool              `json:"disabled"`
+	Groups   []*AssistantGroup `json:"groups"`
+}
+
+type AssistantGroup struct {
+	Key               string              `json:"key"`
+	Label             string              `json:"label"`
+	Scopes            []string            `json:"scopes"`
+	Permission        AssistantPermission `json:"permission"`
+	DefaultPermission AssistantPermission `json:"defaultPermission"`
+	Outbound          bool                `json:"outbound"`
+}
+
+type AssistantGroupInput struct {
+	Key        string              `json:"key"`
+	Permission AssistantPermission `json:"permission"`
 }
 
 type AuthPayload struct {
@@ -1036,17 +1088,18 @@ func (e ActivityAction) MarshalJSON() ([]byte, error) {
 type ActorKind string
 
 const (
-	ActorKindWeb     ActorKind = "WEB"
-	ActorKindAndroid ActorKind = "ANDROID"
-	ActorKindWebdav  ActorKind = "WEBDAV"
-	ActorKindAgent   ActorKind = "AGENT"
-	ActorKindImg     ActorKind = "IMG"
-	ActorKindCollect ActorKind = "COLLECT"
-	ActorKindShare   ActorKind = "SHARE"
-	ActorKindJob     ActorKind = "JOB"
-	ActorKindFeed    ActorKind = "FEED"
-	ActorKindClip    ActorKind = "CLIP"
-	ActorKindSystem  ActorKind = "SYSTEM"
+	ActorKindWeb       ActorKind = "WEB"
+	ActorKindAndroid   ActorKind = "ANDROID"
+	ActorKindWebdav    ActorKind = "WEBDAV"
+	ActorKindAgent     ActorKind = "AGENT"
+	ActorKindAssistant ActorKind = "ASSISTANT"
+	ActorKindImg       ActorKind = "IMG"
+	ActorKindCollect   ActorKind = "COLLECT"
+	ActorKindShare     ActorKind = "SHARE"
+	ActorKindJob       ActorKind = "JOB"
+	ActorKindFeed      ActorKind = "FEED"
+	ActorKindClip      ActorKind = "CLIP"
+	ActorKindSystem    ActorKind = "SYSTEM"
 )
 
 var AllActorKind = []ActorKind{
@@ -1054,6 +1107,7 @@ var AllActorKind = []ActorKind{
 	ActorKindAndroid,
 	ActorKindWebdav,
 	ActorKindAgent,
+	ActorKindAssistant,
 	ActorKindImg,
 	ActorKindCollect,
 	ActorKindShare,
@@ -1065,7 +1119,7 @@ var AllActorKind = []ActorKind{
 
 func (e ActorKind) IsValid() bool {
 	switch e {
-	case ActorKindWeb, ActorKindAndroid, ActorKindWebdav, ActorKindAgent, ActorKindImg, ActorKindCollect, ActorKindShare, ActorKindJob, ActorKindFeed, ActorKindClip, ActorKindSystem:
+	case ActorKindWeb, ActorKindAndroid, ActorKindWebdav, ActorKindAgent, ActorKindAssistant, ActorKindImg, ActorKindCollect, ActorKindShare, ActorKindJob, ActorKindFeed, ActorKindClip, ActorKindSystem:
 		return true
 	}
 	return false
@@ -1101,6 +1155,65 @@ func (e *ActorKind) UnmarshalJSON(b []byte) error {
 }
 
 func (e ActorKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type AiProviderKind string
+
+const (
+	AiProviderKindOpenai          AiProviderKind = "OPENAI"
+	AiProviderKindAnthropic       AiProviderKind = "ANTHROPIC"
+	AiProviderKindGoogle          AiProviderKind = "GOOGLE"
+	AiProviderKindOpenaiResponses AiProviderKind = "OPENAI_RESPONSES"
+)
+
+var AllAiProviderKind = []AiProviderKind{
+	AiProviderKindOpenai,
+	AiProviderKindAnthropic,
+	AiProviderKindGoogle,
+	AiProviderKindOpenaiResponses,
+}
+
+func (e AiProviderKind) IsValid() bool {
+	switch e {
+	case AiProviderKindOpenai, AiProviderKindAnthropic, AiProviderKindGoogle, AiProviderKindOpenaiResponses:
+		return true
+	}
+	return false
+}
+
+func (e AiProviderKind) String() string {
+	return string(e)
+}
+
+func (e *AiProviderKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AiProviderKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AiProviderKind", str)
+	}
+	return nil
+}
+
+func (e AiProviderKind) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AiProviderKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AiProviderKind) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil
@@ -1162,6 +1275,63 @@ func (e *ArchiveStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e ArchiveStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type AssistantPermission string
+
+const (
+	AssistantPermissionAllow AssistantPermission = "ALLOW"
+	AssistantPermissionAsk   AssistantPermission = "ASK"
+	AssistantPermissionDeny  AssistantPermission = "DENY"
+)
+
+var AllAssistantPermission = []AssistantPermission{
+	AssistantPermissionAllow,
+	AssistantPermissionAsk,
+	AssistantPermissionDeny,
+}
+
+func (e AssistantPermission) IsValid() bool {
+	switch e {
+	case AssistantPermissionAllow, AssistantPermissionAsk, AssistantPermissionDeny:
+		return true
+	}
+	return false
+}
+
+func (e AssistantPermission) String() string {
+	return string(e)
+}
+
+func (e *AssistantPermission) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AssistantPermission(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AssistantPermission", str)
+	}
+	return nil
+}
+
+func (e AssistantPermission) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AssistantPermission) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AssistantPermission) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

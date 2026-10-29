@@ -29,6 +29,8 @@ const REMOTE_PERMISSIONS: &[&str] = &[
     "allow-desktop-edits",
     "allow-desktop-edit-action",
     "allow-desktop-play-external",
+    "allow-desktop-ai-fetch",
+    "allow-desktop-ai-abort",
 ];
 
 /// 已经给过权限的服务器来源(换了服务器地址再加一份,旧的留着无害)

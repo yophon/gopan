@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/yophon/gopan/server/internal/httpx"
 	"github.com/yophon/gopan/server/internal/service"
 	"github.com/yophon/gopan/server/internal/store"
@@ -1340,6 +1341,147 @@ func (r *mutationResolver) SetClipPrefs(ctx context.Context, input ClipPrefsInpu
 	return r.clipPrefs(ctx, &input)
 }
 
+// CreateAiProvider is the resolver for the createAiProvider field.
+func (r *mutationResolver) CreateAiProvider(ctx context.Context, input AiProviderInput) (*AiProvider, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p, err := r.AI.CreateProvider(ctx, ident.UserID, false, aiInput(input))
+	if err != nil {
+		return nil, err
+	}
+	return gqlAiProvider(p, nil), nil
+}
+
+// AdminCreateAiProvider is the resolver for the adminCreateAiProvider field.
+func (r *mutationResolver) AdminCreateAiProvider(ctx context.Context, input AiProviderInput) (*AiProvider, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p, err := r.AI.CreateProvider(ctx, ident.UserID, true, aiInput(input))
+	if err != nil {
+		return nil, err
+	}
+	return gqlAiProvider(p, nil), nil
+}
+
+// UpdateAiProvider is the resolver for the updateAiProvider field.
+func (r *mutationResolver) UpdateAiProvider(ctx context.Context, id string, input AiProviderInput) (*AiProvider, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, service.ErrNotFound
+	}
+	p, err := r.AI.UpdateProvider(ctx, ident.UserID, pid, aiInput(input))
+	if err != nil {
+		return nil, err
+	}
+	return gqlAiProvider(p, nil), nil
+}
+
+// DeleteAiProvider is the resolver for the deleteAiProvider field.
+func (r *mutationResolver) DeleteAiProvider(ctx context.Context, id string) (bool, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	pid, err := uuid.Parse(id)
+	if err != nil {
+		return false, service.ErrNotFound
+	}
+	return true, r.AI.DeleteProvider(ctx, ident.UserID, pid)
+}
+
+// SetAssistantAccess is the resolver for the setAssistantAccess field.
+func (r *mutationResolver) SetAssistantAccess(ctx context.Context, disabled bool, groups []*AssistantGroupInput) (*AssistantAccess, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	policy := map[string]string{}
+	for _, g := range groups {
+		policy[g.Key] = strings.ToLower(string(g.Permission))
+	}
+	a, err := r.Assistant.SetAccess(ctx, ident.UserID, disabled, policy)
+	if err != nil {
+		return nil, err
+	}
+	return gqlAssistantAccess(a), nil
+}
+
+// CreateAiConversation is the resolver for the createAiConversation field.
+func (r *mutationResolver) CreateAiConversation(ctx context.Context, title string, providerID *string, model *string) (*AiConversation, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	provider, err := optionalUUID(providerID)
+	if err != nil {
+		return nil, err
+	}
+	c, err := r.AIChats.Create(ctx, ident.UserID, title, provider, deref(model, ""))
+	if err != nil {
+		return nil, err
+	}
+	return gqlAiConversation(c), nil
+}
+
+// AppendAiEntries is the resolver for the appendAiEntries field.
+func (r *mutationResolver) AppendAiEntries(ctx context.Context, conversationID string, fromSeq int, entries []string) (*AiConversation, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cid, err := uuid.Parse(conversationID)
+	if err != nil {
+		return nil, service.ErrNotFound
+	}
+	c, err := r.AIChats.Append(ctx, ident.UserID, cid, fromSeq, entries)
+	if err != nil {
+		return nil, err
+	}
+	return gqlAiConversation(c), nil
+}
+
+// UpdateAiConversation is the resolver for the updateAiConversation field.
+func (r *mutationResolver) UpdateAiConversation(ctx context.Context, id string, title *string, providerID *string, model *string) (*AiConversation, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, service.ErrNotFound
+	}
+	provider, err := optionalUUID(providerID)
+	if err != nil {
+		return nil, err
+	}
+	c, err := r.AIChats.Update(ctx, ident.UserID, cid, title, provider, model)
+	if err != nil {
+		return nil, err
+	}
+	return gqlAiConversation(c), nil
+}
+
+// DeleteAiConversation is the resolver for the deleteAiConversation field.
+func (r *mutationResolver) DeleteAiConversation(ctx context.Context, id string) (bool, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	cid, err := uuid.Parse(id)
+	if err != nil {
+		return false, service.ErrNotFound
+	}
+	return true, r.AIChats.Delete(ctx, ident.UserID, cid)
+}
+
 // Preview is the resolver for the preview field.
 func (r *nodeResolver) Preview(ctx context.Context, obj *Node) (*PreviewInfo, error) {
 	if obj.Kind != NodeKindFile {
@@ -2367,9 +2509,15 @@ func (r *queryResolver) AdminUsers(ctx context.Context) ([]*AdminUser, error) {
 	if err != nil {
 		return nil, err
 	}
+	tokens, err := r.AI.UsageByUser(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]*AdminUser, 0, len(us))
 	for _, u := range us {
-		out = append(out, gqlAdminUser(u))
+		au := gqlAdminUser(u)
+		au.AiTokensToday = tokens[u.ID]
+		out = append(out, au)
 	}
 	return out, nil
 }
@@ -2525,6 +2673,121 @@ func (r *queryResolver) NodeClip(ctx context.Context, nodeID string) (*Clip, err
 // ClipPrefs is the resolver for the clipPrefs field.
 func (r *queryResolver) ClipPrefs(ctx context.Context) (*ClipPrefs, error) {
 	return r.clipPrefs(ctx, nil)
+}
+
+// AiProviders is the resolver for the aiProviders field.
+func (r *queryResolver) AiProviders(ctx context.Context) ([]*AiProvider, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ps, err := r.AI.Providers(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	usage, err := r.AI.Usage(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	used := map[uuid.UUID]int64{}
+	for _, u := range usage {
+		used[u.ProviderID] = u.InputTokens + u.OutputTokens
+	}
+	out := make([]*AiProvider, 0, len(ps))
+	for _, p := range ps {
+		out = append(out, gqlAiProvider(p, used))
+	}
+	return out, nil
+}
+
+// AdminAiProviders is the resolver for the adminAiProviders field.
+func (r *queryResolver) AdminAiProviders(ctx context.Context) ([]*AiProvider, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ps, err := r.AI.SiteProviders(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*AiProvider, 0, len(ps))
+	for _, p := range ps {
+		out = append(out, gqlAiProvider(p, nil))
+	}
+	return out, nil
+}
+
+// AiProviderKey is the resolver for the aiProviderKey field.
+func (r *queryResolver) AiProviderKey(ctx context.Context, id string) (string, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return "", err
+	}
+	pid, err := uuid.Parse(id)
+	if err != nil {
+		return "", service.ErrNotFound
+	}
+	return r.AI.ProviderKey(ctx, ident.UserID, pid)
+}
+
+// AssistantAccess is the resolver for the assistantAccess field.
+func (r *queryResolver) AssistantAccess(ctx context.Context) (*AssistantAccess, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	a, err := r.Assistant.Access(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return gqlAssistantAccess(a), nil
+}
+
+// AiConversations is the resolver for the aiConversations field.
+func (r *queryResolver) AiConversations(ctx context.Context, before *time.Time, limit *int) ([]*AiConversation, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cs, err := r.AIChats.List(ctx, ident.UserID, before, deref(limit, 50))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*AiConversation, 0, len(cs))
+	for _, c := range cs {
+		out = append(out, gqlAiConversation(c))
+	}
+	return out, nil
+}
+
+// AiConversation is the resolver for the aiConversation field.
+func (r *queryResolver) AiConversation(ctx context.Context, id string) (*AiConversation, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, service.ErrNotFound
+	}
+	c, err := r.AIChats.Get(ctx, ident.UserID, cid)
+	if err != nil {
+		return nil, err
+	}
+	return gqlAiConversation(c), nil
+}
+
+// AiEntries is the resolver for the aiEntries field.
+func (r *queryResolver) AiEntries(ctx context.Context, conversationID string, fromSeq *int) ([]string, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cid, err := uuid.Parse(conversationID)
+	if err != nil {
+		return nil, service.ErrNotFound
+	}
+	return r.AIChats.Entries(ctx, ident.UserID, cid, deref(fromSeq, 0))
 }
 
 // UnreadNotifications is the resolver for the unreadNotifications field.

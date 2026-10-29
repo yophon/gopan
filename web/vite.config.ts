@@ -20,6 +20,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // 助手的内核 tau:编译好放在 src/vendor/tau(doc/33 五,scripts/vendor-tau.mjs)
+      '@yophon/tau-kernel': fileURLToPath(new URL('./src/vendor/tau/kernel/index.js', import.meta.url)),
+      '@yophon/tau-ext-mcp-http': fileURLToPath(new URL('./src/vendor/tau/ext-mcp-http/index.js', import.meta.url)),
+      '@yophon/tau-ext-provider-anthropic': fileURLToPath(new URL('./src/vendor/tau/ext-provider-anthropic/index.js', import.meta.url)),
+      '@yophon/tau-ext-provider-google': fileURLToPath(new URL('./src/vendor/tau/ext-provider-google/index.js', import.meta.url)),
+      '@yophon/tau-ext-provider-openai-responses': fileURLToPath(new URL('./src/vendor/tau/ext-provider-openai-responses/index.js', import.meta.url)),
     },
   },
   server: {
@@ -62,6 +68,10 @@ export default defineConfig({
         target: 'http://127.0.0.1:8080',
       },
       '/api/img': {
+        target: 'http://127.0.0.1:8080',
+      },
+      // 助手的模型转发(doc/33)
+      '/api/ai': {
         target: 'http://127.0.0.1:8080',
       },
       '/mcp': {

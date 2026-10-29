@@ -18,7 +18,12 @@
     "types": ["vite/client", "node", "element-plus/global"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@yophon/tau-kernel": ["src/vendor/tau/kernel/index.d.ts"],
+      "@yophon/tau-ext-mcp-http": ["src/vendor/tau/ext-mcp-http/index.d.ts"],
+      "@yophon/tau-ext-provider-anthropic": ["src/vendor/tau/ext-provider-anthropic/index.d.ts"],
+      "@yophon/tau-ext-provider-google": ["src/vendor/tau/ext-provider-google/index.d.ts"],
+      "@yophon/tau-ext-provider-openai-responses": ["src/vendor/tau/ext-provider-openai-responses/index.d.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts", "codegen.ts"]

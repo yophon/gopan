@@ -24,6 +24,9 @@ const COMMANDS: &[&str] = &[
     "desktop_edits",
     "desktop_edit_action",
     "desktop_play_external",
+    // 助手直连模型服务(doc/33 四)
+    "desktop_ai_fetch",
+    "desktop_ai_abort",
 ];
 
 fn main() {

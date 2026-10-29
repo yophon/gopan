@@ -35,4 +35,9 @@ type Resolver struct {
 	Clips      *service.Clips
 
 	Versions *service.Versions
+
+	// 助手(doc/33)
+	AI        *service.AI
+	AIChats   *service.AIChats
+	Assistant *service.Assistant
 }

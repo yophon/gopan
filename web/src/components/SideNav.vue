@@ -15,6 +15,7 @@ import {
   Folder,
   Key,
   Lock,
+  MagicStick,
   Memo,
   Monitor,
   Scissor,
@@ -33,6 +34,7 @@ import { formatBytes } from '@/utils/format'
 import { useThemeMode, type ThemeMode } from '@/composables/themeMode'
 import { searchKeyword } from '@/utils/search'
 import { desktopWindow, invokeDesktop } from '@/desktop/bridge'
+import { assistantOpen, toggleAssistant } from '@/assistant/state'
 
 /**
  * 侧栏内容。桌面直接放进 el-aside,手机放进 el-drawer ——
@@ -136,6 +138,15 @@ const quotaStatus = computed(() => {
   <div class="side-nav">
     <div class="brand">
       <BrandLogo />
+      <el-button
+        link
+        class="bell-btn assistant-btn"
+        :class="{ on: assistantOpen }"
+        :icon="MagicStick"
+        title="助手"
+        aria-label="助手"
+        @click="toggleAssistant(); emit('navigate')"
+      />
       <el-badge :value="unread" :max="99" :hidden="unread === 0" class="bell-badge">
         <el-button
           link
@@ -296,6 +307,12 @@ const quotaStatus = computed(() => {
 }
 .bell-btn {
   font-size: 18px;
+}
+.assistant-btn {
+  margin-left: auto;
+}
+.assistant-btn.on {
+  color: var(--el-color-primary);
 }
 .bell-badge :deep(.el-badge__content) {
   font-weight: 400;

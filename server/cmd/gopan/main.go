@@ -235,6 +235,10 @@ func run() error {
 	}
 	go jobs.Run(ctx, cfg.JobWorkers)
 	go notifier.Run(ctx)
+	// 助手(doc/33):模型服务与 key、对话记录、助手的权限
+	ai := service.NewAI(pool, admin, cfg.JWTSecret)
+	aiChats := service.NewAIChats(pool)
+	assistant := service.NewAssistant(pool)
 	changes := service.NewChangeHub(pool) // 自动刷新(doc/32 二)
 	go changes.Run(ctx)
 	linksDone := make(chan struct{})
@@ -245,6 +249,7 @@ func run() error {
 		Media: media, Notify: notifier, Links: links,
 		Activities: activities, Space: space, Feeds: feeds, Clips: clips,
 		Versions: versions,
+		AI: ai, AIChats: aiChats, Assistant: assistant,
 	}})
 
 	mux := http.NewServeMux()
@@ -266,6 +271,8 @@ func run() error {
 	}
 	mux.Handle("POST /query", httpx.WithAuth(httpx.NewGraphQLHandler(es, cfg.DevMode), auth, cfg.TrustedProxies))
 	mux.Handle("GET /api/events", httpx.EventsHandler(auth, changes))
+	// 自己的模型服务转发时不许连内网(站点提供的不限)
+	mux.Handle("POST /api/ai/{provider}/{path...}", httpx.AIProxyHandler(auth, ai, fetcher.Guard{Deny: cfg.FetchDeny}))
 	oauthHTTP := oauthserver.New(oauth)
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", oauthHTTP.AuthorizationMetadata)
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource", oauthHTTP.ProtectedResourceMetadata)
@@ -274,7 +281,7 @@ func run() error {
 	mux.HandleFunc("GET /oauth/authorize", oauthHTTP.Authorize)
 	mux.HandleFunc("POST /oauth/token", oauthHTTP.Token)
 	mux.HandleFunc("POST /oauth/register", oauthHTTP.Register)
-	mux.Handle("/mcp", mcpserver.NewHandler(nodes, uploads, mcpTokens, oauth, packer, packTickets, chats, content, jobs, archives, links, activities, clips))
+	mux.Handle("/mcp", mcpserver.NewHandler(nodes, uploads, mcpTokens, oauth, packer, packTickets, chats, content, jobs, archives, links, activities, clips, mcpserver.WithAssistant(auth, assistant)))
 	mux.Handle("/mcp/admin", mcpserver.NewAdminHandler(nodes, mcpTokens, oauth, cfg.DefaultQuota))
 	mux.Handle("GET /mcp-download/{ticket}", httpx.MCPPackHandler(packTickets, packer))
 	mux.Handle("GET /pack", httpx.PackHandler(auth, packer, shares, cfg.TrustedProxies))
