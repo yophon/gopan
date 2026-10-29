@@ -63,8 +63,10 @@ class AssistantViewModel @Inject constructor(
     private val prefs: UserPreferencesRepository,
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<Routes.Assistant>()
-    val contextLabel: String? = route.label
     private val context: String = route.context.orEmpty()
+
+    /** 从文件页带进来时选中了几项(「这几个」指它们);在哪个文件夹不用提,模型那边知道 */
+    val selectionCount: Int = Regex("""选中了 (\d+) 项""").find(context)?.groupValues?.get(1)?.toIntOrNull() ?: 0
 
     val chat = engine.state
 
