@@ -59,6 +59,13 @@ func TestAssistantFileTools(t *testing.T) {
 		t.Fatalf("read: %+v", read)
 	}
 
+	// 文件详情带路径(read / write / edit 用它)
+	var info NodeOutput
+	callTool(t, sess, "get_file_info", map[string]any{"node_id": created.ID}, &info)
+	if info.Path == nil || *info.Path != "/笔记/会议.md" {
+		t.Fatalf("file info path: %v", info.Path)
+	}
+
 	// 覆盖:没带版本拒绝;版本过期报冲突;对得上才写
 	if msg := callToolErr(t, sess, "write_text_file", map[string]any{"path": "/笔记/会议.md", "content": "x"}); !strings.Contains(msg, "READ_FIRST") {
 		t.Fatalf("blind overwrite: %s", msg)
@@ -120,5 +127,11 @@ func TestAssistantFileTools(t *testing.T) {
 	}
 	if msg := callToolErr(t, sess, "view_image", map[string]any{"path": "/red.png"}); msg == "" {
 		t.Fatal("view_image outside the scoped root succeeded")
+	}
+	// 搜索结果的路径从范围的根算,不露出范围外的结构
+	var found ListFilesOutput
+	callTool(t, sess, "search_files", map[string]any{"query": "待办"}, &found)
+	if len(found.Items) != 1 || found.Items[0].Path == nil || *found.Items[0].Path != "/待办.md" {
+		t.Fatalf("scoped search path: %+v", found.Items)
 	}
 }

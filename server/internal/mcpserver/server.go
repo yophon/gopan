@@ -212,13 +212,15 @@ func parseIDs(raw []string) ([]uuid.UUID, error) {
 }
 
 type NodeOutput struct {
-	ID           string  `json:"id"`
-	ParentID     *string `json:"parent_id,omitempty"`
-	Name         string  `json:"name"`
-	Kind         string  `json:"kind"`
-	Size         *int64  `json:"size,omitempty"`
-	Mime         *string `json:"mime,omitempty"`
-	SHA256       *string `json:"sha256,omitempty"`
+	ID       string  `json:"id"`
+	ParentID *string `json:"parent_id,omitempty"`
+	Name     string  `json:"name"`
+	Kind     string  `json:"kind"`
+	Size     *int64  `json:"size,omitempty"`
+	Mime     *string `json:"mime,omitempty"`
+	SHA256   *string `json:"sha256,omitempty"`
+	// Path 从根(有目录范围时是范围的根)开始的路径;搜索结果与文件详情里给,read / write / edit 用它
+	Path         *string `json:"path,omitempty"`
 	SubtreeBytes *int64  `json:"subtree_bytes,omitempty"`
 	SubtreeCount *int64  `json:"subtree_count,omitempty"`
 	StatsStale   *bool   `json:"stats_stale,omitempty"`
@@ -328,7 +330,9 @@ func (s *Server) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in Sea
 		}
 		out := SearchFilesOutput{Items: make([]NodeOutput, 0, len(page.Items)), Total: page.Total, NextCursor: page.NextCursor}
 		for _, n := range page.Items {
-			out.Items = append(out.Items, nodeFromSearch(store.SearchNodesRow(n)))
+			item := nodeFromSearch(store.SearchNodesRow(n))
+			item.Path = s.pathOf(ctx, p, n.ID)
+			out.Items = append(out.Items, item)
 		}
 		return nil, out, nil
 	}
@@ -338,7 +342,9 @@ func (s *Server) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in Sea
 	}
 	out := SearchFilesOutput{Items: make([]NodeOutput, 0, len(page.Items)), NextCursor: page.NextCursor, Total: page.Total}
 	for _, item := range page.Items {
-		out.Items = append(out.Items, nodeFromSearch(item))
+		n := nodeFromSearch(item)
+		n.Path = s.pathOf(ctx, p, item.ID)
+		out.Items = append(out.Items, n)
 	}
 	return nil, out, nil
 }
@@ -361,7 +367,33 @@ func (s *Server) getFileInfo(ctx context.Context, _ *mcp.CallToolRequest, in Nod
 	if err != nil {
 		return nil, NodeOutput{}, err
 	}
-	return nil, nodeFromInfo(row), nil
+	out := nodeFromInfo(row)
+	out.Path = s.pathOf(ctx, p, id)
+	return nil, out, nil
+}
+
+// pathOf 节点的路径;有目录范围时从范围的根算(范围外的结构不给看),算不出来返回 nil。
+func (s *Server) pathOf(ctx context.Context, p *service.MCPPrincipal, id uuid.UUID) *string {
+	abs, err := s.nodes.Path(ctx, p.UserID, id)
+	if err != nil {
+		return nil
+	}
+	if p.RootID == nil {
+		return &abs
+	}
+	base, err := s.nodes.Path(ctx, p.UserID, *p.RootID)
+	if err != nil {
+		return nil
+	}
+	if abs == base {
+		root := "/"
+		return &root
+	}
+	if rest, ok := strings.CutPrefix(abs, strings.TrimRight(base, "/")+"/"); ok {
+		rel := "/" + rest
+		return &rel
+	}
+	return nil
 }
 
 func nodeFromInfo(row store.GetNodeWithBlobRow) NodeOutput {
