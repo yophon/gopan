@@ -69,6 +69,10 @@ val OSS_LIBRARIES = listOf(
     OssLibrary("Coil", "Coil Contributors", OssLicense.APACHE_2_0, "https://github.com/coil-kt/coil"),
     OssLibrary("AppAuth for Android", "The AppAuth Authors", OssLicense.APACHE_2_0, "https://github.com/openid/AppAuth-Android"),
     OssLibrary("Timber", "Jake Wharton", OssLicense.APACHE_2_0, "https://github.com/JakeWharton/timber"),
+    // 助手(doc/33):QuickJS 里跑 tau 内核
+    OssLibrary("quickjs-kt", "dokar3", OssLicense.APACHE_2_0, "https://github.com/dokar3/quickjs-kt"),
+    OssLibrary("QuickJS", "Fabrice Bellard, Charlie Gordon", OssLicense.MIT, "https://bellard.org/quickjs/"),
+    OssLibrary("tau(助手内核)", "yophon", OssLicense.MIT, "https://github.com/yophon/tau"),
     OssLibrary("Guava", "Google", OssLicense.APACHE_2_0, "https://github.com/google/guava"),
     OssLibrary("Tink(登录态加密存储的加密实现)", "Google", OssLicense.APACHE_2_0, "https://github.com/tink-crypto/tink-java"),
     OssLibrary("Gson", "Google", OssLicense.APACHE_2_0, "https://github.com/google/gson"),

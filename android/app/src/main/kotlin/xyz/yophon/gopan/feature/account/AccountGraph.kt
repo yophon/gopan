@@ -1,6 +1,8 @@
 package xyz.yophon.gopan.feature.account
 
 import androidx.navigation.NavController
+import xyz.yophon.gopan.feature.assistant.AssistantScreen
+import xyz.yophon.gopan.feature.assistant.AssistantSettingsScreen
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
@@ -45,6 +47,7 @@ fun NavGraphBuilder.accountGraph(navController: NavController, onOpenPreview: (n
                 onOpenActivity = { entry.ifResumed { navController.navigate(Routes.Activity()) } },
                 onOpenSpace = { entry.ifResumed { navController.navigate(Routes.Space) { launchSingleTop = true } } },
                 onOpenOffline = { entry.ifResumed { navController.navigate(Routes.Offline) { launchSingleTop = true } } },
+                onOpenAssistant = { entry.ifResumed { navController.navigate(Routes.Assistant()) } },
             )
         }
         // 离线可用(doc/26):文件夹项按目录往里点,文件交给根导航的预览
@@ -84,6 +87,13 @@ fun NavGraphBuilder.accountGraph(navController: NavController, onOpenPreview: (n
         composable<Routes.Sessions> { entry -> DevicesScreen(onBack = { entry.ifResumed { navController.popBackStack() } }) }
         composable<Routes.AppPasswords> { entry -> AppPasswordsScreen(onBack = { entry.ifResumed { navController.popBackStack() } }) }
         composable<Routes.AgentCredentials> { entry -> AgentScreen(onBack = { entry.ifResumed { navController.popBackStack() } }) }
+        composable<Routes.Assistant> { entry ->
+            AssistantScreen(
+                onBack = { entry.ifResumed { navController.popBackStack() } },
+                onOpenSettings = { entry.ifResumed { navController.navigate(Routes.AssistantSettings) } },
+            )
+        }
+        composable<Routes.AssistantSettings> { entry -> AssistantSettingsScreen(onBack = { entry.ifResumed { navController.popBackStack() } }) }
         composable<Routes.Admin> { entry -> AdminScreen(onBack = { entry.ifResumed { navController.popBackStack() } }) }
         composable<Routes.CrashLogs> { entry -> CrashLogScreen(onBack = { entry.ifResumed { navController.popBackStack() } }) }
         composable<Routes.Licenses> { entry -> LicensesScreen(onBack = { entry.ifResumed { navController.popBackStack() } }) }

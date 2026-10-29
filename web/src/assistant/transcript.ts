@@ -49,7 +49,7 @@ export function buildTranscript(messages: readonly AgentMessage[]): TranscriptIt
         tools.set(c.id, item)
         out.push(item)
       }
-      if (m.errorMessage && m.stopReason !== 'aborted') out.push({ kind: 'error', key: `e${i}`, text: m.errorMessage })
+      if (m.errorMessage && m.stopReason !== 'aborted') out.push({ kind: 'error', key: `e${i}`, text: friendlyError(m.errorMessage) })
     } else if (m.role === 'toolResult') {
       const item = tools.get(m.toolCallId)
       if (!item) return
@@ -59,6 +59,26 @@ export function buildTranscript(messages: readonly AgentMessage[]): TranscriptIt
     }
   })
   return out
+}
+
+/**
+ * 出错时给人看的话:模型服务 / 转发回的「HTTP 502: {"code":…,"message":"…"}」只留里面那句;额度用完换成提示。
+ */
+export function friendlyError(raw: string): string {
+  let msg = raw
+  const m = /^HTTP (\d+):\s*(\{[\s\S]*\})\s*$/.exec(raw.trim())
+  if (m) {
+    try {
+      const body = JSON.parse(m[2]!) as { code?: string; message?: string; error?: { message?: string } }
+      const inner = body.message ?? body.error?.message
+      if (body.code === 'AI_QUOTA') return '今天的站点额度用完了,可以换自己的 key'
+      if (inner) msg = inner
+    } catch {
+      // 不是 JSON:原样
+    }
+  }
+  if (/AI_QUOTA/.test(msg)) return '今天的站点额度用完了,可以换自己的 key'
+  return msg
 }
 
 /** 第一句话当标题 */

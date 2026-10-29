@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 助手(doc/33):QuickJS 里跑 tau 内核,工具是 gopan 自己的 MCP -->
+    <string name="assistant_title">助手</string>
+    <string name="assistant_entry_hint">让 AI 帮你找文件、读文档、整理、建分享</string>
+    <string name="assistant_ask">问助手</string>
+    <string name="assistant_history">对话记录</string>
+    <string name="assistant_history_empty">还没有对话</string>
+    <string name="assistant_untitled">(没有标题)</string>
+    <string name="assistant_new">新对话</string>
+    <string name="assistant_settings">助手设置</string>
+    <string name="assistant_delete">删除</string>
+    <string name="assistant_no_provider">还没有可用的模型服务</string>
+    <string name="assistant_add_provider">添加模型服务</string>
+    <string name="assistant_edit_provider">修改模型服务</string>
+    <string name="assistant_site">站点提供</string>
+    <string name="assistant_hint_title">可以这样问:</string>
+    <string name="assistant_hint_1">把这几个文件改成日期开头</string>
+    <string name="assistant_hint_2">上个月传的 PDF 放哪了</string>
+    <string name="assistant_hint_3">给这个文件夹建个能上传的分享</string>
+    <string name="assistant_not_done">(没做)</string>
+    <string name="assistant_more">……还有 %1$d 项</string>
+    <string name="assistant_allow">允许</string>
+    <string name="assistant_allow_session">这次对话都允许</string>
+    <string name="assistant_deny">不行</string>
+    <string name="assistant_placeholder">让助手做点什么</string>
+    <string name="assistant_send">发送</string>
+    <string name="assistant_stop">停止</string>
+    <string name="assistant_conflict">这个对话在别处有了新内容,请从「对话记录」重新打开</string>
+
+    <string name="assistant_mode_title">连接方式(这台设备)</string>
+    <string name="assistant_mode_proxy">经服务器转发</string>
+    <string name="assistant_mode_proxy_hint">key 不下发到这台手机</string>
+    <string name="assistant_mode_direct">直接连接</string>
+    <string name="assistant_mode_direct_hint">手机直接请求模型服务;站点提供的总是转发</string>
+    <string name="assistant_site_title">站点提供</string>
+    <string name="assistant_usage_today">今天 %1$s</string>
+    <string name="assistant_mine_title">我的模型服务</string>
+    <string name="assistant_no_key">(没填 key)</string>
+    <string name="assistant_access_title">助手能做什么</string>
+    <string name="assistant_enabled">启用助手</string>
+    <string name="assistant_outbound">(外发)</string>
+    <string name="assistant_perm_allow">允许</string>
+    <string name="assistant_perm_ask">询问</string>
+    <string name="assistant_perm_deny">拒绝</string>
+    <string name="assistant_outbound_title">改成允许</string>
+    <string name="assistant_outbound_message">这组能把东西发到外面(公开链接、访问任意网址)。助手读到的文档里要是藏着坏指令,可能借它把内容带出去。确定不再询问?</string>
+    <string name="assistant_outbound_confirm">确定</string>
+    <string name="assistant_delete_provider_title">删除模型服务</string>
+    <string name="assistant_delete_provider_message">删除「%1$s」?用它的对话之后要换个服务接着聊。</string>
+    <string name="assistant_kind_openai">OpenAI 兼容(DeepSeek、通义、Kimi…)</string>
+    <string name="assistant_field_name">名字</string>
+    <string name="assistant_field_url">地址</string>
+    <string name="assistant_field_models">模型(一行一个,第一个是默认)</string>
+    <string name="assistant_key_keep">留空不变</string>
+    <string name="assistant_save">保存</string>
+    <string name="assistant_cancel">取消</string>
+</resources>

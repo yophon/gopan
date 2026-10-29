@@ -1,0 +1,55 @@
+# 助手(doc/33):模型服务、权限、对话记录。对话本身由 QuickJS 里的运行时直接调 /query,这里只放界面要的
+
+query AiProviders {
+  aiProviders {
+    id
+    name
+    kind
+    baseUrl
+    models
+    hasKey
+    site
+    dailyTokens
+    usedTokens
+  }
+}
+
+mutation CreateAiProvider($input: AiProviderInput!) {
+  createAiProvider(input: $input) { id }
+}
+
+mutation UpdateAiProvider($id: ID!, $input: AiProviderInput!) {
+  updateAiProvider(id: $id, input: $input) { id }
+}
+
+mutation DeleteAiProvider($id: ID!) {
+  deleteAiProvider(id: $id)
+}
+
+query AiConversations($limit: Int) {
+  aiConversations(limit: $limit) {
+    id
+    title
+    providerId
+    model
+    updatedAt
+  }
+}
+
+mutation DeleteAiConversation($id: ID!) {
+  deleteAiConversation(id: $id)
+}
+
+query AssistantAccess {
+  assistantAccess {
+    disabled
+    groups { key label permission outbound }
+  }
+}
+
+mutation SetAssistantAccess($disabled: Boolean!, $groups: [AssistantGroupInput!]!) {
+  setAssistantAccess(disabled: $disabled, groups: $groups) {
+    disabled
+    groups { key label permission outbound }
+  }
+}

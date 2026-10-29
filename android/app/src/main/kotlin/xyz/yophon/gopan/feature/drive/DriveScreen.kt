@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OfflinePin
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.CloudOff
@@ -164,6 +165,8 @@ fun DriveScreen(
     onOpenQuick: (recent: Boolean) -> Unit = {},
     /** 离线可用的文件夹没网打不开时,去看手机上的副本(doc/26) */
     onOpenOffline: (Routes.OfflineFolder) -> Unit = {},
+    /** 问助手(doc/33):带上当前文件夹与选中的文件 */
+    onOpenAssistant: (Routes.Assistant) -> Unit = {},
     viewModel: DriveViewModel = hiltViewModel(),
     fetchViewModel: FetchViewModel = hiltViewModel(),
     // 「复制直链」:与 NodeDialogHost 里的是同一个实例(同一个导航条目),对话框与提示由它画
@@ -254,6 +257,10 @@ fun DriveScreen(
                     SelectionTopBar(
                         state,
                         viewModel,
+                        onAskAssistant = {
+                            onOpenAssistant(assistantRoute(state.crumbs, state.selectedNodes))
+                            viewModel.clearSelection()
+                        },
                         // 多选「复制直链」:一行一条,文件夹跳过
                         onCopyLinks = if (linkState.enabled) {
                             {
@@ -265,7 +272,10 @@ fun DriveScreen(
                         },
                     )
                 } else {
-                    DriveTopBar(state, viewModel, onBack, onCrumbClick, onOpenSearch, onOpenTrash, onOpenTransfers, topBarScroll)
+                    DriveTopBar(
+                        state, viewModel, onBack, onCrumbClick, onOpenSearch, onOpenTrash, onOpenTransfers, topBarScroll,
+                        onAskAssistant = { onOpenAssistant(assistantRoute(state.crumbs, emptyList())) },
+                    )
                 }
             },
             floatingActionButton = {
@@ -423,6 +433,7 @@ private fun DriveTopBar(
     onOpenTrash: () -> Unit,
     onOpenTransfers: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior? = null,
+    onAskAssistant: () -> Unit = {},
 ) {
     val rootCrumb = Crumb(null, "")
     val title = when {
@@ -450,6 +461,9 @@ private fun DriveTopBar(
                 }
             },
             actions = {
+                IconButton(onClick = onAskAssistant, modifier = Modifier.testTag("drive_assistant")) {
+                    Icon(Icons.Outlined.AutoAwesome, contentDescription = stringResource(R.string.assistant_ask))
+                }
                 IconButton(onClick = { onOpenSearch(state.crumbs.lastOrNull()) }) {
                     Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.drive_action_search))
                 }
@@ -476,7 +490,7 @@ private fun DriveTopBar(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SelectionTopBar(state: DriveUiState, viewModel: DriveViewModel, onCopyLinks: (() -> Unit)?) {
+private fun SelectionTopBar(state: DriveUiState, viewModel: DriveViewModel, onAskAssistant: () -> Unit, onCopyLinks: (() -> Unit)?) {
     val hasSelection = state.selection.isNotEmpty()
     TopAppBar(
         windowInsets = TopBarInsets,
@@ -499,14 +513,14 @@ private fun SelectionTopBar(state: DriveUiState, viewModel: DriveViewModel, onCo
             IconButton(onClick = viewModel::deleteSelected, enabled = hasSelection) {
                 Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.drive_action_delete))
             }
-            SelectionMoreMenu(state, viewModel, onCopyLinks)
+            SelectionMoreMenu(state, viewModel, onAskAssistant, onCopyLinks)
         },
         colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     )
 }
 
 @Composable
-private fun SelectionMoreMenu(state: DriveUiState, viewModel: DriveViewModel, onCopyLinks: (() -> Unit)?) {
+private fun SelectionMoreMenu(state: DriveUiState, viewModel: DriveViewModel, onAskAssistant: () -> Unit, onCopyLinks: (() -> Unit)?) {
     var expanded by remember { mutableStateOf(false) }
     val hasSelection = state.selection.isNotEmpty()
     Box {
@@ -514,6 +528,14 @@ private fun SelectionMoreMenu(state: DriveUiState, viewModel: DriveViewModel, on
             Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.drive_action_more))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.assistant_ask)) },
+                onClick = {
+                    expanded = false
+                    onAskAssistant()
+                },
+                leadingIcon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null) },
+            )
             // 选了一项是重命名,选了多项是批量重命名(doc/27)
             val many = state.selection.size > 1
             DropdownMenuItem(

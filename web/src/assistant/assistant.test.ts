@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentMessage } from '@yophon/tau-kernel'
 
+import { localPath } from './agent'
 import { describeCall, toolLabel } from './describe'
 import { decide, mcpToolName, scopePermissions, toolMetas } from './policy'
 import { ConflictError, GopanSessionStore } from './session'
 import { describeContext } from './state'
-import { buildTranscript, stripContext, titleFrom, withContext } from './transcript'
+import { buildTranscript, friendlyError, stripContext, titleFrom, withContext } from './transcript'
 
 const metas = toolMetas([
   { name: 'list_files', annotations: { readOnlyHint: true }, _meta: { 'gopan/scopes': ['files:read'] } },
@@ -92,6 +93,13 @@ describe('对话 → 面板', () => {
     expect(items[3]).toMatchObject({ name: 'trash_nodes', status: 'denied' })
   })
 
+  it('出错的话只留给人看的那句', () => {
+    expect(friendlyError('HTTP 502: {"code":"AI_UPSTREAM","message":"模型服务的地址不允许访问(内网地址)"}')).toBe('模型服务的地址不允许访问(内网地址)')
+    expect(friendlyError('HTTP 429: {"code":"AI_QUOTA","message":"x"}')).toBe('今天的站点额度用完了,可以换自己的 key')
+    expect(friendlyError('HTTP 401: {"error":{"message":"Invalid API key"}}')).toBe('Invalid API key')
+    expect(friendlyError('HTTP 500: oops')).toBe('HTTP 500: oops')
+  })
+
   it('上下文与标题', () => {
     expect(stripContext(withContext('hi', 'ctx'))).toBe('hi')
     expect(withContext('hi', '')).toBe('hi')
@@ -139,5 +147,17 @@ describe('对话记录写到服务端', () => {
     await store.flush()
     expect(store.conflict).toBe(true)
     expect(store.pending).toBe(1)
+  })
+})
+
+describe('同源判断(不用 URL 类,QuickJS 里没有)', () => {
+  it('只认这个站点下的路径', () => {
+    const o = 'https://drive.example.com'
+    expect(localPath(o + '/mcp', o)).toBe('/mcp')
+    expect(localPath(o + '/api/ai/p1/chat/completions?x=1', o)).toBe('/api/ai/p1/chat/completions')
+    expect(localPath('/query', o)).toBe('/query')
+    expect(localPath(o, o)).toBe('/')
+    expect(localPath('https://drive.example.com.evil.com/mcp', o)).toBeNull()
+    expect(localPath('https://api.deepseek.com/v1/chat/completions', o)).toBeNull()
   })
 })

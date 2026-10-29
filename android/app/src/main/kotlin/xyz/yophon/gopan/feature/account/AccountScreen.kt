@@ -38,6 +38,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.ViewList
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Code
@@ -158,6 +159,7 @@ fun AccountScreen(
     onOpenFeeds: () -> Unit = {},
     onOpenClips: () -> Unit = {},
     onOpenOffline: () -> Unit = {},
+    onOpenAssistant: () -> Unit = {},
     viewModel: AccountViewModel = hiltViewModel(),
     updates: UpdateViewModel = hiltViewModel(),
     crashes: CrashLogViewModel = hiltViewModel(),
@@ -218,6 +220,7 @@ fun AccountScreen(
         onOpenFeeds = onOpenFeeds,
         onOpenClips = onOpenClips,
         onOpenOffline = onOpenOffline,
+        onOpenAssistant = onOpenAssistant,
     )
     update.phase?.let { UpdateDialog(it, updates) }
 }
@@ -255,6 +258,7 @@ internal fun AccountContent(
     onOpenFeeds: () -> Unit = {},
     onOpenClips: () -> Unit = {},
     onOpenOffline: () -> Unit = {},
+    onOpenAssistant: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showThemeDialog by rememberSaveable { mutableStateOf(false) }
@@ -331,6 +335,7 @@ internal fun AccountContent(
                     onOpenFeeds = onOpenFeeds,
                     onOpenClips = onOpenClips,
                     onOpenOffline = onOpenOffline,
+                    onOpenAssistant = onOpenAssistant,
                 )
             }
         }
@@ -424,6 +429,7 @@ private fun AccountList(
     onOpenFeeds: () -> Unit = {},
     onOpenClips: () -> Unit = {},
     onOpenOffline: () -> Unit = {},
+    onOpenAssistant: () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     OnTabReselect(Routes.AccountTab) { listState.animateScrollToItem(0) }
@@ -439,6 +445,17 @@ private fun AccountList(
             if (!wide) item("header") { AccountHeader(user = user, usage = usage, onClick = onOpenSpace) }
 
             if (notifications != null) notificationsSection(notifications)
+
+            // 助手(doc/33)
+            item("assistant") {
+                SettingItem(
+                    icon = Icons.Outlined.AutoAwesome,
+                    title = stringResource(R.string.assistant_title),
+                    supporting = stringResource(R.string.assistant_entry_hint),
+                    onClick = onOpenAssistant,
+                    modifier = Modifier.testTag("account_assistant"),
+                )
+            }
 
             item("storage") { SectionTitle(stringResource(R.string.account_section_storage)) }
             // 空间分析与动态(doc/23 二、三)

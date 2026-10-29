@@ -49,6 +49,8 @@ export interface ApprovalView {
 }
 
 export interface AssistantDeps {
+  /** 宿主的平台能力:浏览器里是 defaultPlatform();安卓的 QuickJS 里由 App 桥接(网络走 OkHttp) */
+  platform?: Platform
   token(): string | null
   /** 401 后换一张凭证;拿到了返回 true */
   refresh(stale: string | null): Promise<boolean>
@@ -59,6 +61,8 @@ export interface AssistantDeps {
 }
 
 export interface AssistantOptions {
+  /** gopan 站点地址(不带结尾的 /):/mcp、/api/ai 都在它下面 */
+  origin: string
   provider: ProviderView
   model: string
   mode: ConnectionMode
@@ -79,15 +83,11 @@ export interface AssistantHandle {
   metas: Map<string, ToolMeta>
 }
 
-const enc = (s: string) => s
-
-function sameOrigin(url: string): URL | null {
-  try {
-    const u = new URL(url, location.origin)
-    return u.origin === location.origin ? u : null
-  } catch {
-    return null
-  }
+/** 同源请求的路径(不含查询);不是同源返回 null。不用 URL 类:QuickJS 里没有 */
+export function localPath(url: string, origin: string): string | null {
+  if (url.startsWith('/')) return url.split('?')[0]!
+  if (url !== origin && !url.startsWith(`${origin}/`) && !url.startsWith(`${origin}?`)) return null
+  return (url.slice(origin.length) || '/').split('?')[0]!
 }
 
 function randomId(platform: Platform): string {
@@ -99,18 +99,19 @@ function randomId(platform: Platform): string {
 }
 
 /** 同源的 /api/ai、/mcp 加登录凭证(401 时换一张再试一次);别的地址按连接方式发 */
-function gopanFetch(base: PlatformFetch, deps: AssistantDeps, extra: () => Record<string, string>, direct: PlatformFetch): PlatformFetch {
+function gopanFetch(origin: string, base: PlatformFetch, deps: AssistantDeps, extra: () => Record<string, string>, direct: PlatformFetch): PlatformFetch {
   return async (url, init) => {
-    const local = sameOrigin(url)
-    if (!local) return direct(url, init)
+    const path = localPath(url, origin)
+    if (path === null) return direct(url, init)
+    const full = url.startsWith('/') ? origin + url : url
     const send = (token: string | null) => {
       const headers: Record<string, string> = { ...(init?.headers ?? {}) }
       // tau 的 provider 会带上它自己的认证头(转发时是占位的),一律换成登录凭证
       for (const k of Object.keys(headers)) if (/^(authorization|x-api-key|x-goog-api-key)$/i.test(k)) delete headers[k]
       if (token) headers.Authorization = `Bearer ${token}`
-      if (local.pathname === '/mcp') Object.assign(headers, extra())
+      if (path === '/mcp') Object.assign(headers, extra())
       const next: PlatformRequestInit = { ...init, headers }
-      return base(local.href, next)
+      return base(full, next)
     }
     const token = deps.token()
     const res = await send(token)
@@ -135,11 +136,11 @@ function transportFor(o: AssistantOptions, baseUrl: string, apiKey: string, plat
 }
 
 /** 直接问 /mcp 要工具列表(带 _meta 与标注),供权限判断与确认卡用 */
-async function listTools(fetch: PlatformFetch): Promise<Map<string, ToolMeta>> {
-  const res = await fetch(`${location.origin}/mcp`, {
+async function listTools(origin: string, fetch: PlatformFetch): Promise<Map<string, ToolMeta>> {
+  const res = await fetch(`${origin}/mcp`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
-    body: enc(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })),
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
   })
   if (res.status === 403) throw new Error(await res.text().catch(() => '助手已停用'))
   if (!res.ok) throw new Error(`连不上 gopan 的工具(${res.status})`)
@@ -148,19 +149,19 @@ async function listTools(fetch: PlatformFetch): Promise<Map<string, ToolMeta>> {
 }
 
 export async function createAssistant(o: AssistantOptions, deps: AssistantDeps): Promise<AssistantHandle> {
-  const base = defaultPlatform()
+  const base = deps.platform ?? defaultPlatform()
   let turn = randomId(base)
   const extra = () => ({ 'X-Gopan-Assistant': o.conversationId, 'X-Gopan-Turn': turn })
   const direct = deps.shellFetch ?? base.fetch
-  const platform: Platform = { ...base, fetch: gopanFetch(base.fetch, deps, extra, direct) }
+  const platform: Platform = { ...base, fetch: gopanFetch(o.origin, base.fetch, deps, extra, direct) }
 
   const proxied = o.provider.site || o.mode === 'proxy'
-  const baseUrl = proxied ? `${location.origin}/api/ai/${o.provider.id}` : o.provider.baseUrl
+  const baseUrl = proxied ? `${o.origin}/api/ai/${o.provider.id}` : o.provider.baseUrl
   // 转发时 key 在服务端,桌面端直连时外壳自己取;tau 的几种 provider 要求有个值,给个占位
   // (转发时发出去前换成登录凭证,外壳不转认证头)
   const apiKey = proxied || deps.shellFetch ? 'gopan' : await deps.providerKey(o.provider.id)
 
-  const metas = await listTools(platform.fetch)
+  const metas = await listTools(o.origin, platform.fetch)
   let scopes = scopePermissions(o.groups)
   const sessionAllowed = new Set<string>()
   const policy: ToolPolicy = {
@@ -174,7 +175,7 @@ export async function createAssistant(o: AssistantOptions, deps: AssistantDeps):
   }
 
   const mcp = createHttpMcpExtension({
-    servers: [{ name: MCP_SERVER, url: `${location.origin}/mcp`, riskFromAnnotations: true }],
+    servers: [{ name: MCP_SERVER, url: `${o.origin}/mcp`, riskFromAnnotations: true }],
     platform,
   })
   const extensions = await ExtensionRegistry.load([mcp.extension])

@@ -132,6 +132,24 @@ class UserPreferencesRepository @Inject constructor(
         dataStore.edit { if (text.isEmpty()) it.remove(Keys.chatDraft) else it[Keys.chatDraft] = text }
     }
 
+    /** 助手的连接方式(doc/33 一):按设备记,不跟账号走;"direct" 直连,别的都当转发 */
+    val assistantDirect: Flow<Boolean> = dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[Keys.assistantMode] == "direct" }
+
+    suspend fun setAssistantDirect(direct: Boolean) {
+        dataStore.edit { it[Keys.assistantMode] = if (direct) "direct" else "proxy" }
+    }
+
+    /** 这台设备上次选的模型服务与模型("服务 id|模型");空串 = 没选过 */
+    val assistantPick: Flow<String> = dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[Keys.assistantPick].orEmpty() }
+
+    suspend fun setAssistantPick(value: String) {
+        dataStore.edit { it[Keys.assistantPick] = value }
+    }
+
     private object Keys {
         val theme = stringPreferencesKey("theme")
         val palette = stringPreferencesKey("palette")
@@ -145,6 +163,8 @@ class UserPreferencesRepository @Inject constructor(
         val driveViewMode = stringPreferencesKey("drive_view_mode")
         val driveSortOrder = stringPreferencesKey("drive_sort_order")
         val driveSortDesc = booleanPreferencesKey("drive_sort_desc")
+        val assistantMode = stringPreferencesKey("assistant_mode")
+        val assistantPick = stringPreferencesKey("assistant_pick")
     }
 
     private fun Preferences.toUserPreferences() = UserPreferences(

@@ -14,24 +14,17 @@ import { shellAiFetch } from '@/desktop/aifetch'
 import { useAuthStore } from '@/stores/auth'
 import { createAssistant, type ApprovalAnswer, type ApprovalView, type AssistantHandle, type ProviderView } from './agent'
 import { describeCall, type CallDescription } from './describe'
+import { SYSTEM_PROMPT } from './prompt'
 import type { AccessGroup, Permission } from './policy'
 import { ConflictError, GopanSessionStore } from './session'
 import { assistantContext, describeContext, type ConnectionMode } from './state'
-import { buildTranscript, shortToolName, titleFrom, withContext, type TranscriptItem } from './transcript'
+import { buildTranscript, friendlyError, shortToolName, titleFrom, withContext, type TranscriptItem } from './transcript'
 
 /**
  * 助手面板的控制器(doc/33 四):一个对话一个 tau Agent;对话记录写在 gopan 上。
  * 换了服务 / 模型 / 连接方式就按同一份记录重建 Agent,接着聊。
  */
 
-const SYSTEM_PROMPT = `你是 gopan 网盘里的助手,用 gopan 的工具帮用户找文件、读文件、整理文件、建分享。
-
-- 先查再动:动手前用列目录、搜索确认对象,不要猜 id 或路径。
-- 批量改动前先说清楚要动哪些、动到哪;改动会弹确认,用户拒绝了就停下问。
-- 放进回收站的东西能恢复;没有彻底删除。
-- 路径用用户看得懂的写法(/旅行/2024),不要把 id 念给用户。
-- 消息开头 <gopan-context> 里是用户此刻正在看的文件夹和选中的文件,「这几个」「这里」指的就是它们。
-- 用用户的语言回答,简短。`
 
 export interface PendingApproval {
   view: ApprovalView
@@ -141,6 +134,7 @@ async function ensureAgent(setup: ChatSetup, firstText: string): Promise<Assista
   const direct = setup.mode === 'direct' && !setup.provider.site
   handle.value = await createAssistant(
     {
+      origin: location.origin,
       provider: setup.provider,
       model: setup.model,
       mode: setup.provider.site ? 'proxy' : setup.mode,
@@ -174,8 +168,7 @@ async function ensureAgent(setup: ChatSetup, firstText: string): Promise<Assista
 function friendly(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err)
   if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return '连不上模型服务。浏览器直连要对方允许跨域,不行就改用「经服务器转发」'
-  if (/AI_QUOTA|额度/.test(msg)) return '今天的站点额度用完了,可以换自己的 key'
-  return msg
+  return friendlyError(msg)
 }
 
 export async function send(text: string, setup: ChatSetup) {
