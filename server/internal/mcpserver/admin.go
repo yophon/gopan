@@ -23,7 +23,7 @@ func NewAdminHandler(nodes *service.Nodes, tokens *service.MCPTokens, oauth *ser
 	addTool(s, protocol, &mcp.Tool{Name: "admin_retry_failed_tasks", Description: "Requeue failed background tasks; supports idempotency."}, mutation(s, "admin_retry_failed_tasks", "admin:tasks", (*Server).adminRetry))
 	addTool(s, protocol, &mcp.Tool{Name: "admin_purge_nodes", Description: "Permanently delete selected trashed nodes for a user. Use dry_run first; actual deletion requires confirm=true. Supports idempotency."}, mutation(s, "admin_purge_nodes", "admin:purge", (*Server).adminPurge))
 	addTool(s, protocol, &mcp.Tool{Name: "admin_list_audit", Description: "Read instance-wide MCP operation history with account and credential IDs; no passwords, tokens or presigned URLs."}, s.listAudit)
-	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return protocol }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
+	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return protocol }, streamableOptions())
 	return s.withAuth(http.NewCrossOriginProtection().Handler(handler))
 }
 

@@ -55,10 +55,15 @@ func NewHandler(nodes *service.Nodes, uploads *service.Uploads, tokens *service.
 	protocol := mcp.NewServer(&mcp.Implementation{Name: "gopan", Version: "2.3.0"}, nil)
 	s.registerTools(protocol)
 	protocol.AddReceivingMiddleware(assistantToolFilter)
-	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return protocol }, &mcp.StreamableHTTPOptions{
-		Stateless: true, JSONResponse: true,
-	})
+	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return protocol }, streamableOptions())
 	return s.withAuth(http.NewCrossOriginProtection().Handler(h))
+}
+
+// streamableOptions 两个 MCP 入口共用。SDK 默认的防 DNS rebinding 检查(经 127.0.0.1 进来、Host 却不是 localhost
+// 就 403)是给不认证的本地 MCP 服务准备的;这里每个请求都要 Bearer 凭证,还有 CrossOriginProtection。
+// 留着它会把本机反代过来的请求、服务器上跑的助手(回环地址 + 对外 Host,doc/34)全挡掉。
+func streamableOptions() *mcp.StreamableHTTPOptions {
+	return &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, DisableLocalhostProtection: true}
 }
 
 func (s *Server) withAuth(next http.Handler) http.Handler {

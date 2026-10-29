@@ -161,6 +161,16 @@ class AssistantEngine @Inject constructor(
                 h.update { it.copy(conversation = AssistantConversation(id = run.conversationId, title = args.text.trim().take(40))) }
             }
             applyRun(run)
+            // 这一轮可能在回应回来之前就结束了(新对话那时推送还对不上号,被丢掉):再读一次它现在的状态
+            val now = runCatching { repo.currentRun(run.conversationId) }.getOrNull()
+            if (now != null && now.id == run.id && now.status !in ACTIVE) {
+                if (now.status != "failed") {
+                    // 做完 / 停了:写进记录的读回来;出错的留着刚发的那句
+                    h.open(run.conversationId)
+                    h.update { it.copy(onServer = true) }
+                }
+                applyRun(now)
+            }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             h.update { it.copy(running = false, error = e.message) }
@@ -188,6 +198,8 @@ class AssistantEngine @Inject constructor(
 
     private fun applyRun(run: AiRun) {
         val active = run.status in ACTIVE
+        // 同一轮已经结束了,迟到的旧状态(startRun 的回应晚于推送)不认
+        if (state.value.runId == run.id && !state.value.running && active) return
         val approval = if (run.status == "waiting") run.approval?.let { raw ->
             runCatching { AssistantHost.json.decodeFromString(AssistantApproval.serializer(), raw) }.getOrNull()
         } else {

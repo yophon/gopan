@@ -19,10 +19,14 @@ import (
 
 type assistantTransport struct {
 	token, conv, turn string
+	host              string // 非空时改写 Host(模拟本机反代 / 服务器上跑的助手)
 }
 
 func (a assistantTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	r = r.Clone(r.Context())
+	if a.host != "" {
+		r.Host = a.host
+	}
 	r.Header.Set("Authorization", "Bearer "+a.token)
 	if a.conv != "" {
 		r.Header.Set(assistantHeader, a.conv)
@@ -153,6 +157,17 @@ func TestAssistantOverMCP(t *testing.T) {
 		t.Fatalf("assistant outside its root: %s", resultText(res))
 	}
 	callTool(t, sess, "get_file_info", map[string]any{"node_id": a.ID}, &info)
+
+	// 经回环地址进来、Host 是对外域名(本机反代、服务器上跑的助手):照常能用,不被 SDK 的 localhost 检查挡掉
+	viaProxy := tr
+	viaProxy.host = "drive.example.com"
+	proxied, err := connectAssistant(t, srv.URL, viaProxy)
+	if err != nil {
+		t.Fatalf("loopback request with public Host: %v", err)
+	}
+	if toolNames(t, proxied)["list_files"] == nil {
+		t.Fatal("proxied session sees no tools")
+	}
 
 	// 停用:连不上
 	if _, err := assistant.SetAccess(ctx, e.alice, true, nil); err != nil {
