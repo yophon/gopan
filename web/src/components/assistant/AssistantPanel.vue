@@ -231,6 +231,12 @@ const statusMark: Record<string, string> = { running: '…', ok: '✓', error: '
   background: var(--el-bg-color);
   box-shadow: var(--el-box-shadow-light);
 }
+/* 窗口不够宽时面板浮在内容上(AppShell 不再让出位置):影子重一点,看得出是盖在上面的 */
+@media (max-width: 1443px) {
+  .assistant:not(.mobile) {
+    box-shadow: var(--el-box-shadow-dark);
+  }
+}
 .assistant.mobile {
   left: 0;
   width: auto;

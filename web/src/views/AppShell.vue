@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, reactive, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useMediaQuery } from '@vueuse/core'
 import { Bell, MagicStick } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
@@ -39,6 +40,10 @@ const queryClient = useQueryClient()
 onBeforeUnmount(startRealtime(queryClient))
 
 const { isMobile } = useBreakpoints()
+
+// 助手面板推开主内容时,剩下的宽度得还放得下桌面布局(断点 1023 + 面板 420);
+// 窗口没这么宽就让面板浮在内容上面,内容照旧按整个窗口的宽度排,不被挤碎
+const roomForAssistant = useMediaQuery('(min-width: 1444px)')
 
 // 桌面端的传输助手小窗(doc/29 D3):只要会话本身,导航、上传抽屉、播放条都不要
 const embed = computed(() => route.query.embed === '1' || desktopWindow() === 'mini')
@@ -114,7 +119,7 @@ async function onLogout() {
       />
     </el-aside>
 
-    <el-container class="body" :class="{ 'with-assistant': assistantOpen && !isMobile && !embed }" direction="vertical">
+    <el-container class="body" :class="{ 'with-assistant': assistantOpen && roomForAssistant && !isMobile && !embed }" direction="vertical">
       <header v-if="isMobile && !embed" class="topbar">
         <el-button text class="topbar-btn" title="打开导航" aria-label="打开导航" @click="navOpen = true">
           <!-- 三道杠;Element 的 Menu 图标是四个方块,像「应用」不像「菜单」 -->

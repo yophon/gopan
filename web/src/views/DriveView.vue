@@ -1264,10 +1264,19 @@ function onSheetSelect(key: string) {
 }
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-height: 36px;
   margin-bottom: 10px;
+}
+/* 窄的时候整组换行,不把「上传 | ▾」这种分体按钮从中间拆开 */
+.toolbar > * {
+  flex-shrink: 0;
+}
+.toolbar :deep(.el-button-group) {
+  display: inline-flex;
+  flex-wrap: nowrap;
 }
 .toolbar :deep(.el-button + .el-button) {
   margin-left: 0;
