@@ -1145,6 +1145,10 @@ type Query {
   # 登录设备列表,最近活跃的在前
   sessions: [Session!]!
   node(id: ID!): Node!
+  # 按 id 一次查几个(助手回答里引用的文件,doc/35 六);查不到、没权限的直接不返回,最多 100 个
+  nodesByIds(ids: [ID!]!): [Node!]!
+  # 按网盘路径查(/笔记/会议.md);助手的引用有时写的是路径。查不到的不返回,最多 100 个
+  nodesByPaths(paths: [String!]!): [Node!]!
   children(parentId: ID, cursor: String, order: NodeOrder = NAME, desc: Boolean = false): NodePage!
   # 按名字搜索。带 filter 时关键词可以为空(只按筛选找);分享访客的搜索忽略 filter
   searchNodes(q: String!, cursor: String, filter: SearchFilter): NodePage!
@@ -1563,7 +1567,8 @@ extend type Mutation {
   updateAiConversation(id: ID!, title: String, providerId: ID, model: String): AiConversation!
   deleteAiConversation(id: ID!): Boolean!
   # 交给服务器跑(doc/34):没有对话就先建;同一个对话同时只能有一轮(AI_RUN_BUSY)
-  startAiRun(conversationId: ID, text: String!, context: String, providerId: ID!, model: String): AiRun!
+  # images:随这句话发的图(data URL,JPEG / PNG / WebP / GIF),最多 4 张、合计 1 MB(doc/35)
+  startAiRun(conversationId: ID, text: String!, context: String, providerId: ID!, model: String, images: [String!]): AiRun!
   # 确认卡的答复:once / session / deny
   answerAiRun(id: ID!, answer: String!): Boolean!
   stopAiRun(id: ID!): Boolean!

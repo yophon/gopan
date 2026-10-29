@@ -229,6 +229,7 @@ func run() error {
 	// 收藏、最近与历史版本(doc/24)
 	versions := service.NewVersions(pool, obj, service.VersionPolicy{Keep: cfg.VersionKeep, TTL: cfg.VersionTTL})
 	uploads.SetVersionKeep(cfg.VersionKeep)
+	uploads.SetPDFRenderer(lookPathOrEmpty(cfg.PdftoppmPath))
 	activities.SetVersions(versions)
 	wk.SetVersions(versions)
 	go wk.Run(ctx, cfg.Workers)

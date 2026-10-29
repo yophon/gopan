@@ -1408,6 +1408,7 @@ export type MutationShareInitUploadArgs = {
 export type MutationStartAiRunArgs = {
   context?: InputMaybe<Scalars['String']['input']>;
   conversationId?: InputMaybe<Scalars['ID']['input']>;
+  images?: InputMaybe<Array<Scalars['String']['input']>>;
   model?: InputMaybe<Scalars['String']['input']>;
   providerId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
@@ -1740,6 +1741,8 @@ export type Query = {
   node: Node;
   nodeClip?: Maybe<Clip>;
   nodeLink?: Maybe<DirectLink>;
+  nodesByIds: Array<Node>;
+  nodesByPaths: Array<Node>;
   notifications: NotificationPage;
   notifyChannels: Array<NotifyChannel>;
   notifyEventKinds: Array<NotifyEventKind>;
@@ -1934,6 +1937,16 @@ export type QueryNodeClipArgs = {
 
 export type QueryNodeLinkArgs = {
   nodeId: Scalars['ID']['input'];
+};
+
+
+export type QueryNodesByIdsArgs = {
+  ids: Array<Scalars['ID']['input']>;
+};
+
+
+export type QueryNodesByPathsArgs = {
+  paths: Array<Scalars['String']['input']>;
 };
 
 
@@ -2554,6 +2567,7 @@ export type StartAiRunMutationVariables = Exact<{
   context?: InputMaybe<Scalars['String']['input']>;
   providerId: Scalars['ID']['input'];
   model?: InputMaybe<Scalars['String']['input']>;
+  images?: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
 }>;
 
 
@@ -2581,6 +2595,20 @@ export type SetAiConversationRunnerMutationVariables = Exact<{
 
 
 export type SetAiConversationRunnerMutation = { __typename?: 'Mutation', setAiConversationRunner: boolean };
+
+export type NodesByIdsQueryVariables = Exact<{
+  ids: Array<Scalars['ID']['input']> | Scalars['ID']['input'];
+}>;
+
+
+export type NodesByIdsQuery = { __typename?: 'Query', nodesByIds: Array<{ __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, mime?: string | null, path?: string | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null, largeUrl?: string | null } }> };
+
+export type NodesByPathsQueryVariables = Exact<{
+  paths: Array<Scalars['String']['input']> | Scalars['String']['input'];
+}>;
+
+
+export type NodesByPathsQuery = { __typename?: 'Query', nodesByPaths: Array<{ __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, mime?: string | null, path?: string | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null, largeUrl?: string | null } }> };
 
 export type LoginMutationVariables = Exact<{
   username: Scalars['String']['input'];
@@ -4631,13 +4659,14 @@ export const AiRunDocument = new TypedDocumentString(`
   error
 }`) as unknown as TypedDocumentString<AiRunQuery, AiRunQueryVariables>;
 export const StartAiRunDocument = new TypedDocumentString(`
-    mutation StartAiRun($conversationId: ID, $text: String!, $context: String, $providerId: ID!, $model: String) {
+    mutation StartAiRun($conversationId: ID, $text: String!, $context: String, $providerId: ID!, $model: String, $images: [String!]) {
   startAiRun(
     conversationId: $conversationId
     text: $text
     context: $context
     providerId: $providerId
     model: $model
+    images: $images
   ) {
     ...AiRunFields
   }
@@ -4664,6 +4693,42 @@ export const SetAiConversationRunnerDocument = new TypedDocumentString(`
   setAiConversationRunner(id: $id, runner: $runner)
 }
     `) as unknown as TypedDocumentString<SetAiConversationRunnerMutation, SetAiConversationRunnerMutationVariables>;
+export const NodesByIdsDocument = new TypedDocumentString(`
+    query NodesByIds($ids: [ID!]!) {
+  nodesByIds(ids: $ids) {
+    id
+    parentId
+    name
+    kind
+    size
+    mime
+    path
+    preview {
+      kind
+      thumbUrl
+      largeUrl
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<NodesByIdsQuery, NodesByIdsQueryVariables>;
+export const NodesByPathsDocument = new TypedDocumentString(`
+    query NodesByPaths($paths: [String!]!) {
+  nodesByPaths(paths: $paths) {
+    id
+    parentId
+    name
+    kind
+    size
+    mime
+    path
+    preview {
+      kind
+      thumbUrl
+      largeUrl
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<NodesByPathsQuery, NodesByPathsQueryVariables>;
 export const LoginDocument = new TypedDocumentString(`
     mutation Login($username: String!, $password: String!) {
   login(username: $username, password: $password) {

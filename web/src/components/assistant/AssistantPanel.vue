@@ -2,22 +2,24 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Clock, Close, Delete, Plus, Setting } from '@element-plus/icons-vue'
+import { Clock, Close, Delete, Picture, Plus, Setting } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
 import { AiConversationsDocument, AiProvidersDocument, AiRunAvailableDocument, DeleteAiConversationDocument, NodeDocument } from '@/api/gen/graphql'
 import { canSend, chat, newChat, openChat, send, setOnServer, stop } from '@/assistant/controller'
 import { toolLabel } from '@/assistant/describe'
+import { fitBudget, MAX_IMAGES, shrinkImage, type PendingImage } from '@/assistant/images'
 import { assistantContext, loadMode, loadPick, savePick, toggleAssistant, type ConnectionMode } from '@/assistant/state'
 import { useBreakpoints } from '@/composables/breakpoints'
 import { formatTime } from '@/utils/format'
-import { miniMarkdown } from '@/utils/miniMarkdown'
+import AssistantReply from './AssistantReply.vue'
 import AssistantSettings from './AssistantSettings.vue'
 
 /**
  * 助手面板(doc/33 一):贴在右边,开着也能继续点文件列表;手机上占满屏。
  * 对话记录在 gopan 上,左上角「对话记录」切换;改东西前弹确认卡。
+ * 能随消息发图(附件按钮、粘贴、拖进来,doc/35);回答里引用的文件能点,图片视频直接显示。
  */
 
 const { isMobile } = useBreakpoints()
@@ -83,12 +85,53 @@ function startNew() {
 // ---------- 发消息 ----------
 const input = ref('')
 const settingsOpen = ref(false)
-function submit() {
+const pending = ref<PendingImage[]>([])
+const picker = ref<HTMLInputElement | null>(null)
+const canSubmit = computed(() => (input.value.trim() !== '' || pending.value.length > 0) && canSend.value && !!current.value)
+
+async function addImages(files: Iterable<File>) {
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue
+    if (pending.value.length >= MAX_IMAGES) {
+      ElMessage.warning(`一次最多发 ${MAX_IMAGES} 张图`)
+      return
+    }
+    try {
+      pending.value = [...pending.value, { file, url: await shrinkImage(file) }]
+    } catch (err) {
+      ElMessage.error(errorText(err, '这张图读不了'))
+    }
+  }
+}
+function onPick(e: Event) {
+  const el = e.target as HTMLInputElement
+  void addImages(el.files ?? [])
+  el.value = ''
+}
+function onPaste(e: ClipboardEvent) {
+  const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'))
+  if (!files.length) return
+  e.preventDefault()
+  void addImages(files)
+}
+function onDrop(e: DragEvent) {
+  void addImages(e.dataTransfer?.files ?? [])
+}
+
+async function submit() {
   const c = current.value
-  if (!c || !input.value.trim() || !canSend.value) return
+  if (!c || !canSubmit.value) return
+  let images: string[] = []
+  try {
+    images = await fitBudget(pending.value)
+  } catch (err) {
+    ElMessage.error(errorText(err, '图片太大了'))
+    return
+  }
   const text = input.value
   input.value = ''
-  void send(text, { provider: c.provider, model: c.model, mode: mode.value }).then(() => {
+  pending.value = []
+  void send(text, { provider: c.provider, model: c.model, mode: mode.value }, images).then(() => {
     void queryClient.invalidateQueries({ queryKey: ['aiConversations'] })
     void queryClient.invalidateQueries({ queryKey: ['aiProviders'] }) // 今天的用量
   })
@@ -97,7 +140,7 @@ function onKey(e: Event | KeyboardEvent) {
   if (!(e instanceof KeyboardEvent)) return
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault()
-    submit()
+    void submit()
   }
 }
 
@@ -139,7 +182,7 @@ const statusMark: Record<string, string> = { running: '…', ok: '✓', error: '
 </script>
 
 <template>
-  <aside class="assistant" :class="{ mobile: isMobile }" aria-label="助手">
+  <aside class="assistant" :class="{ mobile: isMobile }" aria-label="助手" @dragover.prevent @drop.prevent="onDrop">
     <header class="head">
       <el-select v-if="options.length" v-model="pickValue" class="pick" size="small" :disabled="chat.running" placeholder="选模型">
         <el-option-group v-for="o in options" :key="o.provider.id" :label="o.provider.site ? `${o.provider.name}(站点提供)` : o.provider.name">
@@ -178,15 +221,29 @@ const statusMark: Record<string, string> = { running: '…', ok: '✓', error: '
       </div>
       <div v-if="chat.loading" class="loading" v-loading="true" />
       <template v-for="it in chat.items" :key="it.key">
-        <div v-if="it.kind === 'user'" class="msg user">{{ it.text }}</div>
-        <!-- miniMarkdown 先整段转义再加标签 -->
-        <div v-else-if="it.kind === 'assistant'" class="msg bot md" v-html="miniMarkdown(it.text)" />
+        <div v-if="it.kind === 'user'" class="msg user">
+          <div v-if="it.images?.length" class="sent-images">
+            <el-image
+              v-for="(src, i) in it.images"
+              :key="i"
+              :src="src"
+              :preview-src-list="it.images"
+              :initial-index="i"
+              :z-index="3000"
+              preview-teleported
+              fit="cover"
+              class="sent-image"
+            />
+          </div>
+          <template v-if="it.text">{{ it.text }}</template>
+        </div>
+        <AssistantReply v-else-if="it.kind === 'assistant'" class="msg bot" :text="it.text" />
         <div v-else-if="it.kind === 'tool'" class="tool" :class="it.status" :title="it.output.slice(0, 500)">
           <span class="mark">{{ statusMark[it.status] }}</span>{{ it.label ?? toolLabel(it.name, it.args) }}<span v-if="it.status === 'denied'" class="denied">(没做)</span>
         </div>
         <div v-else class="msg error">{{ it.text }}</div>
       </template>
-      <div v-if="chat.live" class="msg bot md" v-html="miniMarkdown(chat.live)" />
+      <AssistantReply v-if="chat.live" class="msg bot" :text="chat.live" />
 
       <div v-if="chat.approval" class="approval">
         <div class="approval-title">{{ chat.approval.description.title }}</div>
@@ -219,7 +276,15 @@ const statusMark: Record<string, string> = { running: '…', ok: '✓', error: '
           @update:model-value="(v) => setOnServer(v === true)"
         />
       </div>
+      <div v-if="pending.length" class="pending">
+        <div v-for="(p, i) in pending" :key="i" class="pending-item">
+          <img :src="p.url" alt="" />
+          <button type="button" class="pending-remove" title="不发这张" @click="pending = pending.filter((_, j) => j !== i)">×</button>
+        </div>
+      </div>
       <div class="compose">
+        <el-button text :icon="Picture" title="发图片" :disabled="!providers.length || pending.length >= MAX_IMAGES" @click="picker?.click()" />
+        <input ref="picker" type="file" accept="image/*" multiple hidden @change="onPick" />
         <el-input
           v-model="input"
           type="textarea"
@@ -227,9 +292,10 @@ const statusMark: Record<string, string> = { running: '…', ok: '✓', error: '
           :placeholder="providers.length ? '让助手做点什么' : '先添加模型服务'"
           :disabled="!providers.length"
           @keydown="onKey"
+          @paste="onPaste"
         />
         <el-button v-if="chat.running" @click="stop">停止</el-button>
-        <el-button v-else type="primary" :disabled="!input.trim() || !canSend || !current" @click="submit">发送</el-button>
+        <el-button v-else type="primary" :disabled="!canSubmit" @click="submit">发送</el-button>
       </div>
     </footer>
 
@@ -341,35 +407,50 @@ const statusMark: Record<string, string> = { running: '…', ok: '✓', error: '
   white-space: pre-wrap;
   word-break: break-word;
 }
-.msg.md {
+.msg.bot {
   white-space: normal;
 }
-.md :deep(p),
-.md :deep(ul),
-.md :deep(ol),
-.md :deep(pre) {
-  margin: 0 0 6px;
+.sent-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
 }
-.md :deep(ul),
-.md :deep(ol) {
-  padding-left: 20px;
-}
-.md :deep(code) {
-  padding: 0 4px;
-  border-radius: 4px;
-  background: var(--el-fill-color);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.92em;
-}
-.md :deep(pre) {
-  overflow-x: auto;
-  padding: 8px;
+.sent-image {
+  width: 72px;
+  height: 72px;
   border-radius: 6px;
-  background: var(--el-fill-color);
 }
-.md :deep(pre code) {
+.pending {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.pending-item {
+  position: relative;
+  width: 56px;
+  height: 56px;
+}
+.pending-item img {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  object-fit: cover;
+}
+.pending-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
   padding: 0;
-  background: none;
+  border: none;
+  border-radius: 50%;
+  background: var(--el-text-color-primary);
+  color: var(--el-bg-color);
+  font-size: 14px;
+  line-height: 20px;
+  cursor: pointer;
 }
 .msg.user {
   margin-left: 15%;

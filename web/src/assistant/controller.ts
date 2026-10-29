@@ -27,7 +27,7 @@ import type { AccessGroup, Permission } from './policy'
 import { ConflictError, GopanSessionStore } from './session'
 import { assistantContext, describeContext, type ConnectionMode } from './state'
 import type { ViewItem } from './runtime'
-import { buildTranscript, friendlyError, shortToolName, titleFrom, withContext, type TranscriptItem } from './transcript'
+import { buildTranscript, friendlyError, shortToolName, titleFrom, userContent, type TranscriptItem } from './transcript'
 
 /**
  * 助手面板的控制器(doc/33 四):一个对话一个 tau Agent;对话记录写在 gopan 上。
@@ -175,13 +175,22 @@ export async function setOnServer(on: boolean) {
 
 const ACTIVE: string[] = ['QUEUED', 'RUNNING', 'WAITING']
 
-/** 服务器推来的条目已经是人话(工具那一行写好了) */
+/**
+ * 服务器推来的条目已经是人话(工具那一行写好了)。用户发的图推送里只有张数(doc/35):
+ * 按顺序沿用面板上已有的那几条用户消息的图(刚发的、打开对话时从记录读的)。
+ */
 function fromViewItems(items: ViewItem[]): TranscriptItem[] {
-  return items.map((it) =>
-    it.kind === 'tool'
-      ? { kind: 'tool', key: it.key, id: it.key, name: '', args: {}, status: (it.status ?? 'running') as 'running', output: '', label: it.text }
-      : ({ kind: it.kind, key: it.key, text: it.text } as TranscriptItem),
-  )
+  const known = chat.items.filter((it): it is Extract<TranscriptItem, { kind: 'user' }> => it.kind === 'user').map((it) => it.images)
+  let u = 0
+  return items.map((it) => {
+    if (it.kind === 'tool') return { kind: 'tool', key: it.key, id: it.key, name: '', args: {}, status: (it.status ?? 'running') as 'running', output: '', label: it.text }
+    if (it.kind === 'user') {
+      const images = it.images ?? (it.imageCount ? known[u] : undefined)
+      u++
+      return { kind: 'user', key: it.key, text: it.text, ...(images?.length ? { images } : {}) }
+    }
+    return { kind: it.kind, key: it.key, text: it.text } as TranscriptItem
+  })
 }
 
 function applyRun(run: AiRunFieldsFragment) {
@@ -240,14 +249,15 @@ onAssistantEvent((conversationId, raw) => {
   }
 })
 
-async function sendOnServer(input: string, setup: ChatSetup) {
+async function sendOnServer(input: string, images: string[], setup: ChatSetup) {
   chat.error = ''
-  chat.items = [...chat.items, { kind: 'user', key: `pending-${Date.now()}`, text: input }]
+  chat.items = [...chat.items, { kind: 'user', key: `pending-${Date.now()}`, text: input, ...(images.length ? { images } : {}) }]
   chat.running = true
   try {
     const { startAiRun } = await request(StartAiRunDocument, {
       conversationId: chat.conversation?.id ?? null,
       text: input,
+      images: images.length ? images : null,
       context: describeContext(assistantContext.value),
       providerId: setup.provider.id,
       model: setup.model,
@@ -323,21 +333,22 @@ function friendly(err: unknown): string {
   return friendlyError(msg)
 }
 
-export async function send(text: string, setup: ChatSetup) {
+/** images:随这句话发的图(data URL,面板已缩好,doc/35) */
+export async function send(text: string, setup: ChatSetup, images: string[] = []) {
   const input = text.trim()
-  if (!input || !canSend.value) return
-  if (chat.onServer) return sendOnServer(input, setup)
+  if ((!input && !images.length) || !canSend.value) return
+  if (chat.onServer) return sendOnServer(input, images, setup)
   localTurn = true
   chat.running = true
   chat.error = ''
   chat.live = ''
   // 先把这句话画上,建 Agent(连工具)要一会儿
-  chat.items = [...chat.items, { kind: 'user', key: `pending-${Date.now()}`, text: input }]
+  chat.items = [...chat.items, { kind: 'user', key: `pending-${Date.now()}`, text: input, ...(images.length ? { images } : {}) }]
   try {
-    const h = await ensureAgent(setup, input)
+    const h = await ensureAgent(setup, input || '图片')
     h.beginTurn()
     const ctx = describeContext(assistantContext.value)
-    for await (const ev of h.agent.prompt(withContext(input, ctx)) as AsyncGenerator<AgentEvent>) {
+    for await (const ev of h.agent.prompt(userContent(input, ctx, images)) as AsyncGenerator<AgentEvent>) {
       if (ev.type === 'text_delta') chat.live += ev.delta
       else if (ev.type === 'assistant_message' || ev.type === 'tool_start' || ev.type === 'tool_result' || ev.type === 'user_message') {
         chat.live = ''

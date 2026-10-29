@@ -86,7 +86,7 @@ func TestAssistantOverMCP(t *testing.T) {
 		t.Fatal(err)
 	}
 	tools := toolNames(t, sess)
-	for _, name := range []string{"list_files", "read_text_file", "create_folder", "trash_nodes", "batch_nodes", "create_share", "chat_send"} {
+	for _, name := range []string{"list_files", "get_file_info", "create_folder", "trash_nodes", "batch_nodes", "create_share", "chat_send"} {
 		if tools[name] == nil {
 			t.Fatalf("default policy hides %s", name)
 		}

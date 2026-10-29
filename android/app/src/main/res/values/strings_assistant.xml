@@ -59,4 +59,11 @@
     <string name="assistant_on_server">在服务器上运行</string>
     <string name="assistant_run_running">运行中</string>
     <string name="assistant_run_waiting">等你确认</string>
+    <!-- 看图与引用文件(doc/35) -->
+    <string name="assistant_add_image">发图片</string>
+    <string name="assistant_image_count">图片 ×%1$d</string>
+    <string name="assistant_images_skipped">有的图读不了,或者超过 4 张了</string>
+    <string name="assistant_images_too_large">图片太大了,少发几张</string>
+    <string name="assistant_ref_gone">(已不在)</string>
+    <string name="assistant_ref_root">我的文件</string>
 </resources>

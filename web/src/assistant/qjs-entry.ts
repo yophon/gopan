@@ -219,6 +219,7 @@ function handle(msg: Incoming) {
 async function run(msg: Extract<Incoming, { op: 'start' }>) {
   const runtime = new AssistantRuntime({
     origin: msg.origin.replace(/\/+$/, ''),
+    inlineImages: false, // 事件推给各个设备,只给图的张数
     platform,
     emit: (event) => send({ op: 'emit', event }),
     approve: (view) =>

@@ -91,6 +91,8 @@ fun NavGraphBuilder.accountGraph(navController: NavController, onOpenPreview: (n
             AssistantScreen(
                 onBack = { entry.ifResumed { navController.popBackStack() } },
                 onOpenSettings = { entry.ifResumed { navController.navigate(Routes.AssistantSettings) } },
+                onOpenFolder = { id -> entry.ifResumed { navController.navigate(Routes.Folder(id)) } },
+                onOpenPreview = { id -> entry.ifResumed { onOpenPreview(id) } },
             )
         }
         composable<Routes.AssistantSettings> { entry -> AssistantSettingsScreen(onBack = { entry.ifResumed { navController.popBackStack() } }) }

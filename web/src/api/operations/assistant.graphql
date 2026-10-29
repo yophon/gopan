@@ -112,8 +112,8 @@ query AiRun($conversationId: ID!) {
   aiRun(conversationId: $conversationId) { ...AiRunFields }
 }
 
-mutation StartAiRun($conversationId: ID, $text: String!, $context: String, $providerId: ID!, $model: String) {
-  startAiRun(conversationId: $conversationId, text: $text, context: $context, providerId: $providerId, model: $model) { ...AiRunFields }
+mutation StartAiRun($conversationId: ID, $text: String!, $context: String, $providerId: ID!, $model: String, $images: [String!]) {
+  startAiRun(conversationId: $conversationId, text: $text, context: $context, providerId: $providerId, model: $model, images: $images) { ...AiRunFields }
 }
 
 mutation AnswerAiRun($id: ID!, $answer: String!) {
@@ -126,4 +126,40 @@ mutation StopAiRun($id: ID!) {
 
 mutation SetAiConversationRunner($id: ID!, $runner: AiRunner!) {
   setAiConversationRunner(id: $id, runner: $runner)
+}
+
+# 回答里引用的文件(doc/35 六):一段回答里的一次查完,查不到的不返回
+query NodesByIds($ids: [ID!]!) {
+  nodesByIds(ids: $ids) {
+    id
+    parentId
+    name
+    kind
+    size
+    mime
+    path
+    preview {
+      kind
+      thumbUrl
+      largeUrl
+    }
+  }
+}
+
+# 引用写的是路径时(doc/35 六)
+query NodesByPaths($paths: [String!]!) {
+  nodesByPaths(paths: $paths) {
+    id
+    parentId
+    name
+    kind
+    size
+    mime
+    path
+    preview {
+      kind
+      thumbUrl
+      largeUrl
+    }
+  }
 }

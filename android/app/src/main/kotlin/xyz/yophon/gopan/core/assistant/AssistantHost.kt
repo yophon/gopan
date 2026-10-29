@@ -161,7 +161,7 @@ class AssistantHost(
     private fun onEvent(raw: String) {
         val obj = runCatching { json.parseToJsonElement(raw).jsonObject }.getOrNull() ?: return
         when (obj["type"]?.jsonPrimitive?.contentOrNull) {
-            "items" -> _state.update { it.copy(items = json.decodeFromJsonElement(ItemsEvent.serializer(), obj).items) }
+            "items" -> _state.update { it.copy(items = withKnownImages(json.decodeFromJsonElement(ItemsEvent.serializer(), obj).items, it.items)) }
             "live" -> _state.update { it.copy(live = obj["text"]?.jsonPrimitive?.contentOrNull.orEmpty()) }
             "conversation" -> _state.update { it.copy(conversation = json.decodeFromJsonElement(ConversationEvent.serializer(), obj).conversation) }
             "error" -> {
@@ -284,10 +284,35 @@ private data class ItemsEvent(val items: List<AssistantItem>)
 @Serializable
 private data class ConversationEvent(val conversation: AssistantConversation)
 
-/** 面板上的一条:user / assistant / tool / error;工具调用的 [text] 是一行人话 */
+/**
+ * 服务器上跑的推送里用户发的图只有张数(doc/35):按顺序沿用面板上已有的那几条用户消息的图
+ * (刚发的、打开对话时从记录读的)。
+ */
+internal fun withKnownImages(incoming: List<AssistantItem>, current: List<AssistantItem>): List<AssistantItem> {
+    val known = current.filter { it.kind == "user" }.map { it.images }
+    var u = 0
+    return incoming.map { item ->
+        if (item.kind != "user") return@map item
+        val images = item.images ?: known.getOrNull(u).takeIf { (item.imageCount ?: 0) > 0 }
+        u++
+        if (images != null && item.images == null) item.copy(images = images) else item
+    }
+}
+
+/**
+ * 面板上的一条:user / assistant / tool / error;工具调用的 [text] 是一行人话。
+ * 用户发的图(doc/35):[images] 是 data URL;服务器上跑的推送里只有张数 [imageCount]。
+ */
 @Immutable
 @Serializable
-data class AssistantItem(val kind: String, val key: String, val text: String, val status: String? = null)
+data class AssistantItem(
+    val kind: String,
+    val key: String,
+    val text: String,
+    val status: String? = null,
+    val images: List<String>? = null,
+    val imageCount: Int? = null,
+)
 
 @Immutable
 @Serializable
@@ -316,6 +341,8 @@ data class AssistantApproval(
 data class SendArgs(
     val text: String,
     val context: String,
+    /** 随这句话发的图(JPEG data URL,已缩好,doc/35) */
+    val images: List<String> = emptyList(),
     val provider: Provider,
     val model: String,
     val mode: String,

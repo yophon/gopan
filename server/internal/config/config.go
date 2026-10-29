@@ -59,6 +59,8 @@ type Config struct {
 	// 内容搜索:false 关掉文字提取,内容搜索返回不可用;pdftotext 找不到时 PDF 不提(doc/20)
 	ContentIndex  bool
 	PdftotextPath string
+	// 助手看 PDF / Office 的第一页(doc/35);找不到就看不了
+	PdftoppmPath string
 
 	// 离线下载(doc/21 三):服务器替用户从链接拉文件。挡内网的规则见 fetcher.Guard
 	Fetch             bool
@@ -121,6 +123,7 @@ func Load() (*Config, error) {
 		Workers:       int(envInt64("WORKERS", 2)),
 		ContentIndex:  envBool("CONTENT_INDEX", true),
 		PdftotextPath: env("PDFTOTEXT_PATH", "pdftotext"),
+		PdftoppmPath:  env("PDFTOPPM_PATH", "pdftoppm"),
 
 		Fetch:             envBool("FETCH", true),
 		FetchMaxSize:      envInt64("FETCH_MAX_SIZE", 20<<30),

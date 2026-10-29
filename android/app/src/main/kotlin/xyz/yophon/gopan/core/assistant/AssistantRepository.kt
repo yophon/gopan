@@ -9,6 +9,8 @@ import xyz.yophon.gopan.graphql.AiConversationsQuery
 import xyz.yophon.gopan.graphql.AiRunAvailableQuery
 import xyz.yophon.gopan.graphql.AiRunQuery
 import xyz.yophon.gopan.graphql.AnswerAiRunMutation
+import xyz.yophon.gopan.graphql.NodesByIdsQuery
+import xyz.yophon.gopan.graphql.NodesByPathsQuery
 import xyz.yophon.gopan.graphql.SetAiConversationRunnerMutation
 import xyz.yophon.gopan.graphql.StartAiRunMutation
 import xyz.yophon.gopan.graphql.StopAiRunMutation
@@ -58,6 +60,22 @@ data class AiConversationRow(
 @Immutable
 data class AiRun(val id: String, val conversationId: String, val status: String, val approval: String?, val error: String)
 
+/** 回答里引用的文件(doc/35 六);[kind] 是 FILE / FOLDER,[previewKind] 是 IMAGE / VIDEO / …,缩略图地址是预签名的 */
+@Immutable
+data class RefNode(
+    val id: String,
+    val name: String,
+    val kind: String,
+    val size: Long?,
+    val path: String?,
+    val previewKind: String,
+    val thumbUrl: String?,
+    val largeUrl: String?,
+) {
+    val folder: Boolean get() = kind == "FOLDER"
+    val visual: Boolean get() = previewKind == "IMAGE" || previewKind == "VIDEO"
+}
+
 /** 助手权限表的一行;[permission] 是 ALLOW / ASK / DENY */
 @Immutable
 data class AssistantGroup(val key: String, val label: String, val permission: String, val outbound: Boolean)
@@ -81,11 +99,17 @@ interface AssistantRepository {
     // 服务器上运行(doc/34)
     suspend fun runAvailable(): Boolean
     suspend fun currentRun(conversationId: String): AiRun?
-    suspend fun startRun(conversationId: String?, text: String, context: String, providerId: String, model: String): AiRun
+    suspend fun startRun(conversationId: String?, text: String, context: String, providerId: String, model: String, images: List<String> = emptyList()): AiRun
     suspend fun answerRun(runId: String, answer: String)
     suspend fun stopRun(runId: String)
     suspend fun setRunner(conversationId: String, server: Boolean)
     suspend fun runner(conversationId: String): String
+
+    /** 按 id 查几个节点;查不到、没权限的不在结果里 */
+    suspend fun nodesByIds(ids: List<String>): List<RefNode>
+
+    /** 按网盘路径查(引用里写的是路径时) */
+    suspend fun nodesByPaths(paths: List<String>): List<RefNode>
 }
 
 @Singleton
@@ -134,9 +158,16 @@ class ApolloAssistantRepository @Inject constructor(private val apollo: ApolloCl
             AiRun(it.id, it.conversationId, it.status.rawValue.lowercase(), it.approval, it.error)
         }
 
-    override suspend fun startRun(conversationId: String?, text: String, context: String, providerId: String, model: String): AiRun {
+    override suspend fun startRun(conversationId: String?, text: String, context: String, providerId: String, model: String, images: List<String>): AiRun {
         val r = apollo.mutation(
-            StartAiRunMutation(Optional.presentIfNotNull(conversationId), text, Optional.present(context), providerId, Optional.present(model)),
+            StartAiRunMutation(
+                Optional.presentIfNotNull(conversationId),
+                text,
+                Optional.present(context),
+                providerId,
+                Optional.present(model),
+                if (images.isEmpty()) Optional.absent() else Optional.present(images),
+            ),
         ).execute().requireData().startAiRun
         return AiRun(r.id, r.conversationId, r.status.rawValue.lowercase(), r.approval, r.error)
     }
@@ -155,6 +186,16 @@ class ApolloAssistantRepository @Inject constructor(private val apollo: ApolloCl
 
     override suspend fun runner(conversationId: String): String =
         apollo.query(AiConversationRunnerQuery(conversationId)).execute().requireData().aiConversation.runner.rawValue
+
+    override suspend fun nodesByIds(ids: List<String>): List<RefNode> =
+        apollo.query(NodesByIdsQuery(ids)).execute().requireData().nodesByIds.map {
+            RefNode(it.id, it.name, it.kind.rawValue, it.size, it.path, it.preview.kind.rawValue, it.preview.thumbUrl, it.preview.largeUrl)
+        }
+
+    override suspend fun nodesByPaths(paths: List<String>): List<RefNode> =
+        apollo.query(NodesByPathsQuery(paths)).execute().requireData().nodesByPaths.map {
+            RefNode(it.id, it.name, it.kind.rawValue, it.size, it.path, it.preview.kind.rawValue, it.preview.thumbUrl, it.preview.largeUrl)
+        }
 
     override suspend fun setAccess(disabled: Boolean, changes: Map<String, String>): AssistantAccess {
         val groups = changes.map { (k, v) -> AssistantGroupInput(key = k, permission = AssistantPermission.safeValueOf(v)) }

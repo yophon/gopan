@@ -1479,7 +1479,7 @@ func (r *mutationResolver) DeleteAiConversation(ctx context.Context, id string) 
 }
 
 // StartAiRun is the resolver for the startAiRun field.
-func (r *mutationResolver) StartAiRun(ctx context.Context, conversationID *string, text string, context *string, providerID string, model *string) (*AiRun, error) {
+func (r *mutationResolver) StartAiRun(ctx context.Context, conversationID *string, text string, context *string, providerID string, model *string, images []string) (*AiRun, error) {
 	ident, err := httpx.UserFrom(ctx)
 	if err != nil {
 		return nil, err
@@ -1492,7 +1492,7 @@ func (r *mutationResolver) StartAiRun(ctx context.Context, conversationID *strin
 	if err != nil {
 		return nil, service.ErrNotFound
 	}
-	run, _, err := r.AIRuns.Start(ctx, ident.UserID, conv, text, deref(context, ""), pid, deref(model, ""))
+	run, _, err := r.AIRuns.Start(ctx, ident.UserID, conv, text, deref(context, ""), images, pid, deref(model, ""))
 	if err != nil {
 		return nil, err
 	}
@@ -1746,6 +1746,50 @@ func (r *queryResolver) Node(ctx context.Context, id string) (*Node, error) {
 		return nil, err
 	}
 	return r.getNodeFull(ctx, ident.UserID, nid)
+}
+
+// NodesByIds is the resolver for the nodesByIds field.
+func (r *queryResolver) NodesByIds(ctx context.Context, ids []string) ([]*Node, error) {
+	if len(ids) > 100 {
+		return nil, &service.Error{Code: "INVALID_INPUT", Message: "一次最多查 100 个"}
+	}
+	out := make([]*Node, 0, len(ids))
+	for _, raw := range ids {
+		nid, err := parseID(raw)
+		if err != nil {
+			continue
+		}
+		ident, err := r.requireNodeAccess(ctx, nid)
+		if err != nil {
+			continue // 删了、没权限:不返回(助手引用的文件,查不到就显示「已不在」)
+		}
+		if n, err := r.getNodeFull(ctx, ident.UserID, nid); err == nil {
+			out = append(out, n)
+		}
+	}
+	return out, nil
+}
+
+// NodesByPaths is the resolver for the nodesByPaths field.
+func (r *queryResolver) NodesByPaths(ctx context.Context, paths []string) ([]*Node, error) {
+	if len(paths) > 100 {
+		return nil, &service.Error{Code: "INVALID_INPUT", Message: "一次最多查 100 个"}
+	}
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*Node, 0, len(paths))
+	for _, p := range paths {
+		n, err := r.Nodes.ResolvePathAt(ctx, ident.UserID, p, nil)
+		if err != nil || n == nil {
+			continue // 不存在、根目录:不返回
+		}
+		if full, err := r.getNodeFull(ctx, ident.UserID, n.ID); err == nil {
+			out = append(out, full)
+		}
+	}
+	return out, nil
 }
 
 // Children is the resolver for the children field.

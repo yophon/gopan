@@ -388,6 +388,8 @@ type ReadTextOutput struct {
 	Offset     int64  `json:"offset"`
 	NextOffset int64  `json:"next_offset"`
 	EOF        bool   `json:"eof"`
+	// 整个文件的 sha256:write_text_file 覆盖时带上它(base_sha256)
+	SHA256 string `json:"sha256,omitempty"`
 }
 
 func (s *Server) readTextFile(ctx context.Context, _ *mcp.CallToolRequest, in ReadTextInput) (*mcp.CallToolResult, ReadTextOutput, error) {
@@ -406,7 +408,11 @@ func (s *Server) readTextFile(ctx context.Context, _ *mcp.CallToolRequest, in Re
 	if err != nil {
 		return nil, ReadTextOutput{}, err
 	}
-	return nil, ReadTextOutput{Text: text, Offset: in.Offset, NextOffset: in.Offset + int64(len([]byte(text))), EOF: eof}, nil
+	out := ReadTextOutput{Text: text, Offset: in.Offset, NextOffset: in.Offset + int64(len([]byte(text))), EOF: eof}
+	if row, err := s.uploads.NodeInfo(ctx, p.UserID, id); err == nil && row.BlobSha256 != nil {
+		out.SHA256 = *row.BlobSha256
+	}
+	return nil, out, nil
 }
 
 type CreateFolderInput struct {
@@ -796,6 +802,7 @@ func (s *Server) prepareDownload(ctx context.Context, _ *mcp.CallToolRequest, in
 func (s *Server) registerTools(server *mcp.Server) {
 	s.registerControlTools(server)
 	s.registerContentTools(server)
+	s.registerFileTools(server)
 	s.registerJobTools(server)
 	s.registerArchiveTools(server)
 	s.registerLinkTools(server)

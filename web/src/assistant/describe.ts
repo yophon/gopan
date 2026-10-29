@@ -32,6 +32,19 @@ function parentOf(args: Args): string {
   return str(args.parent_id) ? '所在文件夹' : '根目录'
 }
 
+const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n)}…` : s)
+
+/** 路径的最后一段(面板上一行放不下整条路径) */
+const baseName = (p: string | undefined): string => (p ?? '').replace(/\/+$/, '').split('/').pop() || (p ?? '')
+
+const VISUAL = /\.(jpe?g|png|gif|webp|bmp|heic|heif|avif|tiff?|dng|cr2|cr3|nef|arw|raf|orf|rw2|mp4|mov|mkv|webm|avi|m4v)$/i
+
+/** edit 的改动:edits[] 或旧的一对 oldText / newText */
+function editsOf(args: Args): { oldText: string; newText: string }[] {
+  if (Array.isArray(args.edits)) return (args.edits as Args[]).map((e) => ({ oldText: str(e.oldText) ?? '', newText: typeof e.newText === 'string' ? e.newText : '' }))
+  return str(args.oldText) ? [{ oldText: str(args.oldText)!, newText: typeof args.newText === 'string' ? args.newText : '' }] : []
+}
+
 function one(args: Args): { ids: string[]; paths: string[] } {
   return { ids: strs([args.node_id]), paths: strs([args.path]) }
 }
@@ -83,6 +96,17 @@ export function describeCall(tool: string, args: Args): CallDescription {
       return { title: '吊销一个收集链接', ids: [], paths: [] }
     case 'chat_send':
       return { title: '发到传输助手', ids: strs([args.node_id]), paths: [], detail: str(args.text) }
+    // tau 的读写工具(doc/35):参数是网盘路径
+    case 'write': {
+      const content = typeof args.content === 'string' ? args.content : ''
+      return { title: `写入「${baseName(str(args.path))}」(新建,或整份替换原来的内容)`, ids: [], paths: strs([args.path]), detail: clip(content, 300) }
+    }
+    case 'edit': {
+      const edits = editsOf(args)
+      const first = edits[0]
+      const detail = first ? `把「${clip(first.oldText, 120)}」改成「${clip(first.newText, 120)}」${edits.length > 1 ? `,另外还有 ${edits.length - 1} 处` : ''}` : undefined
+      return { title: `修改「${baseName(str(args.path))}」${edits.length > 1 ? `(${edits.length} 处)` : ''}`, ids: [], paths: strs([args.path]), detail }
+    }
     default:
       return { title: `调用 ${tool}`, ids: [], paths: [], detail: JSON.stringify(args).slice(0, 300) }
   }
@@ -90,6 +114,7 @@ export function describeCall(tool: string, args: Args): CallDescription {
 
 // 只读的工具不弹确认,面板上记一行它做了什么
 const READ_LABELS: Record<string, (a: Args) => string> = {
+  read: (a) => `${VISUAL.test(str(a.path) ?? '') ? '看了' : '读了'}「${baseName(str(a.path))}」`,
   list_files: (a) => `看了${str(a.path) ? `「${str(a.path)}」` : '文件夹'}`,
   search_files: (a) => `搜索「${str(a.query) ?? str(a.q) ?? ''}」`,
   search_file_contents: (a) => `按内容搜索「${str(a.query) ?? str(a.q) ?? ''}」`,

@@ -1,5 +1,8 @@
 package xyz.yophon.gopan.feature.assistant
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,6 +28,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.Button
@@ -63,18 +67,23 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.yophon.gopan.R
 import xyz.yophon.gopan.core.assistant.AssistantApproval
 import xyz.yophon.gopan.core.assistant.AssistantItem
+import xyz.yophon.gopan.core.assistant.ChatImages
+import xyz.yophon.gopan.core.assistant.RefNode
 import xyz.yophon.gopan.core.ui.format.formatRelativeTime
 import xyz.yophon.gopan.feature.drive.NestedScreenInsets
 import xyz.yophon.gopan.feature.drive.TopBarInsets
 
 /**
  * 助手(doc/33 八之 2):对话、确认卡、对话记录。对话在整个 App 一份,离开这页这一轮也接着跑完。
+ * 能随消息发图(相册选,doc/35);回答里引用的文件能点:文件夹进去看,文件开预览。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssistantScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenFolder: (String) -> Unit,
+    onOpenPreview: (String) -> Unit,
     viewModel: AssistantViewModel = hiltViewModel(),
 ) {
     val chat by viewModel.chat.collectAsStateWithLifecycle()
@@ -83,6 +92,10 @@ fun AssistantScreen(
     var historyOpen by remember { mutableStateOf(false) }
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val openRef: (RefNode) -> Unit = { node -> if (node.folder) onOpenFolder(node.id) else onOpenPreview(node.id) }
+    val pickImages = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(ChatImages.MAX)) { uris ->
+        if (uris.isNotEmpty()) viewModel.addImages(uris)
+    }
 
     LaunchedEffect(ui.message) {
         ui.message?.let { snackbar.showSnackbar(it); viewModel.messageShown() }
@@ -135,8 +148,8 @@ fun AssistantScreen(
                 } else if (chat.items.isEmpty() && !chat.loading) {
                     item("hints") { Hints(onPick = { input = it }) }
                 }
-                items(chat.items, key = { it.key }) { ItemRow(it) }
-                if (chat.live.isNotEmpty()) item("live") { Text(miniMarkdown(chat.live), style = MaterialTheme.typography.bodyLarge) }
+                items(chat.items, key = { it.key }) { ItemRow(it, ui.refs, openRef) }
+                if (chat.live.isNotEmpty()) item("live") { AssistantReply(chat.live, ui.refs, openRef) }
                 chat.approval?.let { a -> item("approval") { ApprovalCard(a, onAnswer = viewModel::answer) } }
                 if (chat.conflict || chat.error != null) {
                     item("error") { ErrorBubble(if (chat.conflict) stringResource(R.string.assistant_conflict) else chat.error.orEmpty()) }
@@ -151,9 +164,11 @@ fun AssistantScreen(
                 onToggleServer = viewModel::setOnServer,
                 running = chat.running,
                 canSend = ui.current != null && !chat.loading && !chat.conflict,
+                pendingImages = ui.pendingImages,
+                onPickImages = { pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                onRemoveImage = viewModel::removeImage,
                 onSend = {
-                    viewModel.send(input)
-                    input = ""
+                    if (viewModel.send(input)) input = ""
                 },
                 onStop = viewModel::stop,
             )
@@ -240,20 +255,25 @@ private fun Hints(onPick: (String) -> Unit) {
 }
 
 @Composable
-private fun ItemRow(item: AssistantItem) {
+private fun ItemRow(item: AssistantItem, refs: Map<String, RefNode?>, onOpen: (RefNode) -> Unit) {
     when (item.kind) {
         "user" -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Text(
-                item.text,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier
+            Column(
+                Modifier
                     .padding(start = 48.dp)
                     .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(14.dp))
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (!item.images.isNullOrEmpty()) {
+                    ChatImageRow(item.images, size = 72)
+                } else if ((item.imageCount ?: 0) > 0) {
+                    Text(stringResource(R.string.assistant_image_count, item.imageCount!!), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+                if (item.text.isNotEmpty()) Text(item.text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
         }
-        "assistant" -> Text(miniMarkdown(item.text), style = MaterialTheme.typography.bodyLarge)
+        "assistant" -> AssistantReply(item.text, refs, onOpen)
         "tool" -> {
             val mark = when (item.status) {
                 "ok" -> "✓"
@@ -315,6 +335,9 @@ private fun Composer(
     onToggleServer: (Boolean) -> Unit,
     running: Boolean,
     canSend: Boolean,
+    pendingImages: List<String>,
+    onPickImages: () -> Unit,
+    onRemoveImage: (Int) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
 ) {
@@ -342,7 +365,13 @@ private fun Composer(
                 }
             }
         }
+        if (pendingImages.isNotEmpty()) {
+            Box(Modifier.padding(top = 6.dp, bottom = 6.dp)) { ChatImageRow(pendingImages, size = 56, onRemove = onRemoveImage) }
+        }
         Row(verticalAlignment = Alignment.Bottom) {
+            IconButton(onClick = onPickImages, enabled = pendingImages.size < ChatImages.MAX, modifier = Modifier.testTag("assistant_add_image")) {
+                Icon(Icons.Outlined.Image, contentDescription = stringResource(R.string.assistant_add_image))
+            }
             OutlinedTextField(
                 value = input,
                 onValueChange = onInput,
@@ -355,7 +384,7 @@ private fun Composer(
                     Icon(Icons.Outlined.Stop, contentDescription = stringResource(R.string.assistant_stop))
                 }
             } else {
-                IconButton(onClick = onSend, enabled = canSend && input.isNotBlank(), modifier = Modifier.testTag("assistant_send")) {
+                IconButton(onClick = onSend, enabled = canSend && (input.isNotBlank() || pendingImages.isNotEmpty()), modifier = Modifier.testTag("assistant_send")) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.assistant_send))
                 }
             }

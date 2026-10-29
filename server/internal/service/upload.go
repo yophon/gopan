@@ -36,6 +36,8 @@ type Uploads struct {
 	notify   *Notifier
 	// 同名覆盖时每个文件最多留几份旧内容(doc/24);0 = 不留,覆盖即丢(测试默认)
 	versionKeep int
+	// pdftoppm 的路径(助手看 PDF 第一页,doc/35);空 = 不渲染
+	pdftoppm string
 }
 
 func NewUploads(pool *pgxpool.Pool, obj *objstore.Store, nodes *Nodes, partSize int64, ttl time.Duration) *Uploads {

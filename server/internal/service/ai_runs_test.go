@@ -32,14 +32,18 @@ func TestAIRunsQueue(t *testing.T) {
 
 	// 没装 qjs:直接说清楚
 	none := service.NewAIRuns(pool, chats, auth, nil, nil, service.AIRunsConfig{QJS: "/nope/qjs"})
-	if _, _, err := none.Start(ctx, user, nil, "hi", "", p.ID, ""); aiCode(err) != "AI_RUN_UNAVAILABLE" {
+	if _, _, err := none.Start(ctx, user, nil, "hi", "", nil, p.ID, ""); aiCode(err) != "AI_RUN_UNAVAILABLE" {
 		t.Fatalf("without qjs: %v", err)
 	}
 
 	// 有 qjs(任何存在的文件即可,这里不起调度,只看排队)
 	exe, _ := os.Executable()
 	runs := service.NewAIRuns(pool, chats, auth, nil, nil, service.AIRunsConfig{QJS: exe})
-	run, conv, err := runs.Start(ctx, user, nil, "  把发票挑出来\n第二行", "用户正在看:/", p.ID, "")
+	// 随消息发的图只认图片 data URL(doc/35)
+	if _, _, err := runs.Start(ctx, user, nil, "看图", "", []string{"https://x/a.jpg"}, p.ID, ""); aiCode(err) != "INVALID_INPUT" {
+		t.Fatalf("bad image: %v", err)
+	}
+	run, conv, err := runs.Start(ctx, user, nil, "  把发票挑出来\n第二行", "用户正在看:/", nil, p.ID, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +55,7 @@ func TestAIRunsQueue(t *testing.T) {
 		t.Fatalf("conversation after start: %+v %v", got, err)
 	}
 	// 同一个对话同时只能一轮
-	if _, _, err := runs.Start(ctx, user, &conv.ID, "再来", "", p.ID, "m1"); aiCode(err) != "AI_RUN_BUSY" {
+	if _, _, err := runs.Start(ctx, user, &conv.ID, "再来", "", nil, p.ID, "m1"); aiCode(err) != "AI_RUN_BUSY" {
 		t.Fatalf("second run: %v", err)
 	}
 	st, err := runs.ActiveStatuses(ctx, user)
@@ -70,7 +74,7 @@ func TestAIRunsQueue(t *testing.T) {
 		t.Fatalf("current: %+v %v", cur, err)
 	}
 	// 停了之后可以再发
-	if _, _, err := runs.Start(ctx, user, &conv.ID, "再来", "", p.ID, "m1"); err != nil {
+	if _, _, err := runs.Start(ctx, user, &conv.ID, "再来", "", nil, p.ID, "m1"); err != nil {
 		t.Fatalf("after stop: %v", err)
 	}
 	// 答复没在跑的一轮

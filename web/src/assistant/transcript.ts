@@ -1,4 +1,4 @@
-import type { AgentMessage } from '@yophon/tau-kernel'
+import type { AgentMessage, ImageContent, TextContent } from '@yophon/tau-kernel'
 
 /**
  * 对话 → 面板上一条条显示的东西。纯函数:同一份消息(刚回答完的、从服务端读回来的)画出来一样。
@@ -7,7 +7,8 @@ import type { AgentMessage } from '@yophon/tau-kernel'
  */
 
 export type TranscriptItem =
-  | { kind: 'user'; key: string; text: string }
+  /** images:随这句话发的图(data URL) */
+  | { kind: 'user'; key: string; text: string; images?: string[] }
   | { kind: 'assistant'; key: string; text: string }
   | { kind: 'tool'; key: string; id: string; name: string; args: Record<string, unknown>; status: 'running' | 'ok' | 'error' | 'denied'; output: string; label?: string }
   | { kind: 'error'; key: string; text: string }
@@ -20,6 +21,24 @@ export function withContext(text: string, context: string): string {
 
 export function stripContext(text: string): string {
   return text.replace(CONTEXT_RE, '')
+}
+
+/** 随消息发的图:data URL ↔ tau 的图片块(doc/35) */
+export function imageBlock(dataUrl: string): ImageContent | null {
+  const m = /^data:(image\/[a-z+.-]+);base64,(.+)$/s.exec(dataUrl)
+  return m ? { type: 'image', mimeType: m[1]!, data: m[2]! } : null
+}
+
+/** 发给模型的这句话:文字(带「你在看什么」)加上图 */
+export function userContent(text: string, context: string, images: readonly string[] = []): string | (TextContent | ImageContent)[] {
+  const body = withContext(text, context)
+  const blocks = images.map(imageBlock).filter((b): b is ImageContent => b !== null)
+  return blocks.length ? [{ type: 'text', text: body }, ...blocks] : body
+}
+
+function imagesOf(content: string | readonly { type: string; data?: string; mimeType?: string }[]): string[] {
+  if (typeof content === 'string') return []
+  return content.filter((c) => c.type === 'image' && c.data).map((c) => `data:${c.mimeType ?? 'image/jpeg'};base64,${c.data}`)
 }
 
 function textOf(content: string | readonly { type: string; text?: string }[]): string {
@@ -39,7 +58,8 @@ export function buildTranscript(messages: readonly AgentMessage[]): TranscriptIt
   messages.forEach((m, i) => {
     if (m.role === 'user') {
       const text = stripContext(textOf(m.content))
-      if (text.trim()) out.push({ kind: 'user', key: `u${i}`, text })
+      const images = imagesOf(m.content)
+      if (text.trim() || images.length) out.push({ kind: 'user', key: `u${i}`, text, ...(images.length ? { images } : {}) })
     } else if (m.role === 'assistant') {
       const text = m.content.filter((c) => c.type === 'text').map((c) => (c as { text: string }).text).join('')
       if (text.trim()) out.push({ kind: 'assistant', key: `a${i}`, text })

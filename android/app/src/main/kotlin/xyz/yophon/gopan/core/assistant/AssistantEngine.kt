@@ -153,10 +153,11 @@ class AssistantEngine @Inject constructor(
 
     private suspend fun sendOnServer(args: SendArgs) {
         val h = host()
-        h.update { it.copy(error = null, running = true, items = it.items + AssistantItem("user", "pending-${it.items.size}", args.text.trim())) }
+        val pending = AssistantItem("user", "pending-${state.value.items.size}", args.text.trim(), images = args.images.ifEmpty { null })
+        h.update { it.copy(error = null, running = true, items = it.items + pending) }
         try {
             val conv = state.value.conversation
-            val run = repo.startRun(conv?.id, args.text, args.context, args.provider.id, args.model)
+            val run = repo.startRun(conv?.id, args.text, args.context, args.provider.id, args.model, args.images)
             if (conv == null) {
                 h.update { it.copy(conversation = AssistantConversation(id = run.conversationId, title = args.text.trim().take(40))) }
             }

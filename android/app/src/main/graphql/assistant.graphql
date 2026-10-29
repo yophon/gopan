@@ -70,8 +70,18 @@ query AiConversationRunner($id: ID!) {
   aiConversation(id: $id) { id runner }
 }
 
-mutation StartAiRun($conversationId: ID, $text: String!, $context: String, $providerId: ID!, $model: String) {
-  startAiRun(conversationId: $conversationId, text: $text, context: $context, providerId: $providerId, model: $model) { id conversationId status approval error }
+mutation StartAiRun($conversationId: ID, $text: String!, $context: String, $providerId: ID!, $model: String, $images: [String!]) {
+  startAiRun(conversationId: $conversationId, text: $text, context: $context, providerId: $providerId, model: $model, images: $images) { id conversationId status approval error }
+}
+
+# 回答里引用的文件(doc/35 六):查不到的不返回
+query NodesByIds($ids: [ID!]!) {
+  nodesByIds(ids: $ids) { id name kind size path preview { kind thumbUrl largeUrl } }
+}
+
+# 引用写的是路径时
+query NodesByPaths($paths: [String!]!) {
+  nodesByPaths(paths: $paths) { id name kind size path preview { kind thumbUrl largeUrl } }
 }
 
 mutation AnswerAiRun($id: ID!, $answer: String!) {

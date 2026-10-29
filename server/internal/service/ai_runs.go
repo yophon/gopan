@@ -152,6 +152,7 @@ func scanAIRun(row pgx.Row) (AIRunView, error) {
 
 type runInput struct {
 	Text     string      `json:"text"`
+	Images   []string    `json:"images,omitempty"`
 	Context  string      `json:"context"`
 	Provider runProvider `json:"provider"`
 	Model    string      `json:"model"`
@@ -167,16 +168,19 @@ type runProvider struct {
 }
 
 // Start 发一句话交给服务器跑:没有对话就先建;同一个对话同时只能有一轮。
-func (r *AIRuns) Start(ctx context.Context, user uuid.UUID, conversation *uuid.UUID, text, contextText string, providerID uuid.UUID, model string) (AIRunView, AIConversation, error) {
+func (r *AIRuns) Start(ctx context.Context, user uuid.UUID, conversation *uuid.UUID, text, contextText string, images []string, providerID uuid.UUID, model string) (AIRunView, AIConversation, error) {
 	if !r.Available() {
 		return AIRunView{}, AIConversation{}, errNoRunner
 	}
 	text = strings.TrimSpace(text)
-	if text == "" {
+	if text == "" && len(images) == 0 {
 		return AIRunView{}, AIConversation{}, errf("INVALID_INPUT", "说点什么")
 	}
 	if len(text) > 64<<10 || len(contextText) > 64<<10 {
 		return AIRunView{}, AIConversation{}, errf("INVALID_INPUT", "太长了")
+	}
+	if err := CheckChatImages(images); err != nil {
+		return AIRunView{}, AIConversation{}, err
 	}
 	var p runProvider
 	var owner *uuid.UUID
@@ -206,7 +210,7 @@ func (r *AIRuns) Start(ctx context.Context, user uuid.UUID, conversation *uuid.U
 	if _, err := r.pool.Exec(ctx, `UPDATE ai_conversations SET runner = 'server', provider_id = $2, model = $3, updated_at = now() WHERE id = $1`, conv.ID, providerID, model); err != nil {
 		return AIRunView{}, conv, err
 	}
-	input, _ := json.Marshal(runInput{Text: text, Context: contextText, Provider: p, Model: model, Mode: "proxy"})
+	input, _ := json.Marshal(runInput{Text: text, Images: images, Context: contextText, Provider: p, Model: model, Mode: "proxy"})
 	run, err := scanAIRun(r.pool.QueryRow(ctx, `INSERT INTO ai_runs (id, user_id, conversation_id, status, input) VALUES ($1, $2, $3, 'queued', $4) RETURNING `+aiRunCols,
 		uuid.Must(uuid.NewV7()), user, conv.ID, input))
 	if err != nil {

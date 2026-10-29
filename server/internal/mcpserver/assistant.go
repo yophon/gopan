@@ -29,6 +29,7 @@ var toolScopes = map[string][]string{
 	"resolve_path": {"files:read"}, "list_trash": {"files:read"}, "storage_status": {"files:read"},
 	"list_archive": {"files:read"}, "search_file_contents": {"files:read"}, "get_job": {"files:read"}, "list_jobs": {"files:read"},
 	"read_text_file": {"files:download"}, "read_document_text": {"files:download"}, "prepare_download": {"files:download"},
+	"view_image": {"files:download"}, "write_text_file": {"files:write"},
 	"create_folder": {"files:write"}, "create_directories": {"files:write"}, "rename_node": {"files:write"},
 	"move_nodes": {"files:write"}, "copy_nodes": {"files:write"},
 	"trash_nodes": {"files:delete"}, "restore_nodes": {"files:delete"},
@@ -82,7 +83,18 @@ func annotateTool(tool *mcp.Tool) {
 	}
 }
 
-// assistantVisible 助手能看到这个工具:不在隐藏表里,且至少有一个 scope 拿得到。
+// 助手的运行时自己调、不列给模型的(doc/35):模型手里是 tau 的 read / write / edit,底下就是这几个;
+// 两套都给模型会挑错。外部 MCP 客户端照样能看到。
+var assistantInternal = map[string]bool{
+	"read_text_file": true, "read_document_text": true, "view_image": true, "write_text_file": true,
+}
+
+// assistantListed tools/list 里列给模型的:能调用,且不是运行时内部用的。
+func assistantListed(p *service.MCPPrincipal, name string) bool {
+	return !assistantInternal[name] && assistantVisible(p, name)
+}
+
+// assistantVisible 助手能调用这个工具:不在隐藏表里,且至少有一个 scope 拿得到。
 func assistantVisible(p *service.MCPPrincipal, name string) bool {
 	if assistantHidden[name] {
 		return false
@@ -114,7 +126,7 @@ func assistantToolFilter(next mcp.MethodHandler) mcp.MethodHandler {
 		out := *list
 		out.Tools = make([]*mcp.Tool, 0, len(list.Tools))
 		for _, t := range list.Tools {
-			if assistantVisible(p, t.Name) {
+			if assistantListed(p, t.Name) {
 				out.Tools = append(out.Tools, t)
 			}
 		}

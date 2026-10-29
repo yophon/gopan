@@ -705,7 +705,7 @@ type ComplexityRoot struct {
 		ShareCompleteUpload      func(childComplexity int, sessionID string, etags []*PartEtag) int
 		ShareEnsureFolder        func(childComplexity int, parentID string, name string, uploaderName *string) int
 		ShareInitUpload          func(childComplexity int, parentID string, name string, size int64, uploaderName *string) int
-		StartAiRun               func(childComplexity int, conversationID *string, text string, context *string, providerID string, model *string) int
+		StartAiRun               func(childComplexity int, conversationID *string, text string, context *string, providerID string, model *string, images []string) int
 		StopAiRun                func(childComplexity int, id string) int
 		TestNotifyChannel        func(childComplexity int, id string) int
 		UndoActivities           func(childComplexity int, selection UndoSelection) int
@@ -902,6 +902,8 @@ type ComplexityRoot struct {
 		Node                      func(childComplexity int, id string) int
 		NodeClip                  func(childComplexity int, nodeID string) int
 		NodeLink                  func(childComplexity int, nodeID string) int
+		NodesByIds                func(childComplexity int, ids []string) int
+		NodesByPaths              func(childComplexity int, paths []string) int
 		Notifications             func(childComplexity int, cursor *string, unreadOnly *bool) int
 		NotifyChannels            func(childComplexity int) int
 		NotifyEventKinds          func(childComplexity int) int
@@ -1222,7 +1224,7 @@ type MutationResolver interface {
 	AppendAiEntries(ctx context.Context, conversationID string, fromSeq int, entries []string) (*AiConversation, error)
 	UpdateAiConversation(ctx context.Context, id string, title *string, providerID *string, model *string) (*AiConversation, error)
 	DeleteAiConversation(ctx context.Context, id string) (bool, error)
-	StartAiRun(ctx context.Context, conversationID *string, text string, context *string, providerID string, model *string) (*AiRun, error)
+	StartAiRun(ctx context.Context, conversationID *string, text string, context *string, providerID string, model *string, images []string) (*AiRun, error)
 	AnswerAiRun(ctx context.Context, id string, answer string) (bool, error)
 	StopAiRun(ctx context.Context, id string) (bool, error)
 	SetAiConversationRunner(ctx context.Context, id string, runner AiRunner) (bool, error)
@@ -1243,6 +1245,8 @@ type QueryResolver interface {
 	Me(ctx context.Context) (*User, error)
 	Sessions(ctx context.Context) ([]*Session, error)
 	Node(ctx context.Context, id string) (*Node, error)
+	NodesByIds(ctx context.Context, ids []string) ([]*Node, error)
+	NodesByPaths(ctx context.Context, paths []string) ([]*Node, error)
 	Children(ctx context.Context, parentID *string, cursor *string, order *NodeOrder, desc *bool) (*NodePage, error)
 	SearchNodes(ctx context.Context, q string, cursor *string, filter *SearchFilter) (*NodePage, error)
 	SearchContent(ctx context.Context, q string, cursor *string, filter *SearchFilter) (*ContentHitPage, error)
@@ -4695,7 +4699,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.StartAiRun(childComplexity, args["conversationId"].(*string), args["text"].(string), args["context"].(*string), args["providerId"].(string), args["model"].(*string)), true
+		return e.ComplexityRoot.Mutation.StartAiRun(childComplexity, args["conversationId"].(*string), args["text"].(string), args["context"].(*string), args["providerId"].(string), args["model"].(*string), args["images"].([]string)), true
 	case "Mutation.stopAiRun":
 		if e.ComplexityRoot.Mutation.StopAiRun == nil {
 			break
@@ -5796,6 +5800,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.NodeLink(childComplexity, args["nodeId"].(string)), true
+	case "Query.nodesByIds":
+		if e.ComplexityRoot.Query.NodesByIds == nil {
+			break
+		}
+
+		args, err := ec.field_Query_nodesByIds_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.NodesByIds(childComplexity, args["ids"].([]string)), true
+	case "Query.nodesByPaths":
+		if e.ComplexityRoot.Query.NodesByPaths == nil {
+			break
+		}
+
+		args, err := ec.field_Query_nodesByPaths_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.NodesByPaths(childComplexity, args["paths"].([]string)), true
 	case "Query.notifications":
 		if e.ComplexityRoot.Query.Notifications == nil {
 			break
@@ -7925,6 +7951,10 @@ type Query {
   # 登录设备列表,最近活跃的在前
   sessions: [Session!]!
   node(id: ID!): Node!
+  # 按 id 一次查几个(助手回答里引用的文件,doc/35 六);查不到、没权限的直接不返回,最多 100 个
+  nodesByIds(ids: [ID!]!): [Node!]!
+  # 按网盘路径查(/笔记/会议.md);助手的引用有时写的是路径。查不到的不返回,最多 100 个
+  nodesByPaths(paths: [String!]!): [Node!]!
   children(parentId: ID, cursor: String, order: NodeOrder = NAME, desc: Boolean = false): NodePage!
   # 按名字搜索。带 filter 时关键词可以为空(只按筛选找);分享访客的搜索忽略 filter
   searchNodes(q: String!, cursor: String, filter: SearchFilter): NodePage!
@@ -8343,7 +8373,8 @@ extend type Mutation {
   updateAiConversation(id: ID!, title: String, providerId: ID, model: String): AiConversation!
   deleteAiConversation(id: ID!): Boolean!
   # 交给服务器跑(doc/34):没有对话就先建;同一个对话同时只能有一轮(AI_RUN_BUSY)
-  startAiRun(conversationId: ID, text: String!, context: String, providerId: ID!, model: String): AiRun!
+  # images:随这句话发的图(data URL,JPEG / PNG / WebP / GIF),最多 4 张、合计 1 MB(doc/35)
+  startAiRun(conversationId: ID, text: String!, context: String, providerId: ID!, model: String, images: [String!]): AiRun!
   # 确认卡的答复:once / session / deny
   answerAiRun(id: ID!, answer: String!): Boolean!
   stopAiRun(id: ID!): Boolean!
@@ -11906,6 +11937,14 @@ func (ec *executionContext) field_Mutation_startAiRun_args(ctx context.Context, 
 		return nil, err
 	}
 	args["model"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "images",
+		func(ctx context.Context, v any) ([]string, error) {
+			return ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["images"] = arg5
 	return args, nil
 }
 
@@ -12706,6 +12745,34 @@ func (ec *executionContext) field_Query_node_args(ctx context.Context, rawArgs m
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_nodesByIds_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "ids",
+		func(ctx context.Context, v any) ([]string, error) {
+			return ec.unmarshalNID2ᚕstringᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["ids"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_nodesByPaths_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "paths",
+		func(ctx context.Context, v any) ([]string, error) {
+			return ec.unmarshalNString2ᚕstringᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["paths"] = arg0
 	return args, nil
 }
 
@@ -26549,7 +26616,7 @@ func (ec *executionContext) _Mutation_startAiRun(ctx context.Context, field grap
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().StartAiRun(ctx, fc.Args["conversationId"].(*string), fc.Args["text"].(string), fc.Args["context"].(*string), fc.Args["providerId"].(string), fc.Args["model"].(*string))
+			return ec.Resolvers.Mutation().StartAiRun(ctx, fc.Args["conversationId"].(*string), fc.Args["text"].(string), fc.Args["context"].(*string), fc.Args["providerId"].(string), fc.Args["model"].(*string), fc.Args["images"].([]string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *AiRun) graphql.Marshaler {
@@ -28920,6 +28987,94 @@ func (ec *executionContext) fieldContext_Query_node(ctx context.Context, field g
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_node_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_nodesByIds(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_nodesByIds(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().NodesByIds(ctx, fc.Args["ids"].([]string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Node) graphql.Marshaler {
+			return ec.marshalNNode2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNodeᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_nodesByIds(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Node(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_nodesByIds_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_nodesByPaths(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_nodesByPaths(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().NodesByPaths(ctx, fc.Args["paths"].([]string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Node) graphql.Marshaler {
+			return ec.marshalNNode2ᚕᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐNodeᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_nodesByPaths(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Node(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_nodesByPaths_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -42527,6 +42682,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_node(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "nodesByIds":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_nodesByIds(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "nodesByPaths":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_nodesByPaths(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

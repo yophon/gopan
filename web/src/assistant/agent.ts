@@ -16,6 +16,8 @@ import { createAnthropicTransport } from '@yophon/tau-ext-provider-anthropic'
 import { createGoogleTransport } from '@yophon/tau-ext-provider-google'
 import { createOpenAIResponsesTransport } from '@yophon/tau-ext-provider-openai-responses'
 
+import { FILE_TOOL_METAS, fileTools } from './files'
+import { GopanFs, mcpCaller } from './gopan-fs'
 import { decide, MCP_SERVER, scopePermissions, toolMetas, type AccessGroup, type ToolMeta } from './policy'
 import type { GopanSessionStore } from './session'
 
@@ -24,7 +26,8 @@ import type { GopanSessionStore } from './session'
  *
  * - 转发:baseUrl = /api/ai/{服务 id},tau 原样拼路径;登录凭证由这里的 fetch 加上,服务端换成真 key。
  * - 直连:baseUrl = 服务地址,key 现取、只放内存;桌面端走外壳的 ai_fetch(没有跨域限制)。
- * - 工具:ext-mcp-http 连同源的 /mcp,带登录凭证、对话 id 与这一轮的批次 id(同一轮的改动合成一批撤回)。
+ * - 工具:ext-mcp-http 连同源的 /mcp,带登录凭证、对话 id 与这一轮的批次 id(同一轮的改动合成一批撤回);
+ *   读写文件用 tau 自带的 read / write / edit,底下的 GopanFs 走同一条 /mcp(doc/35)。
  * - 问不问:tau 的 ToolPolicy 判,规则来自服务端存的权限;要问时 onApproval 交给面板弹确认卡。
  */
 
@@ -162,6 +165,8 @@ export async function createAssistant(o: AssistantOptions, deps: AssistantDeps):
   const apiKey = proxied || deps.shellFetch ? 'gopan' : await deps.providerKey(o.provider.id)
 
   const metas = await listTools(o.origin, platform.fetch)
+  for (const m of FILE_TOOL_METAS) metas.set(m.name, m)
+  const files = fileTools(new GopanFs(mcpCaller(o.origin, platform.fetch)))
   let scopes = scopePermissions(o.groups)
   const sessionAllowed = new Set<string>()
   const policy: ToolPolicy = {
@@ -188,6 +193,7 @@ export async function createAssistant(o: AssistantOptions, deps: AssistantDeps):
     transport: transportFor(o, baseUrl, apiKey, platform),
     platform,
     systemPrompt: o.systemPrompt,
+    tools: files,
     extensions,
     session,
     initialMessages: restored.messages,

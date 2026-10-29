@@ -155,7 +155,8 @@ func (s *Server) enforceRoot(ctx context.Context, p *service.MCPPrincipal, tool 
 				}
 			}
 		}
-		if path, ok := args["path"].(string); ok && tool != "create_directories" {
+		// create_directories / write_text_file 的 path 可以还不存在;它们自己在凭证的根下解析
+		if path, ok := args["path"].(string); ok && tool != "create_directories" && tool != "write_text_file" {
 			n, err := s.nodes.ResolvePathAt(ctx, p.UserID, path, p.RootID)
 			if err != nil {
 				return err
