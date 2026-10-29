@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "gopan",
   "mainBinaryName": "gopan",
-  "version": "3.17.0",
+  "version": "3.20.0",
   "identifier": "xyz.yophon.gopan.desktop",
   "build": {
     "frontendDist": "../src"

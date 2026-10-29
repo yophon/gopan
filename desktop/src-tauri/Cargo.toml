@@ -1,6 +1,6 @@
 [package]
 name = "gopan-desktop"
-version = "3.17.0"
+version = "3.20.0"
 description = "gopan 桌面端(Windows,doc/29)"
 edition = "2021"
 publish = false
