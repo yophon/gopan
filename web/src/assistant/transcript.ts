@@ -9,7 +9,7 @@ import type { AgentMessage } from '@yophon/tau-kernel'
 export type TranscriptItem =
   | { kind: 'user'; key: string; text: string }
   | { kind: 'assistant'; key: string; text: string }
-  | { kind: 'tool'; key: string; id: string; name: string; args: Record<string, unknown>; status: 'running' | 'ok' | 'error' | 'denied'; output: string }
+  | { kind: 'tool'; key: string; id: string; name: string; args: Record<string, unknown>; status: 'running' | 'ok' | 'error' | 'denied'; output: string; label?: string }
   | { kind: 'error'; key: string; text: string }
 
 const CONTEXT_RE = /^<gopan-context>[\s\S]*?<\/gopan-context>\n?/

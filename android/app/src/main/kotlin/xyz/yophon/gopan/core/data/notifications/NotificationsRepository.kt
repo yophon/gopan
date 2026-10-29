@@ -22,7 +22,7 @@ import xyz.yophon.gopan.graphql.type.NotificationTargetKind as GqlTargetKind
 enum class NotificationLevel { INFO, WARN, ALERT }
 
 /** 点开通知跳到哪(与 GraphQL NotificationTargetKind 同名) */
-enum class NotificationTargetKind { NODE, FILE_REQUEST, LINK, JOBS, SESSIONS, CREDENTIALS, ADMIN, ACTIVITY, FEED }
+enum class NotificationTargetKind { NODE, FILE_REQUEST, LINK, JOBS, SESSIONS, CREDENTIALS, ADMIN, ACTIVITY, FEED, ASSISTANT }
 
 /**
  * NODE:[id] 是文件 / 文件夹,[parentId] 是所在文件夹(null = 根目录);FILE_REQUEST / LINK:[id] 是收集链接 / 直链;
@@ -108,6 +108,7 @@ internal fun InboxNotificationFields.toDomain() = AppNotification(
             GqlTargetKind.ADMIN -> NotificationTargetKind.ADMIN
             GqlTargetKind.ACTIVITY -> NotificationTargetKind.ACTIVITY
             GqlTargetKind.FEED -> NotificationTargetKind.FEED
+            GqlTargetKind.ASSISTANT -> NotificationTargetKind.ASSISTANT
             // 新版服务端加了目标而 App 没跟上:当作没有目标,点了只标已读
             else -> null
         }

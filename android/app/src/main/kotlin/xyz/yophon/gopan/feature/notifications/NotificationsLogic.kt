@@ -42,6 +42,9 @@ sealed interface NotificationNav {
     data class Feed(val feedId: String? = null) : NotificationNav
 
     data object Admin : NotificationNav
+
+    /** 服务器上跑的助手等确认 / 做完了(doc/34):打开助手里的这个对话 */
+    data class Assistant(val conversationId: String) : NotificationNav
 }
 
 /** 列表的一行:日期分隔 / 一条通知 */
@@ -82,6 +85,7 @@ object NotificationsLogic {
             NotificationTargetKind.ADMIN -> if (isAdmin) NotificationNav.Admin else null
             NotificationTargetKind.ACTIVITY -> NotificationNav.Activity(actor = target.id?.takeIf { it.isNotBlank() }, since = target.parentId)
             NotificationTargetKind.FEED -> NotificationNav.Feed(target.id?.takeIf { it.isNotBlank() })
+            NotificationTargetKind.ASSISTANT -> target.id?.takeIf { it.isNotBlank() }?.let { NotificationNav.Assistant(it) }
         }
     }
 

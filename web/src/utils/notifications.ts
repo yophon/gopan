@@ -10,6 +10,7 @@ export type NotificationTargetKindValue =
   | 'ADMIN'
   | 'ACTIVITY'
   | 'FEED'
+  | 'ASSISTANT'
 
 export interface TargetLike {
   kind: NotificationTargetKindValue
@@ -56,6 +57,9 @@ export function notificationRoute(t: TargetLike | null | undefined): RouteTarget
     }
     case 'FEED':
       return t.id ? { path: '/feeds', query: { id: t.id } } : { path: '/feeds' }
+    case 'ASSISTANT':
+      // 服务器上跑的助手等确认 / 做完了(doc/34):打开助手面板里的这个对话
+      return t.id ? { path: '/drive', query: { assistant: t.id } } : { path: '/drive' }
     default:
       return null
   }

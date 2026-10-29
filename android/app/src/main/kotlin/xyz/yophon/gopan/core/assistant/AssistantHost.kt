@@ -141,6 +141,12 @@ class AssistantHost(
         pendingApproval?.complete(answer)
     }
 
+    /** 服务器上跑的一轮(doc/34)推来的事件:items / live / conversation / error 与本机跑时一样处理 */
+    fun applyServerEvent(raw: String) = onEvent(raw)
+
+    /** 引擎改状态(服务器上跑时的运行状态、确认卡) */
+    fun update(transform: (AssistantState) -> AssistantState) = _state.update(transform)
+
     fun close() {
         stop()
         calls.values.forEach { it.call.cancel() }
@@ -328,4 +334,8 @@ data class AssistantState(
     val error: String? = null,
     val conflict: Boolean = false,
     val conversation: AssistantConversation? = null,
+    /** 这个对话交给服务器跑(doc/34) */
+    val onServer: Boolean = false,
+    /** 服务器上这个对话最近的一轮 */
+    val runId: String? = null,
 )

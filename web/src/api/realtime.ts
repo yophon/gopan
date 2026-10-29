@@ -14,6 +14,15 @@ import { keysFor, parseEvents, type Change } from '@/utils/realtime'
  * - 服务端每 5 分钟断一次让客户端带新凭据重连;出错退避重连,连不上时各页面原有的刷新照旧。
  */
 
+/** 服务器上跑的助手推来的事件(doc/34):对话 id 与事件;助手面板订阅 */
+type AssistantListener = (conversationId: string, event: unknown) => void
+const assistantListeners = new Set<AssistantListener>()
+
+export function onAssistantEvent(fn: AssistantListener): () => void {
+  assistantListeners.add(fn)
+  return () => assistantListeners.delete(fn)
+}
+
 /** 推送连接是否连着:传输助手据此把轮询放慢 */
 export const realtimeConnected = ref(false)
 
@@ -29,6 +38,7 @@ export function startRealtime(queryClient: QueryClient): () => void {
   const pending = new Map<string, unknown[]>()
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   function apply(c: Change) {
+    if (c.t === 'assistant' && c.c) for (const fn of assistantListeners) fn(c.c, c.e)
     const keys = keysFor(c)
     if (keys === null) {
       void queryClient.invalidateQueries()

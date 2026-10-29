@@ -110,9 +110,12 @@ object Routes {
     @Serializable
     data object AgentCredentials
 
-    /** 助手(doc/33):从文件页进来时带着「你在看什么」([context] 给模型,[label] 给人看) */
+    /**
+     * 助手(doc/33):从文件页进来时带着「你在看什么」([context] 给模型,[label] 给人看);
+     * 通知点进来时带着要打开的对话([conversation],doc/34)
+     */
     @Serializable
-    data class Assistant(val context: String? = null, val label: String? = null)
+    data class Assistant(val context: String? = null, val label: String? = null, val conversation: String? = null)
 
     @Serializable
     data object AssistantSettings

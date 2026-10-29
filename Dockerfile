@@ -35,6 +35,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl poppler-utils poppler-data \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -r -u 10001 gopan
+# 助手在服务器上运行(doc/34):quickjs-ng 的 qjs(静态编译,每一轮起一个进程);固定版本,sha256 对不上就不装
+ARG QJS_VERSION=v0.17.0
+ARG QJS_SHA256=0bfc02511a9f549c28b53880d988fc7cd5d361e90c5e8afdfcd7dc6774ceace5
+RUN curl -fsSL -o /usr/local/bin/qjs "https://github.com/quickjs-ng/quickjs/releases/download/${QJS_VERSION}/qjs-linux-x86_64" \
+    && echo "${QJS_SHA256}  /usr/local/bin/qjs" | sha256sum -c - \
+    && chmod 755 /usr/local/bin/qjs
 COPY --from=ffmpeg /ffmpeg /ffprobe /usr/local/bin/
 COPY --from=build /out/gopan /usr/local/bin/gopan
 USER gopan

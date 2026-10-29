@@ -125,5 +125,6 @@ private fun NavController.navigateFor(nav: NotificationNav, onOpenPreview: (Stri
         NotificationNav.Account -> if (!popBackStack(Routes.Account, inclusive = false)) navigate(Routes.Account)
         is NotificationNav.Activity -> navigate(Routes.Activity(actor = nav.actor, since = nav.since))
         is NotificationNav.Feed -> navigate(nav.feedId?.let { Routes.FeedDetail(it) } ?: Routes.Feeds)
+        is NotificationNav.Assistant -> navigate(Routes.Assistant(conversation = nav.conversationId))
     }
 }

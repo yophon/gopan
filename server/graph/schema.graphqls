@@ -255,7 +255,7 @@ enum NotificationLevel { INFO, WARN, ALERT }
 
 # 点开通知跳到哪。NODE:id 是文件 / 文件夹,parentId 是所在文件夹(null = 根目录);
 # FILE_REQUEST / LINK:id 是收集链接 / 直链;JOBS:后台任务列表;SESSIONS:登录设备;CREDENTIALS:新建的凭据,id 是 webdav(应用密码)/ mcp(API Key、Agent 授权)/ img(图床密钥);ADMIN:管理端
-enum NotificationTargetKind { NODE, FILE_REQUEST, LINK, JOBS, SESSIONS, CREDENTIALS, ADMIN, ACTIVITY, FEED }
+enum NotificationTargetKind { NODE, FILE_REQUEST, LINK, JOBS, SESSIONS, CREDENTIALS, ADMIN, ACTIVITY, FEED, ASSISTANT }
 
 type NotificationTarget {
   kind: NotificationTargetKind!
@@ -1505,11 +1505,35 @@ type AiConversation {
   model: String!
   # 条目数,也是下一次追加的 fromSeq
   entries: Int!
+  # 在哪跑:DEVICE(客户端,doc/33)/ SERVER(服务器,doc/34)
+  runner: AiRunner!
+  # 服务器上没跑完的这一轮的状态(列表上的「运行中」「等你确认」);没有为 null
+  runStatus: AiRunStatus
   createdAt: Time!
   updatedAt: Time!
 }
 
+enum AiRunner { DEVICE, SERVER }
+enum AiRunStatus { QUEUED, RUNNING, WAITING, DONE, FAILED, STOPPED }
+
+# 服务器上跑的一轮(doc/34)
+type AiRun {
+  id: ID!
+  conversationId: ID!
+  status: AiRunStatus!
+  # 等确认时的确认卡(JSON:title / names / more / detail / canAllowSession)
+  approval: String
+  error: String!
+  createdAt: Time!
+  startedAt: Time
+  finishedAt: Time
+}
+
 extend type Query {
+  # 服务器上能不能跑助手(装了运行环境)
+  aiRunAvailable: Boolean!
+  # 这个对话最近的一轮;没有为 null
+  aiRun(conversationId: ID!): AiRun
   # 自己的 + 站点提供的(站点的在前)
   aiProviders: [AiProvider!]!
   # 管理员:站点提供的
@@ -1538,4 +1562,10 @@ extend type Mutation {
   appendAiEntries(conversationId: ID!, fromSeq: Int!, entries: [String!]!): AiConversation!
   updateAiConversation(id: ID!, title: String, providerId: ID, model: String): AiConversation!
   deleteAiConversation(id: ID!): Boolean!
+  # 交给服务器跑(doc/34):没有对话就先建;同一个对话同时只能有一轮(AI_RUN_BUSY)
+  startAiRun(conversationId: ID, text: String!, context: String, providerId: ID!, model: String): AiRun!
+  # 确认卡的答复:once / session / deny
+  answerAiRun(id: ID!, answer: String!): Boolean!
+  stopAiRun(id: ID!): Boolean!
+  setAiConversationRunner(id: ID!, runner: AiRunner!): Boolean!
 }

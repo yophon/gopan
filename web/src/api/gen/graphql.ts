@@ -158,6 +158,8 @@ export type AiConversation = {
   id: Scalars['ID']['output'];
   model: Scalars['String']['output'];
   providerId?: Maybe<Scalars['ID']['output']>;
+  runStatus?: Maybe<AiRunStatus>;
+  runner: AiRunner;
   title: Scalars['String']['output'];
   updatedAt: Scalars['Time']['output'];
 };
@@ -190,6 +192,30 @@ export type AiProviderKind =
   | 'GOOGLE'
   | 'OPENAI'
   | 'OPENAI_RESPONSES';
+
+export type AiRun = {
+  __typename?: 'AiRun';
+  approval?: Maybe<Scalars['String']['output']>;
+  conversationId: Scalars['ID']['output'];
+  createdAt: Scalars['Time']['output'];
+  error: Scalars['String']['output'];
+  finishedAt?: Maybe<Scalars['Time']['output']>;
+  id: Scalars['ID']['output'];
+  startedAt?: Maybe<Scalars['Time']['output']>;
+  status: AiRunStatus;
+};
+
+export type AiRunStatus =
+  | 'DONE'
+  | 'FAILED'
+  | 'QUEUED'
+  | 'RUNNING'
+  | 'STOPPED'
+  | 'WAITING';
+
+export type AiRunner =
+  | 'DEVICE'
+  | 'SERVER';
 
 export type AppPassword = {
   __typename?: 'AppPassword';
@@ -801,6 +827,7 @@ export type Mutation = {
   adminRevokeLink: Scalars['Boolean']['output'];
   adminSetDisabled: AdminUser;
   adminSetQuota: AdminUser;
+  answerAiRun: Scalars['Boolean']['output'];
   appendAiEntries: AiConversation;
   cancelJob: Job;
   changePassword: AuthPayload;
@@ -872,6 +899,7 @@ export type Mutation = {
   saveProgress?: Maybe<PlayProgress>;
   saveTextFile: Node;
   sendChatMessage: ChatMessage;
+  setAiConversationRunner: Scalars['Boolean']['output'];
   setAssistantAccess: AssistantAccess;
   setClipPrefs: ClipPrefs;
   setLinkPrefs: LinkPrefs;
@@ -882,6 +910,8 @@ export type Mutation = {
   shareCompleteUpload: Node;
   shareEnsureFolder: Node;
   shareInitUpload: UploadSession;
+  startAiRun: AiRun;
+  stopAiRun: Scalars['Boolean']['output'];
   testNotifyChannel: Scalars['Boolean']['output'];
   undoActivities: UndoResult;
   updateAiConversation: AiConversation;
@@ -936,6 +966,12 @@ export type MutationAdminSetDisabledArgs = {
 export type MutationAdminSetQuotaArgs = {
   quotaBytes: Scalars['Int64']['input'];
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationAnswerAiRunArgs = {
+  answer: Scalars['String']['input'];
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1302,6 +1338,12 @@ export type MutationSendChatMessageArgs = {
 };
 
 
+export type MutationSetAiConversationRunnerArgs = {
+  id: Scalars['ID']['input'];
+  runner: AiRunner;
+};
+
+
 export type MutationSetAssistantAccessArgs = {
   disabled: Scalars['Boolean']['input'];
   groups: Array<AssistantGroupInput>;
@@ -1360,6 +1402,20 @@ export type MutationShareInitUploadArgs = {
   parentId: Scalars['ID']['input'];
   size: Scalars['Int64']['input'];
   uploaderName?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type MutationStartAiRunArgs = {
+  context?: InputMaybe<Scalars['String']['input']>;
+  conversationId?: InputMaybe<Scalars['ID']['input']>;
+  model?: InputMaybe<Scalars['String']['input']>;
+  providerId: Scalars['ID']['input'];
+  text: Scalars['String']['input'];
+};
+
+
+export type MutationStopAiRunArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1492,6 +1548,7 @@ export type NotificationTarget = {
 export type NotificationTargetKind =
   | 'ACTIVITY'
   | 'ADMIN'
+  | 'ASSISTANT'
   | 'CREDENTIALS'
   | 'FEED'
   | 'FILE_REQUEST'
@@ -1642,6 +1699,8 @@ export type Query = {
   aiEntries: Array<Scalars['String']['output']>;
   aiProviderKey: Scalars['String']['output'];
   aiProviders: Array<AiProvider>;
+  aiRun?: Maybe<AiRun>;
+  aiRunAvailable: Scalars['Boolean']['output'];
   appPasswords: Array<AppPassword>;
   archiveEntries: ArchiveEntryPage;
   archiveInfo: ArchiveInfo;
@@ -1738,6 +1797,11 @@ export type QueryAiEntriesArgs = {
 
 export type QueryAiProviderKeyArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryAiRunArgs = {
+  conversationId: Scalars['ID']['input'];
 };
 
 
@@ -2410,7 +2474,7 @@ export type SetAssistantAccessMutationVariables = Exact<{
 
 export type SetAssistantAccessMutation = { __typename?: 'Mutation', setAssistantAccess: { __typename?: 'AssistantAccess', disabled: boolean, groups: Array<{ __typename?: 'AssistantGroup', key: string, label: string, scopes: Array<string>, permission: AssistantPermission, defaultPermission: AssistantPermission, outbound: boolean }> } };
 
-export type AiConversationFieldsFragment = { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, createdAt: string, updatedAt: string };
+export type AiConversationFieldsFragment = { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, runner: AiRunner, runStatus?: AiRunStatus | null, createdAt: string, updatedAt: string };
 
 export type AiConversationsQueryVariables = Exact<{
   before?: InputMaybe<Scalars['Time']['input']>;
@@ -2418,14 +2482,14 @@ export type AiConversationsQueryVariables = Exact<{
 }>;
 
 
-export type AiConversationsQuery = { __typename?: 'Query', aiConversations: Array<{ __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, createdAt: string, updatedAt: string }> };
+export type AiConversationsQuery = { __typename?: 'Query', aiConversations: Array<{ __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, runner: AiRunner, runStatus?: AiRunStatus | null, createdAt: string, updatedAt: string }> };
 
 export type AiConversationQueryVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type AiConversationQuery = { __typename?: 'Query', aiConversation: { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, createdAt: string, updatedAt: string } };
+export type AiConversationQuery = { __typename?: 'Query', aiConversation: { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, runner: AiRunner, runStatus?: AiRunStatus | null, createdAt: string, updatedAt: string } };
 
 export type AiEntriesQueryVariables = Exact<{
   conversationId: Scalars['ID']['input'];
@@ -2442,7 +2506,7 @@ export type CreateAiConversationMutationVariables = Exact<{
 }>;
 
 
-export type CreateAiConversationMutation = { __typename?: 'Mutation', createAiConversation: { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, createdAt: string, updatedAt: string } };
+export type CreateAiConversationMutation = { __typename?: 'Mutation', createAiConversation: { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, runner: AiRunner, runStatus?: AiRunStatus | null, createdAt: string, updatedAt: string } };
 
 export type AppendAiEntriesMutationVariables = Exact<{
   conversationId: Scalars['ID']['input'];
@@ -2451,7 +2515,7 @@ export type AppendAiEntriesMutationVariables = Exact<{
 }>;
 
 
-export type AppendAiEntriesMutation = { __typename?: 'Mutation', appendAiEntries: { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, createdAt: string, updatedAt: string } };
+export type AppendAiEntriesMutation = { __typename?: 'Mutation', appendAiEntries: { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, runner: AiRunner, runStatus?: AiRunStatus | null, createdAt: string, updatedAt: string } };
 
 export type UpdateAiConversationMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -2461,7 +2525,7 @@ export type UpdateAiConversationMutationVariables = Exact<{
 }>;
 
 
-export type UpdateAiConversationMutation = { __typename?: 'Mutation', updateAiConversation: { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, createdAt: string, updatedAt: string } };
+export type UpdateAiConversationMutation = { __typename?: 'Mutation', updateAiConversation: { __typename?: 'AiConversation', id: string, title: string, providerId?: string | null, model: string, entries: number, runner: AiRunner, runStatus?: AiRunStatus | null, createdAt: string, updatedAt: string } };
 
 export type DeleteAiConversationMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -2469,6 +2533,54 @@ export type DeleteAiConversationMutationVariables = Exact<{
 
 
 export type DeleteAiConversationMutation = { __typename?: 'Mutation', deleteAiConversation: boolean };
+
+export type AiRunFieldsFragment = { __typename?: 'AiRun', id: string, conversationId: string, status: AiRunStatus, approval?: string | null, error: string };
+
+export type AiRunAvailableQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type AiRunAvailableQuery = { __typename?: 'Query', aiRunAvailable: boolean };
+
+export type AiRunQueryVariables = Exact<{
+  conversationId: Scalars['ID']['input'];
+}>;
+
+
+export type AiRunQuery = { __typename?: 'Query', aiRun?: { __typename?: 'AiRun', id: string, conversationId: string, status: AiRunStatus, approval?: string | null, error: string } | null };
+
+export type StartAiRunMutationVariables = Exact<{
+  conversationId?: InputMaybe<Scalars['ID']['input']>;
+  text: Scalars['String']['input'];
+  context?: InputMaybe<Scalars['String']['input']>;
+  providerId: Scalars['ID']['input'];
+  model?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type StartAiRunMutation = { __typename?: 'Mutation', startAiRun: { __typename?: 'AiRun', id: string, conversationId: string, status: AiRunStatus, approval?: string | null, error: string } };
+
+export type AnswerAiRunMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+  answer: Scalars['String']['input'];
+}>;
+
+
+export type AnswerAiRunMutation = { __typename?: 'Mutation', answerAiRun: boolean };
+
+export type StopAiRunMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type StopAiRunMutation = { __typename?: 'Mutation', stopAiRun: boolean };
+
+export type SetAiConversationRunnerMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+  runner: AiRunner;
+}>;
+
+
+export type SetAiConversationRunnerMutation = { __typename?: 'Mutation', setAiConversationRunner: boolean };
 
 export type LoginMutationVariables = Exact<{
   username: Scalars['String']['input'];
@@ -3672,10 +3784,21 @@ export const AiConversationFieldsFragmentDoc = new TypedDocumentString(`
   providerId
   model
   entries
+  runner
+  runStatus
   createdAt
   updatedAt
 }
     `, {"fragmentName":"AiConversationFields"}) as unknown as TypedDocumentString<AiConversationFieldsFragment, unknown>;
+export const AiRunFieldsFragmentDoc = new TypedDocumentString(`
+    fragment AiRunFields on AiRun {
+  id
+  conversationId
+  status
+  approval
+  error
+}
+    `, {"fragmentName":"AiRunFields"}) as unknown as TypedDocumentString<AiRunFieldsFragment, unknown>;
 export const ClipFieldsFragmentDoc = new TypedDocumentString(`
     fragment ClipFields on Clip {
   id
@@ -4397,6 +4520,8 @@ export const AiConversationsDocument = new TypedDocumentString(`
   providerId
   model
   entries
+  runner
+  runStatus
   createdAt
   updatedAt
 }`) as unknown as TypedDocumentString<AiConversationsQuery, AiConversationsQueryVariables>;
@@ -4412,6 +4537,8 @@ export const AiConversationDocument = new TypedDocumentString(`
   providerId
   model
   entries
+  runner
+  runStatus
   createdAt
   updatedAt
 }`) as unknown as TypedDocumentString<AiConversationQuery, AiConversationQueryVariables>;
@@ -4432,6 +4559,8 @@ export const CreateAiConversationDocument = new TypedDocumentString(`
   providerId
   model
   entries
+  runner
+  runStatus
   createdAt
   updatedAt
 }`) as unknown as TypedDocumentString<CreateAiConversationMutation, CreateAiConversationMutationVariables>;
@@ -4451,6 +4580,8 @@ export const AppendAiEntriesDocument = new TypedDocumentString(`
   providerId
   model
   entries
+  runner
+  runStatus
   createdAt
   updatedAt
 }`) as unknown as TypedDocumentString<AppendAiEntriesMutation, AppendAiEntriesMutationVariables>;
@@ -4471,6 +4602,8 @@ export const UpdateAiConversationDocument = new TypedDocumentString(`
   providerId
   model
   entries
+  runner
+  runStatus
   createdAt
   updatedAt
 }`) as unknown as TypedDocumentString<UpdateAiConversationMutation, UpdateAiConversationMutationVariables>;
@@ -4479,6 +4612,58 @@ export const DeleteAiConversationDocument = new TypedDocumentString(`
   deleteAiConversation(id: $id)
 }
     `) as unknown as TypedDocumentString<DeleteAiConversationMutation, DeleteAiConversationMutationVariables>;
+export const AiRunAvailableDocument = new TypedDocumentString(`
+    query AiRunAvailable {
+  aiRunAvailable
+}
+    `) as unknown as TypedDocumentString<AiRunAvailableQuery, AiRunAvailableQueryVariables>;
+export const AiRunDocument = new TypedDocumentString(`
+    query AiRun($conversationId: ID!) {
+  aiRun(conversationId: $conversationId) {
+    ...AiRunFields
+  }
+}
+    fragment AiRunFields on AiRun {
+  id
+  conversationId
+  status
+  approval
+  error
+}`) as unknown as TypedDocumentString<AiRunQuery, AiRunQueryVariables>;
+export const StartAiRunDocument = new TypedDocumentString(`
+    mutation StartAiRun($conversationId: ID, $text: String!, $context: String, $providerId: ID!, $model: String) {
+  startAiRun(
+    conversationId: $conversationId
+    text: $text
+    context: $context
+    providerId: $providerId
+    model: $model
+  ) {
+    ...AiRunFields
+  }
+}
+    fragment AiRunFields on AiRun {
+  id
+  conversationId
+  status
+  approval
+  error
+}`) as unknown as TypedDocumentString<StartAiRunMutation, StartAiRunMutationVariables>;
+export const AnswerAiRunDocument = new TypedDocumentString(`
+    mutation AnswerAiRun($id: ID!, $answer: String!) {
+  answerAiRun(id: $id, answer: $answer)
+}
+    `) as unknown as TypedDocumentString<AnswerAiRunMutation, AnswerAiRunMutationVariables>;
+export const StopAiRunDocument = new TypedDocumentString(`
+    mutation StopAiRun($id: ID!) {
+  stopAiRun(id: $id)
+}
+    `) as unknown as TypedDocumentString<StopAiRunMutation, StopAiRunMutationVariables>;
+export const SetAiConversationRunnerDocument = new TypedDocumentString(`
+    mutation SetAiConversationRunner($id: ID!, $runner: AiRunner!) {
+  setAiConversationRunner(id: $id, runner: $runner)
+}
+    `) as unknown as TypedDocumentString<SetAiConversationRunnerMutation, SetAiConversationRunnerMutationVariables>;
 export const LoginDocument = new TypedDocumentString(`
     mutation Login($username: String!, $password: String!) {
   login(username: $username, password: $password) {

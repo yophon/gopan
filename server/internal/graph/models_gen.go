@@ -113,13 +113,15 @@ type AdminUser struct {
 }
 
 type AiConversation struct {
-	ID         string    `json:"id"`
-	Title      string    `json:"title"`
-	ProviderID *string   `json:"providerId,omitempty"`
-	Model      string    `json:"model"`
-	Entries    int       `json:"entries"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	ID         string       `json:"id"`
+	Title      string       `json:"title"`
+	ProviderID *string      `json:"providerId,omitempty"`
+	Model      string       `json:"model"`
+	Entries    int          `json:"entries"`
+	Runner     AiRunner     `json:"runner"`
+	RunStatus  *AiRunStatus `json:"runStatus,omitempty"`
+	CreatedAt  time.Time    `json:"createdAt"`
+	UpdatedAt  time.Time    `json:"updatedAt"`
 }
 
 type AiProvider struct {
@@ -142,6 +144,17 @@ type AiProviderInput struct {
 	Models      []string       `json:"models"`
 	Key         *string        `json:"key,omitempty"`
 	DailyTokens *int64         `json:"dailyTokens,omitempty"`
+}
+
+type AiRun struct {
+	ID             string      `json:"id"`
+	ConversationID string      `json:"conversationId"`
+	Status         AiRunStatus `json:"status"`
+	Approval       *string     `json:"approval,omitempty"`
+	Error          string      `json:"error"`
+	CreatedAt      time.Time   `json:"createdAt"`
+	StartedAt      *time.Time  `json:"startedAt,omitempty"`
+	FinishedAt     *time.Time  `json:"finishedAt,omitempty"`
 }
 
 type AppPassword struct {
@@ -1219,6 +1232,124 @@ func (e AiProviderKind) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+type AiRunStatus string
+
+const (
+	AiRunStatusQueued  AiRunStatus = "QUEUED"
+	AiRunStatusRunning AiRunStatus = "RUNNING"
+	AiRunStatusWaiting AiRunStatus = "WAITING"
+	AiRunStatusDone    AiRunStatus = "DONE"
+	AiRunStatusFailed  AiRunStatus = "FAILED"
+	AiRunStatusStopped AiRunStatus = "STOPPED"
+)
+
+var AllAiRunStatus = []AiRunStatus{
+	AiRunStatusQueued,
+	AiRunStatusRunning,
+	AiRunStatusWaiting,
+	AiRunStatusDone,
+	AiRunStatusFailed,
+	AiRunStatusStopped,
+}
+
+func (e AiRunStatus) IsValid() bool {
+	switch e {
+	case AiRunStatusQueued, AiRunStatusRunning, AiRunStatusWaiting, AiRunStatusDone, AiRunStatusFailed, AiRunStatusStopped:
+		return true
+	}
+	return false
+}
+
+func (e AiRunStatus) String() string {
+	return string(e)
+}
+
+func (e *AiRunStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AiRunStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AiRunStatus", str)
+	}
+	return nil
+}
+
+func (e AiRunStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AiRunStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AiRunStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type AiRunner string
+
+const (
+	AiRunnerDevice AiRunner = "DEVICE"
+	AiRunnerServer AiRunner = "SERVER"
+)
+
+var AllAiRunner = []AiRunner{
+	AiRunnerDevice,
+	AiRunnerServer,
+}
+
+func (e AiRunner) IsValid() bool {
+	switch e {
+	case AiRunnerDevice, AiRunnerServer:
+		return true
+	}
+	return false
+}
+
+func (e AiRunner) String() string {
+	return string(e)
+}
+
+func (e *AiRunner) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AiRunner(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AiRunner", str)
+	}
+	return nil
+}
+
+func (e AiRunner) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AiRunner) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AiRunner) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 type ArchiveStatus string
 
 const (
@@ -1933,6 +2064,7 @@ const (
 	NotificationTargetKindAdmin       NotificationTargetKind = "ADMIN"
 	NotificationTargetKindActivity    NotificationTargetKind = "ACTIVITY"
 	NotificationTargetKindFeed        NotificationTargetKind = "FEED"
+	NotificationTargetKindAssistant   NotificationTargetKind = "ASSISTANT"
 )
 
 var AllNotificationTargetKind = []NotificationTargetKind{
@@ -1945,11 +2077,12 @@ var AllNotificationTargetKind = []NotificationTargetKind{
 	NotificationTargetKindAdmin,
 	NotificationTargetKindActivity,
 	NotificationTargetKindFeed,
+	NotificationTargetKindAssistant,
 }
 
 func (e NotificationTargetKind) IsValid() bool {
 	switch e {
-	case NotificationTargetKindNode, NotificationTargetKindFileRequest, NotificationTargetKindLink, NotificationTargetKindJobs, NotificationTargetKindSessions, NotificationTargetKindCredentials, NotificationTargetKindAdmin, NotificationTargetKindActivity, NotificationTargetKindFeed:
+	case NotificationTargetKindNode, NotificationTargetKindFileRequest, NotificationTargetKindLink, NotificationTargetKindJobs, NotificationTargetKindSessions, NotificationTargetKindCredentials, NotificationTargetKindAdmin, NotificationTargetKindActivity, NotificationTargetKindFeed, NotificationTargetKindAssistant:
 		return true
 	}
 	return false

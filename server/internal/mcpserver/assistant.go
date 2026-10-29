@@ -132,8 +132,15 @@ func (s *Server) authenticateAssistant(r *http.Request, bearer string) (*service
 		return nil, service.ErrUnauthenticated
 	}
 	ident, err := s.auth.ParseAccessContext(r.Context(), bearer)
-	if err != nil || ident.Scope != service.ScopeUser {
+	if err != nil {
 		return nil, service.ErrUnauthenticated
+	}
+	// 登录凭证,或服务器上跑的一轮的运行凭证(只认它自己那个对话,doc/34)
+	if ident.Scope != service.ScopeUser {
+		conv, ok := service.AIRunScopeConversation(ident.Scope)
+		if !ok || conv != conversation {
+			return nil, service.ErrUnauthenticated
+		}
 	}
 	u, err := s.auth.GetUser(r.Context(), ident.UserID)
 	if err != nil || u.DisabledAt.Valid {

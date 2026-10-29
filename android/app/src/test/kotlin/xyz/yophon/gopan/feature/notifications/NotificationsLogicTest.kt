@@ -73,6 +73,9 @@ class NotificationsLogicTest {
     fun `feed target goes to the feed`() {
         assertThat(NotificationsLogic.navFor(t(NotificationTargetKind.FEED, "f1"), false)).isEqualTo(NotificationNav.Feed("f1"))
         assertThat(NotificationsLogic.navFor(t(NotificationTargetKind.FEED), false)).isEqualTo(NotificationNav.Feed(null))
+        // 服务器上跑的助手等确认 / 做完了(doc/34):直达这个对话;没有对话 id 只标已读
+        assertThat(NotificationsLogic.navFor(t(NotificationTargetKind.ASSISTANT, "c1"), false)).isEqualTo(NotificationNav.Assistant("c1"))
+        assertThat(NotificationsLogic.navFor(t(NotificationTargetKind.ASSISTANT), false)).isNull()
     }
 
     @Test

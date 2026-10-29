@@ -37,6 +37,8 @@ const (
 	EvMassDelete    = "mass_delete"
 	EvFeedNew       = "feed_new"
 	EvFeedFailed    = "feed_failed"
+	EvAssistantWait = "assistant_wait"
+	EvAssistantDone = "assistant_done"
 )
 
 const (
@@ -63,6 +65,8 @@ var EventKinds = []EventKind{
 	{EvMassDelete, "大量删除(WebDAV / Agent)", true, false},
 	{EvFeedNew, "订阅有新内容", false, false},
 	{EvFeedFailed, "订阅检查失败", true, false},
+	{EvAssistantWait, "服务器上的助手等你确认", true, false},
+	{EvAssistantDone, "服务器上的助手做完了", true, false},
 	{EvBackup, "备份异常", true, true},
 }
 
@@ -88,6 +92,7 @@ const (
 	TgAdmin       = "ADMIN"
 	TgActivity    = "ACTIVITY" // id = 来源(kind:ref),parent_id = 从什么时候起(RFC 3339)
 	TgFeed        = "FEED"
+	TgAssistant   = "ASSISTANT" // id = 对话
 )
 
 type Target struct {
@@ -561,6 +566,8 @@ func TargetPath(t Target) string {
 			p += "?open=" + t.ID
 		}
 		return p
+	case TgAssistant:
+		return "/drive?assistant=" + t.ID
 	case TgFileRequest:
 		return "/shares?tab=requests&id=" + t.ID
 	case TgLink:

@@ -23,7 +23,7 @@ const changesChannel = "gopan_changes"
 const maxChangeFolders = 50
 
 // Change 推给客户端的一条。Topic:files(文件夹里的东西变了)/ chat(传输助手)/ recent(「最近」)/
-// resync(服务端重连过,可能漏了,全部重拉)。
+// resync(服务端重连过,可能漏了,全部重拉)/ assistant(服务器上跑的助手,doc/34)。
 type Change struct {
 	Topic string `json:"t"`
 	// files:变了的文件夹,"" = 根目录;All = 太多了没列
@@ -31,6 +31,9 @@ type Change struct {
 	All     bool     `json:"all,omitempty"`
 	// files:回收站也变了(删除、还原、彻底删除)
 	Trash bool `json:"trash,omitempty"`
+	// assistant:哪个对话、运行时交出来的事件(原样的 JSON)
+	Conversation string          `json:"c,omitempty"`
+	Event        json.RawMessage `json:"e,omitempty"`
 }
 
 type changeMsg struct {
@@ -140,6 +143,9 @@ func (h *ChangeHub) Close() {
 		delete(h.subs, user)
 	}
 }
+
+// Publish 进程内直接推给这个用户连着的设备(不经 Postgres:服务器上跑的助手就在这个进程里,事件也大)。
+func (h *ChangeHub) Publish(user uuid.UUID, c Change) { h.publish(user, c) }
 
 func (h *ChangeHub) publish(user uuid.UUID, c Change) {
 	h.mu.Lock()

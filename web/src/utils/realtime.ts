@@ -8,6 +8,10 @@ export interface Change {
   all?: boolean
   /** files:回收站也变了 */
   trash?: boolean
+  /** assistant:哪个对话(服务器上跑的助手,doc/34) */
+  c?: string
+  /** assistant:运行时交出来的事件 */
+  e?: unknown
 }
 
 /** 一条改动要刷新哪些查询;null = 全部(重连后可能漏了) */
@@ -23,6 +27,9 @@ export function keysFor(c: Change): unknown[][] | null {
       return [['chatMessages']]
     case 'recent':
       return [['recent'], ['recentPlays']]
+    case 'assistant':
+      // 这一轮的状态变了(开始、等确认、结束):对话列表上的「运行中」跟着变;过程中的事件交给助手面板
+      return (c.e as { type?: string } | undefined)?.type === 'run' ? [['aiConversations']] : []
     case 'resync':
       return null
     default:

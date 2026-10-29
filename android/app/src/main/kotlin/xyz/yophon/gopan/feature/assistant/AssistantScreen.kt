@@ -41,6 +41,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -145,6 +146,9 @@ fun AssistantScreen(
                 input = input,
                 onInput = { input = it },
                 contextLabel = viewModel.contextLabel,
+                serverAvailable = ui.serverAvailable,
+                onServer = chat.onServer,
+                onToggleServer = viewModel::setOnServer,
                 running = chat.running,
                 canSend = ui.current != null && !chat.loading && !chat.conflict,
                 onSend = {
@@ -166,7 +170,14 @@ fun AssistantScreen(
                 items(rows.orEmpty(), key = { it.id }) { row ->
                     ListItem(
                         headlineContent = { Text(row.title.ifBlank { stringResource(R.string.assistant_untitled) }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        supportingContent = { Text(formatRelativeTime(row.updatedAt)) },
+                        supportingContent = {
+                            val badge = when (row.runStatus) {
+                                "WAITING" -> stringResource(R.string.assistant_run_waiting)
+                                "RUNNING", "QUEUED" -> stringResource(R.string.assistant_run_running)
+                                else -> null
+                            }
+                            Text(if (badge != null) "$badge · ${formatRelativeTime(row.updatedAt)}" else formatRelativeTime(row.updatedAt))
+                        },
                         trailingContent = {
                             IconButton(onClick = { viewModel.delete(row) }) {
                                 Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.assistant_delete))
@@ -299,6 +310,9 @@ private fun Composer(
     input: String,
     onInput: (String) -> Unit,
     contextLabel: String?,
+    serverAvailable: Boolean,
+    onServer: Boolean,
+    onToggleServer: (Boolean) -> Unit,
     running: Boolean,
     canSend: Boolean,
     onSend: () -> Unit,
@@ -306,8 +320,27 @@ private fun Composer(
 ) {
     // 页面的 Scaffold(NestedScreenInsets)已经让出了底部导航,这里不再加
     Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 8.dp)) {
-        if (contextLabel != null) {
-            Text(contextLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (contextLabel != null || serverAvailable) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    contextLabel.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (serverAvailable) {
+                    // 在服务器上运行(doc/34):这一句交给服务器跑,关掉 App 也照样跑完
+                    Text(stringResource(R.string.assistant_on_server), style = MaterialTheme.typography.bodySmall)
+                    Switch(
+                        checked = onServer,
+                        onCheckedChange = onToggleServer,
+                        enabled = !running,
+                        modifier = Modifier.padding(start = 6.dp).testTag("assistant_on_server"),
+                    )
+                }
+            }
         }
         Row(verticalAlignment = Alignment.Bottom) {
             OutlinedTextField(

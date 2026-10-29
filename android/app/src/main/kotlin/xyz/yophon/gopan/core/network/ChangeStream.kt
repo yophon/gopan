@@ -47,6 +47,10 @@ data class Change(
     val all: Boolean = false,
     /** files:回收站也变了 */
     val trash: Boolean = false,
+    /** assistant:服务器上跑的助手(doc/34)是哪个对话 */
+    @SerialName("c") val conversation: String? = null,
+    /** assistant:运行时交出来的事件,原样 */
+    @SerialName("e") val event: kotlinx.serialization.json.JsonElement? = null,
 ) {
     /** 正开着的这个文件夹([folderId] 为 null = 根目录)要不要刷新 */
     fun touchesFolder(folderId: String?): Boolean =
@@ -64,6 +68,7 @@ data class Change(
         const val CHAT = "chat"
         const val RECENT = "recent"
         const val RESYNC = "resync"
+        const val ASSISTANT = "assistant"
 
         private val json = Json { ignoreUnknownKeys = true }
 

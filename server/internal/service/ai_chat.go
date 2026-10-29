@@ -32,8 +32,10 @@ type AIConversation struct {
 	ProviderID *uuid.UUID
 	Model      string
 	Entries    int32
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	// Runner 在哪跑:device(客户端)/ server(服务器,doc/34)
+	Runner    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type AIChats struct {
@@ -42,11 +44,11 @@ type AIChats struct {
 
 func NewAIChats(pool *pgxpool.Pool) *AIChats { return &AIChats{pool: pool} }
 
-const aiConvCols = `id, title, provider_id, model, entries, created_at, updated_at`
+const aiConvCols = `id, title, provider_id, model, entries, runner, created_at, updated_at`
 
 func scanAIConv(row pgx.Row) (AIConversation, error) {
 	var c AIConversation
-	err := row.Scan(&c.ID, &c.Title, &c.ProviderID, &c.Model, &c.Entries, &c.CreatedAt, &c.UpdatedAt)
+	err := row.Scan(&c.ID, &c.Title, &c.ProviderID, &c.Model, &c.Entries, &c.Runner, &c.CreatedAt, &c.UpdatedAt)
 	return c, err
 }
 

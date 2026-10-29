@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"github.com/google/uuid"
 	"context"
 	"net/http"
 
@@ -27,6 +28,22 @@ func IdentityFrom(ctx context.Context) (*service.Identity, error) {
 		return nil, service.ErrUnauthenticated
 	}
 	return id, nil
+}
+
+// AssistantFrom 助手运行时要用的那几个接口(doc/34):登录用户,或服务器上跑的一轮(ai-run:<对话 id>)。
+// 后者返回它能碰的那个对话;登录用户返回 uuid.Nil(不限)。
+func AssistantFrom(ctx context.Context) (*service.Identity, uuid.UUID, error) {
+	id, err := IdentityFrom(ctx)
+	if err != nil {
+		return nil, uuid.Nil, err
+	}
+	if id.Scope == service.ScopeUser {
+		return id, uuid.Nil, nil
+	}
+	if conv, ok := service.AIRunScopeConversation(id.Scope); ok {
+		return id, conv, nil
+	}
+	return nil, uuid.Nil, service.ErrForbidden
 }
 
 // UserFrom 只接受完整用户身份(拒绝访客 scope)。

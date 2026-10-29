@@ -60,6 +60,8 @@ fragment AiConversationFields on AiConversation {
   providerId
   model
   entries
+  runner
+  runStatus
   createdAt
   updatedAt
 }
@@ -90,4 +92,38 @@ mutation UpdateAiConversation($id: ID!, $title: String, $providerId: ID, $model:
 
 mutation DeleteAiConversation($id: ID!) {
   deleteAiConversation(id: $id)
+}
+
+# 服务器上运行(doc/34)
+
+fragment AiRunFields on AiRun {
+  id
+  conversationId
+  status
+  approval
+  error
+}
+
+query AiRunAvailable {
+  aiRunAvailable
+}
+
+query AiRun($conversationId: ID!) {
+  aiRun(conversationId: $conversationId) { ...AiRunFields }
+}
+
+mutation StartAiRun($conversationId: ID, $text: String!, $context: String, $providerId: ID!, $model: String) {
+  startAiRun(conversationId: $conversationId, text: $text, context: $context, providerId: $providerId, model: $model) { ...AiRunFields }
+}
+
+mutation AnswerAiRun($id: ID!, $answer: String!) {
+  answerAiRun(id: $id, answer: $answer)
+}
+
+mutation StopAiRun($id: ID!) {
+  stopAiRun(id: $id)
+}
+
+mutation SetAiConversationRunner($id: ID!, $runner: AiRunner!) {
+  setAiConversationRunner(id: $id, runner: $runner)
 }

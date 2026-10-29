@@ -111,7 +111,8 @@ func (p *aiProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeArchiveErr(w, &service.Error{Code: "UNAUTHENTICATED", Message: "未登录或凭证已过期"}, http.StatusUnauthorized)
 		return
 	}
-	if ident.Scope != service.ScopeUser {
+	// 登录用户,或服务器上跑的一轮(doc/34)
+	if _, run := service.AIRunScopeConversation(ident.Scope); ident.Scope != service.ScopeUser && !run {
 		writeServiceErr(w, service.ErrForbidden)
 		return
 	}

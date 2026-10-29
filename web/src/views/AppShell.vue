@@ -99,6 +99,19 @@ watch(
   { immediate: true },
 )
 
+// ?assistant=<对话 id>:服务器上跑的助手等确认 / 做完了的通知点进来(doc/34),打开面板里的这个对话
+watch(
+  () => route.query.assistant,
+  async (raw) => {
+    if (typeof raw !== 'string' || !raw) return
+    toggleAssistant(true)
+    void router.replace({ path: route.path, query: withoutQuery(route.query, ['assistant']), hash: route.hash })
+    const { openChatById } = await import('@/assistant/controller')
+    await openChatById(raw).catch(() => {})
+  },
+  { immediate: true },
+)
+
 async function onLogout() {
   navOpen.value = false
   await auth.logoutAction()

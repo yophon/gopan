@@ -33,6 +33,8 @@ query AiConversations($limit: Int) {
     providerId
     model
     updatedAt
+    runner
+    runStatus
   }
 }
 
@@ -52,4 +54,34 @@ mutation SetAssistantAccess($disabled: Boolean!, $groups: [AssistantGroupInput!]
     disabled
     groups { key label permission outbound }
   }
+}
+
+# 服务器上运行(doc/34)
+
+query AiRunAvailable {
+  aiRunAvailable
+}
+
+query AiRun($conversationId: ID!) {
+  aiRun(conversationId: $conversationId) { id conversationId status approval error }
+}
+
+query AiConversationRunner($id: ID!) {
+  aiConversation(id: $id) { id runner }
+}
+
+mutation StartAiRun($conversationId: ID, $text: String!, $context: String, $providerId: ID!, $model: String) {
+  startAiRun(conversationId: $conversationId, text: $text, context: $context, providerId: $providerId, model: $model) { id conversationId status approval error }
+}
+
+mutation AnswerAiRun($id: ID!, $answer: String!) {
+  answerAiRun(id: $id, answer: $answer)
+}
+
+mutation StopAiRun($id: ID!) {
+  stopAiRun(id: $id)
+}
+
+mutation SetAiConversationRunner($id: ID!, $runner: AiRunner!) {
+  setAiConversationRunner(id: $id, runner: $runner)
 }

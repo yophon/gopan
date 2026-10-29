@@ -138,6 +138,8 @@ type ComplexityRoot struct {
 		ID         func(childComplexity int) int
 		Model      func(childComplexity int) int
 		ProviderID func(childComplexity int) int
+		RunStatus  func(childComplexity int) int
+		Runner     func(childComplexity int) int
 		Title      func(childComplexity int) int
 		UpdatedAt  func(childComplexity int) int
 	}
@@ -153,6 +155,17 @@ type ComplexityRoot struct {
 		Site        func(childComplexity int) int
 		UpdatedAt   func(childComplexity int) int
 		UsedTokens  func(childComplexity int) int
+	}
+
+	AiRun struct {
+		Approval       func(childComplexity int) int
+		ConversationID func(childComplexity int) int
+		CreatedAt      func(childComplexity int) int
+		Error          func(childComplexity int) int
+		FinishedAt     func(childComplexity int) int
+		ID             func(childComplexity int) int
+		StartedAt      func(childComplexity int) int
+		Status         func(childComplexity int) int
 	}
 
 	AppPassword struct {
@@ -609,6 +622,7 @@ type ComplexityRoot struct {
 		AdminRevokeLink          func(childComplexity int, id string) int
 		AdminSetDisabled         func(childComplexity int, userID string, disabled bool) int
 		AdminSetQuota            func(childComplexity int, userID string, quotaBytes int64) int
+		AnswerAiRun              func(childComplexity int, id string, answer string) int
 		AppendAiEntries          func(childComplexity int, conversationID string, fromSeq int, entries []string) int
 		CancelJob                func(childComplexity int, id string) int
 		ChangePassword           func(childComplexity int, oldPassword string, newPassword string) int
@@ -680,6 +694,7 @@ type ComplexityRoot struct {
 		SaveProgress             func(childComplexity int, nodeID string, position float64, duration float64) int
 		SaveTextFile             func(childComplexity int, nodeID string, content string, baseSha256 *string) int
 		SendChatMessage          func(childComplexity int, body *string, nodeID *string) int
+		SetAiConversationRunner  func(childComplexity int, id string, runner AiRunner) int
 		SetAssistantAccess       func(childComplexity int, disabled bool, groups []*AssistantGroupInput) int
 		SetClipPrefs             func(childComplexity int, input ClipPrefsInput) int
 		SetLinkPrefs             func(childComplexity int, input LinkPrefsInput) int
@@ -690,6 +705,8 @@ type ComplexityRoot struct {
 		ShareCompleteUpload      func(childComplexity int, sessionID string, etags []*PartEtag) int
 		ShareEnsureFolder        func(childComplexity int, parentID string, name string, uploaderName *string) int
 		ShareInitUpload          func(childComplexity int, parentID string, name string, size int64, uploaderName *string) int
+		StartAiRun               func(childComplexity int, conversationID *string, text string, context *string, providerID string, model *string) int
+		StopAiRun                func(childComplexity int, id string) int
 		TestNotifyChannel        func(childComplexity int, id string) int
 		UndoActivities           func(childComplexity int, selection UndoSelection) int
 		UpdateAiConversation     func(childComplexity int, id string, title *string, providerID *string, model *string) int
@@ -844,6 +861,8 @@ type ComplexityRoot struct {
 		AiEntries                 func(childComplexity int, conversationID string, fromSeq *int) int
 		AiProviderKey             func(childComplexity int, id string) int
 		AiProviders               func(childComplexity int) int
+		AiRun                     func(childComplexity int, conversationID string) int
+		AiRunAvailable            func(childComplexity int) int
 		AppPasswords              func(childComplexity int) int
 		ArchiveEntries            func(childComplexity int, nodeID string, path *string, cursor *string) int
 		ArchiveInfo               func(childComplexity int, nodeID string) int
@@ -1203,6 +1222,10 @@ type MutationResolver interface {
 	AppendAiEntries(ctx context.Context, conversationID string, fromSeq int, entries []string) (*AiConversation, error)
 	UpdateAiConversation(ctx context.Context, id string, title *string, providerID *string, model *string) (*AiConversation, error)
 	DeleteAiConversation(ctx context.Context, id string) (bool, error)
+	StartAiRun(ctx context.Context, conversationID *string, text string, context *string, providerID string, model *string) (*AiRun, error)
+	AnswerAiRun(ctx context.Context, id string, answer string) (bool, error)
+	StopAiRun(ctx context.Context, id string) (bool, error)
+	SetAiConversationRunner(ctx context.Context, id string, runner AiRunner) (bool, error)
 }
 type NodeResolver interface {
 	Preview(ctx context.Context, obj *Node) (*PreviewInfo, error)
@@ -1287,6 +1310,8 @@ type QueryResolver interface {
 	Clip(ctx context.Context, id string) (*Clip, error)
 	NodeClip(ctx context.Context, nodeID string) (*Clip, error)
 	ClipPrefs(ctx context.Context) (*ClipPrefs, error)
+	AiRunAvailable(ctx context.Context) (bool, error)
+	AiRun(ctx context.Context, conversationID string) (*AiRun, error)
 	AiProviders(ctx context.Context) ([]*AiProvider, error)
 	AdminAiProviders(ctx context.Context) ([]*AiProvider, error)
 	AiProviderKey(ctx context.Context, id string) (string, error)
@@ -1722,6 +1747,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AiConversation.ProviderID(childComplexity), true
+	case "AiConversation.runStatus":
+		if e.ComplexityRoot.AiConversation.RunStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiConversation.RunStatus(childComplexity), true
+	case "AiConversation.runner":
+		if e.ComplexityRoot.AiConversation.Runner == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiConversation.Runner(childComplexity), true
 	case "AiConversation.title":
 		if e.ComplexityRoot.AiConversation.Title == nil {
 			break
@@ -1795,6 +1832,55 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AiProvider.UsedTokens(childComplexity), true
+
+	case "AiRun.approval":
+		if e.ComplexityRoot.AiRun.Approval == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiRun.Approval(childComplexity), true
+	case "AiRun.conversationId":
+		if e.ComplexityRoot.AiRun.ConversationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiRun.ConversationID(childComplexity), true
+	case "AiRun.createdAt":
+		if e.ComplexityRoot.AiRun.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiRun.CreatedAt(childComplexity), true
+	case "AiRun.error":
+		if e.ComplexityRoot.AiRun.Error == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiRun.Error(childComplexity), true
+	case "AiRun.finishedAt":
+		if e.ComplexityRoot.AiRun.FinishedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiRun.FinishedAt(childComplexity), true
+	case "AiRun.id":
+		if e.ComplexityRoot.AiRun.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiRun.ID(childComplexity), true
+	case "AiRun.startedAt":
+		if e.ComplexityRoot.AiRun.StartedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiRun.StartedAt(childComplexity), true
+	case "AiRun.status":
+		if e.ComplexityRoot.AiRun.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AiRun.Status(childComplexity), true
 
 	case "AppPassword.createdAt":
 		if e.ComplexityRoot.AppPassword.CreatedAt == nil {
@@ -3721,6 +3807,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AdminSetQuota(childComplexity, args["userId"].(string), args["quotaBytes"].(int64)), true
+	case "Mutation.answerAiRun":
+		if e.ComplexityRoot.Mutation.AnswerAiRun == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_answerAiRun_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AnswerAiRun(childComplexity, args["id"].(string), args["answer"].(string)), true
 	case "Mutation.appendAiEntries":
 		if e.ComplexityRoot.Mutation.AppendAiEntries == nil {
 			break
@@ -4467,6 +4564,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SendChatMessage(childComplexity, args["body"].(*string), args["nodeId"].(*string)), true
+	case "Mutation.setAiConversationRunner":
+		if e.ComplexityRoot.Mutation.SetAiConversationRunner == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setAiConversationRunner_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetAiConversationRunner(childComplexity, args["id"].(string), args["runner"].(AiRunner)), true
 	case "Mutation.setAssistantAccess":
 		if e.ComplexityRoot.Mutation.SetAssistantAccess == nil {
 			break
@@ -4577,6 +4685,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ShareInitUpload(childComplexity, args["parentId"].(string), args["name"].(string), args["size"].(int64), args["uploaderName"].(*string)), true
+	case "Mutation.startAiRun":
+		if e.ComplexityRoot.Mutation.StartAiRun == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_startAiRun_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.StartAiRun(childComplexity, args["conversationId"].(*string), args["text"].(string), args["context"].(*string), args["providerId"].(string), args["model"].(*string)), true
+	case "Mutation.stopAiRun":
+		if e.ComplexityRoot.Mutation.StopAiRun == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_stopAiRun_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.StopAiRun(childComplexity, args["id"].(string)), true
 	case "Mutation.testNotifyChannel":
 		if e.ComplexityRoot.Mutation.TestNotifyChannel == nil {
 			break
@@ -5299,6 +5429,23 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AiProviders(childComplexity), true
+	case "Query.aiRun":
+		if e.ComplexityRoot.Query.AiRun == nil {
+			break
+		}
+
+		args, err := ec.field_Query_aiRun_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AiRun(childComplexity, args["conversationId"].(string)), true
+	case "Query.aiRunAvailable":
+		if e.ComplexityRoot.Query.AiRunAvailable == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.AiRunAvailable(childComplexity), true
 	case "Query.appPasswords":
 		if e.ComplexityRoot.Query.AppPasswords == nil {
 			break
@@ -6888,7 +7035,7 @@ enum NotificationLevel { INFO, WARN, ALERT }
 
 # 点开通知跳到哪。NODE:id 是文件 / 文件夹,parentId 是所在文件夹(null = 根目录);
 # FILE_REQUEST / LINK:id 是收集链接 / 直链;JOBS:后台任务列表;SESSIONS:登录设备;CREDENTIALS:新建的凭据,id 是 webdav(应用密码)/ mcp(API Key、Agent 授权)/ img(图床密钥);ADMIN:管理端
-enum NotificationTargetKind { NODE, FILE_REQUEST, LINK, JOBS, SESSIONS, CREDENTIALS, ADMIN, ACTIVITY, FEED }
+enum NotificationTargetKind { NODE, FILE_REQUEST, LINK, JOBS, SESSIONS, CREDENTIALS, ADMIN, ACTIVITY, FEED, ASSISTANT }
 
 type NotificationTarget {
   kind: NotificationTargetKind!
@@ -8138,11 +8285,35 @@ type AiConversation {
   model: String!
   # 条目数,也是下一次追加的 fromSeq
   entries: Int!
+  # 在哪跑:DEVICE(客户端,doc/33)/ SERVER(服务器,doc/34)
+  runner: AiRunner!
+  # 服务器上没跑完的这一轮的状态(列表上的「运行中」「等你确认」);没有为 null
+  runStatus: AiRunStatus
   createdAt: Time!
   updatedAt: Time!
 }
 
+enum AiRunner { DEVICE, SERVER }
+enum AiRunStatus { QUEUED, RUNNING, WAITING, DONE, FAILED, STOPPED }
+
+# 服务器上跑的一轮(doc/34)
+type AiRun {
+  id: ID!
+  conversationId: ID!
+  status: AiRunStatus!
+  # 等确认时的确认卡(JSON:title / names / more / detail / canAllowSession)
+  approval: String
+  error: String!
+  createdAt: Time!
+  startedAt: Time
+  finishedAt: Time
+}
+
 extend type Query {
+  # 服务器上能不能跑助手(装了运行环境)
+  aiRunAvailable: Boolean!
+  # 这个对话最近的一轮;没有为 null
+  aiRun(conversationId: ID!): AiRun
   # 自己的 + 站点提供的(站点的在前)
   aiProviders: [AiProvider!]!
   # 管理员:站点提供的
@@ -8171,6 +8342,12 @@ extend type Mutation {
   appendAiEntries(conversationId: ID!, fromSeq: Int!, entries: [String!]!): AiConversation!
   updateAiConversation(id: ID!, title: String, providerId: ID, model: String): AiConversation!
   deleteAiConversation(id: ID!): Boolean!
+  # 交给服务器跑(doc/34):没有对话就先建;同一个对话同时只能有一轮(AI_RUN_BUSY)
+  startAiRun(conversationId: ID, text: String!, context: String, providerId: ID!, model: String): AiRun!
+  # 确认卡的答复:once / session / deny
+  answerAiRun(id: ID!, answer: String!): Boolean!
+  stopAiRun(id: ID!): Boolean!
+  setAiConversationRunner(id: ID!, runner: AiRunner!): Boolean!
 }
 `, BuiltIn: false},
 }
@@ -8368,6 +8545,10 @@ func (ec *executionContext) childFields_AiConversation(ctx context.Context, fiel
 		return ec.fieldContext_AiConversation_model(ctx, field)
 	case "entries":
 		return ec.fieldContext_AiConversation_entries(ctx, field)
+	case "runner":
+		return ec.fieldContext_AiConversation_runner(ctx, field)
+	case "runStatus":
+		return ec.fieldContext_AiConversation_runStatus(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_AiConversation_createdAt(ctx, field)
 	case "updatedAt":
@@ -8400,6 +8581,28 @@ func (ec *executionContext) childFields_AiProvider(ctx context.Context, field gr
 		return ec.fieldContext_AiProvider_updatedAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type AiProvider", field.Name)
+}
+
+func (ec *executionContext) childFields_AiRun(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_AiRun_id(ctx, field)
+	case "conversationId":
+		return ec.fieldContext_AiRun_conversationId(ctx, field)
+	case "status":
+		return ec.fieldContext_AiRun_status(ctx, field)
+	case "approval":
+		return ec.fieldContext_AiRun_approval(ctx, field)
+	case "error":
+		return ec.fieldContext_AiRun_error(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_AiRun_createdAt(ctx, field)
+	case "startedAt":
+		return ec.fieldContext_AiRun_startedAt(ctx, field)
+	case "finishedAt":
+		return ec.fieldContext_AiRun_finishedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AiRun", field.Name)
 }
 
 func (ec *executionContext) childFields_AppPassword(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -10148,6 +10351,28 @@ func (ec *executionContext) field_Mutation_adminSetQuota_args(ctx context.Contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_answerAiRun_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "answer",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["answer"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_appendAiEntries_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -11388,6 +11613,28 @@ func (ec *executionContext) field_Mutation_sendChatMessage_args(ctx context.Cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_setAiConversationRunner_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "runner",
+		func(ctx context.Context, v any) (AiRunner, error) {
+			return ec.unmarshalNAiRunner2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRunner(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["runner"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_setAssistantAccess_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -11613,6 +11860,66 @@ func (ec *executionContext) field_Mutation_shareInitUpload_args(ctx context.Cont
 		return nil, err
 	}
 	args["uploaderName"] = arg3
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_startAiRun_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "conversationId",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["conversationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "text",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["text"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "context",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["context"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "providerId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["providerId"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "model",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["model"] = arg4
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_stopAiRun_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -11927,6 +12234,20 @@ func (ec *executionContext) field_Query_aiProviderKey_args(ctx context.Context, 
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_aiRun_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "conversationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["conversationId"] = arg0
 	return args, nil
 }
 
@@ -14405,6 +14726,52 @@ func (ec *executionContext) fieldContext_AiConversation_entries(_ context.Contex
 	return graphql.NewScalarFieldContext("AiConversation", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _AiConversation_runner(ctx context.Context, field graphql.CollectedField, obj *AiConversation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiConversation_runner(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Runner, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v AiRunner) graphql.Marshaler {
+			return ec.marshalNAiRunner2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRunner(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiConversation_runner(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiConversation", field, false, false, errors.New("field of type AiRunner does not have child fields"))
+}
+
+func (ec *executionContext) _AiConversation_runStatus(ctx context.Context, field graphql.CollectedField, obj *AiConversation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiConversation_runStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RunStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AiRunStatus) graphql.Marshaler {
+			return ec.marshalOAiRunStatus2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRunStatus(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AiConversation_runStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiConversation", field, false, false, errors.New("field of type AiRunStatus does not have child fields"))
+}
+
 func (ec *executionContext) _AiConversation_createdAt(ctx context.Context, field graphql.CollectedField, obj *AiConversation) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -14679,6 +15046,190 @@ func (ec *executionContext) _AiProvider_updatedAt(ctx context.Context, field gra
 }
 func (ec *executionContext) fieldContext_AiProvider_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("AiProvider", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _AiRun_id(ctx context.Context, field graphql.CollectedField, obj *AiRun) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiRun_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiRun_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiRun", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AiRun_conversationId(ctx context.Context, field graphql.CollectedField, obj *AiRun) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiRun_conversationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ConversationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiRun_conversationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiRun", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AiRun_status(ctx context.Context, field graphql.CollectedField, obj *AiRun) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiRun_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v AiRunStatus) graphql.Marshaler {
+			return ec.marshalNAiRunStatus2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRunStatus(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiRun_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiRun", field, false, false, errors.New("field of type AiRunStatus does not have child fields"))
+}
+
+func (ec *executionContext) _AiRun_approval(ctx context.Context, field graphql.CollectedField, obj *AiRun) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiRun_approval(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Approval, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AiRun_approval(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiRun", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AiRun_error(ctx context.Context, field graphql.CollectedField, obj *AiRun) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiRun_error(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Error, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiRun_error(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiRun", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AiRun_createdAt(ctx context.Context, field graphql.CollectedField, obj *AiRun) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiRun_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AiRun_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiRun", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _AiRun_startedAt(ctx context.Context, field graphql.CollectedField, obj *AiRun) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiRun_startedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.StartedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AiRun_startedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiRun", field, false, false, errors.New("field of type Time does not have child fields"))
+}
+
+func (ec *executionContext) _AiRun_finishedAt(ctx context.Context, field graphql.CollectedField, obj *AiRun) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AiRun_finishedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FinishedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AiRun_finishedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AiRun", field, false, false, errors.New("field of type Time does not have child fields"))
 }
 
 func (ec *executionContext) _AppPassword_id(ctx context.Context, field graphql.CollectedField, obj *AppPassword) (ret graphql.Marshaler) {
@@ -25988,6 +26539,182 @@ func (ec *executionContext) fieldContext_Mutation_deleteAiConversation(ctx conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_startAiRun(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_startAiRun(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().StartAiRun(ctx, fc.Args["conversationId"].(*string), fc.Args["text"].(string), fc.Args["context"].(*string), fc.Args["providerId"].(string), fc.Args["model"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AiRun) graphql.Marshaler {
+			return ec.marshalNAiRun2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRun(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_startAiRun(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AiRun(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_startAiRun_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_answerAiRun(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_answerAiRun(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AnswerAiRun(ctx, fc.Args["id"].(string), fc.Args["answer"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_answerAiRun(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_answerAiRun_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_stopAiRun(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_stopAiRun(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().StopAiRun(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_stopAiRun(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_stopAiRun_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setAiConversationRunner(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_setAiConversationRunner(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetAiConversationRunner(ctx, fc.Args["id"].(string), fc.Args["runner"].(AiRunner))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_setAiConversationRunner(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setAiConversationRunner_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Node_id(ctx context.Context, field graphql.CollectedField, obj *Node) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -30816,6 +31543,73 @@ func (ec *executionContext) fieldContext_Query_clipPrefs(_ context.Context, fiel
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_ClipPrefs(ctx, field)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_aiRunAvailable(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_aiRunAvailable(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().AiRunAvailable(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_aiRunAvailable(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _Query_aiRun(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_aiRun(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AiRun(ctx, fc.Args["conversationId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AiRun) graphql.Marshaler {
+			return ec.marshalOAiRun2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRun(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_aiRun(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AiRun(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_aiRun_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -36172,6 +36966,16 @@ func (ec *executionContext) _AiConversation(ctx context.Context, sel ast.Selecti
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "runner":
+			out.Values[i] = ec._AiConversation_runner(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "runStatus":
+			out.Values[i] = ec._AiConversation_runStatus(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "createdAt":
 			out.Values[i] = ec._AiConversation_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -36263,6 +37067,79 @@ func (ec *executionContext) _AiProvider(ctx context.Context, sel ast.SelectionSe
 		case "updatedAt":
 			out.Values[i] = ec._AiProvider_updatedAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var aiRunImplementors = []string{"AiRun"}
+
+func (ec *executionContext) _AiRun(ctx context.Context, sel ast.SelectionSet, obj *AiRun) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, aiRunImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AiRun")
+		case "id":
+			out.Values[i] = ec._AiRun_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "conversationId":
+			out.Values[i] = ec._AiRun_conversationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._AiRun_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "approval":
+			out.Values[i] = ec._AiRun_approval(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "error":
+			out.Values[i] = ec._AiRun_error(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._AiRun_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "startedAt":
+			out.Values[i] = ec._AiRun_startedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "finishedAt":
+			out.Values[i] = ec._AiRun_finishedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:
@@ -40332,6 +41209,34 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "startAiRun":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_startAiRun(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "answerAiRun":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_answerAiRun(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "stopAiRun":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_stopAiRun(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "setAiConversationRunner":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setAiConversationRunner(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -43108,6 +44013,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "aiRunAvailable":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_aiRunAvailable(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "aiRun":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_aiRun(ctx, field)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "aiProviders":
 			field := field
 
@@ -45209,6 +46158,40 @@ func (ec *executionContext) unmarshalNAiProviderKind2githubᚗcomᚋyophonᚋgop
 }
 
 func (ec *executionContext) marshalNAiProviderKind2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiProviderKind(ctx context.Context, sel ast.SelectionSet, v AiProviderKind) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNAiRun2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRun(ctx context.Context, sel ast.SelectionSet, v AiRun) graphql.Marshaler {
+	return ec._AiRun(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAiRun2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRun(ctx context.Context, sel ast.SelectionSet, v *AiRun) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AiRun(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNAiRunStatus2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRunStatus(ctx context.Context, v any) (AiRunStatus, error) {
+	var res AiRunStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNAiRunStatus2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRunStatus(ctx context.Context, sel ast.SelectionSet, v AiRunStatus) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) unmarshalNAiRunner2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRunner(ctx context.Context, v any) (AiRunner, error) {
+	var res AiRunner
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNAiRunner2githubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRunner(ctx context.Context, sel ast.SelectionSet, v AiRunner) graphql.Marshaler {
 	return v
 }
 
@@ -47608,6 +48591,29 @@ func (ec *executionContext) unmarshalOActorKind2ᚖgithubᚗcomᚋyophonᚋgopan
 }
 
 func (ec *executionContext) marshalOActorKind2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐActorKind(ctx context.Context, sel ast.SelectionSet, v *ActorKind) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
+func (ec *executionContext) marshalOAiRun2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRun(ctx context.Context, sel ast.SelectionSet, v *AiRun) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._AiRun(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOAiRunStatus2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRunStatus(ctx context.Context, v any) (*AiRunStatus, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(AiRunStatus)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOAiRunStatus2ᚖgithubᚗcomᚋyophonᚋgopanᚋserverᚋinternalᚋgraphᚐAiRunStatus(ctx context.Context, sel ast.SelectionSet, v *AiRunStatus) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}

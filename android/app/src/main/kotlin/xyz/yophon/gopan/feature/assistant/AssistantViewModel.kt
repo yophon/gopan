@@ -31,6 +31,8 @@ data class AssistantUi(
     val direct: Boolean = false,
     val history: List<AiConversationRow>? = null,
     val message: String? = null,
+    /** 服务器上能不能跑(装了运行环境,doc/34) */
+    val serverAvailable: Boolean = false,
 ) {
     val current: Pair<AiProvider, String>? get() = providers?.let { AssistantLogic.resolvePick(it, pick) }
 }
@@ -62,7 +64,13 @@ class AssistantViewModel @Inject constructor(
             }
         }
         refreshProviders()
+        viewModelScope.launch {
+            runCatching { repo.runAvailable() }.onSuccess { a -> _ui.update { it.copy(serverAvailable = a) } }
+        }
+        route.conversation?.let { engine.open(it) }
     }
+
+    fun setOnServer(on: Boolean) = engine.setOnServer(on)
 
     fun refreshProviders() {
         viewModelScope.launch {
@@ -104,7 +112,7 @@ class AssistantViewModel @Inject constructor(
     }
 
     fun open(row: AiConversationRow) {
-        engine.open(row.id)
+        engine.open(row.id, server = row.runner == "SERVER")
         val providers = _ui.value.providers.orEmpty()
         val p = providers.firstOrNull { it.id == row.providerId }
         if (p != null && row.model in p.models) pick(p, row.model)

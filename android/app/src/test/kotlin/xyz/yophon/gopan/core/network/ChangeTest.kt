@@ -35,4 +35,13 @@ class ChangeTest {
         assertThat(resync.touchesTrash).isTrue()
         assertThat(resync.touchesChat).isTrue()
     }
+
+    @Test
+    fun `assistant events carry the conversation and the raw event`() {
+        val c = Change.parse("""{"t":"assistant","c":"c1","e":{"type":"run","run":{"id":"r1","status":"waiting"}}}""")!!
+        assertThat(c.topic).isEqualTo(Change.ASSISTANT)
+        assertThat(c.conversation).isEqualTo("c1")
+        assertThat(c.event.toString()).contains("\"status\":\"waiting\"")
+        assertThat(c.touchesFolder(null)).isFalse()
+    }
 }

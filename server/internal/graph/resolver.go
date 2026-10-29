@@ -40,4 +40,6 @@ type Resolver struct {
 	AI        *service.AI
 	AIChats   *service.AIChats
 	Assistant *service.Assistant
+	// AIRuns 助手在服务器上运行(doc/34)
+	AIRuns *service.AIRuns
 }

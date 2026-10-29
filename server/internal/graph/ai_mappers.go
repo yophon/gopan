@@ -3,10 +3,12 @@ package graph
 // 助手(doc/33)的 GraphQL 转换。
 
 import (
+	"context"
 	"strings"
 
 	"github.com/google/uuid"
 
+	"github.com/yophon/gopan/server/internal/httpx"
 	"github.com/yophon/gopan/server/internal/service"
 )
 
@@ -48,7 +50,7 @@ func gqlAssistantAccess(a service.AssistantAccess) *AssistantAccess {
 
 func gqlAiConversation(c service.AIConversation) *AiConversation {
 	out := &AiConversation{
-		ID: c.ID.String(), Title: c.Title, Model: c.Model, Entries: int(c.Entries),
+		ID: c.ID.String(), Title: c.Title, Model: c.Model, Entries: int(c.Entries), Runner: AiRunner(strings.ToUpper(c.Runner)),
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 	}
 	if c.ProviderID != nil {
@@ -67,4 +69,32 @@ func optionalUUID(s *string) (*uuid.UUID, error) {
 		return nil, service.ErrNotFound
 	}
 	return &id, nil
+}
+
+// assistantConversation 助手运行时读写对话:登录用户随意;服务器上跑的一轮只能碰它自己那个对话(doc/34)。
+func assistantConversation(ctx context.Context, raw string) (*service.Identity, uuid.UUID, error) {
+	ident, only, err := httpx.AssistantFrom(ctx)
+	if err != nil {
+		return nil, uuid.Nil, err
+	}
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return nil, uuid.Nil, service.ErrNotFound
+	}
+	if only != uuid.Nil && only != id {
+		return nil, uuid.Nil, service.ErrForbidden
+	}
+	return ident, id, nil
+}
+
+func gqlAiRun(v service.AIRunView) *AiRun {
+	out := &AiRun{
+		ID: v.ID.String(), ConversationID: v.ConversationID.String(), Status: AiRunStatus(strings.ToUpper(v.Status)),
+		Error: v.Error, CreatedAt: v.CreatedAt, StartedAt: v.StartedAt, FinishedAt: v.FinishedAt,
+	}
+	if len(v.Approval) > 0 {
+		s := string(v.Approval)
+		out.Approval = &s
+	}
+	return out
 }

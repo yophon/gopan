@@ -4,7 +4,15 @@ import androidx.compose.runtime.Immutable
 import com.apollographql.apollo.ApolloClient
 import com.apollographql.apollo.api.Optional
 import xyz.yophon.gopan.core.network.requireData
+import xyz.yophon.gopan.graphql.AiConversationRunnerQuery
 import xyz.yophon.gopan.graphql.AiConversationsQuery
+import xyz.yophon.gopan.graphql.AiRunAvailableQuery
+import xyz.yophon.gopan.graphql.AiRunQuery
+import xyz.yophon.gopan.graphql.AnswerAiRunMutation
+import xyz.yophon.gopan.graphql.SetAiConversationRunnerMutation
+import xyz.yophon.gopan.graphql.StartAiRunMutation
+import xyz.yophon.gopan.graphql.StopAiRunMutation
+import xyz.yophon.gopan.graphql.type.AiRunner
 import xyz.yophon.gopan.graphql.AiProvidersQuery
 import xyz.yophon.gopan.graphql.AssistantAccessQuery
 import xyz.yophon.gopan.graphql.CreateAiProviderMutation
@@ -34,8 +42,21 @@ data class AiProvider(
     val usedTokens: Long,
 )
 
+/** [runner] 是 DEVICE / SERVER;[runStatus] 是服务器上没跑完的这一轮(QUEUED / RUNNING / WAITING),没有为 null */
 @Immutable
-data class AiConversationRow(val id: String, val title: String, val providerId: String?, val model: String, val updatedAt: String)
+data class AiConversationRow(
+    val id: String,
+    val title: String,
+    val providerId: String?,
+    val model: String,
+    val updatedAt: String,
+    val runner: String = "DEVICE",
+    val runStatus: String? = null,
+)
+
+/** 服务器上跑的一轮(doc/34);[status] 小写(queued / running / waiting / done / failed / stopped),[approval] 是确认卡的 JSON */
+@Immutable
+data class AiRun(val id: String, val conversationId: String, val status: String, val approval: String?, val error: String)
 
 /** 助手权限表的一行;[permission] 是 ALLOW / ASK / DENY */
 @Immutable
@@ -56,6 +77,15 @@ interface AssistantRepository {
     suspend fun deleteConversation(id: String)
     suspend fun access(): AssistantAccess
     suspend fun setAccess(disabled: Boolean, changes: Map<String, String>): AssistantAccess
+
+    // 服务器上运行(doc/34)
+    suspend fun runAvailable(): Boolean
+    suspend fun currentRun(conversationId: String): AiRun?
+    suspend fun startRun(conversationId: String?, text: String, context: String, providerId: String, model: String): AiRun
+    suspend fun answerRun(runId: String, answer: String)
+    suspend fun stopRun(runId: String)
+    suspend fun setRunner(conversationId: String, server: Boolean)
+    suspend fun runner(conversationId: String): String
 }
 
 @Singleton
@@ -86,7 +116,7 @@ class ApolloAssistantRepository @Inject constructor(private val apollo: ApolloCl
 
     override suspend fun conversations(): List<AiConversationRow> =
         apollo.query(AiConversationsQuery(limit = Optional.present(100))).execute().requireData().aiConversations.map {
-            AiConversationRow(it.id, it.title, it.providerId, it.model, it.updatedAt)
+            AiConversationRow(it.id, it.title, it.providerId, it.model, it.updatedAt, it.runner.rawValue, it.runStatus?.rawValue)
         }
 
     override suspend fun deleteConversation(id: String) {
@@ -96,6 +126,35 @@ class ApolloAssistantRepository @Inject constructor(private val apollo: ApolloCl
     override suspend fun access(): AssistantAccess = apollo.query(AssistantAccessQuery()).execute().requireData().assistantAccess.let { a ->
         AssistantAccess(a.disabled, a.groups.map { AssistantGroup(it.key, it.label, it.permission.rawValue, it.outbound) })
     }
+
+    override suspend fun runAvailable(): Boolean = apollo.query(AiRunAvailableQuery()).execute().requireData().aiRunAvailable
+
+    override suspend fun currentRun(conversationId: String): AiRun? =
+        apollo.query(AiRunQuery(conversationId)).execute().requireData().aiRun?.let {
+            AiRun(it.id, it.conversationId, it.status.rawValue.lowercase(), it.approval, it.error)
+        }
+
+    override suspend fun startRun(conversationId: String?, text: String, context: String, providerId: String, model: String): AiRun {
+        val r = apollo.mutation(
+            StartAiRunMutation(Optional.presentIfNotNull(conversationId), text, Optional.present(context), providerId, Optional.present(model)),
+        ).execute().requireData().startAiRun
+        return AiRun(r.id, r.conversationId, r.status.rawValue.lowercase(), r.approval, r.error)
+    }
+
+    override suspend fun answerRun(runId: String, answer: String) {
+        apollo.mutation(AnswerAiRunMutation(runId, answer)).execute().requireData()
+    }
+
+    override suspend fun stopRun(runId: String) {
+        apollo.mutation(StopAiRunMutation(runId)).execute().requireData()
+    }
+
+    override suspend fun setRunner(conversationId: String, server: Boolean) {
+        apollo.mutation(SetAiConversationRunnerMutation(conversationId, if (server) AiRunner.SERVER else AiRunner.DEVICE)).execute().requireData()
+    }
+
+    override suspend fun runner(conversationId: String): String =
+        apollo.query(AiConversationRunnerQuery(conversationId)).execute().requireData().aiConversation.runner.rawValue
 
     override suspend fun setAccess(disabled: Boolean, changes: Map<String, String>): AssistantAccess {
         val groups = changes.map { (k, v) -> AssistantGroupInput(key = k, permission = AssistantPermission.safeValueOf(v)) }

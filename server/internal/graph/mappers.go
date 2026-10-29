@@ -278,6 +278,9 @@ func (r *Resolver) requireNodeAccess(ctx context.Context, nodeID uuid.UUID) (*se
 	if err != nil {
 		return nil, err
 	}
+	if _, ok := service.AIRunScopeConversation(ident.Scope); ok {
+		return ident, nil // 服务器上跑的助手查名字(确认卡):节点照样按属主取(doc/34)
+	}
 	if ident.Scope != service.ScopeUser {
 		if err := r.Shares.Authorize(ctx, ident, nodeID); err != nil {
 			return nil, err

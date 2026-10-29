@@ -38,3 +38,10 @@ describe('parseEvents', () => {
     expect(parseEvents('data: {"t":"recent"}\r\n\r\ndata: oops\n\n').events).toEqual([{ t: 'recent' }])
   })
 })
+
+describe('服务器上跑的助手(doc/34)', () => {
+  it('这一轮的状态变了才刷新对话列表,过程中的事件不刷', () => {
+    expect(keysFor({ t: 'assistant', c: 'c1', e: { type: 'run', run: { id: 'r', status: 'waiting' } } })).toEqual([['aiConversations']])
+    expect(keysFor({ t: 'assistant', c: 'c1', e: { type: 'live', text: '…' } })).toEqual([])
+  })
+})

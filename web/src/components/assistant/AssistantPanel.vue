@@ -6,8 +6,8 @@ import { Clock, Close, Delete, Plus, Setting } from '@element-plus/icons-vue'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
-import { AiConversationsDocument, AiProvidersDocument, DeleteAiConversationDocument, NodeDocument } from '@/api/gen/graphql'
-import { canSend, chat, newChat, openChat, send, stop } from '@/assistant/controller'
+import { AiConversationsDocument, AiProvidersDocument, AiRunAvailableDocument, DeleteAiConversationDocument, NodeDocument } from '@/api/gen/graphql'
+import { canSend, chat, newChat, openChat, send, setOnServer, stop } from '@/assistant/controller'
 import { toolLabel } from '@/assistant/describe'
 import { assistantContext, loadMode, loadPick, savePick, toggleAssistant, type ConnectionMode } from '@/assistant/state'
 import { useBreakpoints } from '@/composables/breakpoints'
@@ -44,6 +44,12 @@ const pickValue = computed({
   },
 })
 const mode = ref<ConnectionMode>(loadMode())
+
+// 在服务器上运行(doc/34):服务器装了运行环境才显示开关
+const { data: runAvailable } = useQuery({ queryKey: ['aiRunAvailable'], queryFn: () => request(AiRunAvailableDocument), staleTime: 10 * 60_000 })
+const serverAvailable = computed(() => runAvailable.value?.aiRunAvailable === true)
+const runBadge = (status: string | null | undefined) =>
+  status === 'WAITING' ? '等你确认' : status === 'RUNNING' || status === 'QUEUED' ? '运行中' : ''
 
 // ---------- 对话记录 ----------
 const showHistory = ref(false)
@@ -151,7 +157,10 @@ const statusMark: Record<string, string> = { running: '…', ok: '✓', error: '
       <el-empty v-if="!conversations.length" description="还没有对话" :image-size="60" />
       <div v-for="c in conversations" :key="c.id" class="conv" :class="{ active: chat.conversation?.id === c.id }" @click="pickConversation(c)">
         <div class="conv-main">
-          <div class="conv-title">{{ c.title || '(没有标题)' }}</div>
+          <div class="conv-title">
+            {{ c.title || '(没有标题)' }}
+            <el-tag v-if="runBadge(c.runStatus)" size="small" :type="c.runStatus === 'WAITING' ? 'warning' : 'primary'" class="badge">{{ runBadge(c.runStatus) }}</el-tag>
+          </div>
           <div class="conv-time">{{ formatTime(c.updatedAt) }}</div>
         </div>
         <el-button text size="small" :icon="Delete" title="删除" @click.stop="removeConversation(c.id)" />
@@ -173,7 +182,7 @@ const statusMark: Record<string, string> = { running: '…', ok: '✓', error: '
         <!-- miniMarkdown 先整段转义再加标签 -->
         <div v-else-if="it.kind === 'assistant'" class="msg bot md" v-html="miniMarkdown(it.text)" />
         <div v-else-if="it.kind === 'tool'" class="tool" :class="it.status" :title="it.output.slice(0, 500)">
-          <span class="mark">{{ statusMark[it.status] }}</span>{{ toolLabel(it.name, it.args) }}<span v-if="it.status === 'denied'" class="denied">(没做)</span>
+          <span class="mark">{{ statusMark[it.status] }}</span>{{ it.label ?? toolLabel(it.name, it.args) }}<span v-if="it.status === 'denied'" class="denied">(没做)</span>
         </div>
         <div v-else class="msg error">{{ it.text }}</div>
       </template>
@@ -198,7 +207,18 @@ const statusMark: Record<string, string> = { running: '…', ok: '✓', error: '
     </div>
 
     <footer v-if="!showHistory" class="foot">
-      <div v-if="contextLabel" class="context" :title="contextLabel">{{ contextLabel }}</div>
+      <div v-if="contextLabel || serverAvailable" class="foot-row">
+        <span class="context" :title="contextLabel">{{ contextLabel }}</span>
+        <el-switch
+          v-if="serverAvailable"
+          :model-value="chat.onServer"
+          size="small"
+          active-text="在服务器上运行"
+          :disabled="chat.running"
+          title="开着时这一句交给服务器跑,关掉网页也照样跑完"
+          @update:model-value="(v) => setOnServer(v === true)"
+        />
+      </div>
       <div class="compose">
         <el-input
           v-model="input"
@@ -417,9 +437,20 @@ const statusMark: Record<string, string> = { running: '…', ok: '✓', error: '
   padding: 8px 12px 12px;
   border-top: 1px solid var(--el-border-color-lighter);
 }
+.foot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.badge {
+  margin-left: 6px;
+  vertical-align: 1px;
+}
 .context {
   overflow: hidden;
-  margin-bottom: 6px;
+  min-width: 0;
   color: var(--el-text-color-secondary);
   font-size: 12px;
   text-overflow: ellipsis;

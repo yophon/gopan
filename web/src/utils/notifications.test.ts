@@ -121,3 +121,9 @@ describe('badgeText', () => {
     expect(badgeText(120)).toBe('99+')
   })
 })
+
+describe('助手的通知(doc/34)', () => {
+  it('打开助手面板里的这个对话', () => {
+    expect(notificationRoute({ kind: 'ASSISTANT', id: 'c1' })).toEqual({ path: '/drive', query: { assistant: 'c1' } })
+  })
+})

@@ -1433,13 +1433,9 @@ func (r *mutationResolver) CreateAiConversation(ctx context.Context, title strin
 
 // AppendAiEntries is the resolver for the appendAiEntries field.
 func (r *mutationResolver) AppendAiEntries(ctx context.Context, conversationID string, fromSeq int, entries []string) (*AiConversation, error) {
-	ident, err := httpx.UserFrom(ctx)
+	ident, cid, err := assistantConversation(ctx, conversationID)
 	if err != nil {
 		return nil, err
-	}
-	cid, err := uuid.Parse(conversationID)
-	if err != nil {
-		return nil, service.ErrNotFound
 	}
 	c, err := r.AIChats.Append(ctx, ident.UserID, cid, fromSeq, entries)
 	if err != nil {
@@ -1480,6 +1476,66 @@ func (r *mutationResolver) DeleteAiConversation(ctx context.Context, id string) 
 		return false, service.ErrNotFound
 	}
 	return true, r.AIChats.Delete(ctx, ident.UserID, cid)
+}
+
+// StartAiRun is the resolver for the startAiRun field.
+func (r *mutationResolver) StartAiRun(ctx context.Context, conversationID *string, text string, context *string, providerID string, model *string) (*AiRun, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	conv, err := optionalUUID(conversationID)
+	if err != nil {
+		return nil, err
+	}
+	pid, err := uuid.Parse(providerID)
+	if err != nil {
+		return nil, service.ErrNotFound
+	}
+	run, _, err := r.AIRuns.Start(ctx, ident.UserID, conv, text, deref(context, ""), pid, deref(model, ""))
+	if err != nil {
+		return nil, err
+	}
+	return gqlAiRun(run), nil
+}
+
+// AnswerAiRun is the resolver for the answerAiRun field.
+func (r *mutationResolver) AnswerAiRun(ctx context.Context, id string, answer string) (bool, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	rid, err := uuid.Parse(id)
+	if err != nil {
+		return false, service.ErrNotFound
+	}
+	return true, r.AIRuns.Answer(ctx, ident.UserID, rid, answer)
+}
+
+// StopAiRun is the resolver for the stopAiRun field.
+func (r *mutationResolver) StopAiRun(ctx context.Context, id string) (bool, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	rid, err := uuid.Parse(id)
+	if err != nil {
+		return false, service.ErrNotFound
+	}
+	return true, r.AIRuns.Stop(ctx, ident.UserID, rid)
+}
+
+// SetAiConversationRunner is the resolver for the setAiConversationRunner field.
+func (r *mutationResolver) SetAiConversationRunner(ctx context.Context, id string, runner AiRunner) (bool, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	cid, err := uuid.Parse(id)
+	if err != nil {
+		return false, service.ErrNotFound
+	}
+	return true, r.AIRuns.SetRunner(ctx, ident.UserID, cid, strings.ToLower(string(runner)))
 }
 
 // Preview is the resolver for the preview field.
@@ -2675,6 +2731,31 @@ func (r *queryResolver) ClipPrefs(ctx context.Context) (*ClipPrefs, error) {
 	return r.clipPrefs(ctx, nil)
 }
 
+// AiRunAvailable is the resolver for the aiRunAvailable field.
+func (r *queryResolver) AiRunAvailable(ctx context.Context) (bool, error) {
+	if _, err := httpx.UserFrom(ctx); err != nil {
+		return false, err
+	}
+	return r.AIRuns.Available(), nil
+}
+
+// AiRun is the resolver for the aiRun field.
+func (r *queryResolver) AiRun(ctx context.Context, conversationID string) (*AiRun, error) {
+	ident, err := httpx.UserFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cid, err := uuid.Parse(conversationID)
+	if err != nil {
+		return nil, service.ErrNotFound
+	}
+	run, err := r.AIRuns.Current(ctx, ident.UserID, cid)
+	if err != nil || run == nil {
+		return nil, err
+	}
+	return gqlAiRun(*run), nil
+}
+
 // AiProviders is the resolver for the aiProviders field.
 func (r *queryResolver) AiProviders(ctx context.Context) ([]*AiProvider, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -2732,7 +2813,7 @@ func (r *queryResolver) AiProviderKey(ctx context.Context, id string) (string, e
 
 // AssistantAccess is the resolver for the assistantAccess field.
 func (r *queryResolver) AssistantAccess(ctx context.Context) (*AssistantAccess, error) {
-	ident, err := httpx.UserFrom(ctx)
+	ident, _, err := httpx.AssistantFrom(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -2753,22 +2834,27 @@ func (r *queryResolver) AiConversations(ctx context.Context, before *time.Time, 
 	if err != nil {
 		return nil, err
 	}
+	active, err := r.AIRuns.ActiveStatuses(ctx, ident.UserID)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]*AiConversation, 0, len(cs))
 	for _, c := range cs {
-		out = append(out, gqlAiConversation(c))
+		v := gqlAiConversation(c)
+		if s, ok := active[c.ID]; ok {
+			st := AiRunStatus(strings.ToUpper(s))
+			v.RunStatus = &st
+		}
+		out = append(out, v)
 	}
 	return out, nil
 }
 
 // AiConversation is the resolver for the aiConversation field.
 func (r *queryResolver) AiConversation(ctx context.Context, id string) (*AiConversation, error) {
-	ident, err := httpx.UserFrom(ctx)
+	ident, cid, err := assistantConversation(ctx, id)
 	if err != nil {
 		return nil, err
-	}
-	cid, err := uuid.Parse(id)
-	if err != nil {
-		return nil, service.ErrNotFound
 	}
 	c, err := r.AIChats.Get(ctx, ident.UserID, cid)
 	if err != nil {
@@ -2779,13 +2865,9 @@ func (r *queryResolver) AiConversation(ctx context.Context, id string) (*AiConve
 
 // AiEntries is the resolver for the aiEntries field.
 func (r *queryResolver) AiEntries(ctx context.Context, conversationID string, fromSeq *int) ([]string, error) {
-	ident, err := httpx.UserFrom(ctx)
+	ident, cid, err := assistantConversation(ctx, conversationID)
 	if err != nil {
 		return nil, err
-	}
-	cid, err := uuid.Parse(conversationID)
-	if err != nil {
-		return nil, service.ErrNotFound
 	}
 	return r.AIChats.Entries(ctx, ident.UserID, cid, deref(fromSeq, 0))
 }

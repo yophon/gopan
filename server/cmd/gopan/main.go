@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -241,6 +243,12 @@ func run() error {
 	assistant := service.NewAssistant(pool)
 	changes := service.NewChangeHub(pool) // 自动刷新(doc/32 二)
 	go changes.Run(ctx)
+	// 助手在服务器上运行(doc/34):每一轮起一个 qjs 进程,请求经本机回环地址回到这里
+	aiRuns := service.NewAIRuns(pool, aiChats, auth, changes, notifier, service.AIRunsConfig{
+		QJS: envOr("GOPAN_QJS", "/usr/local/bin/qjs"), Origin: loopbackURL(cfg.Listen), PublicURL: cfg.PublicURL,
+		Max: envIntOr("GOPAN_AI_RUNS", 2),
+	})
+	go aiRuns.Run(ctx)
 	linksDone := make(chan struct{})
 	go func() { links.Run(ctx); close(linksDone) }()
 
@@ -248,8 +256,7 @@ func run() error {
 		Cfg: cfg, Auth: auth, Nodes: nodes, Uploads: uploads, Previews: previews, Shares: shares, Admin: admin, AppPass: appPass, MCPTokens: mcpTokens, OAuth: oauth, Chats: chats, Collects: collects, ShareUploads: shareUploads, Content: content, Jobs: jobs, Archives: archives,
 		Media: media, Notify: notifier, Links: links,
 		Activities: activities, Space: space, Feeds: feeds, Clips: clips,
-		Versions: versions,
-		AI: ai, AIChats: aiChats, Assistant: assistant,
+		Versions: versions, AI: ai, AIChats: aiChats, Assistant: assistant, AIRuns: aiRuns,
 	}})
 
 	mux := http.NewServeMux()
@@ -396,4 +403,30 @@ func lookPathOrEmpty(name string) string {
 		return ""
 	}
 	return p
+}
+
+// loopbackURL 本机访问自己的地址(服务器上跑的助手用):":8080" → http://127.0.0.1:8080
+func loopbackURL(listen string) string {
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		return "http://127.0.0.1:8080"
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, port)
+}
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func envIntOr(key string, def int) int {
+	if n, err := strconv.Atoi(os.Getenv(key)); err == nil && n > 0 {
+		return n
+	}
+	return def
 }

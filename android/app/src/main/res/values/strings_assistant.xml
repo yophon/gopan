@@ -55,4 +55,8 @@
     <string name="assistant_key_keep">留空不变</string>
     <string name="assistant_save">保存</string>
     <string name="assistant_cancel">取消</string>
+    <!-- 服务器上运行(doc/34) -->
+    <string name="assistant_on_server">在服务器上运行</string>
+    <string name="assistant_run_running">运行中</string>
+    <string name="assistant_run_waiting">等你确认</string>
 </resources>
