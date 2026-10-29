@@ -40,9 +40,14 @@ android {
         applicationId = "xyz.yophon.gopan"
         minSdk = 26
         targetSdk = 36
-        versionCode = 31900
-        versionName = "3.19.0"
+        versionCode = 32100
+        versionName = "3.21.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // 助手的 QuickJS 带原生库(doc/33 八之 2):只打 64 位真机与模拟器,不要 32 位
+        ndk {
+            abiFilters += setOf("arm64-v8a", "x86_64")
+        }
 
         // AppAuth 的 RedirectUriReceiverActivity 由库 manifest 合并,这里只给 scheme;
         // 取自 gopan.idRedirect(如 xyz.yophon.gopan:/oauthredirect → xyz.yophon.gopan),改回调地址时两者不会脱节
@@ -164,6 +169,9 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.timber)
 
+    // 助手:QuickJS 里跑 tau 内核(doc/33 八之 2)
+    implementation(libs.quickjs.kt)
+
     // 预览:音视频(流式 + 后台播放与通知控制)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
@@ -175,4 +183,11 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.turbine)
     testImplementation(libs.truth)
+}
+
+// 单元测试跑在电脑的 JVM 上:QuickJS 换成带桌面原生库的 -jvm 版(Windows / Linux / macOS 都有)
+configurations.matching { it.name.contains("UnitTest") }.configureEach {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("io.github.dokar3:quickjs-kt-android")).using(module("io.github.dokar3:quickjs-kt-jvm:${libs.versions.quickjsKt.get()}"))
+    }
 }
