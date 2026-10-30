@@ -5,6 +5,7 @@ import { getErrorCode, request, singleFlightRefresh } from '@/api/client'
 import {
   AiConversationDocument,
   AiEntriesDocument,
+  AiMemoryDocument,
   AiProviderKeyDocument,
   AiRunDocument,
   AnswerAiRunDocument,
@@ -12,6 +13,7 @@ import {
   AssistantAccessDocument,
   CreateAiConversationDocument,
   SetAiConversationRunnerDocument,
+  SetAiMemoryDocument,
   StartAiRunDocument,
   StopAiRunDocument,
   type AiConversationFieldsFragment,
@@ -304,6 +306,7 @@ async function ensureAgent(setup: ChatSetup, firstText: string): Promise<Assista
       store,
       groups: toGroups(access.assistantAccess.groups),
       systemPrompt: SYSTEM_PROMPT,
+      memory: memoryStore,
       onApproval: (view) =>
         new Promise<ApprovalAnswer>((resolve) => {
           chat.approval = {
@@ -325,6 +328,15 @@ async function ensureAgent(setup: ChatSetup, firstText: string): Promise<Assista
   )
   built = key
   return handle.value
+}
+
+/** 长期记忆存在服务器上(doc/38);只有 USER.md 一份,没有项目层,list 用不到 */
+const memoryStore = {
+  read: async (file: string) => (await request(AiMemoryDocument, { name: file })).aiMemory,
+  write: async (file: string, content: string) => {
+    await request(SetAiMemoryDocument, { name: file, content })
+  },
+  list: async () => [] as string[],
 }
 
 function friendly(err: unknown): string {

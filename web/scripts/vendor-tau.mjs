@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-export const TAU_PACKAGES = ['kernel', 'ext-mcp-http', 'ext-provider-anthropic', 'ext-provider-google', 'ext-provider-openai-responses']
+export const TAU_PACKAGES = ['kernel', 'ext-mcp-http', 'ext-provider-anthropic', 'ext-provider-google', 'ext-provider-openai-responses', 'ext-memory']
 
 const web = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const tau = resolve(process.argv[2] ?? join(web, '../../tau'))

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Edit, Plus } from '@element-plus/icons-vue'
@@ -7,12 +7,12 @@ import { useRouter } from 'vue-router'
 
 import { request } from '@/api/client'
 import { errorText } from '@/api/errors'
-import { AiProvidersDocument, DeleteAiProviderDocument, type AiProviderFieldsFragment } from '@/api/gen/graphql'
+import { AiMemoryDocument, AiProvidersDocument, DeleteAiProviderDocument, SetAiMemoryDocument, type AiProviderFieldsFragment } from '@/api/gen/graphql'
 import { loadMode, saveMode, type ConnectionMode } from '@/assistant/state'
 import { isDesktop } from '@/desktop/bridge'
 import AiProviderForm from './AiProviderForm.vue'
 
-/** 助手设置:连接方式(这台设备)、自己的模型服务;权限在「MCP 访问」里 */
+/** 助手设置:助手记得的(doc/38)、连接方式(这台设备)、自己的模型服务;权限在「MCP 访问」里 */
 const visible = defineModel<boolean>({ required: true })
 const emit = defineEmits<{ (e: 'mode', mode: ConnectionMode): void }>()
 
@@ -54,11 +54,61 @@ function openPermissions() {
   void router.replace({ query: { ...router.currentRoute.value.query, panel: 'mcp' } })
 }
 
+// ---------- 助手记得的(doc/38):就是那份 Markdown,改完存下,下一段对话起生效 ----------
+const memory = ref('')
+const memorySaved = ref('')
+const memoryLoading = ref(false)
+const memorySaving = ref(false)
+watch(
+  visible,
+  async (open) => {
+    if (!open) return
+    memoryLoading.value = true
+    try {
+      const { aiMemory } = await request(AiMemoryDocument, {})
+      memory.value = memorySaved.value = aiMemory
+    } catch (err) {
+      ElMessage.error(errorText(err, '读不到助手记得的'))
+    } finally {
+      memoryLoading.value = false
+    }
+  },
+  { immediate: true },
+)
+async function saveMemory() {
+  memorySaving.value = true
+  try {
+    await request(SetAiMemoryDocument, { content: memory.value })
+    memorySaved.value = memory.value
+    ElMessage.success('存好了,下一段对话起生效')
+  } catch (err) {
+    ElMessage.error(errorText(err, '没存上'))
+  } finally {
+    memorySaving.value = false
+  }
+}
+
 const fmt = (n: number) => (n >= 10000 ? `${Math.round(n / 1000) / 10} 万` : String(n))
 </script>
 
 <template>
   <el-dialog v-model="visible" title="助手设置" width="min(560px, 94vw)" append-to-body>
+    <section class="block">
+      <h4>助手记得的</h4>
+      <el-input
+        v-model="memory"
+        v-loading="memoryLoading"
+        type="textarea"
+        :autosize="{ minRows: 3, maxRows: 10 }"
+        placeholder="还没记什么。对助手说「记住……」,或者直接写在这里,一行一条"
+        class="memory"
+      />
+      <div class="memory-actions">
+        <el-button size="small" :disabled="memory === memorySaved" :loading="memorySaving" @click="saveMemory">保存</el-button>
+        <el-button v-if="memory" size="small" text @click="memory = ''">清空</el-button>
+      </div>
+    </section>
+
     <section class="block">
       <h4>连接方式(这台设备)</h4>
       <el-radio-group :model-value="mode" @update:model-value="(v) => setMode(v as ConnectionMode)">
@@ -146,6 +196,15 @@ h4 {
   color: var(--el-text-color-secondary);
   font-size: 12px;
   white-space: nowrap;
+}
+.memory :deep(.el-textarea__inner) {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.memory-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
 }
 .row + .el-button,
 .block > .el-button {

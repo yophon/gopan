@@ -26,6 +26,7 @@ export default defineConfig({
       '@yophon/tau-ext-provider-anthropic': fileURLToPath(new URL('./src/vendor/tau/ext-provider-anthropic/index.js', import.meta.url)),
       '@yophon/tau-ext-provider-google': fileURLToPath(new URL('./src/vendor/tau/ext-provider-google/index.js', import.meta.url)),
       '@yophon/tau-ext-provider-openai-responses': fileURLToPath(new URL('./src/vendor/tau/ext-provider-openai-responses/index.js', import.meta.url)),
+      '@yophon/tau-ext-memory': fileURLToPath(new URL('./src/vendor/tau/ext-memory/index.js', import.meta.url)),
     },
   },
   server: {

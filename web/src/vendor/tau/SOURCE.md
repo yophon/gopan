@@ -3,10 +3,10 @@
 由 `web/scripts/vendor-tau.mjs` 从本机 tau 仓库生成,不要手改;要更新就重跑脚本。
 
 - 仓库:https://github.com/yophon/tau(MIT)
-- 提交:`a0918efb10da9f343be0f35d98b3e9bce83fef69` fix: P62h — undici 8.12.2 (GHSA-xjj6-f33q-929c), a security exception to the two-week rule
+- 提交:`e6bcfd14e20751377684139fee9e6a10377b718d` feat: P63 — long-term memory as @yophon/tau-ext-memory, store injected by the host
 - 包版本号:0.2.0(未发布到 npm,用的是这个提交)
-- 包:kernel、ext-mcp-http、ext-provider-anthropic、ext-provider-google、ext-provider-openai-responses
-- 生成时间:2026-10-29T02:48:18.429Z
+- 包:kernel、ext-mcp-http、ext-provider-anthropic、ext-provider-google、ext-provider-openai-responses、ext-memory
+- 生成时间:2026-10-30T02:03:26.843Z
 
 ## sha256
 
@@ -42,6 +42,8 @@ aff1645b3d602db8e20734777bd4af181b4fb1ce2f40324c69bcbb72233e255e  ext-mcp-http/s
 773a934892bc14fe3347b9f3a1abe43cb703bf7d0d8dc780d7221cad8c600104  ext-mcp-http/transport.js
 e0797e7f94b0d19eb469a9851dca3f98743762e05945bd0dba9a462d0fbdb35c  ext-mcp-http/wait-tool.d.ts
 058634383cdd2899ca1cc801f727ec6439405f3e335c1284e33cc56b0c94d0fb  ext-mcp-http/wait-tool.js
+45eebc18cadcfa0dba76002ab5a9ffee383aa6824206423b47c183677612e76c  ext-memory/index.d.ts
+ec5a272910a5aa355be2076a7ea082e07836cd1c562c49a668e0e53c905d9721  ext-memory/index.js
 e4ff06970163bbc05f32af802013fb996100cfddd7e809d9aeb91e58dc5611af  ext-provider-anthropic/index.d.ts
 31ca2e5aafc8b9e0befe1f303e069b83403585a5f5a898a5c2cdcc974539dadd  ext-provider-anthropic/index.js
 77b3f886387f430f526ea0dc3cb01b5c52b368b09541b9aedf2a59bfb5666908  ext-provider-google/index.d.ts

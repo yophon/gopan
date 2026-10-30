@@ -199,6 +199,14 @@ export class AssistantRuntime {
         store: this.store,
         groups,
         systemPrompt: SYSTEM_PROMPT,
+        // 长期记忆存在服务器上(doc/38)
+        memory: {
+          read: async (file) => (await this.gql<{ aiMemory: string }>('query($n: String) { aiMemory(name: $n) }', { n: file })).aiMemory,
+          write: async (file, content) => {
+            await this.gql('mutation($n: String, $c: String!) { setAiMemory(name: $n, content: $c) }', { n: file, c: content })
+          },
+          list: async () => [],
+        },
         onApproval: async (view) => {
           const d = describeCall(view.meta?.tool ?? shortToolName(view.request.toolName), view.request.args)
           const names = await Promise.all(

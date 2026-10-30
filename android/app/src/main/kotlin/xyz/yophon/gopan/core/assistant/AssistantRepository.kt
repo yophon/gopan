@@ -8,7 +8,9 @@ import xyz.yophon.gopan.graphql.AiConversationRunnerQuery
 import xyz.yophon.gopan.graphql.AiConversationsQuery
 import xyz.yophon.gopan.graphql.AiRunAvailableQuery
 import xyz.yophon.gopan.graphql.AiRunQuery
+import xyz.yophon.gopan.graphql.AiMemoryQuery
 import xyz.yophon.gopan.graphql.AnswerAiRunMutation
+import xyz.yophon.gopan.graphql.SetAiMemoryMutation
 import xyz.yophon.gopan.graphql.NodesByIdsQuery
 import xyz.yophon.gopan.graphql.NodesByPathsQuery
 import xyz.yophon.gopan.graphql.SetAiConversationRunnerMutation
@@ -110,6 +112,10 @@ interface AssistantRepository {
 
     /** 按网盘路径查(引用里写的是路径时) */
     suspend fun nodesByPaths(paths: List<String>): List<RefNode>
+
+    // 长期记忆(doc/38):一份 Markdown,助手自己记,这里看、改、清空
+    suspend fun memory(): String
+    suspend fun setMemory(content: String)
 }
 
 @Singleton
@@ -191,6 +197,12 @@ class ApolloAssistantRepository @Inject constructor(private val apollo: ApolloCl
         apollo.query(NodesByIdsQuery(ids)).execute().requireData().nodesByIds.map {
             RefNode(it.id, it.name, it.kind.rawValue, it.size, it.path, it.preview.kind.rawValue, it.preview.thumbUrl, it.preview.largeUrl)
         }
+
+    override suspend fun memory(): String = apollo.query(AiMemoryQuery()).execute().requireData().aiMemory
+
+    override suspend fun setMemory(content: String) {
+        apollo.mutation(SetAiMemoryMutation(content)).execute().requireData()
+    }
 
     override suspend fun nodesByPaths(paths: List<String>): List<RefNode> =
         apollo.query(NodesByPathsQuery(paths)).execute().requireData().nodesByPaths.map {

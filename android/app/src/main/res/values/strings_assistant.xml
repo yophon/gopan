@@ -61,6 +61,11 @@
     <string name="assistant_on_server">在服务器上运行</string>
     <string name="assistant_run_running">运行中</string>
     <string name="assistant_run_waiting">等你确认</string>
+    <!-- 长期记忆(doc/38) -->
+    <string name="assistant_memory_title">助手记得的</string>
+    <string name="assistant_memory_hint">还没记什么。对助手说「记住……」,或者直接写在这里,一行一条</string>
+    <string name="assistant_memory_clear">清空</string>
+    <string name="assistant_memory_saved">存好了,下一段对话起生效</string>
     <!-- 看图与引用文件(doc/35) -->
     <string name="assistant_add_image">发图片</string>
     <string name="assistant_image_count">图片 ×%1$d</string>

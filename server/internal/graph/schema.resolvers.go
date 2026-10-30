@@ -1414,6 +1414,19 @@ func (r *mutationResolver) SetAssistantAccess(ctx context.Context, disabled bool
 	return gqlAssistantAccess(a), nil
 }
 
+// SetAiMemory is the resolver for the setAiMemory field.
+func (r *mutationResolver) SetAiMemory(ctx context.Context, name *string, content string) (bool, error) {
+	// 登录用户,或服务器上跑的一轮(只能动对话主人自己的,doc/38)
+	ident, _, err := httpx.AssistantFrom(ctx)
+	if err != nil {
+		return false, err
+	}
+	if err := r.Assistant.SetMemory(ctx, ident.UserID, deref(name, service.AIMemoryUser), content); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // CreateAiConversation is the resolver for the createAiConversation field.
 func (r *mutationResolver) CreateAiConversation(ctx context.Context, title string, providerID *string, model *string) (*AiConversation, error) {
 	ident, err := httpx.UserFrom(ctx)
@@ -2866,6 +2879,15 @@ func (r *queryResolver) AssistantAccess(ctx context.Context) (*AssistantAccess, 
 		return nil, err
 	}
 	return gqlAssistantAccess(a), nil
+}
+
+// AiMemory is the resolver for the aiMemory field.
+func (r *queryResolver) AiMemory(ctx context.Context, name *string) (string, error) {
+	ident, _, err := httpx.AssistantFrom(ctx)
+	if err != nil {
+		return "", err
+	}
+	return r.Assistant.Memory(ctx, ident.UserID, deref(name, service.AIMemoryUser))
 }
 
 // AiConversations is the resolver for the aiConversations field.

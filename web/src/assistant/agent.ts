@@ -12,6 +12,7 @@ import {
   type ToolPolicy,
 } from '@yophon/tau-kernel'
 import { createHttpMcpExtension } from '@yophon/tau-ext-mcp-http'
+import { createMemoryExtension, type MemoryStore } from '@yophon/tau-ext-memory'
 import { createAnthropicTransport } from '@yophon/tau-ext-provider-anthropic'
 import { createGoogleTransport } from '@yophon/tau-ext-provider-google'
 import { createOpenAIResponsesTransport } from '@yophon/tau-ext-provider-openai-responses'
@@ -19,6 +20,19 @@ import { createOpenAIResponsesTransport } from '@yophon/tau-ext-provider-openai-
 import { FILE_TOOL_METAS, fileTools } from './files'
 import { GopanFs, mcpCaller } from './gopan-fs'
 import { decide, MCP_SERVER, scopePermissions, toolMetas, type AccessGroup, type ToolMeta } from './policy'
+
+/** 长期记忆的三个工具(tau 的 ext-memory,doc/38):不碰网盘,不弹确认 */
+export const MEMORY_TOOL_METAS: ToolMeta[] = ['memory_write', 'memory_edit', 'memory_read'].map((name) => ({
+  name,
+  tool: name,
+  scopes: [],
+  readOnly: name === 'memory_read',
+  destructive: false,
+  free: true,
+}))
+
+/** 这一版每人只有一份「关于你」 */
+const MEMORY_SCOPE = { userFile: 'USER.md' }
 import type { GopanSessionStore } from './session'
 
 /**
@@ -73,6 +87,8 @@ export interface AssistantOptions {
   store: GopanSessionStore
   groups: readonly AccessGroup[]
   systemPrompt: string
+  /** 长期记忆存在哪(gopan 服务器上,经 GraphQL);不给就没有记忆 */
+  memory?: MemoryStore
   onApproval(view: ApprovalView): Promise<ApprovalAnswer>
 }
 
@@ -165,7 +181,7 @@ export async function createAssistant(o: AssistantOptions, deps: AssistantDeps):
   const apiKey = proxied || deps.shellFetch ? 'gopan' : await deps.providerKey(o.provider.id)
 
   const metas = await listTools(o.origin, platform.fetch)
-  for (const m of FILE_TOOL_METAS) metas.set(m.name, m)
+  for (const m of [...FILE_TOOL_METAS, ...(o.memory ? MEMORY_TOOL_METAS : [])]) metas.set(m.name, m)
   const files = fileTools(new GopanFs(mcpCaller(o.origin, platform.fetch)))
   let scopes = scopePermissions(o.groups)
   const sessionAllowed = new Set<string>()
@@ -183,7 +199,10 @@ export async function createAssistant(o: AssistantOptions, deps: AssistantDeps):
     servers: [{ name: MCP_SERVER, url: `${o.origin}/mcp`, riskFromAnnotations: true }],
     platform,
   })
-  const extensions = await ExtensionRegistry.load([mcp.extension])
+  const extensions = await ExtensionRegistry.load([
+    mcp.extension,
+    ...(o.memory ? [createMemoryExtension({ store: o.memory, getScope: () => MEMORY_SCOPE })] : []),
+  ])
   await mcp.connect()
 
   const restored = await restoreSession(o.store)

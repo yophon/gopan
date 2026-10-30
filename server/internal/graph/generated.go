@@ -695,6 +695,7 @@ type ComplexityRoot struct {
 		SaveTextFile             func(childComplexity int, nodeID string, content string, baseSha256 *string) int
 		SendChatMessage          func(childComplexity int, body *string, nodeID *string) int
 		SetAiConversationRunner  func(childComplexity int, id string, runner AiRunner) int
+		SetAiMemory              func(childComplexity int, name *string, content string) int
 		SetAssistantAccess       func(childComplexity int, disabled bool, groups []*AssistantGroupInput) int
 		SetClipPrefs             func(childComplexity int, input ClipPrefsInput) int
 		SetLinkPrefs             func(childComplexity int, input LinkPrefsInput) int
@@ -859,6 +860,7 @@ type ComplexityRoot struct {
 		AiConversation            func(childComplexity int, id string) int
 		AiConversations           func(childComplexity int, before *time.Time, limit *int) int
 		AiEntries                 func(childComplexity int, conversationID string, fromSeq *int) int
+		AiMemory                  func(childComplexity int, name *string) int
 		AiProviderKey             func(childComplexity int, id string) int
 		AiProviders               func(childComplexity int) int
 		AiRun                     func(childComplexity int, conversationID string) int
@@ -1220,6 +1222,7 @@ type MutationResolver interface {
 	UpdateAiProvider(ctx context.Context, id string, input AiProviderInput) (*AiProvider, error)
 	DeleteAiProvider(ctx context.Context, id string) (bool, error)
 	SetAssistantAccess(ctx context.Context, disabled bool, groups []*AssistantGroupInput) (*AssistantAccess, error)
+	SetAiMemory(ctx context.Context, name *string, content string) (bool, error)
 	CreateAiConversation(ctx context.Context, title string, providerID *string, model *string) (*AiConversation, error)
 	AppendAiEntries(ctx context.Context, conversationID string, fromSeq int, entries []string) (*AiConversation, error)
 	UpdateAiConversation(ctx context.Context, id string, title *string, providerID *string, model *string) (*AiConversation, error)
@@ -1320,6 +1323,7 @@ type QueryResolver interface {
 	AdminAiProviders(ctx context.Context) ([]*AiProvider, error)
 	AiProviderKey(ctx context.Context, id string) (string, error)
 	AssistantAccess(ctx context.Context) (*AssistantAccess, error)
+	AiMemory(ctx context.Context, name *string) (string, error)
 	AiConversations(ctx context.Context, before *time.Time, limit *int) ([]*AiConversation, error)
 	AiConversation(ctx context.Context, id string) (*AiConversation, error)
 	AiEntries(ctx context.Context, conversationID string, fromSeq *int) ([]string, error)
@@ -4579,6 +4583,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetAiConversationRunner(childComplexity, args["id"].(string), args["runner"].(AiRunner)), true
+	case "Mutation.setAiMemory":
+		if e.ComplexityRoot.Mutation.SetAiMemory == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setAiMemory_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetAiMemory(childComplexity, args["name"].(*string), args["content"].(string)), true
 	case "Mutation.setAssistantAccess":
 		if e.ComplexityRoot.Mutation.SetAssistantAccess == nil {
 			break
@@ -5416,6 +5431,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AiEntries(childComplexity, args["conversationId"].(string), args["fromSeq"].(*int)), true
+	case "Query.aiMemory":
+		if e.ComplexityRoot.Query.AiMemory == nil {
+			break
+		}
+
+		args, err := ec.field_Query_aiMemory_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AiMemory(childComplexity, args["name"].(*string)), true
 	case "Query.aiProviderKey":
 		if e.ComplexityRoot.Query.AiProviderKey == nil {
 			break
@@ -8351,6 +8377,8 @@ extend type Query {
   # 直连用:只给自己的服务的 key;站点提供的一律拒绝
   aiProviderKey(id: ID!): String!
   assistantAccess: AssistantAccess!
+  # 助手的长期记忆(doc/38):一份 Markdown,没有就是空串;name 这一版只有 USER.md
+  aiMemory(name: String = "USER.md"): String!
   # 最近的在前;before 是上一页最后一个的 updatedAt
   aiConversations(before: Time, limit: Int = 50): [AiConversation!]!
   aiConversation(id: ID!): AiConversation!
@@ -8367,6 +8395,8 @@ extend type Mutation {
   deleteAiProvider(id: ID!): Boolean!
   # groups 只需给要改的组
   setAssistantAccess(disabled: Boolean!, groups: [AssistantGroupInput!]!): AssistantAccess!
+  # 整份替换(空串 = 清空),最多 64 KB
+  setAiMemory(name: String = "USER.md", content: String!): Boolean!
   createAiConversation(title: String!, providerId: ID, model: String): AiConversation!
   # fromSeq 必须等于现有条数,否则 CONFLICT(别的设备先写了)
   appendAiEntries(conversationId: ID!, fromSeq: Int!, entries: [String!]!): AiConversation!
@@ -11666,6 +11696,28 @@ func (ec *executionContext) field_Mutation_setAiConversationRunner_args(ctx cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_setAiMemory_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "name",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "content",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["content"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_setAssistantAccess_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -12259,6 +12311,20 @@ func (ec *executionContext) field_Query_aiEntries_args(ctx context.Context, rawA
 		return nil, err
 	}
 	args["fromSeq"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_aiMemory_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "name",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg0
 	return args, nil
 }
 
@@ -26430,6 +26496,50 @@ func (ec *executionContext) fieldContext_Mutation_setAssistantAccess(ctx context
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_setAiMemory(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_setAiMemory(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetAiMemory(ctx, fc.Args["name"].(*string), fc.Args["content"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_setAiMemory(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setAiMemory_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createAiConversation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -31905,6 +32015,50 @@ func (ec *executionContext) fieldContext_Query_assistantAccess(_ context.Context
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_AssistantAccess(ctx, field)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_aiMemory(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_aiMemory(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AiMemory(ctx, fc.Args["name"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_aiMemory(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_aiMemory_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -41336,6 +41490,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "setAiMemory":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setAiMemory(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createAiConversation":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createAiConversation(ctx, field)
@@ -44332,6 +44493,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_assistantAccess(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "aiMemory":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_aiMemory(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

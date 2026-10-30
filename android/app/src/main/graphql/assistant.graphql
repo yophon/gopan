@@ -95,3 +95,12 @@ mutation StopAiRun($id: ID!) {
 mutation SetAiConversationRunner($id: ID!, $runner: AiRunner!) {
   setAiConversationRunner(id: $id, runner: $runner)
 }
+
+# 助手的长期记忆(doc/38)
+query AiMemory {
+  aiMemory
+}
+
+mutation SetAiMemory($content: String!) {
+  setAiMemory(content: $content)
+}

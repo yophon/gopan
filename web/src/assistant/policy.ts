@@ -18,6 +18,8 @@ export interface ToolMeta {
   scopes: string[]
   readOnly: boolean
   destructive: boolean
+  /** 不碰网盘、不属于任何权限组的工具(长期记忆,doc/38):直接放行 */
+  free?: boolean
 }
 
 export interface AccessGroup {
@@ -43,6 +45,7 @@ export function scopePermissions(groups: readonly AccessGroup[]): Map<string, Pe
 
 /** 一个工具该怎么办:不认识的工具一律问 */
 export function decide(meta: ToolMeta | undefined, scopes: Map<string, Permission>, sessionAllowed: ReadonlySet<string>): Permission {
+  if (meta?.free) return 'allow'
   if (!meta || meta.scopes.length === 0) return 'ask'
   let worst: Permission = 'allow'
   for (const s of meta.scopes) {

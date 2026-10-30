@@ -114,6 +114,10 @@ export function describeCall(tool: string, args: Args): CallDescription {
 
 // 只读的工具不弹确认,面板上记一行它做了什么
 const READ_LABELS: Record<string, (a: Args) => string> = {
+  // 长期记忆(doc/38):不弹确认,面板上记一行
+  memory_write: (a) => `记住了:${clip(str(a.content) ?? '', 80)}`,
+  memory_edit: (a) => (typeof a.new === 'string' && a.new !== '' ? '改了一条记忆' : '删了一条记忆'),
+  memory_read: () => '看了记忆',
   read: (a) => `${VISUAL.test(str(a.path) ?? '') ? '看了' : '读了'}「${baseName(str(a.path))}」`,
   list_files: (a) => `看了${str(a.path) ? `「${str(a.path)}」` : '文件夹'}`,
   search_files: (a) => `搜索「${str(a.query) ?? str(a.q) ?? ''}」`,

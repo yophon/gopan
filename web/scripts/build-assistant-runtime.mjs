@@ -13,7 +13,7 @@ const fromVite = createRequire(createRequire(import.meta.url).resolve('vite'))
 const { build } = await import(pathToFileURL(fromVite.resolve('esbuild')).href)
 
 // 与 vendor-tau.mjs 的 TAU_PACKAGES 一致(那个脚本一引入就会重新编译 tau,这里不引它)
-const TAU_PACKAGES = ['kernel', 'ext-mcp-http', 'ext-provider-anthropic', 'ext-provider-google', 'ext-provider-openai-responses']
+const TAU_PACKAGES = ['kernel', 'ext-mcp-http', 'ext-provider-anthropic', 'ext-provider-google', 'ext-provider-openai-responses', 'ext-memory']
 
 const web = resolve(fileURLToPath(new URL('..', import.meta.url)))
 // 两份:安卓 App 的 QuickJS(quickjs-entry.ts)与服务器上每一轮起的 qjs 进程(qjs-entry.ts,doc/34,embed 进 gopan)

@@ -1,6 +1,7 @@
 package xyz.yophon.gopan.feature.assistant
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -72,11 +74,14 @@ data class AssistantSettingsUi(
     val providers: List<AiProvider>? = null,
     val access: AssistantAccess? = null,
     val message: String? = null,
+    /** 助手记得的(doc/38):服务器上存的那份;null = 还在取 */
+    val memory: String? = null,
 )
 
-/** 助手设置(doc/33 一):连接方式(按设备记)、自己的模型服务、助手能做什么(三态,与网页「Agent 接入 → 助手」同一份) */
+/** 助手设置(doc/33 一):助手记得的(doc/38)、连接方式(按设备记)、自己的模型服务、助手能做什么(三态,与网页「Agent 接入 → 助手」同一份) */
 @HiltViewModel
 class AssistantSettingsViewModel @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val repo: AssistantRepository,
     private val prefs: UserPreferencesRepository,
 ) : ViewModel() {
@@ -92,6 +97,15 @@ class AssistantSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { repo.providers() }.onSuccess { p -> _ui.update { it.copy(providers = p) } }.onFailure(::fail)
             runCatching { repo.access() }.onSuccess { a -> _ui.update { it.copy(access = a) } }.onFailure(::fail)
+            runCatching { repo.memory() }.onSuccess { m -> _ui.update { it.copy(memory = m) } }.onFailure(::fail)
+        }
+    }
+
+    fun saveMemory(content: String) {
+        viewModelScope.launch {
+            runCatching { repo.setMemory(content) }
+                .onSuccess { _ui.update { it.copy(memory = content, message = context.getString(R.string.assistant_memory_saved)) } }
+                .onFailure(::fail)
         }
     }
 
@@ -150,6 +164,10 @@ fun AssistantSettingsScreen(onBack: () -> Unit, viewModel: AssistantSettingsView
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
+            ui.memory?.let { saved ->
+                item { Section(stringResource(R.string.assistant_memory_title)) }
+                item(key = "memory") { MemoryEditor(saved, onSave = viewModel::saveMemory) }
+            }
             item { Section(stringResource(R.string.assistant_mode_title)) }
             item {
                 ModeRow(stringResource(R.string.assistant_mode_proxy), stringResource(R.string.assistant_mode_proxy_hint), !ui.direct) { viewModel.setDirect(false) }
@@ -246,6 +264,27 @@ fun AssistantSettingsScreen(onBack: () -> Unit, viewModel: AssistantSettingsView
             onConfirm = { viewModel.setPermission(key, value); outbound = null },
             onDismiss = { outbound = null },
         )
+    }
+}
+
+/** 助手记得的:就是那份 Markdown,一行一条;改完存下,下一段对话起生效 */
+@Composable
+private fun MemoryEditor(saved: String, onSave: (String) -> Unit) {
+    var text by remember(saved) { mutableStateOf(saved) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            placeholder = { Text(stringResource(R.string.assistant_memory_hint)) },
+            minLines = 3,
+            maxLines = 10,
+            textStyle = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { onSave(text) }, enabled = text != saved) { Text(stringResource(R.string.assistant_save)) }
+            if (text.isNotEmpty()) TextButton(onClick = { text = "" }) { Text(stringResource(R.string.assistant_memory_clear)) }
+        }
     }
 }
 

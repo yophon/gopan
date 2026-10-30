@@ -1545,6 +1545,8 @@ extend type Query {
   # 直连用:只给自己的服务的 key;站点提供的一律拒绝
   aiProviderKey(id: ID!): String!
   assistantAccess: AssistantAccess!
+  # 助手的长期记忆(doc/38):一份 Markdown,没有就是空串;name 这一版只有 USER.md
+  aiMemory(name: String = "USER.md"): String!
   # 最近的在前;before 是上一页最后一个的 updatedAt
   aiConversations(before: Time, limit: Int = 50): [AiConversation!]!
   aiConversation(id: ID!): AiConversation!
@@ -1561,6 +1563,8 @@ extend type Mutation {
   deleteAiProvider(id: ID!): Boolean!
   # groups 只需给要改的组
   setAssistantAccess(disabled: Boolean!, groups: [AssistantGroupInput!]!): AssistantAccess!
+  # 整份替换(空串 = 清空),最多 64 KB
+  setAiMemory(name: String = "USER.md", content: String!): Boolean!
   createAiConversation(title: String!, providerId: ID, model: String): AiConversation!
   # fromSeq 必须等于现有条数,否则 CONFLICT(别的设备先写了)
   appendAiEntries(conversationId: ID!, fromSeq: Int!, entries: [String!]!): AiConversation!

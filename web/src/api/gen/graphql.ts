@@ -900,6 +900,7 @@ export type Mutation = {
   saveTextFile: Node;
   sendChatMessage: ChatMessage;
   setAiConversationRunner: Scalars['Boolean']['output'];
+  setAiMemory: Scalars['Boolean']['output'];
   setAssistantAccess: AssistantAccess;
   setClipPrefs: ClipPrefs;
   setLinkPrefs: LinkPrefs;
@@ -1344,6 +1345,12 @@ export type MutationSetAiConversationRunnerArgs = {
 };
 
 
+export type MutationSetAiMemoryArgs = {
+  content: Scalars['String']['input'];
+  name?: InputMaybe<Scalars['String']['input']>;
+};
+
+
 export type MutationSetAssistantAccessArgs = {
   disabled: Scalars['Boolean']['input'];
   groups: Array<AssistantGroupInput>;
@@ -1698,6 +1705,7 @@ export type Query = {
   aiConversation: AiConversation;
   aiConversations: Array<AiConversation>;
   aiEntries: Array<Scalars['String']['output']>;
+  aiMemory: Scalars['String']['output'];
   aiProviderKey: Scalars['String']['output'];
   aiProviders: Array<AiProvider>;
   aiRun?: Maybe<AiRun>;
@@ -1795,6 +1803,11 @@ export type QueryAiConversationsArgs = {
 export type QueryAiEntriesArgs = {
   conversationId: Scalars['ID']['input'];
   fromSeq?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryAiMemoryArgs = {
+  name?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -2609,6 +2622,21 @@ export type NodesByPathsQueryVariables = Exact<{
 
 
 export type NodesByPathsQuery = { __typename?: 'Query', nodesByPaths: Array<{ __typename?: 'Node', id: string, parentId?: string | null, name: string, kind: NodeKind, size?: number | null, mime?: string | null, path?: string | null, preview: { __typename?: 'PreviewInfo', kind: PreviewKind, thumbUrl?: string | null, largeUrl?: string | null } }> };
+
+export type AiMemoryQueryVariables = Exact<{
+  name?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type AiMemoryQuery = { __typename?: 'Query', aiMemory: string };
+
+export type SetAiMemoryMutationVariables = Exact<{
+  name?: InputMaybe<Scalars['String']['input']>;
+  content: Scalars['String']['input'];
+}>;
+
+
+export type SetAiMemoryMutation = { __typename?: 'Mutation', setAiMemory: boolean };
 
 export type LoginMutationVariables = Exact<{
   username: Scalars['String']['input'];
@@ -4729,6 +4757,16 @@ export const NodesByPathsDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<NodesByPathsQuery, NodesByPathsQueryVariables>;
+export const AiMemoryDocument = new TypedDocumentString(`
+    query AiMemory($name: String) {
+  aiMemory(name: $name)
+}
+    `) as unknown as TypedDocumentString<AiMemoryQuery, AiMemoryQueryVariables>;
+export const SetAiMemoryDocument = new TypedDocumentString(`
+    mutation SetAiMemory($name: String, $content: String!) {
+  setAiMemory(name: $name, content: $content)
+}
+    `) as unknown as TypedDocumentString<SetAiMemoryMutation, SetAiMemoryMutationVariables>;
 export const LoginDocument = new TypedDocumentString(`
     mutation Login($username: String!, $password: String!) {
   login(username: $username, password: $password) {

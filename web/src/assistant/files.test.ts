@@ -173,3 +173,20 @@ describe('回答里引用的文件', () => {
     expect(html).toBe(`<p>看 <b><a data-gid="${ID_A}">a&lt;b&gt;</a></b></p>`)
   })
 })
+
+describe('长期记忆(doc/38)', () => {
+  it('记忆工具不碰网盘:不管权限怎么设都直接放行', async () => {
+    const { MEMORY_TOOL_METAS } = await import('./agent')
+    const { decide, scopePermissions } = await import('./policy')
+    const denyAll = scopePermissions([{ key: 'files:write', scopes: ['files:write'], permission: 'deny' }])
+    for (const m of MEMORY_TOOL_METAS) expect(decide(m, denyAll, new Set())).toBe('allow')
+    expect(MEMORY_TOOL_METAS.map((m) => m.name)).toEqual(['memory_write', 'memory_edit', 'memory_read'])
+  })
+
+  it('面板上的一行', () => {
+    expect(toolLabel('memory_write', { target: 'user', content: '报销单放 /报销,按月分' })).toBe('记住了:报销单放 /报销,按月分')
+    expect(toolLabel('memory_edit', { target: 'user', old: 'a', new: 'b' })).toBe('改了一条记忆')
+    expect(toolLabel('memory_edit', { target: 'user', old: 'a', new: '' })).toBe('删了一条记忆')
+    expect(toolLabel('memory_read', { target: 'user' })).toBe('看了记忆')
+  })
+})

@@ -163,3 +163,12 @@ query NodesByPaths($paths: [String!]!) {
     }
   }
 }
+
+# 助手的长期记忆(doc/38)
+query AiMemory($name: String) {
+  aiMemory(name: $name)
+}
+
+mutation SetAiMemory($name: String, $content: String!) {
+  setAiMemory(name: $name, content: $content)
+}
