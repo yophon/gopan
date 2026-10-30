@@ -5,7 +5,7 @@ import { describeCall, toolLabel } from './describe'
 import type { AccessGroup, Permission } from './policy'
 import { SYSTEM_PROMPT } from './prompt'
 import { ConflictError, GopanSessionStore } from './session'
-import { buildTranscript, friendlyError, shortToolName, titleFrom, userContent, type TranscriptItem } from './transcript'
+import { buildTranscript, changedContext, friendlyError, shortToolName, titleFrom, userContent, type TranscriptItem } from './transcript'
 
 /**
  * 不依赖浏览器的助手运行时(doc/33 八之 2):安卓 App 在 QuickJS 里跑它,界面是 Compose 原生写的。
@@ -254,7 +254,7 @@ export class AssistantRuntime {
       if (stopped) return
       h.beginTurn()
       let live = ''
-      for await (const ev of h.agent.prompt(userContent(input, args.context, images)) as AsyncGenerator<AgentEvent>) {
+      for await (const ev of h.agent.prompt(userContent(input, changedContext(args.context, h.agent.messages), images)) as AsyncGenerator<AgentEvent>) {
         if (ev.type === 'text_delta') {
           live += ev.delta
           this.host.emit({ type: 'live', text: live })

@@ -3,7 +3,8 @@ import type { AgentMessage, ImageContent, TextContent } from '@yophon/tau-kernel
 /**
  * 对话 → 面板上一条条显示的东西。纯函数:同一份消息(刚回答完的、从服务端读回来的)画出来一样。
  *
- * 发给模型的话前面带着「你在看什么」(当前文件夹、选中的文件),包在 <gopan-context> 里,显示时去掉。
+ * 发给模型的话前面带着「你在看什么」(当前文件夹、选中的文件),包在 <gopan-context> 里,显示时去掉;
+ * 只在它变了的时候带。
  */
 
 export type TranscriptItem =
@@ -13,7 +14,7 @@ export type TranscriptItem =
   | { kind: 'tool'; key: string; id: string; name: string; args: Record<string, unknown>; status: 'running' | 'ok' | 'error' | 'denied'; output: string; label?: string }
   | { kind: 'error'; key: string; text: string }
 
-const CONTEXT_RE = /^<gopan-context>[\s\S]*?<\/gopan-context>\n?/
+const CONTEXT_RE = /^<gopan-context>\n?([\s\S]*?)\n?<\/gopan-context>\n?/
 
 export function withContext(text: string, context: string): string {
   return context ? `<gopan-context>\n${context}\n</gopan-context>\n${text}` : text
@@ -21,6 +22,22 @@ export function withContext(text: string, context: string): string {
 
 export function stripContext(text: string): string {
   return text.replace(CONTEXT_RE, '')
+}
+
+/** 模型眼下知道的「你在看什么」:对话里最近一次带上的那份(压缩掉了就没有) */
+export function lastContext(messages: readonly AgentMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]!
+    if (m.role !== 'user') continue
+    const hit = CONTEXT_RE.exec(textOf(m.content))
+    if (hit) return hit[1]!
+  }
+  return ''
+}
+
+/** 和上一次带上的一样就不再带:每句都带同一段,模型会照着这个格式自己续写出一轮「用户的话」 */
+export function changedContext(context: string, messages: readonly AgentMessage[]): string {
+  return context === lastContext(messages) ? '' : context
 }
 
 /** 随消息发的图:data URL ↔ tau 的图片块(doc/35) */

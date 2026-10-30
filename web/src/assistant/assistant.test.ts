@@ -6,7 +6,7 @@ import { describeCall, toolLabel } from './describe'
 import { decide, mcpToolName, scopePermissions, toolMetas } from './policy'
 import { ConflictError, GopanSessionStore } from './session'
 import { describeContext } from './state'
-import { buildTranscript, friendlyError, stripContext, titleFrom, withContext } from './transcript'
+import { buildTranscript, changedContext, friendlyError, lastContext, stripContext, titleFrom, withContext } from './transcript'
 
 const metas = toolMetas([
   { name: 'list_files', annotations: { readOnlyHint: true }, _meta: { 'gopan/scopes': ['files:read'] } },
@@ -106,6 +106,17 @@ describe('对话 → 面板', () => {
     expect(titleFrom('\n  上个月的发票  \n第二行')).toBe('上个月的发票')
     expect(describeContext({ path: '/旅行', folderId: 'f1', selection: [{ id: 'a', name: '1.jpg', kind: 'file' }] })).toContain('选中了 1 项')
     expect(describeContext(null)).toBe('')
+  })
+
+  it('「你在看什么」变了才带', () => {
+    const user = (text: string, context = '') => ({ role: 'user', content: withContext(text, context), timestamp: now }) as AgentMessage
+    const ctx = '用户正在看:/(根目录)'
+    expect(changedContext(ctx, [])).toBe(ctx)
+    const msgs = [user('早', ctx), assistant([{ type: 'text', text: '早' }]), user('在吗')]
+    expect(lastContext(msgs)).toBe(ctx)
+    expect(changedContext(ctx, msgs)).toBe('')
+    expect(changedContext('用户正在看:/旅行', msgs)).toBe('用户正在看:/旅行')
+    expect(changedContext(ctx, [{ role: 'user', content: [{ type: 'text', text: withContext('看图', ctx) }], timestamp: now } as AgentMessage])).toBe('')
   })
 })
 

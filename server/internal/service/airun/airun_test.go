@@ -24,6 +24,7 @@ type fakeGopan struct {
 	appended   atomic.Int32
 	mu         sync.Mutex
 	authHeads  []string
+	firstModel string
 }
 
 func (f *fakeGopan) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -86,6 +87,9 @@ func (f *fakeGopan) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fl := w.(http.Flusher)
 		sse := func(s string) { _, _ = io.WriteString(w, "data: "+s+"\n\n"); fl.Flush() }
 		if f.modelCalls.Add(1) == 1 {
+			f.mu.Lock()
+			f.firstModel = string(body)
+			f.mu.Unlock()
 			sse(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"mcp__gopan__create_folder","arguments":"{\"name\":\"报销\"}"}}]},"finish_reason":"tool_calls"}]}`)
 		} else {
 			sse(`{"choices":[{"delta":{"content":"建好了"},"finish_reason":null}]}`)
@@ -192,6 +196,10 @@ func TestRunWithApproval(t *testing.T) {
 	}
 	if f.toolCalls.Load() != 1 || f.modelCalls.Load() != 2 || f.appended.Load() == 0 {
 		t.Fatalf("tool=%d model=%d appended=%d", f.toolCalls.Load(), f.modelCalls.Load(), f.appended.Load())
+	}
+	// 新对话的第一句带着「你在看什么」(请求体是 JSON,换行是 \n)
+	if !strings.Contains(f.firstModel, `"<gopan-context>\n用户正在看:/\n</gopan-context>\n在根目录建个叫报销的文件夹"`) {
+		t.Fatalf("first model request: %s", f.firstModel)
 	}
 	for _, h := range f.authHeads {
 		if !strings.HasSuffix(h, "Bearer run-token") {

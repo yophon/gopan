@@ -29,7 +29,7 @@ import type { AccessGroup, Permission } from './policy'
 import { ConflictError, GopanSessionStore } from './session'
 import { assistantContext, describeContext, type ConnectionMode } from './state'
 import type { ViewItem } from './runtime'
-import { buildTranscript, friendlyError, shortToolName, titleFrom, userContent, type TranscriptItem } from './transcript'
+import { buildTranscript, changedContext, friendlyError, shortToolName, titleFrom, userContent, type TranscriptItem } from './transcript'
 
 /**
  * 助手面板的控制器(doc/33 四):一个对话一个 tau Agent;对话记录写在 gopan 上。
@@ -359,7 +359,7 @@ export async function send(text: string, setup: ChatSetup, images: string[] = []
   try {
     const h = await ensureAgent(setup, input || '图片')
     h.beginTurn()
-    const ctx = describeContext(assistantContext.value)
+    const ctx = changedContext(describeContext(assistantContext.value), h.agent.messages)
     for await (const ev of h.agent.prompt(userContent(input, ctx, images)) as AsyncGenerator<AgentEvent>) {
       if (ev.type === 'text_delta') chat.live += ev.delta
       else if (ev.type === 'assistant_message' || ev.type === 'tool_start' || ev.type === 'tool_result' || ev.type === 'user_message') {
