@@ -43,6 +43,23 @@ export function readJson(path, fallback = null) {
   }
 }
 
+/** 仓库根的 client.env(KEY=VALUE,# 开头是注释):正式包打进去的线上地址;没有这个文件或这一项时返回 null */
+export function readClientEnv(key) {
+  let text = '';
+  try {
+    text = readFileSync(join(REPO_ROOT, 'client.env'), 'utf8');
+  } catch {
+    return null;
+  }
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#') || !line.includes('=')) continue;
+    const i = line.indexOf('=');
+    if (line.slice(0, i).trim() === key) return line.slice(i + 1).trim() || null;
+  }
+  return null;
+}
+
 export function writeJson(path, value) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(value, null, 2) + '\n');

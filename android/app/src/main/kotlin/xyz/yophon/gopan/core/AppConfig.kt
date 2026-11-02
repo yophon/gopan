@@ -8,9 +8,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
  * 测试里直接构造一个指向 MockWebServer 的实例。
  */
 data class AppConfig(
-    /** gopan 服务端基址,如 https://drive.979687.xyz(末尾斜杠可有可无) */
+    /** gopan 服务端基址,如 https://pan.example.com(末尾斜杠可有可无) */
     val baseUrl: String,
-    /** Yophon ID issuer,如 https://id.979687.xyz */
+    /** Yophon ID issuer,如 https://id.example.com */
     val idIssuer: String,
     /** 账号中心里本 App 的 OAuth 客户端 id(公开客户端,无 secret) */
     val idClientId: String,

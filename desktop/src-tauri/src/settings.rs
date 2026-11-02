@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use std::sync::RwLock;
 use tauri::{AppHandle, Manager};
 
-/// 默认服务器:gopan 的生产站点;自部署的在设置里改
-pub const DEFAULT_SERVER: &str = "https://drive.979687.xyz";
+/// 默认服务器:打包时从仓库根的 client.env 读进来(build.rs);用户在设置里还能改
+pub const DEFAULT_SERVER: &str = env!("GOPAN_DEFAULT_SERVER");
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase")]

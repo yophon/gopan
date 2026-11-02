@@ -70,6 +70,8 @@ make build        # 前端构建 + embed → server/gopan 单二进制
 
 生产运行只需要 `server/gopan` 二进制 + `GOPAN_DB_URL` + `GOPAN_JWT_SECRET`(≥32 字节),配置项见 doc/08。
 
+安卓 App 与桌面端连哪个站点是打包时定的:照 `client.env.example` 在仓库根建 `client.env`(不进 git)写上自己实例的地址,两端都读它(doc/18「自部署」)。
+
 ## 设计文档
 
 浏览器上传的 staging 隔离、配额复核、失败恢复和升级兼容说明见 [15 · 上传一致性修复](./doc/15-浏览器上传一致性修复.md)。
@@ -135,3 +137,7 @@ Agent 接入与远程 MCP 工具见 [docs/MCP.md](./docs/MCP.md)。
 ## 读法
 
 想看全貌:01 → 02 → 03,或者直接读 12(产品说明,一页版)。要动手:04、05 是数据库与 GraphQL 合同,MCP 的协议合同单独见 docs/MCP.md。想知道每步实际怎么落地的:doc/milestones/。要部署:doc/09 照着走,装新机前先扫一遍 doc/10 的检查清单。只是用:doc/11 使用手册;安卓 App 看 doc/18;每个版本改了什么看 CHANGELOG(站点上是 `/app`)。
+
+## 许可证
+
+[MIT](./LICENSE)。`web/src/vendor/tau/` 是 [tau](https://github.com/yophon/tau) 的编译产物,同样是 MIT。

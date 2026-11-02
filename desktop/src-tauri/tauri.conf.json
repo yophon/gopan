@@ -37,7 +37,6 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVFN0ZCQTkxNDcyNDdCQ0MKUldUTWV5UkhrYnAvWGoxWU5KczduUm1EWHlFYWpEcm9QRnF6enJ4U1B1aFExak54QkJIR2kvRHIK",
-      "endpoints": ["https://drive.979687.xyz/api/app/desktop/latest"],
       "windows": { "installMode": "passive" }
     }
   }

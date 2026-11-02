@@ -8,6 +8,8 @@
 __pycache__/
 # 生产配置与密钥:只提交 .env.example
 /.env
+# 安卓 / 桌面端打包用的实例地址:只提交 client.env.example
+/client.env
 /secrets/
 /gopan-linux
 # 服务器上的安卓安装包发版目录(doc/09「安卓安装包发布」)

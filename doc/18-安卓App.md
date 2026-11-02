@@ -68,14 +68,15 @@
 
 ## 自部署
 
-App 默认连 `https://drive.979687.xyz` 与 `https://id.979687.xyz`,地址写在构建参数里,换实例要自己打包:
+App 连哪个站点写在安装包里(App 里改不了),换实例要自己打包。地址放在仓库根的 `client.env`(照 `client.env.example` 建,不进 git),
+桌面端第一次启动时填好的默认服务器也读它:
 
 ```bash
-cd android
-./gradlew :app:assembleRelease \
-  -Pgopan.baseUrl=https://pan.example.com \
-  -Pgopan.idIssuer=https://id.example.com      # 不接 Yophon ID 的实例用密码登录即可
+cp client.env.example client.env      # 改 GOPAN_SERVER_URL / GOPAN_ID_ISSUER;不接 Yophon ID 的实例用密码登录即可
+cd android && ./gradlew :app:assembleRelease
 ```
+
+临时换地址也可以 `-Pgopan.baseUrl=… -Pgopan.idIssuer=…`(优先于 `client.env`)。还是占位值时 release 包拒绝打包。
 
 全部参数见 `android/README.md`(还有 `gopan.idClientId`、`gopan.idRedirect`)。签名用自己的 keystore:`android/keystore.properties` 不存在时 release 退回 debug 签名,只能自己装着用。
 

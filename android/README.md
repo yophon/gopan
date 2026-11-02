@@ -45,12 +45,13 @@ applicationId 仍是 `xyz.yophon.gopan`、签名同一把 key,可原地覆盖安
 
 ## BuildConfig 覆盖
 
-服务端地址等写在 BuildConfig,默认指向生产;本地联调在 `gradle.properties` 或命令行 `-P` 覆盖:
+服务端地址等写在 BuildConfig。默认值来自仓库根的 `client.env`(gitignore,照 `client.env.example` 建),
+没有它时是 `example.com` 的占位值,release 包会拒绝打包;本地联调在 `gradle.properties` 或命令行 `-P` 覆盖(优先于 `client.env`):
 
 | 属性 | BuildConfig 字段 | 默认值 |
 |---|---|---|
-| `gopan.baseUrl` | `GOPAN_BASE_URL` | `https://drive.979687.xyz` |
-| `gopan.idIssuer` | `YOPHON_ID_ISSUER` | `https://id.979687.xyz` |
+| `gopan.baseUrl` | `GOPAN_BASE_URL` | `client.env` 的 `GOPAN_SERVER_URL` |
+| `gopan.idIssuer` | `YOPHON_ID_ISSUER` | `client.env` 的 `GOPAN_ID_ISSUER` |
 | `gopan.idClientId` | `YOPHON_ID_CLIENT_ID` | `gopan-android` |
 | `gopan.idRedirect` | `YOPHON_ID_REDIRECT` | `xyz.yophon.gopan:/oauthredirect` |
 

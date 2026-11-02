@@ -4,11 +4,13 @@
 import { App, T } from './app.mjs';
 import { CdpSession } from './chrome.mjs';
 import { Device } from './device.mjs';
-import { log, sleep } from './util.mjs';
+import { log, readClientEnv, sleep } from './util.mjs';
 
 const apk = process.argv[2];
 if (!apk) throw new Error('用法:node release-smoke.mjs <app-release.apk>');
-const PROD_ID = 'https://id.979687.xyz';
+// 正式包里的账号中心地址:与打包时一样读仓库根的 client.env
+const PROD_ID = readClientEnv('GOPAN_ID_ISSUER');
+if (!PROD_ID) throw new Error('仓库根的 client.env 里没有 GOPAN_ID_ISSUER(见 client.env.example)');
 const device = new Device();
 const app = new App(device);
 

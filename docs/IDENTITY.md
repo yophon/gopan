@@ -3,15 +3,15 @@
 可选的第一方统一登录。设置以下环境变量后，把指定的已有云盘用户绑定到账号中心的稳定 `sub`，不创建新用户、不按用户名或邮箱合并，不改动文件、配额或管理员角色。
 
 ```dotenv
-GOPAN_ID_ISSUER=https://id.979687.xyz
-GOPAN_ID_ORIGIN=https://drive.979687.xyz
+GOPAN_ID_ISSUER=https://id.example.com
+GOPAN_ID_ORIGIN=https://pan.example.com
 GOPAN_ID_CLIENT_ID=gopan
 GOPAN_ID_SECRET=<至少32字符的独立随机客户端密钥>
 GOPAN_ID_SUBJECT=<账号中心稳定用户ID>
 GOPAN_ID_USER_ID=<现有gopan用户UUID>
 ```
 
-账号中心登记精确回调 `https://drive.979687.xyz/api/auth/id/callback` 和移动入口 `https://drive.979687.xyz/api/auth/id/mobile`。浏览器使用 state cookie、PKCE 和 nonce；校验 RS256、issuer、audience、sub、sid。移动入口只接收账号中心签发的绑定目标客户端与 PKCE 的一次性票据。
+账号中心登记精确回调 `https://pan.example.com/api/auth/id/callback` 和移动入口 `https://pan.example.com/api/auth/id/mobile`。浏览器使用 state cookie、PKCE 和 nonce；校验 RS256、issuer、audience、sub、sid。移动入口只接收账号中心签发的绑定目标客户端与 PKCE 的一次性票据。
 
 绑定用户的旧密码及旧浏览器会话不再提供访问权限。其他用户仍可用原登录。新的 gopan refresh cookie 仍为 HttpOnly、路径 `/query`；上游令牌以客户端 secret 派生的 AES-GCM 密钥加密存于 `id_sessions`。每次私有 Bearer 验证和续期都会检查账号中心；数据库行锁串行化上游 refresh，中心不可用时拒绝访问。前端每 30 秒及恢复到前台时检查，撤销后退出私有页面。
 

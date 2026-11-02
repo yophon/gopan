@@ -3,7 +3,7 @@
 真实后端 + 模拟器里的 App:本机起一个隔离的账号中心(Yophon ID)开发实例和一个 gopan 实例,
 模拟器经 `adb reverse` 访问它们,原生登录走模拟器里的 Chrome Custom Tab。脚本零 npm 依赖(Node 24)。
 
-只连临时数据,不碰生产(drive.979687.xyz / id.979687.xyz)。
+只连临时数据,不碰生产(仓库根 `client.env` 里的线上地址)。
 
 ## 依赖
 

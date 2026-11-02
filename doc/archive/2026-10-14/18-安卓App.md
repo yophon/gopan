@@ -4,7 +4,7 @@
 
 ## 设计
 
-**远程模式,不把前端打进 APK。** `capacitor.config.ts` 的 `server.url` 指向线上站点(默认 `https://drive.979687.xyz`,自部署改 `GOPAN_APP_URL` 环境变量后重新 `cap sync`)。WebView 直接加载网页端,登录态(httpOnly refresh cookie)、预签名直传、CSP、PWA 的全部逻辑原样复用,不需要跨域 cookie,前端更新也不用发新版 App。代价是首屏依赖网络,云盘离线本来也没内容。
+**远程模式,不把前端打进 APK。** `capacitor.config.ts` 的 `server.url` 指向线上站点(默认 `https://pan.example.com`,自部署改 `GOPAN_APP_URL` 环境变量后重新 `cap sync`)。WebView 直接加载网页端,登录态(httpOnly refresh cookie)、预签名直传、CSP、PWA 的全部逻辑原样复用,不需要跨域 cookie,前端更新也不用发新版 App。代价是首屏依赖网络,云盘离线本来也没内容。
 
 **壳只做三件事:**
 
@@ -48,7 +48,7 @@ cd android && ./gradlew assembleDebug     # app/build/outputs/apk/debug/app-debu
 
 **发布签名**在仓库外:仓库外发布目录里的 `gopan-release.jks` + `keystore.properties`,复制到 `app/android/keystore.properties` 即可出 release 包。密钥丢了已装用户就没法升级,务必备份。
 
-**身份服务域名要进白名单。** Yophon ID 登录会把 WebView 带到 `id.979687.xyz`,不在 `server.allowNavigation` 里 Capacitor 会丢给系统浏览器,回调落在浏览器、App 拿不到登录态(2.6.0 的问题,2.6.1 修)。自部署改 `GOPAN_APP_ALLOW_NAV`(逗号分隔 host)。
+**身份服务域名要进白名单。** Yophon ID 登录会把 WebView 带到 `id.example.com`,不在 `server.allowNavigation` 里 Capacitor 会丢给系统浏览器,回调落在浏览器、App 拿不到登录态(2.6.0 的问题,2.6.1 修)。自部署改 `GOPAN_APP_ALLOW_NAV`(逗号分隔 host)。
 
 **指向别的实例**(自部署 / 模拟器打本机):`GOPAN_APP_URL=http://10.0.2.2:8090 npx cap sync android` 再打包。http 实例要求服务端 `GOPAN_DEV_MODE=true`(cookie 不带 Secure)。
 

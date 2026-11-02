@@ -29,7 +29,26 @@ const COMMANDS: &[&str] = &[
     "desktop_ai_abort",
 ];
 
+/// 第一次启动时填好的默认服务器:仓库根 client.env 的 GOPAN_SERVER_URL(见 client.env.example),没有就用占位值
+fn default_server() -> String {
+    let path = std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("../../client.env");
+    println!("cargo:rerun-if-changed={}", path.display());
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|text| {
+            text.lines()
+                .map(str::trim)
+                .filter(|line| !line.starts_with('#'))
+                .filter_map(|line| line.split_once('='))
+                .find(|(key, _)| key.trim() == "GOPAN_SERVER_URL")
+                .map(|(_, value)| value.trim().to_string())
+        })
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "https://pan.example.com".into())
+}
+
 fn main() {
+    println!("cargo:rustc-env=GOPAN_DEFAULT_SERVER={}", default_server());
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(COMMANDS)))
         .expect("tauri-build 失败");
 }

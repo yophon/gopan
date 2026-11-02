@@ -11,12 +11,19 @@ plugins {
     alias(libs.plugins.apollo)
 }
 
-// ---- 服务端地址:gradle.properties / -P 可覆盖,留空用默认(生产) ----
+// ---- 服务端地址:gradle.properties / -P > 仓库根的 client.env(gitignore,格式见 client.env.example)> 占位值 ----
 fun gopanProp(name: String, default: String): String =
     providers.gradleProperty(name).orNull?.trim()?.takeIf { it.isNotEmpty() } ?: default
 
-val gopanBaseUrl = gopanProp("gopan.baseUrl", "https://drive.979687.xyz")
-val yophonIdIssuer = gopanProp("gopan.idIssuer", "https://id.979687.xyz")
+val clientEnv: Map<String, String> = providers.fileContents(rootProject.layout.projectDirectory.file("../client.env"))
+    .asText.orNull.orEmpty().lines()
+    .map { it.trim() }
+    .filter { it.isNotEmpty() && !it.startsWith("#") && '=' in it }
+    .associate { it.substringBefore('=').trim() to it.substringAfter('=').trim() }
+
+val placeholderBaseUrl = "https://pan.example.com"
+val gopanBaseUrl = gopanProp("gopan.baseUrl", clientEnv["GOPAN_SERVER_URL"] ?: placeholderBaseUrl)
+val yophonIdIssuer = gopanProp("gopan.idIssuer", clientEnv["GOPAN_ID_ISSUER"] ?: "https://id.example.com")
 val yophonIdClientId = gopanProp("gopan.idClientId", "gopan-android")
 val yophonIdRedirect = gopanProp("gopan.idRedirect", "xyz.yophon.gopan:/oauthredirect")
 
@@ -117,6 +124,17 @@ android {
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
+// release 包的服务端地址在 App 里改不了:还是占位值就不打(装上之后连检查更新都连不上)
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    val baseUrl = gopanBaseUrl
+    val placeholder = placeholderBaseUrl
+    doFirst {
+        if (baseUrl == placeholder) {
+            throw GradleException("release 包的服务端地址还是占位值 $placeholder:在仓库根建 client.env(见 client.env.example),或者 -Pgopan.baseUrl=…")
+        }
     }
 }
 
