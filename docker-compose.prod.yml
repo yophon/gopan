@@ -29,7 +29,11 @@ services:
       retries: 12
 
   minio:
-    image: minio/minio:latest
+    # docker.io/minio/minio 与 quay.io/minio/minio 自 2025 年起不能匿名拉取,新部署拉不下来。
+    # pgsty/minio 是社区维护的 MinIO 构建:入口、命令、/data 布局、mc 都与官方镜像一致,
+    # 旧版写下的数据直接能读(doc/09「MinIO 镜像」)。老部署想保持原镜像不动:.env 里写
+    # MINIO_IMAGE=minio/minio:latest(本地已缓存,不用再拉)
+    image: ${MINIO_IMAGE:-pgsty/minio:RELEASE.2026-08-04T00-00-00Z}
     restart: unless-stopped
     command: server /data
     environment:
@@ -68,7 +72,10 @@ services:
     build:
       context: .
       # 国内构建可加:args: { GOPROXY: "https://goproxy.cn,direct" }
-    image: gopan:latest
+    # 留空 = 本机构建或 Dockerfile.prebuilt 叠出来的 gopan:latest(原来的做法)。
+    # 新部署、小内存机器:.env 里写 GOPAN_IMAGE=ghcr.io/yophon/gopan:<版本>,
+    # 用 `pull` + `up -d --no-build`,不在机器上编译(doc/09「首次部署」)
+    image: ${GOPAN_IMAGE:-gopan:latest}
     restart: unless-stopped
     environment:
       GOPAN_DB_URL: postgres://gopan:${POSTGRES_PASSWORD:?}@postgres:5432/gopan?sslmode=disable

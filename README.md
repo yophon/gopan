@@ -1,6 +1,11 @@
 # gopan
 
-自部署云盘。Go + GraphQL + Postgres + MinIO 后端,Vue 3 前端,单二进制交付;另有 Kotlin + Jetpack Compose 的安卓原生客户端。
+**简体中文** · [English](README.en.md)
+
+自部署云盘。Go + GraphQL + Postgres + MinIO 后端,单二进制交付,2 核 2G 的 VPS 就能跑。三个客户端:Vue 3 网页、Kotlin + Jetpack Compose 的安卓原生 App、Windows 桌面端(Tauri)。
+
+- **内置 AI 助手**:网页、桌面端、安卓 App 里都能用,找文件、读文档、整理、建分享;改动先确认,也能整轮交给服务器跑。
+- **自带 Remote MCP**:Claude、ChatGPT、Codex 等 Agent 经 OAuth 2.1 接入,在你授权的范围里找、读、整理、分享网盘里的文件;文件字节不经过 MCP,Agent 做的每次改动都能在「动态」里按来源撤回。各客户端怎么接见 [docs/MCP.md · 客户端接入](./docs/MCP.md#客户端接入),给 Agent 的用法说明见 [Agent Skill](./skills/gopan/)。
 
 ![CI](https://github.com/yophon/gopan/actions/workflows/ci.yml/badge.svg)
 
@@ -19,7 +24,7 @@
 | ![预览](doc/assets/preview.png) | ![分享访客页](doc/assets/share.png) |
 -->
 
-当前阶段:**v3.5.0——动态与撤回(每次改动都记来源,能单条、整批或按来源撤回,WebDAV / Agent 大量删除提醒)、空间分析(类型分布、大文件、重复文件、空文件夹,文件列表改成自然顺序)、订阅(RSS / 播客 / GitHub Releases 自动下载)、剪藏(网页存成 Markdown,网盘里直接渲染)**;安卓原生 App 同步支持。上一版 v3.4 是影音、通知、直链与图床。
+当前版本与每一版改了什么见 [CHANGELOG](./CHANGELOG.md)(站点的 `/app` 页面与 App 的「更新日志」展示的就是它);功能全貌见 [12 · 产品说明](./doc/12-产品说明.md)。
 
 ## 架构
 
@@ -58,6 +63,23 @@ flowchart LR
 
 ## 快速开始
 
+### 部署(用预构建镜像)
+
+一台有公网 IP 的 Linux 主机(2G 内存够用)、一个解析到它的域名、Docker 与 compose 插件。镜像由 GitHub Actions 构建,机器上不编译(只有 linux/amd64):
+
+```bash
+git clone https://github.com/yophon/gopan.git /opt/gopan && cd /opt/gopan
+cp .env.example .env && vi .env    # 填域名与两个密码,选部署档位,取消 GOPAN_IMAGE 的注释
+mkdir -p secrets && openssl rand -base64 48 > secrets/jwt_secret
+chown 10001:10001 secrets/jwt_secret && chmod 400 secrets/jwt_secret && chmod 600 .env
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d --no-build
+```
+
+选档(自带 Caddy 自动证书,还是交给宿主 nginx)、反代约定、升级、备份与恢复、排障都在 [09 · 上线手册](./doc/09-上线手册.md)。
+
+### 开发
+
 ```bash
 make dev-env      # compose 起 postgres/minio/gotenberg
 make dev-server   # 后端 :8080(自动跑迁移)
@@ -76,7 +98,7 @@ make build        # 前端构建 + embed → server/gopan 单二进制
 
 浏览器上传的 staging 隔离、配额复核、失败恢复和升级兼容说明见 [15 · 上传一致性修复](./doc/15-浏览器上传一致性修复.md)。
 
-Agent 接入与远程 MCP 工具见 [docs/MCP.md](./docs/MCP.md)。
+Agent 接入与远程 MCP 工具见 [docs/MCP.md](./docs/MCP.md)(各客户端的接法在[客户端接入](./docs/MCP.md#客户端接入)一节),给 Agent 的用法说明见 [skills/gopan/](./skills/gopan/)。
 
 全部设计文档在 [doc/](./doc/):
 
@@ -106,10 +128,25 @@ Agent 接入与远程 MCP 工具见 [docs/MCP.md](./docs/MCP.md)。
 | [21 · 离线下载与压缩包计划](./doc/21-离线下载与压缩包计划.md) | 后台任务底座、离线下载防 SSRF 与断线续传、压缩包目录索引 / 预览 / 解压的上限与里程碑 |
 | [22 · 影音、通知与图床计划](./doc/22-影音通知与图床计划.md) | 媒体类型补全、字幕 / 续播 / 连播,通知合并与推送投递,直链中转与审计检测、图床接口与 GPS 抹除 |
 | [23 · 动态、空间、订阅与剪藏计划](./doc/23-动态空间订阅剪藏计划.md) | 改动的来源与撤回、大量删除提醒,空间分析与自然顺序,RSS / 播客 / GitHub 订阅,网页剪藏与服务端 Markdown 渲染 |
+| [24 · 收藏、最近打开与历史版本](./doc/24-收藏最近与历史版本.md) | 收藏、「最近」(带看到哪)、同名覆盖留历史版本;v3.10.0 |
+| [25 · 在线编辑文本](./doc/25-在线编辑文本.md) | 文本文件直接改、App 替换上传;v3.11.0 |
+| [26 · 离线可用](./doc/26-离线可用.md) | 安卓 App 把文件存一份在本机,不同步只是副本;v3.12.0 |
+| [27 · 批量重命名与分享存到文件夹](./doc/27-批量重命名与分享存到文件夹.md) | 批量重命名、把别人的分享存进自己的文件夹、离线可用补全;v3.13.0 |
+| [28 · 备选功能](./doc/28-备选功能.md) | 活的清单:想过还没定的功能,以及明确不做的和原因 |
+| [29 · 桌面端计划](./doc/29-桌面端计划.md) | Windows 桌面端:窗口里是网页版,Tauri 2 外壳补托盘传输、文件夹下载、截图上传、右键上传 |
+| [30 · 搜索筛选](./doc/30-搜索筛选.md) | 文件名与内容搜索加类型、时间、大小、文件夹范围筛选与排序;v3.15.0 |
+| [31 · 影音补强与一步分享](./doc/31-影音补强与一步分享.md) | 网页放 mkv(只换封装)、歌词、用电脑上的播放器放、一步生成分享链接;v3.17.0 |
+| [32 · 分享上传与自动刷新](./doc/32-分享上传与自动刷新.md) | 文件夹分享允许对方上传;别处改了网盘,打开着的列表自己刷新;v3.19.0 |
+| [33 · 助手](./doc/33-助手.md) | 内置 AI 助手:内核是 tau,用 gopan 自己的 MCP 工具;权限三态、确认卡、站点模型或自己的 key、转发或直连 |
+| [34 · 助手在服务器上运行](./doc/34-助手在服务器上运行.md) | 整轮交给服务器跑(每轮一个 qjs 进程),关掉客户端照样跑完,等确认时推送通知 |
+| [35 · 助手看图与读写文件](./doc/35-助手看图与读写文件.md) | 看图、对话里发图、写文本文件、回答里引用文件 |
+| [36 · 局域网直传计划](./doc/36-局域网直传计划.md) | 桌面端与安卓同一局域网直接互传,字节不经过服务器,兼容 LocalSend v2 协议 |
+| [37 · 助手的定时任务、图片识字与入口](./doc/37-助手定时任务、图片识字与入口.md) | 到点由服务器跑的定时任务、用能看图的模型识别图片里的字、从别的 App 带着文件打开助手 |
+| [38 · 助手的长期记忆](./doc/38-助手的长期记忆.md) | 每人一份「关于你」,助手自己记、自己改;用 tau 的长期记忆扩展,gopan 只提供存储 |
 
 ## 实现回顾
 
-每个里程碑实际交付了什么、关键决策、踩坑记录,在 [doc/milestones/](./doc/milestones/):
+每个里程碑实际交付了什么、关键决策、踩坑记录,在 [doc/milestones/](./doc/milestones/)。v3.5 之后各版本的设计与取舍写在 doc/24 起的各篇文档里(上表),逐版的变化见 [CHANGELOG](./CHANGELOG.md):
 
 | 里程碑 | 内容 |
 |---|---|
