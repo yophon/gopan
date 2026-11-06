@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.yophon/gopan",
+  "title": "gopan",
+  "description": "Self-hosted cloud drive: search, read, organize and share your files over remote MCP",
+  "version": "3.24.1",
+  "repository": {
+    "url": "https://github.com/yophon/gopan",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://{gopan_host}/mcp",
+      "variables": {
+        "gopan_host": {
+          "description": "Host of your own gopan instance, e.g. pan.example.com",
+          "isRequired": true
+        }
+      }
+    }
+  ]
+}

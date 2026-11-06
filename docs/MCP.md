@@ -90,6 +90,98 @@ OAuth 与 API Key 共用以下权限：
 
 已有五项文件权限不自动升级为分享管理或审计权限，需要重新 OAuth 授权或创建新 Key。管理员权限是独立的 `admin:read`、`admin:users`、`admin:tasks`、`admin:purge`，只能由管理员授权，且不能与普通文件权限混在同一凭据里。
 
+## 客户端接入
+
+> 2026-11-06 对一套临时测试实例（3.24.1，2026-11-02 构建的生产镜像）实测。「协议已验证」= 下面「自检」里的每一步都用 curl 和一个最小 MCP 客户端跑通了；「未在客户端里试」= 没有真的在那个客户端里点过授权，配置写法以该客户端的文档为准。
+
+### 各客户端
+
+| 客户端 | 认证 | 能否上传本地文件 | 验证情况 |
+|---|---|---|---|
+| Claude Code | OAuth（浏览器授权一次），或 API Key 请求头 | 能：用 shell 跑 `curl` 或 [`skills/gopan/scripts/upload.py`](../skills/gopan/scripts/upload.py) | 协议已验证；未在客户端里试 |
+| Codex CLI | OAuth | 能 | 协议已验证；`codex mcp` 命令沿用下文「客户端要求与 OAuth」里的示例，这次没有重跑 |
+| Claude.ai 自定义连接器 | OAuth | **不能**：网页聊天读不到你电脑上的文件 | 协议已验证；未在客户端里试 |
+| ChatGPT 自定义连接器 | OAuth | **不能**，同上 | 未验证：ChatGPT 对 MCP 服务器的要求以 OpenAI 文档为准 |
+| Cursor | OAuth 或 `headers` | 能（Agent 模式下有终端） | 未在客户端里试 |
+| VS Code（Copilot Agent 模式） | OAuth 或 `headers` | 能（Agent 模式下有终端） | 未在客户端里试 |
+
+不能读本地文件的网页客户端照样能找、读、整理、建分享，也能让服务器替你下文件（`fetch_url`）、剪藏网页（`clip_url`）——这些都不需要 Agent 搬字节。
+
+**网页客户端要求实例能从公网访问**：Claude.ai、ChatGPT 从它们自己的服务器连你的 `/mcp`，只在局域网或 Tailscale 里能访问的实例连不上；命令行客户端（Claude Code、Codex、Cursor、VS Code）从你的电脑直连，没有这个限制。
+
+### 配置片段
+
+以下把 `https://pan.example.com` 换成你的站点地址。各客户端的 MCP 配置格式会变，写法以它们的文档为准，这里是 2026-11 的常见写法。
+
+**Claude Code**
+
+```bash
+claude mcp add --transport http gopan https://pan.example.com/mcp
+# 然后在 Claude Code 里运行 /mcp,选 gopan,在浏览器里完成授权
+
+# 无交互环境用 API Key:
+claude mcp add --transport http gopan https://pan.example.com/mcp \
+  --header "Authorization: Bearer gopan_key_xxx"
+```
+
+**Cursor**（`~/.cursor/mcp.json` 或项目里的 `.cursor/mcp.json`）
+
+```json
+{
+  "mcpServers": {
+    "gopan": { "url": "https://pan.example.com/mcp" }
+  }
+}
+```
+
+用 API Key 时在 `gopan` 里加 `"headers": { "Authorization": "Bearer gopan_key_xxx" }`。
+
+**VS Code**（工作区的 `.vscode/mcp.json`）
+
+```json
+{
+  "servers": {
+    "gopan": { "type": "http", "url": "https://pan.example.com/mcp" }
+  }
+}
+```
+
+**Claude.ai / ChatGPT**：在各自设置里的连接器页面添加自定义连接器，地址填 `https://pan.example.com/mcp`，按提示完成授权。ChatGPT 需要先开启开发者模式，具体入口以 OpenAI 的文档为准。
+
+**Codex**：见下文「客户端要求与 OAuth」。
+
+**Agent Skill**：[`skills/gopan/`](../skills/gopan/) 教 Agent 用好这些工具——上传怎么走、批量改动先预览、改错了怎么办。命令行客户端装上它，第一次用就少踩坑。
+
+### OAuth 细节（实测）
+
+- `/.well-known/oauth-protected-resource` 与 `/.well-known/oauth-authorization-server` 都可用，带 `/mcp` 后缀的变体（`/.well-known/oauth-protected-resource/mcp` 等）也返回同样的 JSON。
+- 动态注册（`/oauth/register`）只接受 public client：`token_endpoint_auth_method` 必须是 `none`，回调必须是 HTTPS 或 loopback 的 HTTP。要求 client secret 的客户端会被拒（`only public clients are supported`），非 loopback 的 HTTP 回调也会被拒。
+- 只支持 PKCE `S256`，授权码 5 分钟、Access Token 1 小时、Refresh Token 30 天且用后即换。
+- 服务是 stateless JSON 模式：不先 `initialize` 直接 `tools/list`、`tools/call` 也能用。
+
+### 自检
+
+部署后用下面几条确认 MCP 对外是好的（`B` 换成你的站点地址，`GOPAN_KEY` 是在「Agent 接入」里建的 API Key）：
+
+```bash
+B=https://pan.example.com
+
+# 1. 未授权:应为 401,WWW-Authenticate 里带 resource_metadata
+curl -si -X POST $B/mcp -H 'Content-Type: application/json' -d '{}' | grep -iE '^HTTP|www-authenticate'
+
+# 2. 资源元数据:resource 必须是 https://<你的域名>/mcp。
+#    是 http:// 或内网地址,说明反代没透传 X-Forwarded-Proto / Host,或没配 GOPAN_TRUSTED_PROXIES(见 doc/09)
+curl -s $B/.well-known/oauth-protected-resource
+
+# 3. 授权服务器元数据:应含 registration_endpoint 与 "S256"
+curl -s $B/.well-known/oauth-authorization-server
+
+# 4. 用 API Key 列工具:应为 45
+curl -s -X POST $B/mcp -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' -H "Authorization: Bearer $GOPAN_KEY" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | grep -o '"name":"[a-z_]*"' | wc -l
+```
+
 ## 工具
 
 | 工具 | Scope | 作用 |
@@ -100,6 +192,8 @@ OAuth 与 API Key 共用以下权限：
 | `read_text_file` | `files:download` | 分段读取 UTF-8 文本，每次最多 64 KiB |
 | `search_file_contents` | `files:read` | 按文件里的文字搜索（PDF、Word / Excel / PowerPoint、ODF、文本与代码），字面子串、不分大小写；返回首处命中的片段与 PDF 页码。关键词至少两个汉字或三个字母 |
 | `read_document_text` | `files:download` | 不下载文件，按字符偏移分段读提取出的文字（PDF / Office 也行），每次最多 5 万字 |
+| `view_image` | `files:download` | 把文件当图片看：各种图片格式、视频封面、PDF 或已转换 Office 的第一页，返回长边不超过 1568 px 的 JPEG |
+| `write_text_file` | `files:write` | 新建 UTF-8 文本文件或整份替换（最多 2 MiB）；覆盖非空文件要带 `read_text_file` 返回的 `base_sha256`，旧内容进历史版本 |
 | `prepare_download` | `files:download` | 签发文件 GET URL 或文件夹/批量 ZIP 票据 |
 | `create_folder` | `files:write` | 创建目录 |
 | `rename_node` | `files:write` | 重命名文件或目录 |
@@ -138,7 +232,7 @@ OAuth 与 API Key 共用以下权限：
 | `chat_send` | `chat:write` | 发送文本或已保存的文件节点到「我的设备」会话 |
 | `chat_list` | `chat:read` | 分页读取「我的设备」会话消息（升序） |
 
-文件与会话接口共 43 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
+文件与会话接口共 45 个工具，不暴露永久删除。永久删除只在独立管理员接口中提供。
 
 ### 我的设备会话
 
