@@ -52,7 +52,7 @@ func NewHandler(nodes *service.Nodes, uploads *service.Uploads, tokens *service.
 	for _, o := range opts {
 		o(s)
 	}
-	protocol := mcp.NewServer(&mcp.Implementation{Name: "gopan", Version: "2.3.0"}, nil)
+	protocol := mcp.NewServer(&mcp.Implementation{Name: "gopan", Version: implementationVersion}, nil)
 	s.registerTools(protocol)
 	protocol.AddReceivingMiddleware(assistantToolFilter)
 	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return protocol }, streamableOptions())

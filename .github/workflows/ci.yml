@@ -10,6 +10,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # MCP 目录(Glama)收录用的自省镜像:按 Dockerfile.glama 构建,经 stdio 取一次工具清单(docs/MCP.md「目录收录」)
+  glama:
+    name: glama (inspection image + tools/list)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Dockerfile.glama
+        run: docker build -f Dockerfile.glama -t gopan-glama .
+
+      - name: tools/list over stdio
+        run: |
+          init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}'
+          inited='{"jsonrpc":"2.0","method":"notifications/initialized"}'
+          list='{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+          out=$( (printf '%s\n%s\n%s\n' "$init" "$inited" "$list"; sleep 3) | docker run -i --rm gopan-glama gopan-inspect )
+          echo "$out" | head -c 400; echo
+          n=$(echo "$out" | grep -o '"name":"[a-z_]*"' | sort -u | wc -l)
+          echo "distinct names in output: $n"
+          test "$n" -ge 40
+          echo "$out" | grep -q '"name":"prepare_upload"'
+          echo "$out" | grep -q 'Schema inspection only'
+
+      - name: mcp-proxy present
+        run: docker run --rm --entrypoint sh gopan-glama -c 'command -v mcp-proxy && command -v gopan-inspect'
+
   server:
     name: server (go vet + go test)
     runs-on: ubuntu-latest
