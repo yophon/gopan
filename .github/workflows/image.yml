@@ -7,7 +7,10 @@ name: Image
 #    预发布 tag(如 v3.0.0-p2)只推它自己。也可以手动:
 #      gh workflow run image.yml -f version=3.24.1 -f push=true
 #
-# 2. 不推,导出成 artifact 给小内存服务器 docker load(doc/09「升级」,Dockerfile.prebuilt 叠层攒多了重建一次):
+# 运行层(Dockerfile 的 runtime 阶段)走 GitHub Actions 缓存:依赖没变时运行层的层不变,
+# 服务器拉新版本只下载变了的那层二进制。
+#
+# 2. 不推,导出成 artifact 给不方便访问 ghcr 的服务器 docker load(doc/09「升级」):
 #      gh workflow run image.yml && gh run watch
 #      gh run download <run-id> -n gopan-image-<sha>     → gopan-image.tar.gz
 on:
@@ -63,6 +66,9 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "version=$version push=$push image=$image latest=$latest"
 
+      # docker-container 驱动才能用 type=gha 缓存;--load 照样把镜像放回本机 docker
+      - uses: docker/setup-buildx-action@v3
+
       - name: Build
         env:
           VERSION: ${{ steps.v.outputs.version }}
@@ -76,6 +82,8 @@ jobs:
             --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
             --label org.opencontainers.image.version="$VERSION" \
             --label org.opencontainers.image.licenses=MIT \
+            --cache-from type=gha,scope=gopan-image \
+            --cache-to type=gha,mode=max,scope=gopan-image \
             $tags --load .
 
       - name: Check runtime tools

@@ -26,10 +26,12 @@ COPY server/ ./
 COPY --from=web /src/web/dist ./cmd/gopan/dist
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags='-s -w' -o /out/gopan ./cmd/gopan
 
-# ---- 运行时:debian-slim + 静态 ffmpeg(apt 版依赖树 ~500MB,静态单文件 ~110MB)----
+# ---- 运行层:debian-slim + 静态 ffmpeg(apt 版依赖树 ~500MB,静态单文件 ~110MB)----
+# 单独成一个阶段,只在系统依赖变化时才变。Dockerfile.prebuilt 以它(gopan-runtime:<版本>)为底
+# 只叠一层二进制。改了这一段(加系统包、升 ffmpeg / qjs),要把 Dockerfile.prebuilt 里的运行层版本号加一。
 FROM mwader/static-ffmpeg:7.1 AS ffmpeg
 
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim AS runtime
 # poppler-utils:内容搜索提取 PDF 文字(pdftotext);poppler-data:中文 PDF 的 CMap(doc/20)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl poppler-utils poppler-data \
@@ -42,9 +44,12 @@ RUN curl -fsSL -o /usr/local/bin/qjs "https://github.com/quickjs-ng/quickjs/rele
     && echo "${QJS_SHA256}  /usr/local/bin/qjs" | sha256sum -c - \
     && chmod 755 /usr/local/bin/qjs
 COPY --from=ffmpeg /ffmpeg /ffprobe /usr/local/bin/
-COPY --from=build /out/gopan /usr/local/bin/gopan
 USER gopan
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
     CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
 ENTRYPOINT ["gopan"]
+
+# ---- 最终镜像:运行层 + 一层二进制 ----
+FROM runtime
+COPY --from=build /out/gopan /usr/local/bin/gopan
