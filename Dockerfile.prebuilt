@@ -1,29 +1,21 @@
 # 小内存服务器部署路径之二:开发机没有 Docker 时,把 Go 二进制(前端已 embed)交叉编译好,
-# 在服务器上只做一层 COPY,复用现有 gopan:latest 的运行时层(debian-slim + 静态 ffmpeg)。
-# 机上零编译,内存占用可忽略。用法见 doc/09「升级 · 无 Docker 开发机」。
+# 在服务器上只做一层 COPY。机上零编译,内存占用可忽略。用法见 doc/09「升级 · 无 Docker 开发机」。
 #
+# 底座是固定的运行层 gopan-runtime:<版本>(Dockerfile 的 runtime 阶段),不是上一次的 gopan:latest:
+# 部署多少次镜像都是「运行层 + 1 层二进制」,旧二进制随旧镜像一起回收。
+# Dockerfile 的 runtime 阶段改了(加系统包、升 ffmpeg / qjs),把下面的版本号加一,
+# 服务器上照 doc/09 重建一次运行层。
+#
+#   # 服务器,运行层只在第一次或版本号变了时建(只有 apt 与拷贝,不编译):
+#   cd /opt/gopan && docker build --target runtime -t gopan-runtime:1 .
 #   # 开发机(任意平台):
 #   cd web && pnpm install --frozen-lockfile && pnpm build && cd ..
 #   rm -rf server/cmd/gopan/dist && cp -r web/dist server/cmd/gopan/dist
 #   cd server && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags='-s -w' -o ../gopan-linux ./cmd/gopan
-#   scp ../gopan-linux Dockerfile.prebuilt <host>:/opt/gopan/
+#   scp ../gopan-linux <host>:/opt/gopan/
 #   # 服务器:
 #   cd /opt/gopan && docker build -f Dockerfile.prebuilt -t gopan:latest . \
 #     && docker compose -f docker-compose.prod.yml up -d --no-build gopan
-ARG BASE=gopan:latest
+ARG BASE=gopan-runtime:1
 FROM ${BASE}
-# v3.2 起内容搜索要 pdftotext:老的运行层没有就补装一次(apt 安装,不编译,小内存机器也扛得住);
-# 之后的 gopan:latest 已经带着,这一步只是检查一下就过去
-USER root
-RUN command -v pdftotext >/dev/null 2>&1 || ( apt-get update \
-    && apt-get install -y --no-install-recommends poppler-utils poppler-data \
-    && rm -rf /var/lib/apt/lists/* )
-# 助手在服务器上运行(doc/34):quickjs-ng 的 qjs(静态编译,每一轮起一个进程);固定版本,sha256 对不上就不装
-ARG QJS_VERSION=v0.17.0
-ARG QJS_SHA256=0bfc02511a9f549c28b53880d988fc7cd5d361e90c5e8afdfcd7dc6774ceace5
-RUN echo "${QJS_SHA256}  /usr/local/bin/qjs" | sha256sum -c - >/dev/null 2>&1 || ( \
-    curl -fsSL -o /usr/local/bin/qjs.tmp "https://github.com/quickjs-ng/quickjs/releases/download/${QJS_VERSION}/qjs-linux-x86_64" \
-    && echo "${QJS_SHA256}  /usr/local/bin/qjs.tmp" | sha256sum -c - \
-    && chmod 755 /usr/local/bin/qjs.tmp && mv /usr/local/bin/qjs.tmp /usr/local/bin/qjs )
 COPY --chown=root:root --chmod=755 gopan-linux /usr/local/bin/gopan
-USER gopan
