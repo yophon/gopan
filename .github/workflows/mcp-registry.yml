@@ -1,0 +1,69 @@
+name: MCP Registry
+
+# 把仓库根的 server.json 发布到官方 MCP Registry(registry.modelcontextprotocol.io,预览版)。
+# 手动触发:发版后(server.json 的 version 已改成新版本)在 Actions 里点 Run workflow。
+# 先只跑校验(publish=false)看服务端认不认 `https://{gopan_host}/mcp` 这种整段主机名的模板变量,
+# 通过了再勾 publish。认证走 GitHub OIDC:命名空间 io.github.yophon/* 由仓库所属账号证明,不需要密钥。
+# 写法照 registry 仓库的 docs/modelcontextprotocol-io/github-actions.mdx(下载后用 cosign 校验签名)。
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "校验通过后真的发布(不勾只跑 validate)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  registry:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC 登录 MCP Registry 必需
+    env:
+      MCP_PUBLISHER_VERSION: v1.8.7
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Download and verify mcp-publisher
+        run: |
+          set -euo pipefail
+          archive="mcp-publisher_linux_amd64.tar.gz"
+          base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
+          curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
+          cosign verify-blob \
+            --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          tar xzf "$archive" mcp-publisher
+          rm -f "$archive" "$archive.sigstore.json"
+
+      - name: Check server.json version matches CHANGELOG
+        run: |
+          set -euo pipefail
+          want="$(grep -m1 -oE '^## [0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | cut -d' ' -f2)"
+          have="$(jq -r .version server.json)"
+          echo "CHANGELOG: $want  server.json: $have"
+          if [ "$want" != "$have" ]; then
+            echo "::error::server.json 的 version($have)与 CHANGELOG 最新版本($want)不一致"
+            exit 1
+          fi
+
+      - name: Validate
+        run: ./mcp-publisher validate server.json
+
+      - name: Authenticate to MCP Registry
+        if: inputs.publish
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish
+        if: inputs.publish
+        run: ./mcp-publisher publish
