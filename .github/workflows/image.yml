@@ -1,12 +1,32 @@
 name: Image
 
-# 按完整 Dockerfile 构建生产镜像(linux/amd64),导出成 artifact,给小内存服务器 docker load。
-# 小机器上不能跑这个构建(vite + go build 会触发 OOM,见 doc/10);平时上线走 Dockerfile.prebuilt,
-# 它每次在旧镜像上叠一层二进制,攒多了用这里重建一次(doc/09「升级」)。
-#   gh workflow run image.yml && gh run watch
-#   gh run download <run-id> -n gopan-image-<sha>     → gopan-image.tar.gz
+# 按完整 Dockerfile 构建生产镜像(linux/amd64)。两种用法:
+#
+# 1. 推到 ghcr.io/yophon/gopan,新部署直接拉,不用在小内存机器上编译(doc/09「首次部署」):
+#    推送版本 tag(v3.24.1)时自动构建并推 :3.24.1;正式版本(x.y.z)同时移动 :latest,
+#    预发布 tag(如 v3.0.0-p2)只推它自己。也可以手动:
+#      gh workflow run image.yml -f version=3.24.1 -f push=true
+#
+# 2. 不推,导出成 artifact 给小内存服务器 docker load(doc/09「升级」,Dockerfile.prebuilt 叠层攒多了重建一次):
+#      gh workflow run image.yml && gh run watch
+#      gh run download <run-id> -n gopan-image-<sha>     → gopan-image.tar.gz
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "镜像版本号,如 3.24.1(推送时必填,不带 v)"
+        required: false
+        default: ""
+      push:
+        description: "推到 ghcr.io/<owner>/gopan(:<version>,正式版本同时推 :latest)"
+        type: boolean
+        default: false
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   image:
@@ -15,11 +35,48 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build
+      - name: Resolve version
+        id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PUSH: ${{ inputs.push }}
         run: |
+          if [ "$EVENT" = "push" ]; then
+            version="${GITHUB_REF_NAME#v}"; push=true
+          else
+            version="${INPUT_VERSION#v}"; push="${INPUT_PUSH:-false}"
+          fi
+          if [ "$push" = "true" ] && [ -z "$version" ]; then
+            echo "::error::推送镜像要给 version(如 3.24.1)"; exit 1
+          fi
+          # ghcr 的仓库名必须小写
+          image="ghcr.io/$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')/gopan"
+          # 只有 x.y.z 这样的正式版本才移动 :latest
+          latest=false
+          if echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then latest=true; fi
+          {
+            echo "version=$version"
+            echo "push=$push"
+            echo "image=$image"
+            echo "latest=$latest"
+          } >> "$GITHUB_OUTPUT"
+          echo "version=$version push=$push image=$image latest=$latest"
+
+      - name: Build
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          PUSH: ${{ steps.v.outputs.push }}
+          IMAGE: ${{ steps.v.outputs.image }}
+        run: |
+          tags="-t gopan:latest"
+          if [ "$PUSH" = "true" ]; then tags="$tags -t $IMAGE:$VERSION"; fi
           docker buildx build --platform linux/amd64 \
             --label org.opencontainers.image.revision=${{ github.sha }} \
-            -t gopan:latest --load .
+            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
+            --label org.opencontainers.image.version="$VERSION" \
+            --label org.opencontainers.image.licenses=MIT \
+            $tags --load .
 
       - name: Check runtime tools
         run: |
@@ -27,10 +84,34 @@ jobs:
             'test -x /usr/local/bin/gopan && command -v pdftotext && ffmpeg -version | head -1 && ffprobe -version | head -1 && id'
           docker images gopan:latest
 
+      - name: Log in to ghcr.io
+        if: steps.v.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push to ghcr.io
+        if: steps.v.outputs.push == 'true'
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          IMAGE: ${{ steps.v.outputs.image }}
+          LATEST: ${{ steps.v.outputs.latest }}
+        run: |
+          docker push "$IMAGE:$VERSION"
+          if [ "$LATEST" = "true" ]; then
+            docker tag "$IMAGE:$VERSION" "$IMAGE:latest"
+            docker push "$IMAGE:latest"
+          fi
+          echo "pushed $IMAGE:$VERSION (latest=$LATEST)" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Save
+        if: steps.v.outputs.push != 'true'
         run: docker save gopan:latest | gzip -1 > gopan-image.tar.gz && ls -l gopan-image.tar.gz
 
       - uses: actions/upload-artifact@v4
+        if: steps.v.outputs.push != 'true'
         with:
           name: gopan-image-${{ github.sha }}
           path: gopan-image.tar.gz
