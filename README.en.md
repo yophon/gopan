@@ -11,12 +11,10 @@ A self-hosted cloud drive. Go + GraphQL + Postgres + MinIO backend shipped as a 
 
 **Live instance**: <https://drive.979687.xyz> (a 2-core / 2 GB VPS, lean profile)
 
-<!--
 | | |
 |---|---|
 | ![Drive](doc/assets/drive.png) | ![Upload queue](doc/assets/upload.png) |
 | ![Preview](doc/assets/preview.png) | ![Share page](doc/assets/share.png) |
--->
 
 > The design documents under [doc/](./doc/) and most code comments are written in Chinese. This page is the English entry point; release notes are in [CHANGELOG.md](./CHANGELOG.md) (Chinese).
 
