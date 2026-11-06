@@ -1,0 +1,14 @@
+# 给 MCP 目录(Glama 等)做 schema 自省的镜像(docs/MCP.md「目录收录」)。不是部署用的镜像。
+# 只编 gopan-inspect:工具定义与 /mcp 相同,不连数据库与对象存储,所有工具调用都会被拒绝。
+# mcp-proxy 把 stdio 包成目录检查用的 HTTP 端点。CI 的 glama 任务每次都按它构建并取一次工具清单。
+FROM golang:1.26-bookworm AS build
+WORKDIR /src/server
+COPY server/go.mod server/go.sum ./
+RUN go mod download
+COPY server/ ./
+RUN CGO_ENABLED=0 go build -ldflags='-s -w' -o /out/gopan-inspect ./cmd/gopan-inspect
+
+FROM node:24-slim
+RUN npm install -g mcp-proxy@6.7.21 && npm cache clean --force
+COPY --from=build /out/gopan-inspect /usr/local/bin/gopan-inspect
+CMD ["mcp-proxy", "--", "gopan-inspect"]

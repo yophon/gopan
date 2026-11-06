@@ -182,6 +182,31 @@ curl -s -X POST $B/mcp -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | grep -o '"name":"[a-z_]*"' | wc -l
 ```
 
+## 目录收录（Glama）
+
+MCP 目录（Glama，以及要求 Glama 评分徽章的 awesome-mcp-servers）的检查方式是：构建一个镜像、单独启动、调 `tools/list` 等做自省。gopan 的 `/mcp` 要数据库、对象存储和凭据，单独启动不了，所以另有一个**只做自省**的入口 `server/cmd/gopan-inspect`：
+
+- 工具定义与 `/mcp` 完全相同（同一个 `registerTools`），走 stdio；
+- 不读配置、不连数据库与对象存储；所有工具调用都被拒绝（没有凭据，`addTool` 的包装在碰任何服务前就返回未认证）；
+- `initialize` 的说明里写明这只是工具清单，真正使用要部署 gopan、连 `https://<你的域名>/mcp`。
+
+`Dockerfile.glama` 把它和 `mcp-proxy`（stdio 包成 HTTP）打成目录检查用的镜像；CI 的 `glama` 任务每次都按它构建，并经 stdio 取一次工具清单。仓库根的 `glama.json` 用来在 Glama 上认领。
+
+在 Glama 上收录：
+
+1. 用 GitHub 登录 https://glama.ai/mcp/servers ，提交 `https://github.com/yophon/gopan`；认领时 Glama 读仓库根的 `glama.json`（`maintainers: ["yophon"]`）。
+2. 在服务器的管理页里配置 Docker 构建：能填完整 Dockerfile 就照搬 `Dockerfile.glama`；只能填表单时，选 Node 24，构建步骤先装 Go 1.26 再 `cd server && CGO_ENABLED=0 go build -o /usr/local/bin/gopan-inspect ./cmd/gopan-inspect`，启动命令 `["mcp-proxy", "--", "gopan-inspect"]`。环境变量留空，不放任何凭据。
+3. 检查通过后，评分徽章是 `[![yophon/gopan MCP server](https://glama.ai/mcp/servers/yophon/gopan/badges/score.svg)](https://glama.ai/mcp/servers/yophon/gopan)`。
+
+本地自查（有 Docker 时）：
+
+```bash
+docker build -f Dockerfile.glama -t gopan-glama .
+(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
+  '{"jsonrpc":"2.0","method":"notifications/initialized"}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'; sleep 2) \
+  | docker run -i --rm gopan-glama gopan-inspect
+```
+
 ## 工具
 
 | 工具 | Scope | 作用 |
