@@ -9,6 +9,7 @@
 | [01-让Claude帮你整理自建网盘.md](./01-让Claude帮你整理自建网盘.md) | 实操：把 gopan 的远程 MCP 接进 Claude / Codex，能做什么、怎么防它乱来 | 自己的博客（留着带搜索流量），再转 V2EX「分享创造」、linux.do | MCP 登记到各目录之后 |
 | [02-2G内存VPS跑完整网盘.md](./02-2G内存VPS跑完整网盘.md) | 技术：小机器上的架构取舍——字节不过后端、内容寻址、同源脚本的坑、备份演练 | 博客、掘金或知乎 | 01 之后 |
 | [02-2G-RAM-VPS-full-cloud-drive.en.md](./02-2G-RAM-VPS-full-cloud-drive.en.md) | 02 的英文精简版 | r/selfhosted、Show HN | 中文版之后；README 有英文版、镜像能直接拉之后 |
+| [03-一行FROM叠出75层镜像.md](./03-一行FROM叠出75层镜像.md) | 复盘：`FROM gopan:latest` 的临时部署方案怎么叠出 75 层、离层数上限多近，固定底座怎么修，以及「给已知代价挂自动检查」 | 博客、V2EX、掘金 | 随时，不依赖前置；数字都是 2026-11-06 的实测 |
 | [listings.md](./listings.md) | awesome-mcp-servers、mcp.so、魔搭 MCP 广场的条目，V2EX 与 linux.do 的帖子 | 各目录与社区 | 和对应文章同步 |
 
 ## 前置（没做完不发）
