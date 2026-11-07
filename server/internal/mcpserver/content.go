@@ -101,5 +101,5 @@ func (s *Server) readDocumentText(ctx context.Context, _ *mcp.CallToolRequest, i
 
 func (s *Server) registerContentTools(server *mcp.Server) {
 	addTool(s, server, &mcp.Tool{Name: "search_file_contents", Description: "Search files by the text inside them (PDF, Word/Excel/PowerPoint, OpenDocument, plain text and code). Matches a literal substring, case-insensitive; returns a snippet around the first match and its PDF page. Scanned images are not searchable."}, s.searchFileContents)
-	addTool(s, server, &mcp.Tool{Name: "read_document_text", Description: "Read the extracted text of a PDF, Office or text file in chunks of up to 50000 characters, without downloading the file. Use next_offset to continue."}, s.readDocumentText)
+	addTool(s, server, &mcp.Tool{Name: "read_document_text", Description: "Read the extracted text of a PDF, Office or text file in chunks of up to 50000 characters, without downloading the file. Use next_offset to continue. For plain-text and code files where the exact bytes matter, prefer read_text_file."}, s.readDocumentText)
 }

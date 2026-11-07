@@ -117,7 +117,7 @@ type ClipURLOutput struct {
 
 type ClipItem struct {
 	ID     string `json:"id"`
-	NodeID string `json:"node_id" jsonschema:"the Markdown file; read it with read_text"`
+	NodeID string `json:"node_id" jsonschema:"the Markdown file; read it with read_text_file"`
 	Title  string `json:"title"`
 	URL    string `json:"url"`
 	Site   string `json:"site"`
@@ -150,6 +150,6 @@ func (s *Server) clipURL(ctx context.Context, _ *mcp.CallToolRequest, in ClipURL
 }
 
 func (s *Server) registerV35Tools(server *mcp.Server) {
-	addTool(s, server, &mcp.Tool{Name: "list_activity", Description: "List recent changes to the drive from every source (web, Android app, WebDAV, agents, file requests, background jobs), newest first: who did what to which file and where. Filter by source kind, action, time or one node's history. Paginate with before_id. Undo is only available to the user in the app. Requires audit:read."}, s.listActivity)
-	addTool(s, server, &mcp.Tool{Name: "clip_url", Description: "Save a web page's main article as a Markdown file (images downloaded next to it) into the user's clippings folder, in the background. Returns a job (poll get_job until done; result_node_id is the .md, readable with read_text), or the existing clipping if this address was clipped before. Not available to credentials limited to a folder. Requires files:upload; supports idempotency."}, mutation(s, "clip_url", "files:upload", (*Server).clipURL))
+	addTool(s, server, &mcp.Tool{Name: "list_activity", Description: "List recent changes to the drive from every source (web, Android app, WebDAV, agents, file requests, background jobs), newest first: who did what to which file and where. Filter by source kind, action, time or one node's history. Paginate with before_id. Undo is only available to the user in the app. For the log of MCP tool calls themselves, use list_audit. Requires audit:read."}, s.listActivity)
+	addTool(s, server, &mcp.Tool{Name: "clip_url", Description: "Save a web page's main article as a Markdown file (images downloaded next to it) into the user's clippings folder, in the background. Returns a job (poll get_job until done; result_node_id is the .md, readable with read_text_file), or the existing clipping if this address was clipped before. Not available to credentials limited to a folder. Requires files:upload; supports idempotency."}, mutation(s, "clip_url", "files:upload", (*Server).clipURL))
 }
