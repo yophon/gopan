@@ -274,7 +274,7 @@ func (s *Server) revokeFileRequest(ctx context.Context, _ *mcp.CallToolRequest, 
 
 func (s *Server) registerControlTools(server *mcp.Server) {
 	addTool(s, server, &mcp.Tool{Name: "storage_status", Description: "Get account quota, used/reserved/available bytes, active uploads and transfer limits. Available space is advisory; final commit enforces quota."}, s.storageStatus)
-	addTool(s, server, &mcp.Tool{Name: "list_audit", Description: "Read MCP operation history without passwords or tokens. Directory-restricted credentials see only their own events."}, s.listAudit)
+	addTool(s, server, &mcp.Tool{Name: "list_audit", Description: "Read the log of MCP tool calls made with this account's credentials: which tool was called, by which credential, on which targets, and the outcome; passwords and tokens are never included. Directory-restricted credentials see only their own events. For the history of file changes from every source (web, apps, WebDAV, agents), use list_activity."}, s.listAudit)
 	addTool(s, server, &mcp.Tool{Name: "list_shares", Description: "List active shares owned by this account and within the credential directory."}, s.listShares)
 	addTool(s, server, &mcp.Tool{Name: "create_share", Description: "Create a public share URL with optional password and future expiry. Requires shares:write; supports idempotency."}, mutation(s, "create_share", "shares:write", (*Server).createShare))
 	addTool(s, server, &mcp.Tool{Name: "revoke_share", Description: "Revoke a share URL immediately. Requires shares:write; supports idempotency."}, mutation(s, "revoke_share", "shares:write", (*Server).revokeShare))
