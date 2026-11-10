@@ -8,7 +8,8 @@
 
 | 文件 | 作用 |
 |---|---|
-| `SKILL.md` | 给 Agent 读的说明：连接自检、路径与 id、读写、整理、上传、下载、分享、规矩、出错了怎么办 |
+| `SKILL.md` | 给 Agent 读的说明：权限与目录范围、找文件读文档、写入整理、分享、我的设备与错误恢复 |
+| `references/upload.md` | 本地上传时按需读取：脚本定位、传输与完成、断线续传、过期与取消 |
 | `scripts/upload.py` | 只用 Python 标准库的上传脚本：算 sha256（争取秒传）；按 `prepare_upload` / `get_upload_parts` 的返回做单次 PUT 或分片 PUT，失败重试，提示下一步 |
 
 ## 安装
@@ -20,10 +21,12 @@
 
 ## 上传脚本单独用
 
-```bash
-python scripts/upload.py hash ./报告.pdf          # → {"name","size","sha256","content_type"}
+从任意工作目录运行时，用实际安装目录定位脚本，文件与计划也使用绝对路径。下列路径需替换：
+
+```text
+python "<skill目录>/scripts/upload.py" hash "<文件绝对路径>"
 # 用上面的结果调 prepare_upload,把返回的 JSON 存成 plan.json
-python scripts/upload.py put ./报告.pdf plan.json # 单次 PUT 或分片 PUT
+python "<skill目录>/scripts/upload.py" put "<文件绝对路径>" "<计划JSON绝对路径>"
 # 然后调 complete_upload + wait_upload
 ```
 

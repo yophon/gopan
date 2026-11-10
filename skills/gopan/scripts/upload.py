@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """把本地文件传到 gopan 签发的预签名地址(只用 Python 标准库)。
 
-MCP 的 JSON 不承载文件字节:agent 先调 prepare_upload 拿到上传目标,再用本脚本把字节
+原始文件上传不经 MCP JSON 传字节:agent 先调 prepare_upload 拿到上传目标,再用本脚本把字节
 PUT 到对象存储,最后调 complete_upload + wait_upload。本脚本不调用 MCP,只管搬字节。
 
 用法:
