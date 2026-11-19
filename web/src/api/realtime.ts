@@ -23,6 +23,15 @@ export function onAssistantEvent(fn: AssistantListener): () => void {
   return () => assistantListeners.delete(fn)
 }
 
+/** 每一条推送原样交给订阅者(doc/39:便签清单据此看自己所在的文件夹有没有变) */
+type ChangeListener = (c: Change) => void
+const changeListeners = new Set<ChangeListener>()
+
+export function onRealtimeChange(fn: ChangeListener): () => void {
+  changeListeners.add(fn)
+  return () => changeListeners.delete(fn)
+}
+
 /** 推送连接是否连着:传输助手据此把轮询放慢 */
 export const realtimeConnected = ref(false)
 
@@ -39,6 +48,7 @@ export function startRealtime(queryClient: QueryClient): () => void {
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   function apply(c: Change) {
     if (c.t === 'assistant' && c.c) for (const fn of assistantListeners) fn(c.c, c.e)
+    for (const fn of changeListeners) fn(c)
     const keys = keysFor(c)
     if (keys === null) {
       void queryClient.invalidateQueries()

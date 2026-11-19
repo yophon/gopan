@@ -399,7 +399,7 @@ private fun PreviewPageHost(
         )
         is PreviewContent.Text -> TextPage(c, onLoadMore = page::loadMoreText)
         PreviewContent.Markdown -> MarkdownPreviewPage(item.nodeId)
-        PreviewContent.DeskNote -> DeskNotePage(item.nodeId)
+        PreviewContent.DeskNote -> DeskNotePage(item.nodeId, state.info?.parentId)
         PreviewContent.OfficeConverting -> OfficeConvertingPage()
         PreviewContent.OfficeUnavailable -> MessagePanel(
             Icons.Outlined.Description,

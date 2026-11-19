@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   applyDeskNoteOp,
+  changeTouchesFolder,
   createDeskNoteSync,
   deskNoteColors,
   formatRemind,
@@ -117,6 +118,17 @@ describe('splitLinks', () => {
       { text: ', 好' },
     ])
     expect(splitLinks('没有链接')).toEqual([{ text: '没有链接' }])
+  })
+})
+
+describe('changeTouchesFolder', () => {
+  it('只认便签所在的文件夹', () => {
+    expect(changeTouchesFolder({ t: 'files', f: ['a', 'b'] }, 'b')).toBe(true)
+    expect(changeTouchesFolder({ t: 'files', f: ['a'] }, 'b')).toBe(false)
+    expect(changeTouchesFolder({ t: 'files', f: [''] }, null)).toBe(true) // 根目录
+    expect(changeTouchesFolder({ t: 'files', all: true }, 'b')).toBe(true)
+    expect(changeTouchesFolder({ t: 'resync' }, 'b')).toBe(true)
+    expect(changeTouchesFolder({ t: 'chat' }, 'b')).toBe(false)
   })
 })
 

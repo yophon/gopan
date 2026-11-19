@@ -7,11 +7,14 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -22,6 +25,7 @@ import xyz.yophon.gopan.core.data.desknote.DeskNoteSaveResult
 import xyz.yophon.gopan.core.data.desknote.DeskNoteSync
 import xyz.yophon.gopan.core.data.desknote.DeskNotes
 import xyz.yophon.gopan.core.data.text.TextFilesRepository
+import xyz.yophon.gopan.core.network.ChangeFeed
 import xyz.yophon.gopan.core.network.GopanException
 import xyz.yophon.gopan.core.network.gopanResult
 import xyz.yophon.gopan.core.network.toGopanException
@@ -41,16 +45,20 @@ data class DeskNoteUiState(
 /**
  * DeskNote 便签(doc/39):预览页里把便签 json 画成清单,勾选、改、删、加都直接写回。
  * 每一步先改显示的内容,再交给 [DeskNoteSync] 排队存;别处改过了它会重读并重放这一步。
+ * 推送说便签所在的文件夹([parentId],null = 根目录)变了就重读,桌面端同步上来的改动随即可见。
  */
+@OptIn(FlowPreview::class)
 @HiltViewModel(assistedFactory = DeskNoteViewModel.Factory::class)
 class DeskNoteViewModel @AssistedInject constructor(
-    @Assisted private val nodeId: String,
+    @Assisted("nodeId") private val nodeId: String,
+    @Assisted("parentId") private val parentId: String?,
     private val texts: TextFilesRepository,
+    private val changes: ChangeFeed,
 ) : ViewModel() {
 
     @AssistedFactory
     interface Factory {
-        fun create(nodeId: String): DeskNoteViewModel
+        fun create(@Assisted("nodeId") nodeId: String, @Assisted("parentId") parentId: String?): DeskNoteViewModel
     }
 
     private val _state = MutableStateFlow(DeskNoteUiState())
@@ -67,6 +75,13 @@ class DeskNoteViewModel @AssistedInject constructor(
 
     init {
         load()
+        // 别处(桌面端同步上来、别的设备)改了便签所在的文件夹:重读;有没存完的操作时 refresh 自己会跳过
+        viewModelScope.launch {
+            changes.changes
+                .filter { it.touchesFolder(parentId) }
+                .debounce(LIVE_DEBOUNCE_MS)
+                .collect { refresh() }
+        }
     }
 
     fun load(quiet: Boolean = false) {
@@ -112,5 +127,6 @@ class DeskNoteViewModel @AssistedInject constructor(
 
     private companion object {
         const val EDIT_CONFLICT = "EDIT_CONFLICT"
+        const val LIVE_DEBOUNCE_MS = 300L
     }
 }

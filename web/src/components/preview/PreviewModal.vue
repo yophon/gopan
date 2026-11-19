@@ -784,7 +784,7 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
 
           <!-- DeskNote 便签:清单 -->
           <div v-else-if="isDeskNote && !deskRaw && node" class="preview-desknote">
-            <DeskNoteViewer :node-id="node.id" @saved="onDeskNoteSaved" />
+            <DeskNoteViewer :node-id="node.id" :parent-id="node.parentId ?? null" @saved="onDeskNoteSaved" />
           </div>
 
           <!-- TEXT -->

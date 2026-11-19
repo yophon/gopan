@@ -278,7 +278,7 @@ func run() error {
 		})
 	}
 	mux.Handle("POST /query", httpx.WithAuth(httpx.NewGraphQLHandler(es, cfg.DevMode), auth, cfg.TrustedProxies))
-	mux.Handle("GET /api/events", httpx.EventsHandler(auth, changes))
+	mux.Handle("GET /api/events", httpx.EventsHandler(auth, changes, mcpTokens.Authenticate))
 	// 自己的模型服务转发时不许连内网(站点提供的不限)
 	mux.Handle("POST /api/ai/{provider}/{path...}", httpx.AIProxyHandler(auth, ai, fetcher.Guard{Deny: cfg.FetchDeny}))
 	oauthHTTP := oauthserver.New(oauth)

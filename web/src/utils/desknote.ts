@@ -139,6 +139,13 @@ export function splitLinks(text: string): { text: string; url?: string }[] {
   return out
 }
 
+/** 推送来的一条改动是不是碰到了便签所在的文件夹([folderId] 为 null = 根目录);resync = 可能漏了,也算 */
+export function changeTouchesFolder(c: { t: string; f?: string[]; all?: boolean }, folderId: string | null | undefined): boolean {
+  if (c.t === 'resync') return true
+  if (c.t !== 'files') return false
+  return !!c.all || !c.f || c.f.includes(folderId ?? '')
+}
+
 /** 便签的底色和字色;没设或格式不对时用桌面端的默认值 */
 export function deskNoteColors(note: DeskNote): { bg: string; fg: string } {
   const hex = (v: unknown, def: string) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : def)

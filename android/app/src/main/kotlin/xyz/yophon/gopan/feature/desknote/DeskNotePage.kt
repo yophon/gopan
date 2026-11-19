@@ -80,8 +80,8 @@ private val DueColor = Color(0xFFE55B5B)
 
 /** 预览页里的便签清单(doc/39):用便签自己的底色和字色画成一张卡片 */
 @Composable
-fun DeskNotePage(nodeId: String, modifier: Modifier = Modifier) {
-    val viewModel = hiltViewModel<DeskNoteViewModel, DeskNoteViewModel.Factory>(key = "desknote-$nodeId") { it.create(nodeId) }
+fun DeskNotePage(nodeId: String, parentId: String?, modifier: Modifier = Modifier) {
+    val viewModel = hiltViewModel<DeskNoteViewModel, DeskNoteViewModel.Factory>(key = "desknote-$nodeId") { it.create(nodeId, parentId) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     LaunchedEffect(viewModel) {

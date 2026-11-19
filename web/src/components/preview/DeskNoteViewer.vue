@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import { Bell, Delete, Plus } from '@element-plus/icons-vue'
 
 import { getErrorCode, request } from '@/api/client'
+import { onRealtimeChange } from '@/api/realtime'
 import { errorText } from '@/api/errors'
 import { SaveTextFileDocument, TextFileDocument } from '@/api/gen/graphql'
 import {
+  changeTouchesFolder,
   createDeskNoteSync,
   deskNoteColors,
   formatRemind,
@@ -24,7 +26,8 @@ import {
  * 排队和重放在 createDeskNoteSync 里(有单测),这里只管界面。
  */
 
-const props = defineProps<{ nodeId: string }>()
+/** parentId:便签所在的文件夹(null = 根目录),推送说它变了就重读 */
+const props = defineProps<{ nodeId: string; parentId?: string | null }>()
 const emit = defineEmits<{ (e: 'saved'): void }>()
 
 const loading = ref(true)
@@ -73,9 +76,9 @@ async function load(quiet = false) {
 
 onMounted(() => void load())
 
-// 切回这个页面(手机上从别的 App 回来)时拉一次最新的,桌面端刚改的能看到
+// 切回这个页面(手机上从别的 App 回来)时拉一次最新的:页面在后台时推送是断开的
 useEventListener(document, 'visibilitychange', () => {
-  if (document.visibilityState === 'visible' && !pending.value && editing.value === null) void load(true)
+  if (document.visibilityState === 'visible') reloadSoon()
 })
 
 function run(op: DeskNoteOp) {
@@ -133,6 +136,33 @@ function onEditKey(e: KeyboardEvent) {
     finishEdit(true)
   }
 }
+
+// 别处改了(桌面端同步上来、别的设备):推送说便签所在的文件夹变了就重读。
+// 正在改字或还有没存完的操作时先记着,改完再读;自己刚存的也会推回来,重读一次内容不变。
+let stale = false
+let reloadTimer: ReturnType<typeof setTimeout> | null = null
+function reloadSoon() {
+  if (pending.value || editing.value !== null) {
+    stale = true
+    return
+  }
+  if (reloadTimer) clearTimeout(reloadTimer)
+  reloadTimer = setTimeout(() => {
+    reloadTimer = null
+    stale = false
+    void load(true)
+  }, 300)
+}
+const stopLive = onRealtimeChange((c) => {
+  if (changeTouchesFolder(c, props.parentId)) reloadSoon()
+})
+onBeforeUnmount(() => {
+  stopLive()
+  if (reloadTimer) clearTimeout(reloadTimer)
+})
+watch([pending, editing], () => {
+  if (stale) reloadSoon()
+})
 
 function toggle(i: number) {
   const it = note.value?.items[i]
