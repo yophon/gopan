@@ -110,6 +110,7 @@ func (w *Pool) Run(ctx context.Context, n int) {
 	go w.periodic(ctx, 24*time.Hour, "refresh-cleanup", w.cleanupRefreshTokens)
 	go w.periodic(ctx, 24*time.Hour, "auth-session-cleanup", w.cleanupAuthSessions)
 	go w.periodic(ctx, 24*time.Hour, "share-visit-cleanup", w.cleanupShareVisits)
+	go w.periodic(ctx, 24*time.Hour, "mcp-audit-cleanup", w.cleanupMCPAudit)
 	if w.collects != nil {
 		go w.periodic(ctx, 24*time.Hour, "collect-visitor-cleanup", w.collects.CleanupVisitors)
 	}
@@ -389,6 +390,32 @@ func (w *Pool) cleanupShareVisits(ctx context.Context) error {
 		metrics.Cleanup.WithLabelValues("share_visits").Add(float64(n))
 	}
 	return err
+}
+
+// mcpAuditKeep:MCP 调用记录留多久(doc/39 四)。每次调用记一条,定时同步的客户端
+// (DeskNote 每 5 分钟拉一次)一年能攒十几万条;「Agent 接入」里只看最近的。
+const mcpAuditKeep = "90 days"
+
+// cleanupMCPAudit 清掉 90 天前的 MCP 调用记录。分批删(每批 1 万条,最多 20 批),
+// 免得第一次上线时一个大事务把表锁太久;剩下的第二天接着删。
+func (w *Pool) cleanupMCPAudit(ctx context.Context) error {
+	var total int64
+	for i := 0; i < 20; i++ {
+		tag, err := w.pool.Exec(ctx, `DELETE FROM mcp_audit WHERE id IN (
+			SELECT id FROM mcp_audit WHERE created_at < now() - $1::interval ORDER BY id LIMIT 10000)`, mcpAuditKeep)
+		if err != nil {
+			return err
+		}
+		total += tag.RowsAffected()
+		if tag.RowsAffected() < 10000 {
+			break
+		}
+	}
+	if total > 0 {
+		slog.Info("mcp audit cleanup", "deleted", total)
+		metrics.Cleanup.WithLabelValues("mcp_audit").Add(float64(total))
+	}
+	return nil
 }
 
 // reapTasks 把用完重试次数后中断在 running 的任务落到 failed(见 FailExhaustedTasks)。

@@ -95,6 +95,7 @@ import xyz.yophon.gopan.core.ui.nav.LocalOpenArchive
 import xyz.yophon.gopan.core.ui.nav.Routes
 import xyz.yophon.gopan.feature.archive.ExtractPickerHost
 import xyz.yophon.gopan.feature.archive.showExtractStarted
+import xyz.yophon.gopan.feature.desknote.DeskNotePage
 import xyz.yophon.gopan.feature.drive.resolve
 import xyz.yophon.gopan.feature.media.followPage
 import xyz.yophon.gopan.feature.media.pdfStartPage
@@ -398,6 +399,7 @@ private fun PreviewPageHost(
         )
         is PreviewContent.Text -> TextPage(c, onLoadMore = page::loadMoreText)
         PreviewContent.Markdown -> MarkdownPreviewPage(item.nodeId)
+        PreviewContent.DeskNote -> DeskNotePage(item.nodeId)
         PreviewContent.OfficeConverting -> OfficeConvertingPage()
         PreviewContent.OfficeUnavailable -> MessagePanel(
             Icons.Outlined.Description,

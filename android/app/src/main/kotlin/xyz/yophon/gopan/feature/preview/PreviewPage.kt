@@ -15,6 +15,7 @@ import xyz.yophon.gopan.core.data.NodeKind
 import xyz.yophon.gopan.core.data.PreviewKind
 import xyz.yophon.gopan.core.data.archive.ArchiveRepository
 import xyz.yophon.gopan.core.data.archive.ArchiveStatus
+import xyz.yophon.gopan.core.data.desknote.DeskNotes
 import xyz.yophon.gopan.core.data.media.PlayProgress
 import xyz.yophon.gopan.core.data.media.SubtitleTrack
 import xyz.yophon.gopan.core.data.preview.DerivativeStatus
@@ -57,6 +58,9 @@ sealed interface PreviewContent {
 
     /** Markdown:渲染好的页面(WebView 打开 /md/{id},doc/23 五.2);可切回文本 */
     data object Markdown : PreviewContent
+
+    /** DeskNote 便签(doc/39):桌面便签同步上来的 json,画成能勾选、改、加的清单 */
+    data object DeskNote : PreviewContent
 
     /** [loadingMore] 正在拉下一段;[moreError] 上次「继续加载」失败的原因 */
     data class Text(val content: TextContent, val loadingMore: Boolean = false, val moreError: String? = null) : PreviewContent
@@ -251,7 +255,11 @@ class PreviewPage(
                 if (info.markdown) return set(PreviewContent.Markdown)
                 val url = info.contentUrl ?: return set(PreviewContent.Unsupported)
                 gopanResult { repo.fetchText(url) }.fold(
-                    onSuccess = { set(PreviewContent.Text(it)) },
+                    onSuccess = {
+                        // 便签要联网读写:离线副本(file:)照旧显示原文
+                        val deskNote = !url.startsWith("file:") && !it.truncated && DeskNotes.isName(info.name) && DeskNotes.parse(it.text) != null
+                        set(if (deskNote) PreviewContent.DeskNote else PreviewContent.Text(it))
+                    },
                     onFailure = { set(PreviewContent.Error(it.message ?: "文本加载失败")) },
                 )
             }

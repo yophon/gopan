@@ -47,8 +47,8 @@ android {
         applicationId = "xyz.yophon.gopan"
         minSdk = 26
         targetSdk = 36
-        versionCode = 32401
-        versionName = "3.24.1"
+        versionCode = 32500
+        versionName = "3.25.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // 助手的 QuickJS 带原生库(doc/33 八之 2):只打 64 位真机与模拟器,不要 32 位
