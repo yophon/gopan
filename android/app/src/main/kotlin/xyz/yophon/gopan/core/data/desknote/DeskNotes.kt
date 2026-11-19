@@ -25,9 +25,9 @@ import java.time.temporal.ChronoUnit
  * 整份留着原始 json([raw]),写回时只动 title 和 items,别的字段(包括不认识的)原样留着。
  */
 @Immutable
-data class DeskNoteItem(val text: String, val done: Boolean, val remind: String?, val reminded: Boolean) {
-    /** 提醒到点了还没做:桌面端到点会把 reminded 置 true */
-    val due: Boolean get() = remind != null && reminded && !done
+data class DeskNoteItem(val text: String, val done: Boolean, val remind: String?, val reminded: Boolean, val repeat: String? = null) {
+    /** 提醒到点了还没做:桌面端到点会把 reminded 置 true。重复的到点就顺延,不算 */
+    val due: Boolean get() = remind != null && reminded && !done && repeat == null
 }
 
 @Immutable
@@ -42,6 +42,7 @@ data class DeskNote(val raw: JsonObject) {
                 done = o.bool("done"),
                 remind = o.str("remind")?.takeIf { it.isNotBlank() },
                 reminded = o.bool("reminded"),
+                repeat = o.str("repeat")?.takeIf { it in DeskNotes.REPEATS },
             )
         }
 
@@ -60,9 +61,14 @@ sealed interface DeskNoteOp {
     data class Remove(val index: Int, val text: String) : DeskNoteOp
     data class Add(val text: String) : DeskNoteOp
     data class Title(val title: String) : DeskNoteOp
+    /** 设提醒(remind 是「2026-11-19 15:00」这样的本地时间,repeat 是 daily / weekdays / weekly 或 null)或移除(remind 为 null) */
+    data class Remind(val index: Int, val text: String, val remind: String?, val repeat: String?) : DeskNoteOp
 }
 
 object DeskNotes {
+    /** 重复:每天 / 工作日(周一到周五)/ 每周;到点后桌面端和服务器都会顺延到下一次 */
+    val REPEATS = setOf("daily", "weekdays", "weekly")
+
     @OptIn(ExperimentalSerializationApi::class)
     private val pretty = Json {
         prettyPrint = true
@@ -111,6 +117,14 @@ object DeskNotes {
                 // 清空文字 = 删掉这一条,和桌面端一样
                 if (t.isEmpty()) items.removeAt(i) else items[i] = JsonObject(items[i] + ("text" to JsonPrimitive(t)))
             }
+            is DeskNoteOp.Remind -> {
+                val i = locate(items, op.index, op.text).takeIf { it >= 0 } ?: return null
+                val rest = items[i] - "remind" - "reminded" - "repeat"
+                items[i] = if (op.remind == null) JsonObject(rest) else JsonObject(
+                    rest + mapOf("remind" to JsonPrimitive(op.remind), "reminded" to JsonPrimitive(false)) +
+                        (op.repeat?.takeIf { it in REPEATS }?.let { mapOf("repeat" to JsonPrimitive(it)) } ?: emptyMap()),
+                )
+            }
         }
         return withItems()
     }
@@ -122,11 +136,17 @@ object DeskNotes {
     }
 
     /** 提醒时间的说法,和桌面端一致:今天 → 「15:00」,明天 → 「明天 15:00」,其余 → 「11月21日 15:00」(跨年带年份) */
-    fun formatRemind(remind: String?, now: LocalDateTime = LocalDateTime.now()): String {
+    fun formatRemind(remind: String?, now: LocalDateTime = LocalDateTime.now(), repeat: String? = null): String {
         val m = Regex("""^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})""").find(remind.orEmpty()) ?: return ""
         val (y, mo, d, hh, mm) = m.destructured
         val day = runCatching { LocalDate.of(y.toInt(), mo.toInt(), d.toInt()) }.getOrNull() ?: return ""
         val hm = "$hh:$mm"
+        // 重复的写规律,和桌面端一致:每天 09:00 / 工作日 09:00 / 每周四 09:00
+        when (repeat) {
+            "daily" -> return "每天 $hm"
+            "weekdays" -> return "工作日 $hm"
+            "weekly" -> return "每周${"一二三四五六日"[day.dayOfWeek.value - 1]} $hm"
+        }
         return when (ChronoUnit.DAYS.between(now.toLocalDate(), day)) {
             0L -> hm
             1L -> "明天 $hm"

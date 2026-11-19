@@ -46,6 +46,7 @@ type Pool struct {
 	feeds      *service.Feeds
 	// 历史版本到期清理(doc/24)
 	versions *service.Versions
+	desknote *service.DeskNoteReminders
 }
 
 func New(pool *pgxpool.Pool, obj *objstore.Store, nodes *service.Nodes, trashTTL time.Duration, ffmpeg, ffprobe, gotenberg string) *Pool {
@@ -72,6 +73,9 @@ func (w *Pool) SetV35(a *service.Activities, f *service.Feeds) {
 }
 
 // SetVersions 历史版本的到期清理(doc/24)。
+// SetDeskNoteReminders 便签提醒推到手机(doc/39 七),每分钟一轮。
+func (w *Pool) SetDeskNoteReminders(d *service.DeskNoteReminders) { w.desknote = d }
+
 func (w *Pool) SetVersions(v *service.Versions) {
 	w.versions = v
 }
@@ -115,6 +119,9 @@ func (w *Pool) Run(ctx context.Context, n int) {
 		go w.periodic(ctx, 24*time.Hour, "collect-visitor-cleanup", w.collects.CleanupVisitors)
 	}
 	go w.periodic(ctx, time.Minute, "subtree-stats", w.recomputeStats)
+	if w.desknote != nil {
+		go w.periodic(ctx, time.Minute, "desknote-reminders", w.desknote.Tick)
+	}
 	go w.periodic(ctx, 5*time.Minute, "task-reap", w.reapTasks)
 	if w.textIndex {
 		go w.periodic(ctx, time.Minute, "text-backfill", w.backfillText)

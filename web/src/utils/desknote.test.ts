@@ -211,3 +211,24 @@ describe('createDeskNoteSync', () => {
     expect(r.notices).toHaveLength(1)
   })
 })
+
+describe('提醒（doc/39 七）', () => {
+  const base: DeskNote = { title: 'T', items: [{ text: 'a', done: true, remind: '2026-11-19 09:00', reminded: true, keep: 1 }] }
+  it('设提醒：清掉已提醒，带上重复；其余字段原样', () => {
+    const n = applyDeskNoteOp(base, { kind: 'remind', index: 0, text: 'a', remind: '2026-11-20 08:30', repeat: 'weekly' })!
+    expect(n.items[0]).toEqual({ text: 'a', done: true, remind: '2026-11-20 08:30', reminded: false, repeat: 'weekly', keep: 1 })
+    const once = applyDeskNoteOp(n, { kind: 'remind', index: 0, text: 'a', remind: '2026-11-21 08:30', repeat: '' })!
+    expect(once.items[0].repeat).toBeUndefined()
+  })
+  it('移除提醒', () => {
+    const n = applyDeskNoteOp(base, { kind: 'remind', index: 0, text: 'a', remind: null, repeat: '' })!
+    expect(n.items[0]).toEqual({ text: 'a', done: true, keep: 1 })
+  })
+  it('重复的写规律、不算到点', () => {
+    expect(formatRemind('2026-11-19 09:00', new Date(2026, 10, 19), 'daily')).toBe('每天 09:00')
+    expect(formatRemind('2026-11-19 09:00', new Date(2026, 10, 19), 'weekdays')).toBe('工作日 09:00')
+    expect(formatRemind('2026-11-19 09:00', new Date(2026, 10, 19), 'weekly')).toBe('每周四 09:00')
+    expect(isDue({ text: 'x', remind: '2026-11-19 09:00', reminded: true, repeat: 'daily' })).toBe(false)
+    expect(isDue({ text: 'x', remind: '2026-11-19 09:00', reminded: true })).toBe(true)
+  })
+})

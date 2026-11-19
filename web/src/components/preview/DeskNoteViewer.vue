@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
-import { Bell, Delete, Plus } from '@element-plus/icons-vue'
+import { Bell, Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
 
 import { getErrorCode, request } from '@/api/client'
 import { onRealtimeChange } from '@/api/realtime'
@@ -14,9 +14,11 @@ import {
   deskNoteColors,
   formatRemind,
   isDue,
+  isRepeat,
   splitLinks,
   type DeskNote,
   type DeskNoteOp,
+  type DeskNoteRepeat,
 } from '@/utils/desknote'
 
 /**
@@ -112,6 +114,44 @@ async function startEdit(target: number | 'title') {
   await nextTick()
   editBox.value?.focus()
   fit()
+}
+
+// ---- 提醒：点标签改，没有提醒的条目悬停时出现铃铛 ----
+const remindFor = ref<number | null>(null)
+const remindAt = ref('')
+const remindRepeat = ref<DeskNoteRepeat>('')
+const repeatOptions: { value: DeskNoteRepeat; label: string }[] = [
+  { value: '', label: '不重复' },
+  { value: 'daily', label: '每天' },
+  { value: 'weekdays', label: '工作日' },
+  { value: 'weekly', label: '每周' },
+]
+
+function pad2(n: number) {
+  return String(n).padStart(2, '0')
+}
+
+function openRemind(i: number) {
+  const it = note.value?.items[i]
+  if (!it) return
+  remindFor.value = i
+  if (it.remind) remindAt.value = it.remind.slice(0, 16).replace('T', ' ')
+  else {
+    // 没有提醒：默认一小时后，取整到 5 分钟
+    const d = new Date(Date.now() + 60 * 60 * 1000)
+    d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5, 0, 0)
+    remindAt.value = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+  }
+  remindRepeat.value = isRepeat(it.repeat) ? it.repeat : ''
+}
+
+function saveRemind(remove: boolean) {
+  const i = remindFor.value
+  remindFor.value = null
+  const it = i === null ? undefined : note.value?.items[i]
+  if (i === null || !it) return
+  if (!remove && !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(remindAt.value)) return
+  run({ kind: 'remind', index: i, text: it.text, remind: remove ? null : remindAt.value, repeat: remove ? '' : remindRepeat.value })
 }
 
 function finishEdit(save: boolean) {
@@ -237,9 +277,18 @@ function onAddKey(e: KeyboardEvent) {
                 <template v-else>{{ seg.text }}</template>
               </template>
             </div>
-            <span v-if="it.remind && editing !== i" class="dn-chip" :class="{ due: isDue(it) }">
-              <el-icon :size="12"><Bell /></el-icon>{{ formatRemind(it.remind) }}
-            </span>
+            <button
+              v-if="it.remind && editing !== i"
+              class="dn-chip"
+              :class="{ due: isDue(it) }"
+              title="改提醒"
+              @click="openRemind(i)"
+            >
+              <el-icon :size="12"><RefreshRight v-if="isRepeat(it.repeat)" /><Bell v-else /></el-icon>{{ formatRemind(it.remind, undefined, it.repeat) }}
+            </button>
+            <button v-else-if="editing !== i" class="dn-del dn-bell" aria-label="设置提醒" title="设置提醒" @click="openRemind(i)">
+              <el-icon :size="15"><Bell /></el-icon>
+            </button>
             <button v-if="editing !== i" class="dn-del" aria-label="删除这一条" title="删除这一条" @click="remove(i)">
               <el-icon :size="15"><Delete /></el-icon>
             </button>
@@ -251,12 +300,59 @@ function onAddKey(e: KeyboardEvent) {
           <input v-model="newText" placeholder="添加一条,回车保存" aria-label="添加一条" @keydown="onAddKey" />
         </label>
       </div>
+      <el-dialog
+        :model-value="remindFor !== null"
+        title="设置提醒"
+        width="min(420px, 92vw)"
+        append-to-body
+        @update:model-value="(v: boolean) => { if (!v) remindFor = null }"
+      >
+        <p v-if="remindFor !== null && note.items[remindFor]" class="dn-remind-item">「{{ note.items[remindFor].text }}」</p>
+        <el-date-picker
+          v-model="remindAt"
+          type="datetime"
+          format="YYYY-MM-DD HH:mm"
+          value-format="YYYY-MM-DD HH:mm"
+          :clearable="false"
+          placeholder="选日期和时间"
+          style="width: 100%"
+        />
+        <el-radio-group v-model="remindRepeat" class="dn-repeat">
+          <el-radio-button v-for="o in repeatOptions" :key="o.value" :value="o.value">{{ o.label }}</el-radio-button>
+        </el-radio-group>
+        <p class="dn-remind-hint">
+          到点后推到手机(在通知的推送设置里选渠道),电脑上的 DeskNote 也会弹通知{{ remindRepeat ? ';推完自动顺延到下一次' : '' }}。
+        </p>
+        <template #footer>
+          <el-button v-if="remindFor !== null && note.items[remindFor]?.remind" type="danger" text @click="saveRemind(true)">移除提醒</el-button>
+          <el-button @click="remindFor = null">取消</el-button>
+          <el-button type="primary" @click="saveRemind(false)">确定</el-button>
+        </template>
+      </el-dialog>
       <p class="dn-foot">改动会同步到电脑上的 DeskNote(几分钟内);两边同时改也不会互相覆盖。</p>
     </template>
   </div>
 </template>
 
 <style scoped>
+.dn-remind-item {
+  margin: 0 0 12px;
+  font-weight: 600;
+  word-break: break-word;
+}
+.dn-repeat {
+  margin-top: 12px;
+}
+.dn-remind-hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+button.dn-chip {
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+}
 .dn-wrap {
   width: min(560px, 100%);
   max-height: 100%;

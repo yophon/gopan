@@ -13,8 +13,13 @@ export interface DeskNoteItem {
   done?: boolean
   remind?: string
   reminded?: boolean
+  /** 重复:每天 / 工作日(周一到周五) / 每周;到点后桌面端和服务器都会顺延到下一次 */
+  repeat?: string
   [key: string]: unknown
 }
+
+export type DeskNoteRepeat = '' | 'daily' | 'weekdays' | 'weekly'
+
 
 export interface DeskNoteStyle {
   textColor?: string
@@ -62,6 +67,8 @@ export type DeskNoteOp =
   | { kind: 'remove'; index: number; text: string }
   | { kind: 'add'; text: string }
   | { kind: 'title'; title: string }
+  /** 设提醒(remind 是「2026-11-19 15:00」这样的本地时间)或移除(remind 为 null) */
+  | { kind: 'remind'; index: number; text: string; remind: string | null; repeat: DeskNoteRepeat }
 
 /** 先看原位置是不是那一条,不是就按文字找第一条;找不到返回 -1 */
 function locate(items: DeskNoteItem[], index: number, text: string): number {
@@ -91,6 +98,19 @@ export function applyDeskNoteOp(note: DeskNote, op: DeskNoteOp): DeskNote | null
       if (i < 0) return null
       if (op.kind === 'toggle') items[i].done = op.done
       else if (op.kind === 'remove') items.splice(i, 1)
+      else if (op.kind === 'remind') {
+        const it = items[i]
+        if (op.remind === null) {
+          delete it.remind
+          delete it.reminded
+          delete it.repeat
+        } else {
+          it.remind = op.remind
+          it.reminded = false
+          if (op.repeat) it.repeat = op.repeat
+          else delete it.repeat
+        }
+      }
       else {
         const t = op.newText.trim()
         if (t) items[i].text = t
@@ -101,17 +121,25 @@ export function applyDeskNoteOp(note: DeskNote, op: DeskNoteOp): DeskNote | null
   }
 }
 
-/** 提醒到点了还没做:桌面端到点会把 reminded 置 true */
+/** 提醒到点了还没做:桌面端到点会把 reminded 置 true。重复的到点就顺延,不算 */
 export function isDue(it: DeskNoteItem): boolean {
-  return !!it.remind && !!it.reminded && !it.done
+  return !!it.remind && !!it.reminded && !it.done && !isRepeat(it.repeat)
+}
+
+export function isRepeat(r: unknown): r is 'daily' | 'weekdays' | 'weekly' {
+  return r === 'daily' || r === 'weekdays' || r === 'weekly'
 }
 
 /** 提醒时间的说法,和桌面端一致:今天 15:00 → 「15:00」,明天 → 「明天 15:00」,其余 → 「11月21日 15:00」(跨年带年份) */
-export function formatRemind(remind: string | null | undefined, now: Date = new Date()): string {
+export function formatRemind(remind: string | null | undefined, now: Date = new Date(), repeat?: unknown): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(remind ?? '')
   if (!m) return ''
   const [y, mo, d, hh, mm] = [Number(m[1]), Number(m[2]), Number(m[3]), m[4], m[5]]
   const hm = `${hh}:${mm}`
+  // 重复的写规律,和桌面端一致:每天 09:00 / 工作日 09:00 / 每周四 09:00
+  if (repeat === 'daily') return `每天 ${hm}`
+  if (repeat === 'weekdays') return `工作日 ${hm}`
+  if (repeat === 'weekly') return `每周${'日一二三四五六'[new Date(y, mo - 1, d).getDay()]} ${hm}`
   const day = new Date(y, mo - 1, d)
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const diff = Math.round((day.getTime() - today.getTime()) / 86_400_000)

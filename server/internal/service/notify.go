@@ -39,6 +39,7 @@ const (
 	EvFeedFailed    = "feed_failed"
 	EvAssistantWait = "assistant_wait"
 	EvAssistantDone = "assistant_done"
+	EvNoteReminder  = "note_reminder"
 )
 
 const (
@@ -67,6 +68,7 @@ var EventKinds = []EventKind{
 	{EvFeedFailed, "订阅检查失败", true, false},
 	{EvAssistantWait, "服务器上的助手等你确认", true, false},
 	{EvAssistantDone, "服务器上的助手做完了", true, false},
+	{EvNoteReminder, "便签提醒到点(DeskNote)", true, false},
 	{EvBackup, "备份异常", true, true},
 }
 

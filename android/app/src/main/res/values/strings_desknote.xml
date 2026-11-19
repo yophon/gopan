@@ -19,4 +19,12 @@
     <string name="desknote_not_note">这个文件不是 DeskNote 便签</string>
     <string name="desknote_load_failed">读取失败</string>
     <string name="desknote_retry">重试</string>
+    <string name="desknote_remind_open">提醒…</string>
+    <string name="desknote_remind_title">设置提醒</string>
+    <string name="desknote_remind_remove">移除提醒</string>
+    <string name="desknote_repeat_none">不重复</string>
+    <string name="desknote_repeat_daily">每天</string>
+    <string name="desknote_repeat_weekdays">工作日</string>
+    <string name="desknote_repeat_weekly">每周</string>
+    <string name="desknote_remind_hint">到点后推到手机(在网页的通知「推送设置」里选渠道),电脑上的 DeskNote 也会弹通知;重复的推完自动顺延到下一次。</string>
 </resources>

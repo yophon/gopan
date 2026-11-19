@@ -29,6 +29,15 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.AlertDialog
+import java.time.LocalDateTime
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.material3.TimeInput
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -110,6 +119,7 @@ private fun DeskNoteCard(note: DeskNote, saving: Boolean, failed: Boolean, onOp:
     val faint = fg.copy(alpha = 0.12f)
     val items = note.items
     var editing by rememberSaveable { mutableStateOf<Int?>(null) }
+    var reminding by rememberSaveable { mutableStateOf<Int?>(null) }
 
     Column(
         Modifier
@@ -152,6 +162,7 @@ private fun DeskNoteCard(note: DeskNote, saving: Boolean, failed: Boolean, onOp:
                     onToggle = { onOp(DeskNoteOp.Toggle(i, it.text, !it.done)) },
                     onEdit = { editing = i },
                     onDelete = { onOp(DeskNoteOp.Remove(i, it.text)) },
+                    onRemind = { reminding = i },
                 )
             }
             AddRow(fg, dim, faint) { onOp(DeskNoteOp.Add(it)) }
@@ -171,12 +182,26 @@ private fun DeskNoteCard(note: DeskNote, saving: Boolean, failed: Boolean, onOp:
             title = stringResource(if (target == TITLE) R.string.desknote_edit_title else R.string.desknote_edit_item),
             initial = original,
             singleLine = target == TITLE,
+            onRemind = if (target == TITLE) null else ({ editing = null; reminding = target }),
             onDismiss = { editing = null },
             onConfirm = { text ->
                 editing = null
                 if (text.trim() != original) {
                     onOp(if (target == TITLE) DeskNoteOp.Title(text) else DeskNoteOp.Edit(target, original, text))
                 }
+            },
+        )
+    }
+
+    val r = reminding
+    if (r != null && r in items.indices) {
+        val item = items[r]
+        RemindDialog(
+            item = item,
+            onDismiss = { reminding = null },
+            onConfirm = { remind, repeat ->
+                reminding = null
+                onOp(DeskNoteOp.Remind(r, item.text, remind, repeat))
             },
         )
     }
@@ -193,6 +218,7 @@ private fun ItemRow(
     onToggle: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onRemind: () -> Unit,
 ) {
     val done = checkboxes && item.done
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.Top) {
@@ -232,7 +258,7 @@ private fun ItemRow(
             modifier = Modifier.weight(1f).padding(vertical = 6.dp).clickable(onClick = onEdit),
         )
         if (item.remind != null) {
-            val label = DeskNotes.formatRemind(item.remind)
+            val label = DeskNotes.formatRemind(item.remind, repeat = item.repeat)
             if (label.isNotEmpty()) {
                 val c = if (item.due) DueColor else dim
                 Row(
@@ -240,11 +266,13 @@ private fun ItemRow(
                         .padding(start = 8.dp, top = 7.dp)
                         .clip(RoundedCornerShape(50))
                         .background(if (item.due) DueColor.copy(alpha = 0.22f) else faint)
-                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                        .clickable(onClick = onRemind)
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                        .testTag("desknote_chip"),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Icon(Icons.Outlined.Notifications, null, tint = c, modifier = Modifier.size(13.dp))
+                    Icon(if (item.repeat != null) Icons.Outlined.Repeat else Icons.Outlined.Notifications, null, tint = c, modifier = Modifier.size(13.dp))
                     Text(label, color = c, fontSize = 12.sp, fontWeight = if (item.due) FontWeight.SemiBold else null)
                 }
             }
@@ -290,7 +318,14 @@ private fun AddRow(fg: Color, dim: Color, faint: Color, onAdd: (String) -> Unit)
 }
 
 @Composable
-private fun EditDialog(title: String, initial: String, singleLine: Boolean, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+private fun EditDialog(
+    title: String,
+    initial: String,
+    singleLine: Boolean,
+    onRemind: (() -> Unit)? = null,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
     var value by remember(initial) { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -305,6 +340,72 @@ private fun EditDialog(title: String, initial: String, singleLine: Boolean, onDi
             )
         },
         confirmButton = { TextButton(onClick = { onConfirm(value) }) { Text(stringResource(R.string.desknote_ok)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.desknote_cancel)) } },
+        dismissButton = {
+            Row {
+                if (onRemind != null) TextButton(onClick = onRemind) { Text(stringResource(R.string.desknote_remind_open)) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.desknote_cancel)) }
+            }
+        },
+    )
+}
+
+// 设置提醒:日期用前一天 / 后一天切换,时间用系统的时间输入,下面选重复(和桌面端的对话框一样)
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RemindDialog(item: DeskNoteItem, onDismiss: () -> Unit, onConfirm: (String?, String?) -> Unit) {
+    val now = LocalDateTime.now()
+    val init = remember(item) {
+        item.remind?.let { runCatching { LocalDateTime.parse(it.take(16).replace(' ', 'T')) }.getOrNull() }
+            ?: now.plusHours(1).withSecond(0).withNano(0).let { it.withMinute(0).plusMinutes(((it.minute + 4) / 5 * 5).toLong()) }
+    }
+    var day by remember(item) { mutableStateOf(init.toLocalDate()) }
+    val time = rememberTimePickerState(initialHour = init.hour, initialMinute = init.minute, is24Hour = true)
+    var repeat by remember(item) { mutableStateOf(item.repeat) }
+    val repeats = listOf(
+        null to R.string.desknote_repeat_none,
+        "daily" to R.string.desknote_repeat_daily,
+        "weekdays" to R.string.desknote_repeat_weekdays,
+        "weekly" to R.string.desknote_repeat_weekly,
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.desknote_remind_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("「${item.text}」", fontWeight = FontWeight.SemiBold, maxLines = 3)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { day = day.minusDays(1) }, enabled = day.isAfter(now.toLocalDate())) {
+                        Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, null)
+                    }
+                    Text(
+                        "${day.monthValue}月${day.dayOfMonth}日 周${"一二三四五六日"[day.dayOfWeek.value - 1]}",
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                    )
+                    IconButton(onClick = { day = day.plusDays(1) }) { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) }
+                }
+                TimeInput(state = time, modifier = Modifier.align(Alignment.CenterHorizontally))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for ((value, label) in repeats) {
+                        FilterChip(selected = repeat == value, onClick = { repeat = value }, label = { Text(stringResource(label)) })
+                    }
+                }
+                Text(stringResource(R.string.desknote_remind_hint), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val at = day.atTime(time.hour, time.minute)
+                onConfirm("%04d-%02d-%02d %02d:%02d".format(at.year, at.monthValue, at.dayOfMonth, at.hour, at.minute), repeat)
+            }) { Text(stringResource(R.string.desknote_ok)) }
+        },
+        dismissButton = {
+            Row {
+                if (item.remind != null) TextButton(onClick = { onConfirm(null, null) }) {
+                    Text(stringResource(R.string.desknote_remind_remove), color = MaterialTheme.colorScheme.error)
+                }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.desknote_cancel)) }
+            }
+        },
     )
 }

@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.LocalDateTime
 
@@ -140,5 +141,30 @@ class DeskNotesTest {
         r.edit(DeskNoteOp.Remove(0, "买牛奶"))
         assertThat(r.sync.persist(DeskNoteOp.Edit(0, "买牛奶", "买酸奶"))).isEqualTo(DeskNoteSaveResult.Gone)
         assertThat(r.note.items.map { it.text }).containsExactly("交周报")
+    }
+
+    @Test
+    fun `设提醒和移除提醒 其余字段原样`() {
+        val note = DeskNotes.parse("""{"title":"T","items":[{"text":"a","done":true,"remind":"2026-11-19 09:00","reminded":true,"keep":1}]}""")!!
+        val set = DeskNotes.apply(note, DeskNoteOp.Remind(0, "a", "2026-11-20 08:30", "weekly"))!!
+        val it = set.items[0]
+        assertEquals("2026-11-20 08:30", it.remind)
+        assertEquals(false, it.reminded)
+        assertEquals("weekly", it.repeat)
+        assertEquals("1", set.raw["items"]!!.toString().substringAfter("\"keep\":").take(1))
+        val removed = DeskNotes.apply(set, DeskNoteOp.Remind(0, "a", null, null))!!
+        assertEquals(null, removed.items[0].remind)
+        assertEquals(null, removed.items[0].repeat)
+        assertEquals(false, removed.raw["items"]!!.toString().contains("reminded"))
+    }
+
+    @Test
+    fun `重复的写规律 不算到点`() {
+        val now = java.time.LocalDateTime.of(2026, 11, 19, 8, 0)
+        assertEquals("每天 09:00", DeskNotes.formatRemind("2026-11-19 09:00", now, "daily"))
+        assertEquals("工作日 09:00", DeskNotes.formatRemind("2026-11-19 09:00", now, "weekdays"))
+        assertEquals("每周四 09:00", DeskNotes.formatRemind("2026-11-19 09:00", now, "weekly"))
+        assertEquals(false, DeskNoteItem("x", false, "2026-11-19 09:00", true, "daily").due)
+        assertEquals(true, DeskNoteItem("x", false, "2026-11-19 09:00", true).due)
     }
 }

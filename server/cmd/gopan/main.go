@@ -217,6 +217,7 @@ func run() error {
 	appPass.SetNotifier(notifier)
 	oauth.SetNotifier(notifier)
 	wk.SetNotify(notifier, media)
+	wk.SetDeskNoteReminders(service.NewDeskNoteReminders(pool, uploads, notifier, cfg.Location))
 	// 动态、空间、订阅、剪藏(doc/23)
 	activities := service.NewActivities(pool, nodes)
 	space := service.NewSpace(pool)
