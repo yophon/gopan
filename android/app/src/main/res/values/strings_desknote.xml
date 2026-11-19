@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DeskNote 便签(doc/39):桌面便签同步上来的 json 画成清单 -->
+<resources>
+    <string name="desknote_synced">已同步</string>
+    <string name="desknote_saving">保存中…</string>
+    <string name="desknote_failed">没存上</string>
+    <string name="desknote_empty">还没有条目,在下面添加</string>
+    <string name="desknote_add_hint">添加一条</string>
+    <string name="desknote_add">添加</string>
+    <string name="desknote_toggle">标为完成或未完成</string>
+    <string name="desknote_delete">删除这一条</string>
+    <string name="desknote_edit_item">修改这一条</string>
+    <string name="desknote_edit_title">修改标题</string>
+    <string name="desknote_ok">确定</string>
+    <string name="desknote_cancel">取消</string>
+    <string name="desknote_foot">改动会同步到电脑上的 DeskNote(几分钟内);两边同时改也不会互相覆盖。</string>
+    <string name="desknote_gone">这一条刚在别处改过了,已换成最新的内容</string>
+    <string name="desknote_save_failed">保存失败</string>
+    <string name="desknote_not_note">这个文件不是 DeskNote 便签</string>
+    <string name="desknote_load_failed">读取失败</string>
+    <string name="desknote_retry">重试</string>
+</resources>

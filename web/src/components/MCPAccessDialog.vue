@@ -263,6 +263,7 @@ async function copy(text: string) {
       </el-tab-pane>
       <el-tab-pane label="操作记录" name="audit">
         <el-button @click="auditBefore = undefined; refreshAudit()">刷新最新记录</el-button>
+        <el-text type="info" size="small" class="audit-keep">只保留最近 90 天的记录</el-text>
         <el-table :data="auditData?.mcpAudit ?? []" v-loading="auditFetching && !auditData" empty-text="暂无 MCP 操作记录">
           <el-table-column label="时间" width="170"><template #default="{ row }">{{ formatTime(row.createdAt) }}</template></el-table-column>
           <el-table-column label="操作" prop="tool" min-width="170" />
@@ -278,6 +279,9 @@ async function copy(text: string) {
 </template>
 
 <style scoped>
+.audit-keep {
+  margin-left: 12px;
+}
 .connection-help {
   margin-bottom: 16px;
   line-height: 1.6;

@@ -3,7 +3,7 @@
   "name": "io.github.yophon/gopan",
   "title": "gopan",
   "description": "Self-hosted cloud drive: search, read, organize and share your files over remote MCP",
-  "version": "3.24.1",
+  "version": "3.25.0",
   "repository": {
     "url": "https://github.com/yophon/gopan",
     "source": "github"

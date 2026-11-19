@@ -10,6 +10,7 @@ import {
   Document,
   Download,
   EditPen,
+  List,
   Monitor,
   Headset,
   Reading,
@@ -42,6 +43,7 @@ import { usePlayerStore } from '@/stores/player'
 import { formatDuration, mergeSubtitles, pickVideoSource, resumePage } from '@/utils/media'
 import { siteOf } from '@/utils/clips'
 import { canEditText } from '@/utils/textEdit'
+import { isDeskNoteName, parseDeskNote } from '@/utils/desknote'
 import {
   currentConnection,
   prefetchBudget,
@@ -52,6 +54,8 @@ import {
 const PdfViewer = defineAsyncComponent(() => import('./PdfViewer.vue'))
 // 在线编辑(doc/25):点「编辑」时才加载
 const TextEditor = defineAsyncComponent(() => import('./TextEditor.vue'))
+// DeskNote 便签(doc/39):认出便签 json 时才加载
+const DeskNoteViewer = defineAsyncComponent(() => import('./DeskNoteViewer.vue'))
 import ImageViewer from './ImageViewer.vue'
 import ArchiveViewer from './ArchiveViewer.vue'
 import VideoPlayer from './VideoPlayer.vue'
@@ -430,6 +434,33 @@ watch(
   { immediate: true },
 )
 
+// ---------- DeskNote 便签(doc/39):桌面便签同步上来的 json 画成清单,可以勾选、改、加 ----------
+
+/** 认出来是便签的那个文件:保存后内容会重新拉,拉的过程中别把清单拆掉 */
+const deskNoteId = ref<string | null>(null)
+/** 便签也能切回原文(只读 / 「编辑」改原文) */
+const deskRaw = ref(false)
+const isDeskNote = computed(() => !!currentId.value && deskNoteId.value === currentId.value)
+watch(currentId, () => {
+  deskNoteId.value = null
+  deskRaw.value = false
+})
+watch(textContent, (text) => {
+  const n = node.value
+  if (props.guestToken || !n || n.id !== currentId.value || textTruncated.value) return
+  if (isDeskNoteName(n.name) && parseDeskNote(text)) deskNoteId.value = n.id
+})
+// 切到原文:拉一次最新内容(清单里的改动不经过这里)
+watch(deskRaw, (raw) => {
+  if (raw) void refetch()
+})
+
+function onDeskNoteSaved() {
+  for (const key of ['children', 'nodeDetail', 'fileVersions', 'activities', 'recent', 'starred']) {
+    void queryClient.invalidateQueries({ queryKey: [key] })
+  }
+}
+
 // ---------- 下载 ----------
 
 const downloading = ref(false)
@@ -551,7 +582,25 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
             >
               查看原图
             </el-button>
-            <el-button v-if="canEdit && !editing" :icon="EditPen" text class="header-btn" @click="editing = true">编辑</el-button>
+            <el-button
+              v-if="isDeskNote && !editing"
+              :icon="deskRaw ? List : Document"
+              text
+              class="header-btn"
+              :title="deskRaw ? '看成清单' : '看原文'"
+              @click="deskRaw = !deskRaw"
+            >
+              {{ deskRaw ? '清单' : '原文' }}
+            </el-button>
+            <el-button
+              v-if="canEdit && !editing && (!isDeskNote || deskRaw)"
+              :icon="EditPen"
+              text
+              class="header-btn"
+              @click="editing = true"
+            >
+              编辑
+            </el-button>
             <el-button
               v-if="preview?.kind === 'TEXT' && preview.markdown && !editing"
               :icon="mdSource ? Reading : Document"
@@ -731,6 +780,11 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
               </el-button>
             </div>
             <MarkdownFrame :key="editVersion" :node-id="node.id" :token="mediaToken" class="md-body" />
+          </div>
+
+          <!-- DeskNote 便签:清单 -->
+          <div v-else-if="isDeskNote && !deskRaw && node" class="preview-desknote">
+            <DeskNoteViewer :node-id="node.id" @saved="onDeskNoteSaved" />
           </div>
 
           <!-- TEXT -->
@@ -1068,6 +1122,13 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   width: 100%;
   height: 100%;
   padding: 12px 64px 16px;
+}
+.preview-desknote {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
 }
 @media (max-width: 767px) {
   .preview-editor {
