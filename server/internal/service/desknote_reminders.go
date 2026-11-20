@@ -211,7 +211,7 @@ func (d *DeskNoteReminders) Scan(ctx context.Context) error {
 	err := d.pool.QueryRow(ctx, `SELECT scanned_until FROM desknote_scan WHERE id = 1`).Scan(&since)
 	first := err == pgx.ErrNoRows
 	if first {
-		since = d.now().Add(-desknoteMaxLate) // 第一次:只看最近一天改过的,更早的便签改动时再认
+		since = time.Time{} // 第一次:所有 .json 都认一遍(每分钟 200 个);太旧的提醒不会补推(desknoteMaxLate)
 	} else if err != nil {
 		return err
 	}
